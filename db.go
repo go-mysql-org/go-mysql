@@ -322,17 +322,17 @@ func (db *DB) pushConn(co *Conn, err error) {
 	if err == ErrBadConn {
 		closeConn = co
 	} else {
-		db.Lock()
+		if db.maxIdleConns > 0 {
+			db.Lock()
+			if db.conns.Len() >= db.maxIdleConns {
+				v := db.conns.Front()
+				closeConn = v.Value.(*Conn)
+				db.conns.Remove(v)
+			}
 
-		if db.conns.Len() >= db.maxIdleConns {
-			v := db.conns.Front()
-			closeConn = v.Value.(*Conn)
-			db.conns.Remove(v)
+			db.conns.PushBack(co)
+			db.Unlock()
 		}
-
-		db.conns.PushBack(co)
-
-		db.Unlock()
 
 	}
 
