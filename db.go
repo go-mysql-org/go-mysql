@@ -332,6 +332,8 @@ func (db *DB) pushConn(co *Conn, err error) {
 
 			db.conns.PushBack(co)
 			db.Unlock()
+		} else {
+			closeConn = co
 		}
 
 	}
