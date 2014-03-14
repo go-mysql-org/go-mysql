@@ -3,7 +3,6 @@ package mysql
 import (
 	"fmt"
 	"io"
-	"lib/log"
 	"net"
 )
 
@@ -24,14 +23,12 @@ func (c *PacketIO) ReadPacket() ([]byte, error) {
 	header := make([]byte, 4)
 
 	if _, err := io.ReadFull(c.Conn, header); err != nil {
-		log.Error("read header error %s", err.Error())
 		return nil, ErrBadConn
 	}
 
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
 	if length < 1 {
 		err := fmt.Errorf("invalid payload length %d", length)
-		log.Error(err.Error())
 		return nil, err
 	}
 
@@ -39,7 +36,6 @@ func (c *PacketIO) ReadPacket() ([]byte, error) {
 
 	if sequence != c.Sequence {
 		err := fmt.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
-		log.Error(err.Error())
 		return nil, err
 	}
 
@@ -47,7 +43,6 @@ func (c *PacketIO) ReadPacket() ([]byte, error) {
 
 	data := make([]byte, length)
 	if _, err := io.ReadFull(c.Conn, data); err != nil {
-		log.Error("read payload data error %s", err.Error())
 		return nil, ErrBadConn
 	} else {
 		if length < MaxPayloadLen {
@@ -57,7 +52,6 @@ func (c *PacketIO) ReadPacket() ([]byte, error) {
 		var buf []byte
 		buf, err = c.ReadPacket()
 		if err != nil {
-			log.Error("read packet error %s", err.Error())
 			return nil, ErrBadConn
 		} else {
 			return append(data, buf...), nil
@@ -78,10 +72,8 @@ func (c *PacketIO) WritePacket(data []byte) error {
 		data[3] = c.Sequence
 
 		if n, err := c.Conn.Write(data[:4+MaxPayloadLen]); err != nil {
-			log.Error("write error %s", err.Error())
 			return ErrBadConn
 		} else if n != (4 + MaxPayloadLen) {
-			log.Error("write error, write data number %d != %d", n, (4 + MaxPayloadLen))
 			return ErrBadConn
 		} else {
 			c.Sequence++
@@ -96,10 +88,8 @@ func (c *PacketIO) WritePacket(data []byte) error {
 	data[3] = c.Sequence
 
 	if n, err := c.Conn.Write(data); err != nil {
-		log.Error("write error %s", err.Error())
 		return ErrBadConn
 	} else if n != len(data) {
-		log.Error("write error, write data number %d != %d", n, (4 + MaxPayloadLen))
 		return ErrBadConn
 	} else {
 		c.Sequence++

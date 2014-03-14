@@ -3,7 +3,6 @@ package mysql
 import (
 	"container/list"
 	"fmt"
-	"lib/log"
 	"strings"
 	"sync"
 )
@@ -194,27 +193,39 @@ func (db *DB) Addr() string {
 }
 
 //dsn: <username>:<password>@<host>:<port>/<database>
-func (db *DB) parseDSN(dsn string) error {
+func parseDSN(dsn string) (user string, password string, addr string, db string, err error) {
 	ns := strings.Split(dsn, "@")
 	if len(ns) != 2 {
-		return fmt.Errorf("invalid dsn %s", dsn)
+		err = fmt.Errorf("invalid dsn %s", dsn)
+		return
 	}
 
 	if us := strings.Split(ns[0], ":"); len(us) > 2 {
-		return fmt.Errorf("invalid dsn %s: error around %s", dsn, ns[0])
+		err = fmt.Errorf("invalid dsn %s: error around %s", dsn, ns[0])
+		return
 	} else if len(us) == 1 {
-		db.user = us[0]
-		db.password = ""
+		user = us[0]
+		password = ""
 	} else {
-		db.user = us[0]
-		db.password = us[1]
+		user = us[0]
+		password = us[1]
 	}
 
 	if ds := strings.Split(ns[1], "/"); len(ds) != 2 {
-		return fmt.Errorf("invalid dsn %s, error around %s", dsn, ns[1])
+		err = fmt.Errorf("invalid dsn %s, error around %s", dsn, ns[1])
+		return
 	} else {
-		db.addr = ds[0]
-		db.db = ds[1]
+		addr = ds[0]
+		db = ds[1]
+	}
+	return
+}
+
+func (db *DB) parseDSN(dsn string) error {
+	var err error
+	db.user, db.password, db.addr, db.db, err = parseDSN(dsn)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -255,7 +266,6 @@ func (db *DB) newConn() (*Conn, error) {
 	co := new(conn)
 
 	if err := co.Connect(db.addr, db.user, db.password, db.db); err != nil {
-		log.Error("connect %s error %s", db.addr, err.Error())
 		return nil, err
 	}
 
@@ -270,13 +280,11 @@ func (db *DB) newConn() (*Conn, error) {
 func (db *DB) tryReuse(co *Conn) error {
 	if co.IsInTransaction() {
 		//we can not reuse a connection in transaction status
-		log.Warn("reuse connection can not in transaction status, rollback")
 		if err := co.Rollback(); err != nil {
 			return err
 		}
 	} else if !co.IsAutoCommit() {
 		//we can not  reuse a connection not in autocomit
-		log.Warn("reuse connection must have autocommit status, enable autocommit")
 		if _, err := co.Exec("set autocommit = 1"); err != nil {
 			return err
 		}
