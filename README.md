@@ -1,5 +1,4 @@
-go-mysql
-========
+# go-mysql
 
 go mysql client interface
 
@@ -49,3 +48,7 @@ go-mysql provieds a simple interface for mysql use, very like golang database/sq
     conn, err = db.GetConn()
 
     conn.SetCharset("gb2312")
+    
+# golang database/sql
+
+go-mysql now can be use with golang database/sql like other sql drivers. I test it using testcase in [https://github.com/bradfitz/go-sql-test](https://github.com/bradfitz/go-sql-test)
