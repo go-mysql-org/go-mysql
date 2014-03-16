@@ -1,12 +1,13 @@
 package mysql
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 )
 
 var (
-	ErrBadConn       = errors.New("connection was bad")
+	ErrBadConn       = driver.ErrBadConn
 	ErrMalformPacket = errors.New("Malform packet error")
 
 	ErrTxDone = errors.New("sql: Transaction has already been committed or rolled back")
