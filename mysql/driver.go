@@ -10,6 +10,7 @@ import (
 type mysqlDriver struct {
 }
 
+//dsn: <username>:<password>@<host>:<port>/<database>
 func (d mysqlDriver) Open(dsn string) (driver.Conn, error) {
 	user, password, addr, db, err := parseDSN(dsn)
 	if err != nil {
