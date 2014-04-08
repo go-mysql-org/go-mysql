@@ -250,47 +250,47 @@ func FormatBinaryTime(n int, data []byte) ([]byte, error) {
 	}
 }
 
-//only support utf8
+var (
+	DONTESCAPE = byte(255)
+
+	EncodeMap [256]byte
+)
+
 func Escape(sql string) string {
 	dest := make([]byte, 0, 2*len(sql))
-	var escape byte
 
-	for i := 0; i < len(sql); {
-		r, w := utf8.DecodeRuneInString(sql[i:])
-
-		escape = 0
-
-		switch r {
-		case 0: /* Must be escaped for 'mysql' */
-			escape = '0'
-			break
-		case '\n': /* Must be escaped for logs */
-			escape = 'n'
-			break
-		case '\r':
-			escape = 'r'
-			break
-		case '\\':
-			escape = '\\'
-			break
-		case '\'':
-			escape = '\''
-			break
-		case '"': /* Better safe than sorry */
-			escape = '"'
-			break
-		case '\032': /* This gives problems on Win32 */
-			escape = 'Z'
-		}
-
-		if escape != 0 {
-			dest = append(dest, '\\', escape)
+	for i, w := 0, 0; i < len(sql); i += w {
+		runeValue, width := utf8.DecodeRuneInString(sql[i:])
+		if c := EncodeMap[byte(runeValue)]; c == DONTESCAPE {
+			dest = append(dest, sql[i:i+width]...)
 		} else {
-			dest = append(dest, sql[i:i+w]...)
+			dest = append(dest, '\\', c)
 		}
-
-		i += w
+		w = width
 	}
 
 	return string(dest)
+}
+
+var encodeRef = map[byte]byte{
+	'\x00': '0',
+	'\'':   '\'',
+	'"':    '"',
+	'\b':   'b',
+	'\n':   'n',
+	'\r':   'r',
+	'\t':   't',
+	26:     'Z', // ctl-Z
+	'\\':   '\\',
+}
+
+func init() {
+	for i := range EncodeMap {
+		EncodeMap[i] = DONTESCAPE
+	}
+	for i := range EncodeMap {
+		if to, ok := encodeRef[byte(i)]; ok {
+			EncodeMap[byte(i)] = to
+		}
+	}
 }
