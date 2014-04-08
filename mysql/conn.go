@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"lib/log"
+	"github.com/siddontang/golib/log"
 	"net"
 	"strings"
 	"time"
