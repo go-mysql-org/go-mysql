@@ -283,7 +283,9 @@ func (db *DB) tryReuse(co *Conn) error {
 		if err := co.Rollback(); err != nil {
 			return err
 		}
-	} else if !co.IsAutoCommit() {
+	}
+
+	if !co.IsAutoCommit() {
 		//we can not  reuse a connection not in autocomit
 		if _, err := co.Exec("set autocommit = 1"); err != nil {
 			return err
