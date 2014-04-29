@@ -116,6 +116,35 @@ func TestConn_Select(t *testing.T) {
 	}
 }
 
+func TestConn_DecodeRow(t *testing.T) {
+	s := `select str, f, e from mixer_test_conn where id = 1`
+
+	c := newTestConn()
+	defer c.Close()
+
+	if result, err := c.Query(s); err != nil {
+		t.Fatal(err)
+	} else {
+		var d = &struct {
+			Str string  `mysql:"str"`
+			F   float64 `mysql:"f"`
+			E   string  `mysql:"e"`
+		}{}
+
+		if err := result.DecodeRow(0, d); err != nil {
+			t.Fatal(err)
+		}
+
+		if d.Str != "a" {
+			t.Fatal(d.Str)
+		} else if d.F != float64(3.14) {
+			t.Fatal(d.F)
+		} else if d.E != "test1" {
+			t.Fatal(d.E)
+		}
+	}
+}
+
 func TestConn_FieldList(t *testing.T) {
 	c := newTestConn()
 	defer c.Close()

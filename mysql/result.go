@@ -389,6 +389,23 @@ func (r *Resultset) IsNullByName(row int, name string) (bool, error) {
 	}
 }
 
+func (r *Resultset) GetBool(row, column int) (bool, error) {
+	n, err := r.GetInt(row, column)
+	if err != nil {
+		return false, err
+	}
+
+	return n != 0, nil
+}
+
+func (r *Resultset) GetBoolByName(row int, name string) (bool, error) {
+	if column, ok := r.FieldNames[name]; ok {
+		return r.GetBool(row, column)
+	} else {
+		return false, fmt.Errorf("invalid field name %s", name)
+	}
+}
+
 func (r *Resultset) GetUint(row, column int) (uint64, error) {
 	d, err := r.GetData(row, column)
 	if err != nil {
