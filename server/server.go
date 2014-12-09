@@ -49,12 +49,12 @@ func (c *Conn) handshake(password string) error {
 	}
 
 	if err := c.readHandshakeResponse(password); err != nil {
-		c.writeError(err)
+		c.WriteError(err)
 
 		return err
 	}
 
-	if err := c.writeOK(nil); err != nil {
+	if err := c.WriteOK(nil); err != nil {
 		return err
 	}
 

@@ -4,7 +4,7 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
-func (c *Conn) writeOK(r *Result) error {
+func (c *Conn) WriteOK(r *Result) error {
 	if r == nil {
 		r = &Result{Status: c.status}
 	}
@@ -23,7 +23,7 @@ func (c *Conn) writeOK(r *Result) error {
 	return c.WritePacket(data)
 }
 
-func (c *Conn) writeError(e error) error {
+func (c *Conn) WriteError(e error) error {
 	var m *MyError
 	var ok bool
 	if m, ok = e.(*MyError); !ok {
@@ -45,7 +45,7 @@ func (c *Conn) writeError(e error) error {
 	return c.WritePacket(data)
 }
 
-func (c *Conn) writeEOF(status uint16) error {
+func (c *Conn) WriteEOF(status uint16) error {
 	data := make([]byte, 4, 9)
 
 	data = append(data, EOF_HEADER)
