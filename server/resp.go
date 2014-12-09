@@ -1,13 +1,17 @@
 package server
 
 import (
+	"fmt"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
-func (c *Conn) WriteOK(r *Result) error {
+func (c *Conn) writeOK(r *Result) error {
 	if r == nil {
-		r = &Result{Status: c.status}
+		r = &Result{}
 	}
+
+	r.Status |= c.status
+
 	data := make([]byte, 4, 32)
 
 	data = append(data, OK_HEADER)
@@ -23,7 +27,7 @@ func (c *Conn) WriteOK(r *Result) error {
 	return c.WritePacket(data)
 }
 
-func (c *Conn) WriteError(e error) error {
+func (c *Conn) writeError(e error) error {
 	var m *MyError
 	var ok bool
 	if m, ok = e.(*MyError); !ok {
@@ -45,14 +49,87 @@ func (c *Conn) WriteError(e error) error {
 	return c.WritePacket(data)
 }
 
-func (c *Conn) WriteEOF(status uint16) error {
+func (c *Conn) writeEOF() error {
 	data := make([]byte, 4, 9)
 
 	data = append(data, EOF_HEADER)
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, 0, 0)
-		data = append(data, byte(status), byte(status>>8))
+		data = append(data, byte(c.status), byte(c.status>>8))
 	}
 
 	return c.WritePacket(data)
+}
+
+func (c *Conn) writeResultset(r *Resultset) error {
+	columnLen := PutLengthEncodedInt(uint64(len(r.Fields)))
+
+	data := make([]byte, 4, 1024)
+
+	data = append(data, columnLen...)
+	if err := c.WritePacket(data); err != nil {
+		return err
+	}
+
+	for _, v := range r.Fields {
+		data = data[0:4]
+		data = append(data, v.Dump()...)
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+
+	if err := c.writeEOF(); err != nil {
+		return err
+	}
+
+	for _, v := range r.RowDatas {
+		data = data[0:4]
+		data = append(data, v...)
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+
+	if err := c.writeEOF(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Conn) writeFieldList(fs []*Field) error {
+	data := make([]byte, 4, 1024)
+
+	for _, v := range fs {
+		data = data[0:4]
+		data = append(data, v.Dump()...)
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+
+	if err := c.writeEOF(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Conn) writeValue(value interface{}) error {
+	switch v := value.(type) {
+	case error:
+		return c.writeError(v)
+	case *Result:
+		if v.Resultset != nil {
+			return c.writeResultset(v.Resultset)
+		} else {
+			return c.writeOK(v)
+		}
+	case []*Field:
+		return c.writeFieldList(v)
+	case *Stmt:
+		return c.writePrepare(v)
+	default:
+		return fmt.Errorf("invalid response type %T", value)
+	}
 }

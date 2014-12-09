@@ -103,9 +103,11 @@ func (c *Conn) readHandshakeResponse(password string) error {
 		}
 
 		db := string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
-		pos += len(c.db) + 1
+		pos += len(db) + 1
 
-		c.db = db
+		if err = c.h.UseDB(db); err != nil {
+			return err
+		}
 	}
 
 	return nil

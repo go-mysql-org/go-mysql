@@ -14,26 +14,30 @@ type Conn struct {
 
 	connectionID uint32
 
-	status  uint16
-	charset string
+	status uint16
 
 	user string
-	db   string
 
 	salt []byte
+
+	h Handler
+
+	stmts  map[uint32]*Stmt
+	stmtID uint32
 }
 
 var baseConnID uint32 = 10000
 
-func NewConn(conn net.Conn, password string) (*Conn, error) {
+func NewConn(conn net.Conn, password string, h Handler) (*Conn, error) {
 	c := new(Conn)
+
+	c.h = h
 
 	c.Conn = packet.NewConn(conn)
 
 	c.connectionID = atomic.AddUint32(&baseConnID, 1)
 
-	//use default charset
-	c.charset = DEFAULT_CHARSET
+	c.stmts = make(map[uint32]*Stmt)
 
 	if err := c.handshake(password); err != nil {
 		c.Close()
@@ -49,16 +53,16 @@ func (c *Conn) handshake(password string) error {
 	}
 
 	if err := c.readHandshakeResponse(password); err != nil {
-		c.WriteError(err)
+		c.writeError(err)
 
 		return err
 	}
 
-	if err := c.WriteOK(nil); err != nil {
+	if err := c.writeOK(nil); err != nil {
 		return err
 	}
 
-	c.Conn.ResetSequence()
+	c.ResetSequence()
 
 	return nil
 }
@@ -70,6 +74,30 @@ func (c *Conn) Close() {
 	}
 }
 
-func (c *Conn) GetDB() string {
-	return c.db
+func (c *Conn) Closed() bool {
+	return c.Conn == nil
+}
+
+func (c *Conn) GetUser() string {
+	return c.user
+}
+
+func (c *Conn) ConnectionID() uint32 {
+	return c.connectionID
+}
+
+func (c *Conn) IsAutoCommit() bool {
+	return c.status&SERVER_STATUS_AUTOCOMMIT > 0
+}
+
+func (c *Conn) IsInTransaction() bool {
+	return c.status&SERVER_STATUS_IN_TRANS > 0
+}
+
+func (c *Conn) SetInTransaction() {
+	c.status |= SERVER_STATUS_IN_TRANS
+}
+
+func (c *Conn) ClearInTransaction() {
+	c.status &= ^SERVER_STATUS_IN_TRANS
 }
