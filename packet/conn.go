@@ -1,48 +1,54 @@
-package mysql
+package packet
 
 import (
+	"bufio"
 	"fmt"
+	. "github.com/siddontang/go-mysql/mysql"
 	"io"
 	"net"
 )
 
-type PacketIO struct {
-	Conn     net.Conn
+/*
+	Conn is the base class to handle MySQL protocol.
+*/
+type Conn struct {
+	net.Conn
+	br *bufio.Reader
+
 	Sequence uint8
 }
 
-func (c *PacketIO) RemoteAddr() net.Addr {
-	return c.Conn.RemoteAddr()
+func NewConn(conn net.Conn) *Conn {
+	c := new(Conn)
+
+	c.br = bufio.NewReaderSize(conn, 4096)
+	c.Conn = conn
+
+	return c
 }
 
-func (c *PacketIO) LocalAddr() net.Addr {
-	return c.Conn.LocalAddr()
-}
+func (c *Conn) ReadPacket() ([]byte, error) {
+	header := []byte{0, 0, 0, 0}
 
-func (c *PacketIO) ReadPacket() ([]byte, error) {
-	header := make([]byte, 4)
-
-	if _, err := io.ReadFull(c.Conn, header); err != nil {
+	if _, err := io.ReadFull(c.br, header); err != nil {
 		return nil, ErrBadConn
 	}
 
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
 	if length < 1 {
-		err := fmt.Errorf("invalid payload length %d", length)
-		return nil, err
+		return nil, fmt.Errorf("invalid payload length %d", length)
 	}
 
 	sequence := uint8(header[3])
 
 	if sequence != c.Sequence {
-		err := fmt.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
-		return nil, err
+		return nil, fmt.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
 	}
 
 	c.Sequence++
 
 	data := make([]byte, length)
-	if _, err := io.ReadFull(c.Conn, data); err != nil {
+	if _, err := io.ReadFull(c.br, data); err != nil {
 		return nil, ErrBadConn
 	} else {
 		if length < MaxPayloadLen {
@@ -59,19 +65,18 @@ func (c *PacketIO) ReadPacket() ([]byte, error) {
 	}
 }
 
-//data already have header
-func (c *PacketIO) WritePacket(data []byte) error {
+// data already has 4 bytes header
+func (c *Conn) WritePacket(data []byte) error {
 	length := len(data) - 4
 
 	for length >= MaxPayloadLen {
-
 		data[0] = 0xff
 		data[1] = 0xff
 		data[2] = 0xff
 
 		data[3] = c.Sequence
 
-		if n, err := c.Conn.Write(data[:4+MaxPayloadLen]); err != nil {
+		if n, err := c.Write(data[:4+MaxPayloadLen]); err != nil {
 			return ErrBadConn
 		} else if n != (4 + MaxPayloadLen) {
 			return ErrBadConn
@@ -87,12 +92,24 @@ func (c *PacketIO) WritePacket(data []byte) error {
 	data[2] = byte(length >> 16)
 	data[3] = c.Sequence
 
-	if n, err := c.Conn.Write(data); err != nil {
+	if n, err := c.Write(data); err != nil {
 		return ErrBadConn
 	} else if n != len(data) {
 		return ErrBadConn
 	} else {
 		c.Sequence++
 		return nil
+	}
+}
+
+func (c *Conn) ResetSequence() {
+	c.Sequence = 0
+}
+
+func (c *Conn) Close() {
+	c.Sequence = 0
+	if c.Conn != nil {
+		c.Conn.Close()
+		c.Conn = nil
 	}
 }

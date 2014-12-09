@@ -1,49 +1,47 @@
-package mysql
+package client
 
 import (
 	"encoding/binary"
 	"fmt"
+	. "github.com/siddontang/go-mysql/mysql"
 	"math"
 )
 
-type stmt struct {
-	conn    *conn
-	id      uint32
-	query   string
-	params  []Field
-	columns []Field
+type Stmt struct {
+	conn  *Conn
+	id    uint32
+	query string
+
+	params  int
+	columns int
 }
 
-func (s *stmt) Exec(args ...interface{}) (*Result, error) {
+func (s *Stmt) ParamNum() int {
+	return s.params
+}
+
+func (s *Stmt) ColumnNum() int {
+	return s.columns
+}
+
+func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 	if err := s.write(args...); err != nil {
 		return nil, err
 	}
 
-	return s.conn.readOK()
+	return s.conn.readResult(true)
 }
 
-func (s *stmt) Query(args ...interface{}) (*Resultset, error) {
-	if err := s.write(args...); err != nil {
-		return nil, err
-	}
-
-	if r, err := s.conn.readResultset(); err != nil {
-		return nil, err
-	} else {
-		return r.Parse(true)
-	}
-}
-
-func (s *stmt) Close() error {
-	if err := s.conn.WriteCommandUint32(COM_STMT_CLOSE, s.id); err != nil {
+func (s *Stmt) Close() error {
+	if err := s.conn.writeCommandUint32(COM_STMT_CLOSE, s.id); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *stmt) write(args ...interface{}) error {
-	paramsNum := len(s.params)
+func (s *Stmt) write(args ...interface{}) error {
+	paramsNum := s.params
 
 	if len(args) != paramsNum {
 		return fmt.Errorf("argument mismatch, need %d but got %d", s.params, len(args))
@@ -142,7 +140,7 @@ func (s *stmt) write(args ...interface{}) error {
 	//iteration-count, always 1
 	data = append(data, 1, 0, 0, 0)
 
-	if len(s.params) > 0 {
+	if s.params > 0 {
 		data = append(data, nullBitmap...)
 
 		//new-params-bound-flag
@@ -159,13 +157,13 @@ func (s *stmt) write(args ...interface{}) error {
 		}
 	}
 
-	s.conn.Sequence = 0
+	s.conn.ResetSequence()
 
 	return s.conn.WritePacket(data)
 }
 
-func (c *conn) Prepare(query string) (*stmt, error) {
-	if err := c.WriteCommandStr(COM_STMT_PREPARE, query); err != nil {
+func (c *Conn) Prepare(query string) (*Stmt, error) {
+	if err := c.writeCommandStr(COM_STMT_PREPARE, query); err != nil {
 		return nil, err
 	}
 
@@ -180,7 +178,7 @@ func (c *conn) Prepare(query string) (*stmt, error) {
 		return nil, ErrMalformPacket
 	}
 
-	s := new(stmt)
+	s := new(Stmt)
 	s.conn = c
 
 	pos := 1
@@ -190,55 +188,25 @@ func (c *conn) Prepare(query string) (*stmt, error) {
 	pos += 4
 
 	//number columns
-	columns := binary.LittleEndian.Uint16(data[pos:])
+	s.columns = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
 	//number params
-	params := binary.LittleEndian.Uint16(data[pos:])
+	s.params = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
 	//warnings
 	//warnings = binary.LittleEndian.Uint16(data[pos:])
 
-	s.params = make([]Field, 0, params)
-
-	if params > 0 {
-		for {
-			data, err := s.conn.ReadPacket()
-			if err != nil {
-				return nil, err
-			}
-
-			if s.conn.isEOFPacket(data) {
-				break
-			}
-
-			if f, err := parseField(data); err != nil {
-				return nil, err
-			} else {
-				s.params = append(s.params, f)
-			}
+	if s.params > 0 {
+		if err := s.conn.readUntilEOF(); err != nil {
+			return nil, err
 		}
 	}
 
-	s.columns = make([]Field, 0, columns)
-
-	if columns > 0 {
-		for {
-			data, err := s.conn.ReadPacket()
-			if err != nil {
-				return nil, err
-			}
-
-			if s.conn.isEOFPacket(data) {
-				break
-			}
-
-			if f, err := parseField(data); err != nil {
-				return nil, err
-			} else {
-				s.columns = append(s.columns, f)
-			}
+	if s.columns > 0 {
+		if err := s.conn.readUntilEOF(); err != nil {
+			return nil, err
 		}
 	}
 

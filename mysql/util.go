@@ -5,9 +5,16 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
+	"github.com/siddontang/go/hack"
 	"io"
-	"unicode/utf8"
+	"runtime"
 )
+
+func Pstack() string {
+	buf := make([]byte, 1024)
+	n := runtime.Stack(buf, false)
+	return string(buf[0:n])
+}
 
 func CalcPassword(scramble, password []byte) []byte {
 	if len(password) == 0 {
@@ -256,17 +263,16 @@ var (
 	EncodeMap [256]byte
 )
 
+// only support utf-8
 func Escape(sql string) string {
 	dest := make([]byte, 0, 2*len(sql))
 
-	for i, w := 0, 0; i < len(sql); i += w {
-		runeValue, width := utf8.DecodeRuneInString(sql[i:])
-		if c := EncodeMap[byte(runeValue)]; c == DONTESCAPE {
-			dest = append(dest, sql[i:i+width]...)
+	for _, w := range hack.Slice(sql) {
+		if c := EncodeMap[w]; c == DONTESCAPE {
+			dest = append(dest, w)
 		} else {
 			dest = append(dest, '\\', c)
 		}
-		w = width
 	}
 
 	return string(dest)
