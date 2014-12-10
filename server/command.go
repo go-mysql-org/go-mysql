@@ -8,11 +8,19 @@ import (
 )
 
 type Handler interface {
+	//handle COM_INIT_DB command, you can check whether the dbName is valid, or other.
 	UseDB(dbName string) error
+	//handle COM_QUERY comamnd, like SELECT, INSERT, UPDATE, etc...
+	//If Result has a Resultset (SELECT, SHOW, etc...), we will send this as the repsonse, otherwise, we will send Result
 	HandleQuery(query string) (*Result, error)
+	//handle COM_FILED_LIST command
 	HandleFieldList(table string, fieldWildcard string) ([]*Field, error)
-	HandleStmtPreprare(id uint32, sql string) (*Stmt, error)
-	HandleStmtExecute(s *Stmt) (*Result, error)
+	//handle COM_STMT_PREAPRE, params is the param number for this statement, columns is the column number
+	//context will be used later for statement execute
+	HandleStmtPreprare(query string) (params int, columns int, context interface{}, err error)
+	//handle COM_STMT_EXECUTE, context is the previous one set in prepare
+	//query is the statement prepare query, and args is the params for this statement
+	HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error)
 }
 
 func (c *Conn) HandleCommand() error {
@@ -74,9 +82,14 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		}
 	case COM_STMT_PREPARE:
 		c.stmtID++
-		if st, err := c.h.HandleStmtPreprare(c.stmtID, hack.String(data)); err != nil {
+		st := new(Stmt)
+		st.ID = c.stmtID
+		st.Query = hack.String(data)
+		var err error
+		if st.Params, st.Columns, st.Context, err = c.h.HandleStmtPreprare(st.Query); err != nil {
 			return err
 		} else {
+			st.ResetParams()
 			c.stmts[c.stmtID] = st
 			return st
 		}

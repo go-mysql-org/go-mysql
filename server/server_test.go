@@ -82,38 +82,32 @@ func (h *testHandler) HandleQuery(query string) (*mysql.Result, error) {
 func (h *testHandler) HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error) {
 	return nil, nil
 }
-func (h *testHandler) HandleStmtPreprare(id uint32, sql string) (*Stmt, error) {
-	stmt := &Stmt{}
-	stmt.ID = id
-	stmt.Query = sql
+func (h *testHandler) HandleStmtPreprare(sql string) (params int, columns int, ctx interface{}, err error) {
 	ss := strings.Split(sql, " ")
 	switch strings.ToLower(ss[0]) {
 	case "select":
-		stmt.Columns = 2
-		stmt.Params = 1
+		params = 1
+		columns = 2
 	case "insert":
-		stmt.Columns = 0
-		stmt.Params = 2
+		params = 2
+		columns = 0
 	case "replace":
-		stmt.Columns = 0
-		stmt.Params = 2
+		params = 2
+		columns = 0
 	case "update":
-		stmt.Columns = 0
-		stmt.Params = 1
+		params = 1
+		columns = 0
 	case "delete":
-		stmt.Columns = 0
-		stmt.Params = 1
+		params = 1
+		columns = 0
 	default:
-		return nil, fmt.Errorf("invalid prepare %s", sql)
+		err = fmt.Errorf("invalid prepare %s", sql)
 	}
-
-	stmt.ResetParams()
-
-	return stmt, nil
+	return params, columns, nil, err
 }
 
-func (h *testHandler) HandleStmtExecute(s *Stmt) (*mysql.Result, error) {
-	return h.handleQuery(s.Query, true)
+func (h *testHandler) HandleStmtExecute(ctx interface{}, query string, args []interface{}) (*mysql.Result, error) {
+	return h.handleQuery(query, true)
 }
 
 func (s *serverTestSuite) SetUpSuite(c *C) {

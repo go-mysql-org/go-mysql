@@ -20,28 +20,22 @@ func init() {
 }
 
 type Stmt struct {
-	ID uint32
+	ID    uint32
+	Query string
 
 	Params  int
 	Columns int
 
 	Args []interface{}
 
-	Query string
-
 	Context interface{}
 }
 
-func NewStmt(id uint32, params int, columns int, query string, context interface{}) *Stmt {
-	s := new(Stmt)
-	s.ID = id
+func (s *Stmt) Rest(params int, columns int, context interface{}) {
 	s.Params = params
 	s.Columns = columns
-	s.Query = query
 	s.Context = context
 	s.ResetParams()
-
-	return s
 }
 
 func (s *Stmt) ResetParams() {
@@ -160,7 +154,7 @@ func (c *Conn) handleStmtExecute(data []byte) (*Result, error) {
 
 	var r *Result
 	var err error
-	if r, err = c.h.HandleStmtExecute(s); err != nil {
+	if r, err = c.h.HandleStmtExecute(s.Context, s.Query, s.Args); err != nil {
 		return nil, err
 	}
 
