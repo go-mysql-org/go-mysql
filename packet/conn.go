@@ -66,6 +66,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 }
 
 // data already has 4 bytes header
+// will modify data inplace
 func (c *Conn) WritePacket(data []byte) error {
 	length := len(data) - 4
 

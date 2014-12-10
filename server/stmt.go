@@ -32,6 +32,18 @@ type Stmt struct {
 	Context interface{}
 }
 
+func NewStmt(id uint32, params int, columns int, query string, context interface{}) *Stmt {
+	s := new(Stmt)
+	s.ID = id
+	s.Params = params
+	s.Columns = columns
+	s.Query = query
+	s.Context = context
+	s.ResetParams()
+
+	return s
+}
+
 func (s *Stmt) ResetParams() {
 	s.Args = make([]interface{}, s.Params)
 }

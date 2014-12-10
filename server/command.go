@@ -16,6 +16,10 @@ type Handler interface {
 }
 
 func (c *Conn) HandleCommand() error {
+	if c.Conn == nil {
+		return fmt.Errorf("connection closed")
+	}
+
 	data, err := c.ReadPacket()
 	if err != nil {
 		c.Close()
@@ -26,7 +30,9 @@ func (c *Conn) HandleCommand() error {
 
 	err = c.writeValue(v)
 
-	c.ResetSequence()
+	if c.Conn != nil {
+		c.ResetSequence()
+	}
 
 	if err != nil {
 		c.Close()
@@ -41,7 +47,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 	switch cmd {
 	case COM_QUIT:
 		c.Close()
-		return nil
+		return noResponse{}
 	case COM_QUERY:
 		if r, err := c.h.HandleQuery(hack.String(data)); err != nil {
 			return err
@@ -49,12 +55,12 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			return r
 		}
 	case COM_PING:
-		return &Result{}
+		return nil
 	case COM_INIT_DB:
 		if err := c.h.UseDB(hack.String(data)); err != nil {
 			return err
 		} else {
-			return &Result{}
+			return nil
 		}
 	case COM_FIELD_LIST:
 		index := bytes.IndexByte(data, 0x00)
@@ -82,10 +88,10 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		}
 	case COM_STMT_CLOSE:
 		c.handleStmtClose(data)
-		return nil
+		return noResponse{}
 	case COM_STMT_SEND_LONG_DATA:
 		c.handleStmtSendLongData(data)
-		return nil
+		return noResponse{}
 	case COM_STMT_RESET:
 		if r, err := c.handleStmtReset(data); err != nil {
 			return err

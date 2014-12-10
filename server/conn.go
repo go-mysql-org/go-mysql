@@ -39,6 +39,8 @@ func NewConn(conn net.Conn, password string, h Handler) (*Conn, error) {
 
 	c.stmts = make(map[uint32]*Stmt)
 
+	c.salt, _ = RandomBuf(20)
+
 	if err := c.handshake(password); err != nil {
 		c.Close()
 		return nil, err
