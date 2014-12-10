@@ -7,6 +7,9 @@ import (
 	"sync/atomic"
 )
 
+/*
+   Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
+*/
 type Conn struct {
 	*packet.Conn
 
