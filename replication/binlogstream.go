@@ -69,27 +69,6 @@ func (b *BinlogStreamReader) writeBinlogDumpGTIDCommand(flags uint16, fileName s
 	return b.WritePacket(data)
 }
 
-func (b *BinlogStreamReader) writTableDumpCommand(db string, table string) error {
-	data := make([]byte, 4+1+1+len(db)+1+len(table))
-
-	pos := 4
-	data[pos] = COM_TABLE_DUMP
-	pos++
-
-	data[pos] = uint8(len(db))
-	pos++
-
-	n := copy(data[pos:], db)
-	pos += n
-
-	data[pos] = uint8(len(table))
-	pos++
-
-	n = copy(data[pos:], table)
-
-	return b.WritePacket(data)
-}
-
 func (b *BinlogStreamReader) writeRegisterSlaveCommand() error {
 	data := make([]byte, 4+1+4+1+len(b.host)+1+len(b.user)+1+len(b.password),
 		+2+4+4)

@@ -136,7 +136,7 @@ type ExecuteLoadQueryEvent struct {
 	StatusVarsLength uint16
 
 	FileID           uint32
-	StartPos         uin32
+	StartPos         uint32
 	EndPos           uint32
 	DupHandlingFlags uint8
 }

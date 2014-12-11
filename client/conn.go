@@ -225,6 +225,15 @@ func (c *Conn) GetConnectionID() uint32 {
 	return c.connectionID
 }
 
+func (c *Conn) HandleOKPacket(data []byte) *Result {
+	r, _ := c.handleOKPacket(data)
+	return r
+}
+
+func (c *Conn) HandleErrorPacket(data []byte) error {
+	return c.handleErrorPacket(data)
+}
+
 func (c *Conn) exec(query string) (*Result, error) {
 	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
 		return nil, err

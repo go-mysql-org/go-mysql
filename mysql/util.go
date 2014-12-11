@@ -8,6 +8,7 @@ import (
 	"github.com/siddontang/go/hack"
 	"io"
 	"runtime"
+	"strings"
 )
 
 func Pstack() string {
@@ -283,6 +284,14 @@ func Escape(sql string) string {
 	}
 
 	return string(dest)
+}
+
+func GetNetProto(addr string) string {
+	if strings.Contains(addr, "/") {
+		return "unix"
+	} else {
+		return "tcp"
+	}
 }
 
 var encodeRef = map[byte]byte{
