@@ -234,6 +234,10 @@ func (c *Conn) HandleErrorPacket(data []byte) error {
 	return c.handleErrorPacket(data)
 }
 
+func (c *Conn) ReadOKPacket() (*Result, error) {
+	return c.readOK()
+}
+
 func (c *Conn) exec(query string) (*Result, error) {
 	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
 		return nil, err

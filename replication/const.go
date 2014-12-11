@@ -1,7 +1,7 @@
 package replication
 
 const (
-	//we only support MySQL 5.0.0+ binlog format
+	//we only support MySQL 5.0.0+ binlog format, maybe???
 	MinBinlogVersion = 4
 )
 
@@ -24,7 +24,15 @@ const (
 )
 
 const (
-	UNKNOWN_EVENT byte = iota
+	BINLOG_DUMP_NON_BLOCK   uint16 = 0x01
+	BINLOG_THROUGH_POSITION uint16 = 0x02
+	BINLOG_THROUGH_GTID     uint16 = 0x04
+)
+
+type EventType byte
+
+const (
+	UNKNOWN_EVENT EventType = iota
 	START_EVENT_V3
 	QUERY_EVENT
 	STOP_EVENT
@@ -62,8 +70,81 @@ const (
 	PREVIOUS_GTIDS_EVENT
 )
 
-const (
-	BINLOG_DUMP_NON_BLOCK   uint16 = 0x01
-	BINLOG_THROUGH_POSITION uint16 = 0x02
-	BINLOG_THROUGH_GTID     uint16 = 0x04
-)
+func (e EventType) String() string {
+	switch e {
+	case UNKNOWN_EVENT:
+		return "UnknownEvent"
+	case START_EVENT_V3:
+		return "StartEventV3"
+	case QUERY_EVENT:
+		return "QueryEvent"
+	case STOP_EVENT:
+		return "StopEvent"
+	case ROTATE_EVENT:
+		return "RotateEvent"
+	case INTVAR_EVENT:
+		return "IntVarEvent"
+	case LOAD_EVENT:
+		return "LoadEvent"
+	case SLAVE_EVENT:
+		return "SlaveEvent"
+	case CREATE_FILE_EVENT:
+		return "CreateFileEvent"
+	case APPEND_BLOCK_EVENT:
+		return "AppendBlockEvent"
+	case EXEC_LOAD_EVENT:
+		return "ExecLoadEvent"
+	case DELETE_FILE_EVENT:
+		return "DeleteFileEvent"
+	case NEW_LOAD_EVENT:
+		return "NewLoadEvent"
+	case RAND_EVENT:
+		return "RandEvent"
+	case USER_VAR_EVENT:
+		return "UserVarEvent"
+	case FORMAT_DESCRIPTION_EVENT:
+		return "FormatDescriptionEvent"
+	case XID_EVENT:
+		return "XIDEvent"
+	case BEGIN_LOAD_QUERY_EVENT:
+		return "BeginLoadQueryEvent"
+	case EXECUTE_LOAD_QUERY_EVENT:
+		return "ExectueLoadQueryEvent"
+	case TABLE_MAP_EVENT:
+		return "TableMapEvent"
+	case WRITE_ROWS_EVENTv0:
+		return "WriteRowsEventV0"
+	case UPDATE_ROWS_EVENTv0:
+		return "UpdateRowsEventV0"
+	case DELETE_ROWS_EVENTv0:
+		return "DeleteRowsEventV0"
+	case WRITE_ROWS_EVENTv1:
+		return "WriteRowsEventV1"
+	case UPDATE_ROWS_EVENTv1:
+		return "UpdateRowsEventV1"
+	case DELETE_ROWS_EVENTv1:
+		return "DeleteRowsEventV1"
+	case INCIDENT_EVENT:
+		return "IncidentEvent"
+	case HEARTBEAT_EVENT:
+		return "HeartbeatEvent"
+	case IGNORABLE_EVENT:
+		return "IgnorableEvent"
+	case ROWS_QUERY_EVENT:
+		return "RowsQueryEvent"
+	case WRITE_ROWS_EVENTv2:
+		return "WriteRowsEventV2"
+	case UPDATE_ROWS_EVENTv2:
+		return "UpdateRowsEventV2"
+	case DELETE_ROWS_EVENTv2:
+		return "DeleteRowsEventV2"
+	case GTID_EVENT:
+		return "GTIDEvent"
+	case ANONYMOUS_GTID_EVENT:
+		return "AnonymousGTIDEvent"
+	case PREVIOUS_GTIDS_EVENT:
+		return "PreviousGTIDsEvent"
+	default:
+		return "UnknownEvent"
+	}
+}

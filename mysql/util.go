@@ -63,6 +63,14 @@ func RandomBuf(size int) ([]byte, error) {
 	return buf, nil
 }
 
+func FixedLengthInt(buf []byte) uint64 {
+	var num uint64 = 0
+	for i, b := range buf {
+		num |= uint64(b) << (uint(i) * 8)
+	}
+	return num
+}
+
 func LengthEncodedInt(b []byte) (num uint64, isNull bool, n int) {
 	switch b[0] {
 
