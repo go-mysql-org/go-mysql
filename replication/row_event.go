@@ -228,8 +228,8 @@ func (e *RowsEvent) Decode(data []byte) error {
 		dataLen := binary.LittleEndian.Uint16(data[pos:])
 		pos += 2
 
-		e.ExtraData = data[pos : pos+int(dataLen)]
-		pos += int(dataLen)
+		e.ExtraData = data[pos : pos+int(dataLen-2)]
+		pos += int(dataLen - 2)
 	}
 
 	var n int

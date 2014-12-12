@@ -14,6 +14,8 @@ const (
 )
 
 type BinlogEvent struct {
+	//raw binlog package, don't include last 4 bytes CRC32 checkout
+	Data   []byte
 	Header *EventHeader
 	Event  Event
 }

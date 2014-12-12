@@ -231,11 +231,7 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	defer func() {
 		if e := recover(); e != nil {
-			if err, ok := e.(error); ok {
-				s.ech <- err
-			} else {
-				s.ech <- fmt.Errorf("%v", e)
-			}
+			s.ech <- fmt.Errorf("Err: %v\n Stack: %s", e, Pstack())
 		}
 		b.wg.Done()
 	}()
@@ -334,7 +330,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.tables[te.TableID] = te
 	}
 
-	s.ch <- &BinlogEvent{h, e}
+	s.ch <- &BinlogEvent{data, h, e}
 
 	return nil
 }
