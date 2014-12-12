@@ -1,11 +1,13 @@
 package replication
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	. "github.com/siddontang/go-mysql/mysql"
 	"io"
+	"strconv"
 	"time"
 )
 
@@ -329,9 +331,9 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
-		n = decimalBinarySize(int(prec), int(scale))
-		//we don't handle decimal here, only use its raw buffer
-		v = data[0:n]
+		var f float64
+		f, n, err = decodeDecimal(data, int(prec), int(scale))
+		v = f
 	case MYSQL_TYPE_FLOAT:
 		n = 4
 		v = int64(binary.LittleEndian.Uint32(data))
@@ -524,32 +526,73 @@ func decodeString(data []byte, length uint16) (v []byte, n int) {
 	return
 }
 
-const digPerDEC1 int = 9
-const sizeOfDEC1 = 4
+const digitsPerInteger int = 9
 
-var dig2bytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
+var compressedBytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
 
-//see mysql strings/decimal.c
-// int decimal_bin_size(int precision, int scale)
-// {
-//   int intg=precision-scale,
-//       intg0=intg/DIG_PER_DEC1, frac0=scale/DIG_PER_DEC1,
-//       intg0x=intg-intg0*DIG_PER_DEC1, frac0x=scale-frac0*DIG_PER_DEC1;
+func decodeDecimal(data []byte, precision int, decimals int) (float64, int, error) {
+	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
+	pos := 0
 
-//   DBUG_ASSERT(scale >= 0 && precision > 0 && scale <= precision);
-//   return intg0*sizeof(dec1)+dig2bytes[intg0x]+
-//          frac0*sizeof(dec1)+dig2bytes[frac0x];
-// }
+	integral := (precision - decimals)
+	uncompIntegral := int(integral / digitsPerInteger)
+	uncompFractional := int(decimals / digitsPerInteger)
+	compIntegral := integral - (uncompIntegral * digitsPerInteger)
+	compFractional := decimals - (uncompFractional * digitsPerInteger)
 
-func decimalBinarySize(precision int, scale int) int {
-	intg := precision - scale
-	intg0 := intg / digPerDEC1
-	frac0 := scale / digPerDEC1
-	intg0x := intg - intg0*digPerDEC1
-	frac0x := scale - frac0*digPerDEC1
+	binSize := uncompIntegral*4 + compressedBytes[compIntegral] +
+		uncompFractional*4 + compressedBytes[compFractional]
 
-	return intg0*sizeOfDEC1 + dig2bytes[intg0x] +
-		frac0*sizeOfDEC1 + dig2bytes[frac0x]
+	buf := make([]byte, binSize)
+	copy(buf, data[:binSize])
+
+	data = buf
+
+	// Support negative
+	// The sign is encoded in the high bit of the the byte
+	// But this bit can also be used in the value
+	value := int64(data[pos])
+	var res bytes.Buffer
+	var mask int64 = 0
+	if value&0x80 == 0 {
+		mask = -1
+		res.WriteString("-")
+	}
+
+	//clear sign
+	data[0] ^= 0x80
+
+	size := compressedBytes[compIntegral]
+	if size > 0 {
+		value = int64(FixedLengthInt(data[pos:pos+size])) ^ mask
+		res.WriteString(strconv.FormatInt(value, 10))
+		pos += size
+	}
+
+	for i := 0; i < uncompIntegral; i++ {
+		value = int64(binary.BigEndian.Uint32(data[pos:])) ^ mask
+		pos += 4
+		res.WriteString(fmt.Sprintf("%09d", value))
+	}
+
+	res.WriteString(".")
+
+	for i := 0; i < uncompFractional; i++ {
+		value = int64(binary.BigEndian.Uint32(data[pos:])) ^ mask
+		pos += 4
+		res.WriteString(fmt.Sprintf("%09d", value))
+	}
+
+	size = compressedBytes[compFractional]
+	if size > 0 {
+		value = int64(FixedLengthInt(data[pos:pos+size])) ^ mask
+		pos += size
+
+		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
+	}
+
+	f, err := strconv.ParseFloat(string(res.Bytes()), 64)
+	return f, pos, err
 }
 
 func (e *RowsEvent) Dump(w io.Writer) {
