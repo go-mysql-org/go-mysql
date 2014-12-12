@@ -27,6 +27,8 @@ type BinlogSyncer struct {
 	useChecksum bool
 
 	format *FormatDescriptionEvent
+
+	tables map[uint64]*TableMapEvent
 }
 
 func NewBinlogSyncer(serverID uint32) *BinlogSyncer {
@@ -38,17 +40,19 @@ func NewBinlogSyncer(serverID uint32) *BinlogSyncer {
 	b.quit = make(chan struct{})
 	b.useChecksum = false
 
+	b.tables = make(map[uint64]*TableMapEvent)
+
 	return b
 }
 
 func (b *BinlogSyncer) Close() {
 	close(b.quit)
 
-	b.wg.Wait()
-
 	if b.c != nil {
 		b.c.Close()
 	}
+
+	b.wg.Wait()
 }
 
 func (b *BinlogSyncer) checksumUsed() error {
@@ -83,7 +87,6 @@ func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, pass
 	if err = b.checksumUsed(); err != nil {
 		return err
 	} else if b.useChecksum {
-		println("here here???")
 		if _, err = b.c.Execute(`SET @master_binlog_checksum=@@global.binlog_checksum`); err != nil {
 			return err
 		}
@@ -226,7 +229,16 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 }
 
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
-	defer b.wg.Done()
+	defer func() {
+		if e := recover(); e != nil {
+			if err, ok := e.(error); ok {
+				s.ech <- err
+			} else {
+				s.ech <- fmt.Errorf("%v", e)
+			}
+		}
+		b.wg.Done()
+	}()
 
 	for {
 		select {
@@ -290,15 +302,76 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		e = &QueryEvent{}
 	case XID_EVENT:
 		e = &XIDEvent{}
+	case TABLE_MAP_EVENT:
+		te := &TableMapEvent{}
+		if b.format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {
+			te.tableIDSize = 4
+		} else {
+			te.tableIDSize = 6
+		}
+		e = te
+	case WRITE_ROWS_EVENTv0,
+		UPDATE_ROWS_EVENTv0,
+		DELETE_ROWS_EVENTv0,
+		WRITE_ROWS_EVENTv1,
+		DELETE_ROWS_EVENTv1,
+		UPDATE_ROWS_EVENTv1,
+		WRITE_ROWS_EVENTv2,
+		UPDATE_ROWS_EVENTv2,
+		DELETE_ROWS_EVENTv2:
+		e = b.newRowsEvent(h)
+	case ROWS_QUERY_EVENT:
+		e = &RowsQueryEvent{}
 	default:
 		e = &GenericEvent{}
 	}
 
 	if err := e.Decode(data); err != nil {
-		return err
+		return &EventError{h, err.Error(), data}
+	}
+
+	if te, ok := e.(*TableMapEvent); ok {
+		b.tables[te.TableID] = te
 	}
 
 	s.ch <- &BinlogEvent{h, e}
 
 	return nil
+}
+
+func (b *BinlogSyncer) newRowsEvent(h *EventHeader) *RowsEvent {
+	e := &RowsEvent{}
+	if b.format.EventTypeHeaderLengths[h.EventType-1] == 6 {
+		e.tableIDSize = 4
+	} else {
+		e.tableIDSize = 6
+	}
+
+	e.needBitmap2 = false
+	e.tables = b.tables
+
+	switch h.EventType {
+	case WRITE_ROWS_EVENTv0:
+		e.Version = 0
+	case UPDATE_ROWS_EVENTv0:
+		e.Version = 0
+	case DELETE_ROWS_EVENTv0:
+		e.Version = 0
+	case WRITE_ROWS_EVENTv1:
+		e.Version = 1
+	case DELETE_ROWS_EVENTv1:
+		e.Version = 1
+	case UPDATE_ROWS_EVENTv1:
+		e.Version = 1
+		e.needBitmap2 = true
+	case WRITE_ROWS_EVENTv2:
+		e.Version = 2
+	case UPDATE_ROWS_EVENTv2:
+		e.Version = 2
+		e.needBitmap2 = true
+	case DELETE_ROWS_EVENTv2:
+		e.Version = 2
+	}
+
+	return e
 }

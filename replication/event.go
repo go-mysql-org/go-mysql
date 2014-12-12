@@ -30,6 +30,20 @@ type Event interface {
 	Decode(data []byte) error
 }
 
+type EventError struct {
+	Header *EventHeader
+
+	//Error message
+	Err string
+
+	//Event data
+	Data []byte
+}
+
+func (e *EventError) Error() string {
+	return e.Err
+}
+
 type EventHeader struct {
 	Timestamp uint32
 	EventType EventType

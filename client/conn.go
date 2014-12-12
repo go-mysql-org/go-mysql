@@ -84,10 +84,7 @@ func (c *Conn) handshake() error {
 }
 
 func (c *Conn) Close() {
-	if c.Conn != nil {
-		c.Conn.Close()
-		c.Conn = nil
-	}
+	c.Conn.Close()
 }
 
 func (c *Conn) Ping() error {

@@ -3,6 +3,7 @@ package server
 import (
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
+	"github.com/siddontang/go/sync2"
 	"net"
 	"sync/atomic"
 )
@@ -27,6 +28,8 @@ type Conn struct {
 
 	stmts  map[uint32]*Stmt
 	stmtID uint32
+
+	closed sync2.AtomicBool
 }
 
 var baseConnID uint32 = 10000
@@ -44,6 +47,8 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	c.stmts = make(map[uint32]*Stmt)
 
 	c.salt, _ = RandomBuf(20)
+
+	c.closed.Set(false)
 
 	if err := c.handshake(password); err != nil {
 		c.Close()
@@ -74,14 +79,12 @@ func (c *Conn) handshake(password string) error {
 }
 
 func (c *Conn) Close() {
-	if c.Conn != nil {
-		c.Conn.Close()
-		c.Conn = nil
-	}
+	c.closed.Set(true)
+	c.Conn.Close()
 }
 
 func (c *Conn) Closed() bool {
-	return c.Conn == nil
+	return c.closed.Get()
 }
 
 func (c *Conn) GetUser() string {
