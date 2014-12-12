@@ -148,7 +148,7 @@ func (s *serverTestSuite) onAccept(c *C) {
 }
 
 func (s *serverTestSuite) onConn(conn net.Conn, c *C) {
-	co, err := NewConn(conn, *testPassword, &testHandler{s})
+	co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
 	c.Assert(err, IsNil)
 
 	for {

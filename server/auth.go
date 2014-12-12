@@ -81,8 +81,12 @@ func (c *Conn) readHandshakeResponse(password string) error {
 	pos += 23
 
 	//user name
-	c.user = string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
-	pos += len(c.user) + 1
+	user := string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
+	pos += len(user) + 1
+
+	if c.user != user {
+		return NewDefaultError(ER_NO_SUCH_USER, user, c.RemoteAddr().String())
+	}
 
 	//auth length and auth
 	authLen := int(data[pos])

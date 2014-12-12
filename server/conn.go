@@ -31,11 +31,12 @@ type Conn struct {
 
 var baseConnID uint32 = 10000
 
-func NewConn(conn net.Conn, password string, h Handler) (*Conn, error) {
+func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
 	c := new(Conn)
 
 	c.h = h
 
+	c.user = user
 	c.Conn = packet.NewConn(conn)
 
 	c.connectionID = atomic.AddUint32(&baseConnID, 1)
