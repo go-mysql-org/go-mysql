@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	. "github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go/hack"
 	"io"
 	"strconv"
 	"time"
@@ -214,7 +215,7 @@ type RowsEvent struct {
 	//len = (ColumnCount + 7) / 8
 	ColumnBitmap2 []byte
 
-	//rows: invalid: int64, float64, bool, []byte, time.Time
+	//rows: invalid: int64, float64, bool, []byte, string
 	Rows [][]interface{}
 }
 
@@ -331,7 +332,8 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
-		var f float64
+		var f string
+		//return string first
 		f, n, err = decodeDecimal(data, int(prec), int(scale))
 		v = f
 	case MYSQL_TYPE_FLOAT:
@@ -372,7 +374,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			int((t%10000)/100),
 			int(t%100),
 			0,
-			time.UTC)
+			time.UTC).Format(TimeFormat)
 	case MYSQL_TYPE_DATETIME2:
 		// {
 		//   char buf[MAX_DATE_STRING_REP_LENGTH];
@@ -438,7 +440,9 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 
 	case MYSQL_TYPE_YEAR:
 		n = 1
-		v = time.Date(int(data[0])+1900, time.January, 0, 0, 0, 0, 0, time.UTC)
+		v = time.Date(int(data[0])+1900,
+			time.January, 0, 0, 0, 0, 0,
+			time.UTC).Format(TimeFormat)
 	case MYSQL_TYPE_ENUM:
 		// switch (meta & 0xFF) {
 		// case 1:
@@ -530,7 +534,7 @@ const digitsPerInteger int = 9
 
 var compressedBytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
 
-func decodeDecimal(data []byte, precision int, decimals int) (float64, int, error) {
+func decodeDecimal(data []byte, precision int, decimals int) (string, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
 	pos := 0
 
@@ -546,6 +550,7 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	buf := make([]byte, binSize)
 	copy(buf, data[:binSize])
 
+	//must copy the data for later change
 	data = buf
 
 	// Support negative
@@ -591,8 +596,7 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
 	}
 
-	f, err := strconv.ParseFloat(string(res.Bytes()), 64)
-	return f, pos, err
+	return hack.String(res.Bytes()), pos, nil
 }
 
 func (e *RowsEvent) Dump(w io.Writer) {
