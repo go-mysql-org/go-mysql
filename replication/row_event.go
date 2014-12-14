@@ -292,7 +292,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent) (int, error) {
 
 // see mysql sql/log_event.cc log_event_print_value
 func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{}, n int, err error) {
-	var length uint16 = 0
+	var length int = 0
 
 	if tp == MYSQL_TYPE_STRING {
 		if meta >= 256 {
@@ -300,13 +300,13 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			b1 := uint8(meta & 0xFF)
 
 			if b0&0x30 != 0x30 {
-				length = uint16(b1) | (uint16((b0&0x30)^0x30) << 4)
+				length = int(uint16(b1) | (uint16((b0&0x30)^0x30) << 4))
 				tp = byte(b0 | 0x30)
 			} else {
-				length = meta & 0xFF
+				length = int(meta & 0xFF)
 			}
 		} else {
-			length = meta
+			length = int(meta)
 		}
 	}
 
@@ -436,41 +436,27 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_BLOB:
 		switch meta {
 		case 1:
+			length = int(data[0])
+			v = data[1 : 1+length]
+			n = length + 1
 		case 2:
+			length = int(binary.BigEndian.Uint16(data))
+			v = data[2 : 2+length]
+			n = length + 2
 		case 3:
+			length = int(FixedLengthInt(data[0:3]))
+			v = data[3 : 3+length]
+			n = length + 3
 		case 4:
+			length = int(binary.BigEndian.Uint32(data))
+			v = data[4 : 4+length]
+			n = length + 4
 		default:
 			err = fmt.Errorf("invalid blob packlen = %d", meta)
 		}
-		// switch (meta) {
-		// case 1:
-		//   length= *ptr;
-		//   my_b_write_quoted(file, ptr + 1, length);
-		//   my_snprintf(typestr, typestr_length, "TINYBLOB/TINYTEXT");
-		//   return length + 1;
-		// case 2:
-		//   length= uint2korr(ptr);
-		//   my_b_write_quoted(file, ptr + 2, length);
-		//   my_snprintf(typestr, typestr_length, "BLOB/TEXT");
-		//   return length + 2;
-		// case 3:
-		//   length= uint3korr(ptr);
-		//   my_b_write_quoted(file, ptr + 3, length);
-		//   my_snprintf(typestr, typestr_length, "MEDIUMBLOB/MEDIUMTEXT");
-		//   return length + 3;
-		// case 4:
-		//   length= uint4korr(ptr);
-		//   my_b_write_quoted(file, ptr + 4, length);
-		//   my_snprintf(typestr, typestr_length, "LONGBLOB/LONGTEXT");
-		//   return length + 4;
-		// default:
-		//   my_b_printf(file, "!! Unknown BLOB packlen=%d", length);
-		//   return 0;
-		// }
-
 	case MYSQL_TYPE_VARCHAR,
 		MYSQL_TYPE_VAR_STRING:
-		length = meta
+		length = int(meta)
 		v, n = decodeString(data, length)
 	case MYSQL_TYPE_STRING:
 		v, n = decodeString(data, length)
@@ -480,15 +466,15 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	return
 }
 
-func decodeString(data []byte, length uint16) (v []byte, n int) {
+func decodeString(data []byte, length int) (v []byte, n int) {
 	if length < 256 {
-		length = uint16(data[0])
+		length = int(data[0])
 
 		n = int(length) + 1
 		v = data[1:n]
 	} else {
-		length = binary.LittleEndian.Uint16(data[0:])
-		n = int(length) + 2
+		length = int(binary.LittleEndian.Uint16(data[0:]))
+		n = length + 2
 		v = data[2:n]
 	}
 
