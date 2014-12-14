@@ -417,33 +417,25 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			time.January, 0, 0, 0, 0, 0,
 			time.UTC).Format(TimeFormat)
 	case MYSQL_TYPE_ENUM:
-		// switch (meta & 0xFF) {
-		// case 1:
-		//   my_b_printf(file, "%d", (int) *ptr);
-		//   my_snprintf(typestr, typestr_length, "ENUM(1 byte)");
-		//   return 1;
-		// case 2:
-		//   {
-		//     int32 i32= uint2korr(ptr);
-		//     my_b_printf(file, "%d", i32);
-		//     my_snprintf(typestr, typestr_length, "ENUM(2 bytes)");
-		//     return 2;
-		//   }
-		// default:
-		//   my_b_printf(file, "!! Unknown ENUM packlen=%d", meta & 0xFF);
-		//   return 0;
-		// }
-		// break;
-
+		l := meta & 0xFF
+		switch l {
+		case 1:
+			v = int64(data[0])
+			n = 1
+		case 2:
+			v = int64(binary.BigEndian.Uint16(data))
+			n = 2
+		default:
+			err = fmt.Errorf("Unknown ENUM packlen=%d", l)
+		}
 	case MYSQL_TYPE_SET:
-		// my_b_write_bit(file, ptr , (meta & 0xFF) * 8);
-		// my_snprintf(typestr, typestr_length, "SET(%d bytes)", meta & 0xFF);
-		// return meta & 0xFF;
+		nbits := meta & 0xFF
+		n = int(nbits+7) / 8
 
+		v, err = decodeBit(data, int(nbits), n)
 	case MYSQL_TYPE_BLOB:
 		switch meta {
 		case 1:
-
 		case 2:
 		case 3:
 		case 4:
