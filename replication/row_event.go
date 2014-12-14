@@ -345,8 +345,9 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_BIT:
 		nbits := ((meta >> 8) * 8) + (meta & 0xFF)
 		n = int(nbits+7) / 8
-		//we don't handle bit here, only use its raw buffer
-		v = data[0:n]
+
+		//use int64 for bit
+		v, err = decodeBit(data, int(nbits), int(n))
 	case MYSQL_TYPE_TIMESTAMP:
 		n = 4
 		t := binary.LittleEndian.Uint32(data)
@@ -410,34 +411,6 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		//   my_snprintf(typestr, typestr_length, "TIME(%d)", meta);
 		//   return my_time_binary_length(meta);
 		// }
-
-	case MYSQL_TYPE_NEWDATE:
-		// {
-		//   uint32 tmp= uint3korr(ptr);
-		//   int part;
-		//   char buf[11];
-		//   char *pos= &buf[10];  // start from '\0' to the beginning
-
-		//   /* Copied from field.cc */
-		//   *pos--=0;					// End NULL
-		//   part=(int) (tmp & 31);
-		//   *pos--= (char) ('0'+part%10);
-		//   *pos--= (char) ('0'+part/10);
-		//   *pos--= ':';
-		//   part=(int) (tmp >> 5 & 15);
-		//   *pos--= (char) ('0'+part%10);
-		//   *pos--= (char) ('0'+part/10);
-		//   *pos--= ':';
-		//   part=(int) (tmp >> 9);
-		//   *pos--= (char) ('0'+part%10); part/=10;
-		//   *pos--= (char) ('0'+part%10); part/=10;
-		//   *pos--= (char) ('0'+part%10); part/=10;
-		//   *pos=   (char) ('0'+part);
-		//   my_b_printf(file , "'%s'", buf);
-		//   my_snprintf(typestr, typestr_length, "DATE");
-		//   return 3;
-		// }
-
 	case MYSQL_TYPE_YEAR:
 		n = 1
 		v = time.Date(int(data[0])+1900,
@@ -597,6 +570,38 @@ func decodeDecimal(data []byte, precision int, decimals int) (string, int, error
 	}
 
 	return hack.String(res.Bytes()), pos, nil
+}
+
+func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
+	if nbits > 1 {
+		switch length {
+		case 1:
+			value = int64(data[0])
+		case 2:
+			value = int64(binary.BigEndian.Uint16(data))
+		case 3:
+			value = int64(FixedLengthInt(data[0:3]))
+		case 4:
+			value = int64(binary.BigEndian.Uint32(data))
+		case 5:
+			value = int64(FixedLengthInt(data[0:5]))
+		case 6:
+			value = int64(FixedLengthInt(data[0:6]))
+		case 7:
+			value = int64(FixedLengthInt(data[0:7]))
+		case 8:
+			value = int64(binary.BigEndian.Uint64(data))
+		default:
+			err = fmt.Errorf("invalid bit length %d", length)
+		}
+	} else {
+		if length != 1 {
+			err = fmt.Errorf("invalid bit length %d", length)
+		} else {
+			value = int64(data[0])
+		}
+	}
+	return
 }
 
 func (e *RowsEvent) Dump(w io.Writer) {
