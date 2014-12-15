@@ -419,15 +419,15 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			v = data[1 : 1+length]
 			n = length + 1
 		case 2:
-			length = int(binary.BigEndian.Uint16(data))
+			length = int(binary.LittleEndian.Uint16(data))
 			v = data[2 : 2+length]
 			n = length + 2
 		case 3:
-			length = int(BFixedLengthInt(data[0:3]))
+			length = int(FixedLengthInt(data[0:3]))
 			v = data[3 : 3+length]
 			n = length + 3
 		case 4:
-			length = int(binary.BigEndian.Uint32(data))
+			length = int(binary.LittleEndian.Uint32(data))
 			v = data[4 : 4+length]
 			n = length + 4
 		default:
