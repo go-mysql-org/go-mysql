@@ -99,35 +99,55 @@ func (t *testSyncerSuite) TestSync(c *C) {
 				return
 			}
 
-			e.Dump(os.Stderr)
-			os.Stderr.Sync()
+			if _, ok := e.Event.(*RowsEvent); ok {
+				e.Dump(os.Stderr)
+				os.Stderr.Sync()
+			}
 		}
 	}()
 
 	//use mixed format
 	t.testExecute(c, "SET SESSION binlog_format = 'MIXED'")
 
-	str := `CREATE TABLE IF NOT EXISTS test_replication (
-          id BIGINT(64) UNSIGNED  NOT NULL,
+	str := `DROP TABLE IF EXISTS test_replication`
+	t.testExecute(c, str)
+
+	str = `CREATE TABLE IF NOT EXISTS test_replication (
+          id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
           str VARCHAR(256),
-          f DOUBLE,
-          u tinyint unsigned,
-          i tinyint,
-          PRIMARY KEY (id)
+          f FLOAT,
+          d DOUBLE,
+          de DECIMAL(5,2),
+          i INT,
+          bi BIGINT,
+          e enum ("e1", "e2"),
+          b BIT(8),
+          y YEAR,
+          da DATE,
+          ts TIMESTAMP,
+          dt DATETIME,
+          tm TIME,
+	      PRIMARY KEY (id) 
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
 	t.testExecute(c, str)
 
-	t.testExecute(c, "DELETE FROM test_replication")
-	t.testExecute(c, `INSERT INTO test_replication (id, str) VALUES (1, "1")`)
-	t.testExecute(c, `INSERT INTO test_replication (id, str) VALUES (2, "2")`)
-
 	//use row format
 	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
-	t.testExecute(c, `INSERT INTO test_replication (id, str, f) VALUES (3, "3", 3.14)`)
-	t.testExecute(c, `INSERT INTO test_replication (id, str, f) VALUES (4, "4", 3.14)`)
-	t.testExecute(c, `UPDATE test_replication SET f = 2.0 WHERE id = 3`)
-	t.testExecute(c, `DELETE FROM test_replication WHERE id = 4`)
+	t.testExecute(c, `INSERT INTO test_replication (str, f, i) VALUES ("3", 3.14, 10)`)
+	t.testExecute(c, `INSERT INTO test_replication (str, d, i) VALUES ("4", 3.14, 100)`)
+	t.testExecute(c, `UPDATE test_replication SET f = 2.0 WHERE id = 1`)
+	t.testExecute(c, `DELETE FROM test_replication WHERE id = 2`)
+	t.testExecute(c, `INSERT INTO test_replication (e) VALUES ("e1")`)
+	t.testExecute(c, `INSERT INTO test_replication (b) VALUES (0b0011)`)
+	t.testExecute(c, `INSERT INTO test_replication (y) VALUES (1985)`)
+	t.testExecute(c, `INSERT INTO test_replication (da) VALUES ("2012-05-07")`)
+	t.testExecute(c, `INSERT INTO test_replication (ts) VALUES ("2012-05-07 14:01:01")`)
+	t.testExecute(c, `INSERT INTO test_replication (dt) VALUES ("2012-05-07 14:01:01")`)
+	t.testExecute(c, `INSERT INTO test_replication (tm) VALUES ("14:01:01")`)
+	t.testExecute(c, `INSERT INTO test_replication (de) VALUES (122.24)`)
+	//t.testExecute(c, `INSERT INTO test_replication (t) VALUES ("abc")`)
+	//t.testExecute(c, `INSERT INTO test_replication (bb) VALUES ("12345")`)
 
 	t.wg.Wait()
 }

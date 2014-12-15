@@ -8,6 +8,7 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 	"io"
+	"math"
 	"strconv"
 	"time"
 )
@@ -305,6 +306,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 				tp = byte(b0 | 0x30)
 			} else {
 				length = int(meta & 0xFF)
+				tp = b0
 			}
 		} else {
 			length = int(meta)
@@ -333,16 +335,13 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
-		var f string
-		//return string first
-		f, n, err = decodeDecimal(data, int(prec), int(scale))
-		v = f
+		v, n, err = decodeDecimal(data, int(prec), int(scale))
 	case MYSQL_TYPE_FLOAT:
 		n = 4
-		v = int64(binary.LittleEndian.Uint32(data))
+		v = float64(math.Float32frombits(binary.LittleEndian.Uint32(data)))
 	case MYSQL_TYPE_DOUBLE:
 		n = 8
-		v = int64(binary.LittleEndian.Uint64(data))
+		v = math.Float64frombits(binary.LittleEndian.Uint64(data))
 	case MYSQL_TYPE_BIT:
 		nbits := ((meta >> 8) * 8) + (meta & 0xFF)
 		n = int(nbits+7) / 8
@@ -384,11 +383,18 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		}
 	case MYSQL_TYPE_TIME2:
 		v, n, err = decodeTime2(data, meta)
+	case MYSQL_TYPE_DATE:
+		n = 3
+		i32 := uint32(FixedLengthInt(data[0:3]))
+		if i32 == 0 {
+			v = "0000-00-00"
+		} else {
+			v = fmt.Sprintf("%04d-%02d-%02d", i32/(16*32), i32/32%16, i32%32)
+		}
+
 	case MYSQL_TYPE_YEAR:
 		n = 1
-		v = time.Date(int(data[0])+1900,
-			time.January, 0, 0, 0, 0, 0,
-			time.UTC).Format(TimeFormat)
+		v = int(data[0]) + 1900
 	case MYSQL_TYPE_ENUM:
 		l := meta & 0xFF
 		switch l {
@@ -417,7 +423,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			v = data[2 : 2+length]
 			n = length + 2
 		case 3:
-			length = int(FixedLengthInt(data[0:3]))
+			length = int(BFixedLengthInt(data[0:3]))
 			v = data[3 : 3+length]
 			n = length + 3
 		case 4:
@@ -439,16 +445,16 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	return
 }
 
-func decodeString(data []byte, length int) (v []byte, n int) {
+func decodeString(data []byte, length int) (v string, n int) {
 	if length < 256 {
 		length = int(data[0])
 
 		n = int(length) + 1
-		v = data[1:n]
+		v = hack.String(data[1:n])
 	} else {
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + 2
-		v = data[2:n]
+		v = hack.String(data[2:n])
 	}
 
 	return
@@ -458,7 +464,7 @@ const digitsPerInteger int = 9
 
 var compressedBytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
 
-func decodeDecimal(data []byte, precision int, decimals int) (string, int, error) {
+func decodeDecimal(data []byte, precision int, decimals int) (float64, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
 	pos := 0
 
@@ -483,7 +489,9 @@ func decodeDecimal(data []byte, precision int, decimals int) (string, int, error
 	value := int64(data[pos])
 	var res bytes.Buffer
 	var mask int64 = 0
-	if value&0x80 == 0 {
+	if value&0x80 != 0 {
+		mask = 0
+	} else {
 		mask = -1
 		res.WriteString("-")
 	}
@@ -493,8 +501,8 @@ func decodeDecimal(data []byte, precision int, decimals int) (string, int, error
 
 	size := compressedBytes[compIntegral]
 	if size > 0 {
-		value = int64(FixedLengthInt(data[pos:pos+size])) ^ mask
-		res.WriteString(strconv.FormatInt(value, 10))
+		value = int64(BFixedLengthInt(data[pos:pos+size])) ^ mask
+		res.WriteString(fmt.Sprintf("%d", value))
 		pos += size
 	}
 
@@ -514,13 +522,15 @@ func decodeDecimal(data []byte, precision int, decimals int) (string, int, error
 
 	size = compressedBytes[compFractional]
 	if size > 0 {
-		value = int64(FixedLengthInt(data[pos:pos+size])) ^ mask
+		value = int64(BFixedLengthInt(data[pos:pos+size])) ^ mask
 		pos += size
 
 		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
 	}
 
-	return hack.String(res.Bytes()), pos, nil
+	//return hack.String(res.Bytes()), pos, nil
+	f, err := strconv.ParseFloat(hack.String(res.Bytes()), 64)
+	return f, pos, err
 }
 
 func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
@@ -531,15 +541,15 @@ func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
 		case 2:
 			value = int64(binary.BigEndian.Uint16(data))
 		case 3:
-			value = int64(FixedLengthInt(data[0:3]))
+			value = int64(BFixedLengthInt(data[0:3]))
 		case 4:
 			value = int64(binary.BigEndian.Uint32(data))
 		case 5:
-			value = int64(FixedLengthInt(data[0:5]))
+			value = int64(BFixedLengthInt(data[0:5]))
 		case 6:
-			value = int64(FixedLengthInt(data[0:6]))
+			value = int64(BFixedLengthInt(data[0:6]))
 		case 7:
-			value = int64(FixedLengthInt(data[0:7]))
+			value = int64(BFixedLengthInt(data[0:7]))
 		case 8:
 			value = int64(binary.BigEndian.Uint64(data))
 		default:
@@ -566,7 +576,11 @@ func decodeTimestamp2(data []byte, dec uint16) (string, int, error) {
 	case 3, 4:
 		usec = int64(binary.BigEndian.Uint16(data[4:])) * 100
 	case 5, 6:
-		usec = int64(FixedLengthInt(data[4:7]))
+		usec = int64(BFixedLengthInt(data[4:7]))
+	}
+
+	if sec == 0 {
+		return "0000-00-00 00:00:00", n, nil
 	}
 
 	t := time.Unix(sec, usec*1000)
@@ -579,8 +593,8 @@ func decodeDatetime2(data []byte, dec uint16) (string, int, error) {
 	//get datetime binary length
 	n := int(5 + (dec+1)/2)
 
-	intPart := int64(FixedLengthInt(data[0:5])) - DATETIMEF_INT_OFS
-	var frac int64
+	intPart := int64(BFixedLengthInt(data[0:5])) - DATETIMEF_INT_OFS
+	var frac int64 = 0
 
 	switch dec {
 	case 1, 2:
@@ -588,7 +602,11 @@ func decodeDatetime2(data []byte, dec uint16) (string, int, error) {
 	case 3, 4:
 		frac = int64(binary.BigEndian.Uint16(data[5:7])) * 100
 	case 5, 6:
-		frac = int64(FixedLengthInt(data[5:8]))
+		frac = int64(BFixedLengthInt(data[5:8]))
+	}
+
+	if intPart == 0 {
+		return "0000-00-00 00:00:00", n, nil
 	}
 
 	tmp := intPart<<24 + frac
@@ -613,7 +631,7 @@ func decodeDatetime2(data []byte, dec uint16) (string, int, error) {
 	minute := int((hms >> 6) % (1 << 6))
 	hour := int((hms >> 12))
 
-	return time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC).Format(TimeFormat), n, nil
+	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second), n, nil
 }
 
 const TIMEF_OFS int64 = 0x800000000000
@@ -629,7 +647,7 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 	switch dec {
 	case 1:
 	case 2:
-		intPart = int64(FixedLengthInt(data[0:3])) - TIMEF_INT_OFS
+		intPart = int64(BFixedLengthInt(data[0:3])) - TIMEF_INT_OFS
 		frac = int64(data[3])
 		if intPart < 0 && frac > 0 {
 			/*
@@ -655,7 +673,7 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 		tmp = intPart<<24 + frac*10000
 	case 3:
 	case 4:
-		intPart = int64(FixedLengthInt(data[0:3])) - TIMEF_INT_OFS
+		intPart = int64(BFixedLengthInt(data[0:3])) - TIMEF_INT_OFS
 		frac = int64(binary.BigEndian.Uint16(data[3:5]))
 		if intPart < 0 && frac > 0 {
 			/*
@@ -669,10 +687,14 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 
 	case 5:
 	case 6:
-		tmp = int64(FixedLengthInt(data[0:6])) - TIMEF_OFS
+		tmp = int64(BFixedLengthInt(data[0:6])) - TIMEF_OFS
 	default:
-		intPart = int64(FixedLengthInt(data[0:3])) - TIMEF_INT_OFS
+		intPart = int64(BFixedLengthInt(data[0:3])) - TIMEF_INT_OFS
 		tmp = intPart << 24
+	}
+
+	if intPart == 0 {
+		return "00:00:00", n, nil
 	}
 
 	hms := int64(0)
@@ -704,7 +726,11 @@ func (e *RowsEvent) Dump(w io.Writer) {
 	for _, rows := range e.Rows {
 		fmt.Fprintf(w, "--\n")
 		for j, d := range rows {
-			fmt.Fprintf(w, "%d:%v\n", j, d)
+			if _, ok := d.([]byte); ok {
+				fmt.Fprintf(w, "%d:%q\n", j, d)
+			} else {
+				fmt.Fprintf(w, "%d:%#v\n", j, d)
+			}
 		}
 	}
 	fmt.Fprintln(w)
