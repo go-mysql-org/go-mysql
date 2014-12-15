@@ -287,6 +287,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent) (int, error) {
 		}
 		pos += n
 	}
+	e.Rows = append(e.Rows, rows)
 	return pos, nil
 }
 
@@ -353,16 +354,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		t := binary.LittleEndian.Uint32(data)
 		v = time.Unix(int64(t), 0)
 	case MYSQL_TYPE_TIMESTAMP2:
-		// {
-		//   char buf[MAX_DATE_STRING_REP_LENGTH];
-		//   struct timeval tm;
-		//   my_timestamp_from_binary(&tm, ptr, meta);
-		//   int buflen= my_timeval_to_str(&tm, buf, meta);
-		//   my_b_write(file, buf, buflen);
-		//   my_snprintf(typestr, typestr_length, "TIMESTAMP(%d)", meta);
-		//   return my_timestamp_binary_length(meta);
-		// }
-
+		v, n, err = decodeTimestamp2(data, meta)
 	case MYSQL_TYPE_DATETIME:
 		n = 8
 		i64 := binary.LittleEndian.Uint64(data)
@@ -377,17 +369,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			0,
 			time.UTC).Format(TimeFormat)
 	case MYSQL_TYPE_DATETIME2:
-		// {
-		//   char buf[MAX_DATE_STRING_REP_LENGTH];
-		//   MYSQL_TIME ltime;
-		//   longlong packed= my_datetime_packed_from_binary(ptr, meta);
-		//   TIME_from_longlong_datetime_packed(&ltime, packed);
-		//   int buflen= my_datetime_to_str(&ltime, buf, meta);
-		//   my_b_write_quoted(file, (uchar *) buf, buflen);
-		//   my_snprintf(typestr, typestr_length, "DATETIME(%d)", meta);
-		//   return my_datetime_binary_length(meta);
-		// }
-
+		v, n, err = decodeDatetime2(data, meta)
 	case MYSQL_TYPE_TIME:
 		n = 3
 		i32 := uint32(FixedLengthInt(data[0:3]))
@@ -401,16 +383,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			v = fmt.Sprintf("%s%02d:%02d:%02d", sign, i32/10000, (i32%10000)/100, i32%100)
 		}
 	case MYSQL_TYPE_TIME2:
-		// {
-		//   char buf[MAX_DATE_STRING_REP_LENGTH];
-		//   MYSQL_TIME ltime;
-		//   longlong packed= my_time_packed_from_binary(ptr, meta);
-		//   TIME_from_longlong_time_packed(&ltime, packed);
-		//   int buflen= my_time_to_str(&ltime, buf, meta);
-		//   my_b_write_quoted(file, (uchar *) buf, buflen);
-		//   my_snprintf(typestr, typestr_length, "TIME(%d)", meta);
-		//   return my_time_binary_length(meta);
-		// }
+		v, n, err = decodeTime2(data, meta)
 	case MYSQL_TYPE_YEAR:
 		n = 1
 		v = time.Date(int(data[0])+1900,
@@ -582,8 +555,159 @@ func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
 	return
 }
 
-func (e *RowsEvent) Dump(w io.Writer) {
+func decodeTimestamp2(data []byte, dec uint16) (string, int, error) {
+	//get timestamp binary length
+	n := int(4 + (dec+1)/2)
+	sec := int64(binary.BigEndian.Uint32(data[0:4]))
+	usec := int64(0)
+	switch dec {
+	case 1, 2:
+		usec = int64(data[4]) * 10000
+	case 3, 4:
+		usec = int64(binary.BigEndian.Uint16(data[4:])) * 100
+	case 5, 6:
+		usec = int64(FixedLengthInt(data[4:7]))
+	}
 
+	t := time.Unix(sec, usec*1000)
+	return t.Format(TimeFormat), n, nil
+}
+
+const DATETIMEF_INT_OFS int64 = 0x8000000000
+
+func decodeDatetime2(data []byte, dec uint16) (string, int, error) {
+	//get datetime binary length
+	n := int(5 + (dec+1)/2)
+
+	intPart := int64(FixedLengthInt(data[0:5])) - DATETIMEF_INT_OFS
+	var frac int64
+
+	switch dec {
+	case 1, 2:
+		frac = int64(data[5]) * 10000
+	case 3, 4:
+		frac = int64(binary.BigEndian.Uint16(data[5:7])) * 100
+	case 5, 6:
+		frac = int64(FixedLengthInt(data[5:8]))
+	}
+
+	tmp := intPart<<24 + frac
+	//handle sign???
+	if tmp < 0 {
+		tmp = -tmp
+	}
+
+	//ingore second part, no precision now
+	//var secPart int64 = tmp % (1 << 24)
+	ymdhms := tmp >> 24
+
+	ymd := ymdhms >> 17
+	ym := ymd >> 5
+	hms := ymdhms % (1 << 17)
+
+	day := int(ymd % (1 << 5))
+	month := int(ym % 13)
+	year := int(ym / 13)
+
+	second := int(hms % (1 << 6))
+	minute := int((hms >> 6) % (1 << 6))
+	hour := int((hms >> 12))
+
+	return time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC).Format(TimeFormat), n, nil
+}
+
+const TIMEF_OFS int64 = 0x800000000000
+const TIMEF_INT_OFS int64 = 0x800000
+
+func decodeTime2(data []byte, dec uint16) (string, int, error) {
+	//time  binary length
+	n := int(3 + (dec+1)/2)
+
+	tmp := int64(0)
+	intPart := int64(0)
+	frac := int64(0)
+	switch dec {
+	case 1:
+	case 2:
+		intPart = int64(FixedLengthInt(data[0:3])) - TIMEF_INT_OFS
+		frac = int64(data[3])
+		if intPart < 0 && frac > 0 {
+			/*
+			   Negative values are stored with reverse fractional part order,
+			   for binary sort compatibility.
+
+			     Disk value  intpart frac   Time value   Memory value
+			     800000.00    0      0      00:00:00.00  0000000000.000000
+			     7FFFFF.FF   -1      255   -00:00:00.01  FFFFFFFFFF.FFD8F0
+			     7FFFFF.9D   -1      99    -00:00:00.99  FFFFFFFFFF.F0E4D0
+			     7FFFFF.00   -1      0     -00:00:01.00  FFFFFFFFFF.000000
+			     7FFFFE.FF   -1      255   -00:00:01.01  FFFFFFFFFE.FFD8F0
+			     7FFFFE.F6   -2      246   -00:00:01.10  FFFFFFFFFE.FE7960
+
+			     Formula to convert fractional part from disk format
+			     (now stored in "frac" variable) to absolute value: "0x100 - frac".
+			     To reconstruct in-memory value, we shift
+			     to the next integer value and then substruct fractional part.
+			*/
+			intPart++     /* Shift to the next integer value */
+			frac -= 0x100 /* -(0x100 - frac) */
+		}
+		tmp = intPart<<24 + frac*10000
+	case 3:
+	case 4:
+		intPart = int64(FixedLengthInt(data[0:3])) - TIMEF_INT_OFS
+		frac = int64(binary.BigEndian.Uint16(data[3:5]))
+		if intPart < 0 && frac > 0 {
+			/*
+			   Fix reverse fractional part order: "0x10000 - frac".
+			   See comments for FSP=1 and FSP=2 above.
+			*/
+			intPart++       /* Shift to the next integer value */
+			frac -= 0x10000 /* -(0x10000-frac) */
+		}
+		tmp = intPart<<24 + frac*100
+
+	case 5:
+	case 6:
+		tmp = int64(FixedLengthInt(data[0:6])) - TIMEF_OFS
+	default:
+		intPart = int64(FixedLengthInt(data[0:3])) - TIMEF_INT_OFS
+		tmp = intPart << 24
+	}
+
+	hms := int64(0)
+	sign := ""
+	if tmp < 0 {
+		tmp = -tmp
+		sign = "-"
+	}
+
+	//ingore second part, no precision now
+	//var secPart int64 = tmp % (1 << 24)
+
+	hms = tmp >> 24
+
+	hour := (hms >> 12) % (1 << 10) /* 10 bits starting at 12th */
+	minute := (hms >> 6) % (1 << 6) /* 6 bits starting at 6th   */
+	second := hms % (1 << 6)        /* 6 bits starting at 0th   */
+	// 	secondPart := tmp % (1 << 24)
+
+	return fmt.Sprintf("%s%02d:%02d:%02d", sign, hour, minute, second), n, nil
+}
+
+func (e *RowsEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "TableID: %d\n", e.TableID)
+	fmt.Fprintf(w, "Flags: %d\n", e.Flags)
+	fmt.Fprintf(w, "Column count: %d\n", e.ColumnCount)
+
+	fmt.Fprintf(w, "Values:\n")
+	for _, rows := range e.Rows {
+		fmt.Fprintf(w, "--\n")
+		for j, d := range rows {
+			fmt.Fprintf(w, "%d:%v\n", j, d)
+		}
+	}
+	fmt.Fprintln(w)
 }
 
 type RowsQueryEvent struct {
