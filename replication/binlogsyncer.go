@@ -170,7 +170,7 @@ func (b *BinlogSyncer) writeBinglogDumpCommand(fileName string, binlogPos uint32
 	binary.LittleEndian.PutUint32(data[pos:], b.serverID)
 	pos += 4
 
-	data = append(data, fileName...)
+	copy(data[pos:], fileName)
 
 	return b.c.WritePacket(data)
 }
