@@ -117,8 +117,11 @@ func (b *BinlogSyncer) StartSync(fileName string, pos uint32) (*BinlogStreamer, 
 	return s, nil
 }
 
-func (b *BinlogSyncer) StartSyncGTID(fileName string, gtidData []byte) (*BinlogStreamer, error) {
-	panic("not supported now")
+func (b *BinlogSyncer) StartSyncGTID(gset *GTIDSet) (*BinlogStreamer, error) {
+	err := b.writeBinlogDumpGTIDCommand(BINLOG_DUMP_NON_BLOCK|BINLOG_THROUGH_GTID, "", 0, gset.Encode())
+	if err != nil {
+		return nil, err
+	}
 
 	//to do later
 	s := newBinlogStreamer()
@@ -158,10 +161,10 @@ func (b *BinlogSyncer) writeBinglogDumpCommand(fileName string, binlogPos uint32
 	return b.c.WritePacket(data)
 }
 
-func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, fileName string, gtidData []byte) error {
+func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, fileName string, binPos int64, gtidData []byte) error {
 	b.c.ResetSequence()
 
-	data := make([]byte, 4+1+2+4+4+len(fileName)+4+4+len(gtidData))
+	data := make([]byte, 4+1+2+4+4+len(fileName)+8+4+len(gtidData))
 	pos := 4
 	data[pos] = COM_BINLOG_DUMP_GTID
 	pos++
@@ -177,6 +180,9 @@ func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, fileName string,
 
 	n := copy(data[pos:], fileName)
 	pos += n
+
+	binary.LittleEndian.PutUint64(data[pos:], uint64(binPos))
+	pos += 8
 
 	if flags&BINLOG_THROUGH_GTID > 0 {
 		binary.LittleEndian.PutUint32(data[pos:], uint32(len(gtidData)))

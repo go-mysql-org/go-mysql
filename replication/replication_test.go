@@ -125,6 +125,8 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	         ts TIMESTAMP,
 	         dt DATETIME,
 	         tm TIME,
+	         t TEXT,
+	         bb BLOB,
 	      PRIMARY KEY (id)
 	       ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
