@@ -5,5 +5,6 @@ Todo:
 
 + Support minimal and noblob binlog row image.
 + Get table information when handing rows event.
++ Support GTID
 */
 package replication
