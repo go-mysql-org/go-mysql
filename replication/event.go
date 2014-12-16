@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	//"encoding/hex"
 	"fmt"
+	"github.com/satori/go.uuid"
 	. "github.com/siddontang/go-mysql/mysql"
 	"io"
 	"time"
@@ -214,5 +215,27 @@ func (e *QueryEvent) Dump(w io.Writer) {
 	//fmt.Fprintf(w, "Status vars: \n%s", hex.Dump(e.StatusVars))
 	fmt.Fprintf(w, "Schema: %s\n", e.Schema)
 	fmt.Fprintf(w, "Query: %s\n", e.Query)
+	fmt.Fprintln(w)
+}
+
+type GTIDEvent struct {
+	CommitFlag uint8
+	SID        []byte
+	GNO        int64
+}
+
+func (e *GTIDEvent) Decode(data []byte) error {
+	e.CommitFlag = uint8(data[0])
+
+	e.SID = data[1:17]
+
+	e.GNO = int64(binary.LittleEndian.Uint64(data[17:]))
+	return nil
+}
+
+func (e *GTIDEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "Commit flag: %d\n", e.CommitFlag)
+	u, _ := uuid.FromBytes(e.SID)
+	fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
 	fmt.Fprintln(w)
 }

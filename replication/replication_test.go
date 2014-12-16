@@ -62,30 +62,7 @@ func (t *testSyncerSuite) testExecute(c *C, query string) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testSyncerSuite) TestSync(c *C) {
-
-	err := t.b.RegisterSlave(*testHost, uint16(*testPort), *testUser, *testPassword)
-	c.Assert(err, IsNil)
-
-	//get current master binlog file and position
-	r, err := t.c.Execute("SHOW MASTER STATUS")
-	c.Assert(err, IsNil)
-	binFile, _ := r.GetString(0, 0)
-	binPos, _ := r.GetInt(0, 1)
-
-	if len(binFile) > 0 {
-		seps := strings.Split(binFile, ".")
-		n, err := strconv.Atoi(seps[1])
-		c.Assert(err, IsNil)
-		binFile = fmt.Sprintf("%s.%06d", seps[0], n+1)
-		binPos = 4
-	}
-
-	//	t.testExecute(c, "FLUSH LOGS")
-
-	s, err := t.b.StartSync(binFile, uint32(binPos))
-	c.Assert(err, IsNil)
-
+func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
@@ -150,4 +127,36 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	t.testExecute(c, `INSERT INTO test_replication (bb) VALUES ("12345")`)
 
 	t.wg.Wait()
+}
+
+func (t *testSyncerSuite) TestSync(c *C) {
+	err := t.b.RegisterSlave(*testHost, uint16(*testPort), *testUser, *testPassword)
+	c.Assert(err, IsNil)
+
+	//get current master binlog file and position
+	r, err := t.c.Execute("SHOW MASTER STATUS")
+	c.Assert(err, IsNil)
+	binFile, _ := r.GetString(0, 0)
+	binPos, _ := r.GetInt(0, 1)
+
+	if len(binFile) > 0 {
+		seps := strings.Split(binFile, ".")
+		n, err := strconv.Atoi(seps[1])
+		c.Assert(err, IsNil)
+		binFile = fmt.Sprintf("%s.%06d", seps[0], n+1)
+		binPos = 4
+	}
+
+	//	t.testExecute(c, "FLUSH LOGS")
+
+	s, err := t.b.StartSync(binFile, uint32(binPos))
+	c.Assert(err, IsNil)
+
+	t.testSync(c, s)
+}
+
+func (t *testSyncerSuite) TestSyncGTID(c *C) {
+	err := t.b.RegisterSlave(*testGTIDHost, uint16(*testGTIDPort), *testGTIDUser, *testGITDPassword)
+	c.Assert(err, IsNil)
+
 }

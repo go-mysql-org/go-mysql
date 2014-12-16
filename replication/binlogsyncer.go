@@ -325,6 +325,8 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		e = b.newRowsEvent(h)
 	case ROWS_QUERY_EVENT:
 		e = &RowsQueryEvent{}
+	case GTID_EVENT:
+		e = &GTIDEvent{}
 	default:
 		e = &GenericEvent{}
 	}
