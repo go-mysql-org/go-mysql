@@ -81,7 +81,7 @@ func (t *testSyncerSuite) TestSync(c *C) {
 		binPos = 4
 	}
 
-	t.testExecute(c, "FLUSH LOGS")
+	//	t.testExecute(c, "FLUSH LOGS")
 
 	s, err := t.b.StartSync(binFile, uint32(binPos))
 	c.Assert(err, IsNil)
@@ -99,10 +99,8 @@ func (t *testSyncerSuite) TestSync(c *C) {
 				return
 			}
 
-			if _, ok := e.Event.(*RowsEvent); ok {
-				e.Dump(os.Stderr)
-				os.Stderr.Sync()
-			}
+			e.Dump(os.Stderr)
+			os.Stderr.Sync()
 		}
 	}()
 
@@ -113,22 +111,22 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	t.testExecute(c, str)
 
 	str = `CREATE TABLE IF NOT EXISTS test_replication (
-          id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
-          str VARCHAR(256),
-          f FLOAT,
-          d DOUBLE,
-          de DECIMAL(5,2),
-          i INT,
-          bi BIGINT,
-          e enum ("e1", "e2"),
-          b BIT(8),
-          y YEAR,
-          da DATE,
-          ts TIMESTAMP,
-          dt DATETIME,
-          tm TIME,
-	      PRIMARY KEY (id) 
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
+	         id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
+	         str VARCHAR(256),
+	         f FLOAT,
+	         d DOUBLE,
+	         de DECIMAL(5,2),
+	         i INT,
+	         bi BIGINT,
+	         e enum ("e1", "e2"),
+	         b BIT(8),
+	         y YEAR,
+	         da DATE,
+	         ts TIMESTAMP,
+	         dt DATETIME,
+	         tm TIME,
+	      PRIMARY KEY (id)
+	       ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
 	t.testExecute(c, str)
 
@@ -146,8 +144,8 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	t.testExecute(c, `INSERT INTO test_replication (dt) VALUES ("2012-05-07 14:01:01")`)
 	t.testExecute(c, `INSERT INTO test_replication (tm) VALUES ("14:01:01")`)
 	t.testExecute(c, `INSERT INTO test_replication (de) VALUES (122.24)`)
-	//t.testExecute(c, `INSERT INTO test_replication (t) VALUES ("abc")`)
-	//t.testExecute(c, `INSERT INTO test_replication (bb) VALUES ("12345")`)
+	t.testExecute(c, `INSERT INTO test_replication (t) VALUES ("abc")`)
+	t.testExecute(c, `INSERT INTO test_replication (bb) VALUES ("12345")`)
 
 	t.wg.Wait()
 }
