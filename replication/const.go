@@ -29,6 +29,12 @@ const (
 	BINLOG_THROUGH_GTID     uint16 = 0x04
 )
 
+const (
+	BINLOG_ROW_IMAGE_FULL    = "full"
+	BINLOG_ROW_IAMGE_MINIMAL = "minimal"
+	BINLOG_ROW_IMAGE_NOBLOB  = "noblob"
+)
+
 type EventType byte
 
 const (
