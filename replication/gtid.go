@@ -70,6 +70,15 @@ func ParseUUIDSet(str string) (*UUIDSet, error) {
 	return s, nil
 }
 
+func NewUUIDSet(sid uuid.UUID, in ...Interval) *UUIDSet {
+	s := new(UUIDSet)
+	s.SID = sid
+
+	s.Intervals = in
+
+	return s
+}
+
 func (s *UUIDSet) Bytes() []byte {
 	var buf bytes.Buffer
 
@@ -131,6 +140,8 @@ func (s *UUIDSet) decode(data []byte) (int, error) {
 		return 0, fmt.Errorf("invalid uuid set buffer, must %d, but %d", pos+int(16*n), len(data))
 	}
 
+	s.Intervals = make([]Interval, 0, n)
+
 	var in Interval
 	for i := int64(0); i < n; i++ {
 		in.Start = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
@@ -187,7 +198,7 @@ func (s *GTIDSet) String() string {
 func (s *GTIDSet) Encode() []byte {
 	var buf bytes.Buffer
 
-	binary.Write(&buf, binary.LittleEndian, uint32(len(s.Sets)))
+	binary.Write(&buf, binary.LittleEndian, uint64(len(s.Sets)))
 
 	for i, _ := range s.Sets {
 		s.Sets[i].encode(&buf)
@@ -197,19 +208,23 @@ func (s *GTIDSet) Encode() []byte {
 }
 
 func (s *GTIDSet) Decode(data []byte) error {
-	if len(data) < 4 {
+	if len(data) < 8 {
 		return fmt.Errorf("invalid gtid set buffer, less 4")
 	}
 
-	n := binary.LittleEndian.Uint32(data)
-	s.Sets = make([]*UUIDSet, n)
+	n := int(binary.LittleEndian.Uint64(data))
+	s.Sets = make([]*UUIDSet, 0, n)
 
-	pos := 4
-	for _, set := range s.Sets {
+	pos := 8
+
+	for i := 0; i < n; i++ {
+		set := new(UUIDSet)
 		if n, err := set.decode(data[pos:]); err != nil {
 			return err
 		} else {
 			pos += n
+
+			s.Sets = append(s.Sets, set)
 		}
 	}
 	return nil

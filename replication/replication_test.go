@@ -23,6 +23,8 @@ var testGTIDPort = flag.Int("gtid_port", 3307, "MySQL master (uses GTID) port")
 var testGTIDUser = flag.String("gtid_user", "root", "MySQL master (uses GTID) user")
 var testGITDPassword = flag.String("gtid_pass", "", "MySQL master (uses GTID) password")
 
+var testOutputLogs = flag.Bool("o", true, "output binlog event")
+
 func TestBinLogSyncer(t *testing.T) {
 	TestingT(t)
 }
@@ -37,10 +39,6 @@ type testSyncerSuite struct {
 var _ = Suite(&testSyncerSuite{})
 
 func (t *testSyncerSuite) SetUpSuite(c *C) {
-	var err error
-
-	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, *testPort), *testUser, *testPassword, "test")
-	c.Assert(err, IsNil)
 }
 
 func (t *testSyncerSuite) TearDownSuite(c *C) {
@@ -54,6 +52,10 @@ func (t *testSyncerSuite) SetUpTest(c *C) {
 }
 
 func (t *testSyncerSuite) TearDownTest(c *C) {
+	if t.c != nil {
+		t.c.Close()
+	}
+
 	t.b.Close()
 }
 
@@ -76,8 +78,10 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 				return
 			}
 
-			e.Dump(os.Stderr)
-			os.Stderr.Sync()
+			if *testOutputLogs {
+				e.Dump(os.Stdout)
+				os.Stdout.Sync()
+			}
 		}
 	}()
 
@@ -130,7 +134,11 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 }
 
 func (t *testSyncerSuite) TestSync(c *C) {
-	err := t.b.RegisterSlave(*testHost, uint16(*testPort), *testUser, *testPassword)
+	var err error
+	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, *testPort), *testUser, *testPassword, "test")
+	c.Assert(err, IsNil)
+
+	err = t.b.RegisterSlave(*testHost, uint16(*testPort), *testUser, *testPassword)
 	c.Assert(err, IsNil)
 
 	//get current master binlog file and position
@@ -155,8 +163,40 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	t.testSync(c, s)
 }
 
-func (t *testSyncerSuite) TestSyncGTID(c *C) {
-	err := t.b.RegisterSlave(*testGTIDHost, uint16(*testGTIDPort), *testGTIDUser, *testGITDPassword)
+func (t *testSyncerSuite) TestGTID(c *C) {
+	us, err := ParseUUIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
 	c.Assert(err, IsNil)
 
+	c.Assert(us.String(), Equals, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
+
+	buf := us.Encode()
+	err = us.Decode(buf)
+	c.Assert(err, IsNil)
+
+	gs, err := ParseGTIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2,de278ad0-2106-11e4-9f8e-6edd0ca20948:1-2")
+	c.Assert(err, IsNil)
+
+	buf = gs.Encode()
+	err = gs.Decode(buf)
+	c.Assert(err, IsNil)
+}
+
+func (t *testSyncerSuite) TestSyncGTID(c *C) {
+	var err error
+	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testGTIDHost, *testGTIDPort), *testGTIDUser, *testGITDPassword, "test")
+	c.Assert(err, IsNil)
+
+	err = t.b.RegisterSlave(*testGTIDHost, uint16(*testGTIDPort), *testGTIDUser, *testGITDPassword)
+	c.Assert(err, IsNil)
+
+	masterUuid, err := t.b.GetMasterUUID()
+	c.Assert(err, IsNil)
+
+	set := new(GTIDSet)
+	set.Sets = []*UUIDSet{NewUUIDSet(masterUuid, Interval{1, 2})}
+
+	s, err := t.b.StartSyncGTID(set)
+	c.Assert(err, IsNil)
+
+	t.testSync(c, s)
 }

@@ -3,6 +3,7 @@ package replication
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
 	"sync"
@@ -69,6 +70,19 @@ func (b *BinlogSyncer) checksumUsed() error {
 	return nil
 }
 
+func (b *BinlogSyncer) GetMasterUUID() (uuid.UUID, error) {
+	if r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'SERVER_UUID'"); err != nil {
+		return uuid.UUID{}, err
+	} else {
+		s, _ := r.GetString(0, 1)
+		if s == "" || s == "NONE" {
+			return uuid.UUID{}, nil
+		} else {
+			return uuid.FromString(s)
+		}
+	}
+}
+
 func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, password string) error {
 	b.host = host
 	b.port = port
@@ -118,7 +132,7 @@ func (b *BinlogSyncer) StartSync(fileName string, pos uint32) (*BinlogStreamer, 
 }
 
 func (b *BinlogSyncer) StartSyncGTID(gset *GTIDSet) (*BinlogStreamer, error) {
-	err := b.writeBinlogDumpGTIDCommand(BINLOG_DUMP_NON_BLOCK|BINLOG_THROUGH_GTID, "", 0, gset.Encode())
+	err := b.writeBinlogDumpGTIDCommand(BINLOG_DUMP_NON_BLOCK|BINLOG_THROUGH_GTID, "", 4, gset.Encode())
 	if err != nil {
 		return nil, err
 	}
