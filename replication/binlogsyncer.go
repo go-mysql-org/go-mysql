@@ -353,6 +353,14 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.tables[te.TableID] = te
 	}
 
+	//If MySQL restart, it may use the same table id for different tables.
+	//We must clear the table map before parsing new events.
+	//We have no better way to known whether the event is before or after restart,
+	//So we have to clear the table map on every rotate event.
+	if h.EventType == ROTATE_EVENT {
+		b.tables = make(map[uint64]*TableMapEvent)
+	}
+
 	s.ch <- &BinlogEvent{evData, h, e}
 
 	return nil
