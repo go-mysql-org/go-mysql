@@ -6,8 +6,6 @@ import (
 	"github.com/siddontang/go-mysql/client"
 	. "gopkg.in/check.v1"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -146,16 +144,6 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	c.Assert(err, IsNil)
 	binFile, _ := r.GetString(0, 0)
 	binPos, _ := r.GetInt(0, 1)
-
-	if len(binFile) > 0 {
-		seps := strings.Split(binFile, ".")
-		n, err := strconv.Atoi(seps[1])
-		c.Assert(err, IsNil)
-		binFile = fmt.Sprintf("%s.%06d", seps[0], n+1)
-		binPos = 4
-	}
-
-	//	t.testExecute(c, "FLUSH LOGS")
 
 	s, err := t.b.StartSync(binFile, uint32(binPos))
 	c.Assert(err, IsNil)
