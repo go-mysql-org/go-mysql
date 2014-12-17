@@ -77,7 +77,9 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 			}
 
 			if *testOutputLogs {
-				e.Dump(os.Stdout)
+				if _, ok := e.Event.(*RowsEvent); ok {
+					e.Dump(os.Stdout)
+				}
 				os.Stdout.Sync()
 			}
 		}
@@ -112,11 +114,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	t.testExecute(c, str)
 
 	//use row format
-	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
 	t.testExecute(c, `INSERT INTO test_replication (str, f, i) VALUES ("3", 3.14, 10)`)
-	t.testExecute(c, `INSERT INTO test_replication (str, d, i) VALUES ("4", 3.14, 100)`)
-	t.testExecute(c, `UPDATE test_replication SET f = 2.0 WHERE id = 1`)
-	t.testExecute(c, `DELETE FROM test_replication WHERE id = 2`)
 	t.testExecute(c, `INSERT INTO test_replication (e) VALUES ("e1")`)
 	t.testExecute(c, `INSERT INTO test_replication (b) VALUES (0b0011)`)
 	t.testExecute(c, `INSERT INTO test_replication (y) VALUES (1985)`)
@@ -128,6 +126,17 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	t.testExecute(c, `INSERT INTO test_replication (t) VALUES ("abc")`)
 	t.testExecute(c, `INSERT INTO test_replication (bb) VALUES ("12345")`)
 
+	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
+
+	id := 100
+	for _, image := range []string{BINLOG_ROW_IMAGE_FULL, BINLOG_ROW_IAMGE_MINIMAL, BINLOG_ROW_IMAGE_NOBLOB} {
+		t.testExecute(c, fmt.Sprintf("SET SESSION binlog_row_image = '%s'", image))
+
+		t.testExecute(c, fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb) VALUES (%d, "4", 3.14, 100, "abc")`, id))
+		t.testExecute(c, fmt.Sprintf(`UPDATE test_replication SET f = 2.14 WHERE id = %d`, id))
+		t.testExecute(c, fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))
+		id++
+	}
 	t.wg.Wait()
 }
 
@@ -170,6 +179,7 @@ func (t *testSyncerSuite) TestGTID(c *C) {
 }
 
 func (t *testSyncerSuite) TestSyncGTID(c *C) {
+	c.Skip("no run now")
 	var err error
 	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testGTIDHost, *testGTIDPort), *testGTIDUser, *testGITDPassword, "test")
 	c.Assert(err, IsNil)

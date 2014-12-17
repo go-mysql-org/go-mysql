@@ -76,7 +76,7 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	pos += n
 
-	if len(data[pos:]) != nullBitmapSize(int(e.ColumnCount)) {
+	if len(data[pos:]) != bitmapByteSize(int(e.ColumnCount)) {
 		return io.EOF
 	}
 
@@ -89,7 +89,7 @@ func isNullSet(nullBitmap []byte, i int) bool {
 	return nullBitmap[i/8]&(1<<(uint(i)%8)) > 0
 }
 
-func nullBitmapSize(columnCount int) int {
+func bitmapByteSize(columnCount int) int {
 	return int(columnCount+7) / 8
 }
 
@@ -240,7 +240,7 @@ func (e *RowsEvent) Decode(data []byte) error {
 	e.ColumnCount, _, n = LengthEncodedInt(data[pos:])
 	pos += n
 
-	bitCount := nullBitmapSize(int(e.ColumnCount))
+	bitCount := bitmapByteSize(int(e.ColumnCount))
 	e.ColumnBitmap1 = data[pos : pos+bitCount]
 	pos += bitCount
 
@@ -255,8 +255,13 @@ func (e *RowsEvent) Decode(data []byte) error {
 	}
 
 	var err error
-	for len(data[pos:]) > 0 {
-		if n, err = e.decodeRows(data[pos:], tableEvent); err != nil {
+	if n, err = e.decodeRows(data[pos:], tableEvent, e.ColumnBitmap1); err != nil {
+		return err
+	}
+	pos += n
+
+	if e.needBitmap2 {
+		if n, err = e.decodeRows(data[pos:], tableEvent, e.ColumnBitmap2); err != nil {
 			return err
 		}
 		pos += n
@@ -265,29 +270,46 @@ func (e *RowsEvent) Decode(data []byte) error {
 	return nil
 }
 
-func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent) (int, error) {
+func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte) (int, error) {
 	rows := make([]interface{}, e.ColumnCount)
 
 	pos := 0
 
-	bitCount := nullBitmapSize(int(e.ColumnCount))
+	b := NewBitmap(bitmap, uint32(e.ColumnCount))
+
+	//bitCount := bitmapByteSize(int(e.ColumnCount))
+	bitCount := int(b.BitsSet()+7) / 8
+
 	nullBitmap := data[pos : pos+bitCount]
 	pos += bitCount
+
+	nullbitIndex := 0
 
 	var n int
 	var err error
 	for i := 0; i < int(e.ColumnCount); i++ {
-		if isNullSet(nullBitmap, i) {
+		isNull := (uint32(nullBitmap[nullbitIndex/8]) >> uint32(nullbitIndex%8)) & 0x01
+
+		if b.IsSet(uint32(i)) == 0 {
+			continue
+		}
+
+		if isNull > 0 {
 			rows[i] = nil
+			nullbitIndex++
 			continue
 		}
 
 		rows[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.ColumnMeta[i])
+
 		if err != nil {
 			return 0, nil
 		}
 		pos += n
+
+		nullbitIndex++
 	}
+
 	e.Rows = append(e.Rows, rows)
 	return pos, nil
 }
