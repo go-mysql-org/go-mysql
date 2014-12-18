@@ -289,8 +289,6 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	//skip 0x00
 	data = data[1:]
 
-	evData := data
-
 	h := new(EventHeader)
 	err := h.Decode(data)
 	if err != nil {
@@ -308,6 +306,9 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		//last 4 bytes is crc32, check later
 		data = data[0 : len(data)-4]
 	}
+
+	evData := data
+
 	var e Event
 	switch h.EventType {
 	case FORMAT_DESCRIPTION_EVENT:

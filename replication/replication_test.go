@@ -150,9 +150,8 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	r, err := t.c.Execute("SHOW MASTER STATUS")
 	c.Assert(err, IsNil)
 	binFile, _ := r.GetString(0, 0)
-	binPos, _ := r.GetInt(0, 1)
 
-	s, err := t.b.StartSync(binFile, uint32(binPos))
+	s, err := t.b.StartSync(binFile, uint32(4))
 	c.Assert(err, IsNil)
 
 	t.testSync(c, s)
@@ -177,7 +176,6 @@ func (t *testSyncerSuite) TestGTID(c *C) {
 }
 
 func (t *testSyncerSuite) TestSyncGTID(c *C) {
-	c.Skip("no run now")
 	var err error
 	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testGTIDHost, *testGTIDPort), *testGTIDUser, *testGITDPassword, "test")
 	c.Assert(err, IsNil)
