@@ -6,7 +6,7 @@ A pure go library to handle MySQL network protocol and replication.
 
 Replication package handles MySQL replication protocol like [python-mysql-replication](https://github.com/noplay/python-mysql-replication).
 
-You can use it acting like a MySQL slave to sync binlog from master then do somethings, like updating cache, etc...
+You can use it acting like a MySQL slave to sync binlog from master then do something, like updating cache, etc...
 
 ### Example
 
