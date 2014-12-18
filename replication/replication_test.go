@@ -77,9 +77,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 			}
 
 			if *testOutputLogs {
-				if _, ok := e.Event.(*RowsEvent); ok {
-					e.Dump(os.Stdout)
-				}
+				e.Dump(os.Stdout)
 				os.Stdout.Sync()
 			}
 		}
