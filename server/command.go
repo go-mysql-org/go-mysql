@@ -126,15 +126,15 @@ func (h EmptyHandler) UseDB(dbName string) error {
 	return nil
 }
 func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
-	return nil, nil
+	return nil, fmt.Errorf("not supported now")
 }
 
 func (h EmptyHandler) HandleFieldList(table string, fieldWildcard string) ([]*Field, error) {
-	return nil, nil
+	return nil, fmt.Errorf("not supported now")
 }
 func (h EmptyHandler) HandleStmtPreprare(query string) (int, int, interface{}, error) {
-	return 0, 0, nil, nil
+	return 0, 0, nil, fmt.Errorf("not supported now")
 }
 func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error) {
-	return nil, nil
+	return nil, fmt.Errorf("not supported now")
 }
