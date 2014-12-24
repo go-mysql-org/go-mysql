@@ -85,10 +85,6 @@ func (e *TableMapEvent) Decode(data []byte) error {
 	return nil
 }
 
-func isNullSet(nullBitmap []byte, i int) bool {
-	return nullBitmap[i/8]&(1<<(uint(i)%8)) > 0
-}
-
 func bitmapByteSize(columnCount int) int {
 	return int(columnCount+7) / 8
 }
@@ -275,13 +271,10 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 
 	pos := 0
 
-	b := NewBitmap(bitmap, uint32(e.ColumnCount))
+	count := (bitCount(bitmap) + 7) / 8
 
-	//bitCount := bitmapByteSize(int(e.ColumnCount))
-	bitCount := int(b.BitsSet()+7) / 8
-
-	nullBitmap := data[pos : pos+bitCount]
-	pos += bitCount
+	nullBitmap := data[pos : pos+count]
+	pos += count
 
 	nullbitIndex := 0
 
@@ -290,7 +283,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 	for i := 0; i < int(e.ColumnCount); i++ {
 		isNull := (uint32(nullBitmap[nullbitIndex/8]) >> uint32(nullbitIndex%8)) & 0x01
 
-		if b.IsSet(uint32(i)) == 0 {
+		if bitGet(bitmap, i) == 0 {
 			continue
 		}
 
