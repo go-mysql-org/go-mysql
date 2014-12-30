@@ -1,5 +1,10 @@
 #!/bin/bash 
 
+set -e
+
+GTID_MODE=${GTID_MODE:-off}
+SERVER_ID=${SERVER_ID:-0}
+
 mkdir -p -m 700 /var/lib/mysql
 chown -R mysql:mysql /var/lib/mysql
 
@@ -46,4 +51,4 @@ if [ ! -d /var/lib/mysql/ibdata1 ]; then
   /usr/bin/mysqladmin --defaults-file=/etc/mysql/debian.cnf shutdown
 fi
 
-exec /usr/bin/mysqld_safe
+exec /usr/bin/mysqld_safe --gtid_mode=${GTID_MODE} --server-id=${SERVER_ID}
