@@ -17,7 +17,7 @@ var testUser = flag.String("user", "root", "MySQL master user")
 var testPassword = flag.String("pass", "", "MySQL master password")
 
 var testGTIDHost = flag.String("gtid_host", "127.0.0.1", "MySQL master (uses GTID) host")
-var testGTIDPort = flag.Int("gtid_port", 3307, "MySQL master (uses GTID) port")
+var testGTIDPort = flag.Int("gtid_port", 3316, "MySQL master (uses GTID) port")
 var testGTIDUser = flag.String("gtid_user", "root", "MySQL master (uses GTID) user")
 var testGITDPassword = flag.String("gtid_pass", "", "MySQL master (uses GTID) password")
 
