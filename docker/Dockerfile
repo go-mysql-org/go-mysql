@@ -2,7 +2,7 @@ FROM ubuntu:14.04
 MAINTAINER siddontang@gmail.com
 
 # Use Chinese sources.list to speed up if you are in China
-ADD sources.list /etc/apt/sources.list
+# ADD sources.list /etc/apt/sources.list
 
 RUN apt-get update \
     && apt-get install -y mysql-server-5.6
