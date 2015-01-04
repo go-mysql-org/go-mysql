@@ -151,7 +151,7 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	c.Assert(err, IsNil)
 	binFile, _ := r.GetString(0, 0)
 
-	s, err := t.b.StartSync(binFile, uint32(4))
+	s, err := t.b.StartSync(Position{binFile, uint32(4)})
 	c.Assert(err, IsNil)
 
 	t.testSync(c, s)

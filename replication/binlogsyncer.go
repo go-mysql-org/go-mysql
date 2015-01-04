@@ -117,8 +117,8 @@ func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, pass
 	return nil
 }
 
-func (b *BinlogSyncer) StartSync(fileName string, pos uint32) (*BinlogStreamer, error) {
-	err := b.writeBinglogDumpCommand(fileName, pos)
+func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
+	err := b.writeBinglogDumpCommand(pos)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (b *BinlogSyncer) StartSync(fileName string, pos uint32) (*BinlogStreamer, 
 }
 
 func (b *BinlogSyncer) StartSyncGTID(gset *GTIDSet) (*BinlogStreamer, error) {
-	err := b.writeBinlogDumpGTIDCommand(BINLOG_DUMP_NON_BLOCK|BINLOG_THROUGH_GTID, "", 4, gset.Encode())
+	err := b.writeBinlogDumpGTIDCommand(BINLOG_DUMP_NON_BLOCK|BINLOG_THROUGH_GTID, Position{"", 4}, gset.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -146,21 +146,21 @@ func (b *BinlogSyncer) StartSyncGTID(gset *GTIDSet) (*BinlogStreamer, error) {
 	return s, nil
 }
 
-func (b *BinlogSyncer) writeBinglogDumpCommand(fileName string, binlogPos uint32) error {
+func (b *BinlogSyncer) writeBinglogDumpCommand(p Position) error {
 	//always start from position 4
-	if binlogPos < 4 {
-		binlogPos = 4
+	if p.Pos < 4 {
+		p.Pos = 4
 	}
 
 	b.c.ResetSequence()
 
-	data := make([]byte, 4+1+4+2+4+len(fileName))
+	data := make([]byte, 4+1+4+2+4+len(p.Name))
 
 	pos := 4
 	data[pos] = COM_BINLOG_DUMP
 	pos++
 
-	binary.LittleEndian.PutUint32(data[pos:], binlogPos)
+	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
 	pos += 4
 
 	//only support 0x01 BINGLOG_DUMP_NON_BLOCK
@@ -170,15 +170,15 @@ func (b *BinlogSyncer) writeBinglogDumpCommand(fileName string, binlogPos uint32
 	binary.LittleEndian.PutUint32(data[pos:], b.serverID)
 	pos += 4
 
-	copy(data[pos:], fileName)
+	copy(data[pos:], p.Name)
 
 	return b.c.WritePacket(data)
 }
 
-func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, fileName string, binPos int64, gtidData []byte) error {
+func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, p Position, gtidData []byte) error {
 	b.c.ResetSequence()
 
-	data := make([]byte, 4+1+2+4+4+len(fileName)+8+4+len(gtidData))
+	data := make([]byte, 4+1+2+4+4+len(p.Name)+8+4+len(gtidData))
 	pos := 4
 	data[pos] = COM_BINLOG_DUMP_GTID
 	pos++
@@ -189,13 +189,13 @@ func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, fileName string,
 	binary.LittleEndian.PutUint32(data[pos:], b.serverID)
 	pos += 4
 
-	binary.LittleEndian.PutUint32(data[pos:], uint32(len(fileName)))
+	binary.LittleEndian.PutUint32(data[pos:], uint32(len(p.Name)))
 	pos += 4
 
-	n := copy(data[pos:], fileName)
+	n := copy(data[pos:], p.Name)
 	pos += n
 
-	binary.LittleEndian.PutUint64(data[pos:], uint64(binPos))
+	binary.LittleEndian.PutUint64(data[pos:], uint64(p.Pos))
 	pos += 8
 
 	if flags&BINLOG_THROUGH_GTID > 0 {
