@@ -6,6 +6,9 @@ import (
 
 type Master struct {
 	Server
+
+	ReplUser     string
+	ReplPassword string
 }
 
 func NewMaster(addr string, user string, password string) *Master {
@@ -16,6 +19,11 @@ func NewMaster(addr string, user string, password string) *Master {
 	m.password = password
 
 	return m
+}
+
+func (s *Master) SetReplUser(user string, password string) {
+	s.ReplUser = user
+	s.ReplPassword = password
 }
 
 func (s *Master) Status() (*Resultset, error) {

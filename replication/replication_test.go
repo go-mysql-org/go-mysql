@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/siddontang/go-mysql/client"
+	"github.com/siddontang/go-mysql/mysql"
 	. "gopkg.in/check.v1"
 	"os"
 	"sync"
@@ -151,28 +152,10 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	c.Assert(err, IsNil)
 	binFile, _ := r.GetString(0, 0)
 
-	s, err := t.b.StartSync(Position{binFile, uint32(4)})
+	s, err := t.b.StartSync(mysql.Position{binFile, uint32(4)})
 	c.Assert(err, IsNil)
 
 	t.testSync(c, s)
-}
-
-func (t *testSyncerSuite) TestGTID(c *C) {
-	us, err := ParseUUIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
-	c.Assert(err, IsNil)
-
-	c.Assert(us.String(), Equals, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
-
-	buf := us.Encode()
-	err = us.Decode(buf)
-	c.Assert(err, IsNil)
-
-	gs, err := ParseGTIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2,de278ad0-2106-11e4-9f8e-6edd0ca20948:1-2")
-	c.Assert(err, IsNil)
-
-	buf = gs.Encode()
-	err = gs.Decode(buf)
-	c.Assert(err, IsNil)
 }
 
 func (t *testSyncerSuite) TestSyncGTID(c *C) {
@@ -186,8 +169,8 @@ func (t *testSyncerSuite) TestSyncGTID(c *C) {
 	masterUuid, err := t.b.GetMasterUUID()
 	c.Assert(err, IsNil)
 
-	set := new(GTIDSet)
-	set.Sets = []*UUIDSet{NewUUIDSet(masterUuid, Interval{1, 2})}
+	set := new(mysql.GTIDSet)
+	set.Sets = []*mysql.UUIDSet{mysql.NewUUIDSet(masterUuid, mysql.Interval{1, 2})}
 
 	s, err := t.b.StartSyncGTID(set)
 	c.Assert(err, IsNil)

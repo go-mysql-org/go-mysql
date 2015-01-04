@@ -1,4 +1,4 @@
-package replication
+package mysql
 
 // For binlog filename + position based replication
 type Position struct {
