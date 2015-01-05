@@ -88,3 +88,21 @@ func (s *Server) SlaveStatus() (*Resultset, error) {
 		return r.Resultset, nil
 	}
 }
+
+func (s *Server) MasterStatus() (*Resultset, error) {
+	r, err := s.Execute("SHOW MASTER STATUS")
+	if err != nil {
+		return nil, err
+	} else {
+		return r.Resultset, nil
+	}
+}
+
+func (s *Server) GTIDUsed() (bool, error) {
+	r, err := s.Execute("SELECT @@gtid_mode")
+	if err != nil {
+		return false, err
+	}
+	on, _ := r.GetString(0, 0)
+	return on == "ON", nil
+}
