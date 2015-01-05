@@ -68,6 +68,8 @@ func (s *GTIDSlave) waitRelayLogDone() error {
 
 	retrieved, _ := r.GetStringByName(0, "Retrieved_Gtid_Set")
 
+	// may only support MySQL version >= 5.6.9
+	// see http://dev.mysql.com/doc/refman/5.6/en/gtid-functions.html
 	if _, err := s.Execute(fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(%s)", retrieved)); err != nil {
 		return err
 	}

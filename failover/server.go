@@ -75,6 +75,11 @@ func (s *Server) StopSlave() error {
 	return err
 }
 
+func (s *Server) StopSlaveIOThread() error {
+	_, err := s.Execute("STOP SLAVE IO_THREAD")
+	return err
+}
+
 func (s *Server) SlaveStatus() (*Resultset, error) {
 	r, err := s.Execute("SHOW SLAVE STATUS")
 	if err != nil {
