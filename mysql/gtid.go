@@ -11,31 +11,46 @@ import (
 	"strings"
 )
 
+// Like MySQL GTID Interval struct, [start, stop), left closed and right open
+// See MySQL rpl_gtid.h
 type Interval struct {
+	// The first GID of this interval.
 	Start int64
-	Stop  int64
+	// The first GID after this interval.
+	Stop int64
 }
 
+// Interval is [start, stop), but the GTID string's format is [n] or [n1-n2], closed interval
 func parseInterval(str string) (i Interval, err error) {
 	p := strings.Split(str, "-")
 	switch len(p) {
 	case 1:
 		i.Start, err = strconv.ParseInt(p[0], 10, 64)
+		i.Stop = i.Start + 1
 	case 2:
 		i.Start, err = strconv.ParseInt(p[0], 10, 64)
 		i.Stop, err = strconv.ParseInt(p[1], 10, 64)
+		i.Stop = i.Stop + 1
 	default:
 		err = fmt.Errorf("invalid interval format, must n[-n]")
 	}
+
+	if err != nil {
+		return
+	}
+
+	if i.Stop <= i.Start {
+		err = fmt.Errorf("invalid interval format, must n[-n] and the end must >= start")
+	}
+
 	return
 }
 
 func (i Interval) String() string {
-	//if stop = 0, use start only
-	if i.Stop == 0 {
+	if i.Stop == i.Start+1 {
 		return fmt.Sprintf("%d", i.Start)
 	} else {
-		return fmt.Sprintf("%d-%d", i.Start, i.Stop)
+		return fmt.Sprintf("%d-%d", i.Start, i.Stop-1)
 	}
 }
 
@@ -104,13 +119,7 @@ func (s *UUIDSet) encode(w io.Writer) {
 
 	for _, i := range s.Intervals {
 		binary.Write(w, binary.LittleEndian, i.Start)
-
-		//if no stop, use start + 1, see python_mysql_replication
-		if i.Stop == 0 {
-			binary.Write(w, binary.LittleEndian, i.Start+1)
-		} else {
-			binary.Write(w, binary.LittleEndian, i.Stop)
-		}
+		binary.Write(w, binary.LittleEndian, i.Stop)
 	}
 }
 
