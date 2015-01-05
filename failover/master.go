@@ -5,25 +5,15 @@ import (
 )
 
 type Master struct {
-	Server
-
-	ReplUser     string
-	ReplPassword string
+	*Server
 }
 
-func NewMaster(addr string, user string, password string) *Master {
+func NewMaster(addr string, user User, replUser User) *Master {
 	m := new(Master)
 
-	m.addr = addr
-	m.user = user
-	m.password = password
+	m.Server = NewServer(addr, user, replUser)
 
 	return m
-}
-
-func (s *Master) SetReplUser(user string, password string) {
-	s.ReplUser = user
-	s.ReplPassword = password
 }
 
 func (s *Master) Status() (*Resultset, error) {
