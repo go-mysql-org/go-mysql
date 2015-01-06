@@ -25,9 +25,9 @@ func (h *PseudoGTIDHandler) Promote(s *Server) error {
 }
 
 const changeMasterToWithPos = `CHANGE MASTER TO
-    MASTER_HOST=%s, MASTER_PORT=%s,
-    MASTER_USER=%s, MASTER_PASSWORD=%s,
-    MASTER_LOG_FILE=%s, MASTER_LOG_POS=%s`
+    MASTER_HOST="%s", MASTER_PORT=%s,
+    MASTER_USER="%s", MASTER_PASSWORD="%s",
+    MASTER_LOG_FILE="%s", MASTER_LOG_POS=%d`
 
 func (h *PseudoGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
 	// Wait all relay logs done with last master
@@ -100,6 +100,18 @@ func (h *PseudoGTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
 	}
 }
 
+func (h *PseudoGTIDHandler) WaitCatchMaster(s *Server, m *Server) error {
+	r, err := m.MasterStatus()
+	if err != nil {
+		return err
+	}
+
+	fname, _ := r.GetStringByName(0, "File")
+	pos, _ := r.GetIntByName(0, "Position")
+
+	return h.waitUntilPosition(s, Position{fname, uint32(pos)})
+}
+
 // Get current binlog filename and position read from master
 func (h *PseudoGTIDHandler) fetchReadPos(s *Server) (Position, error) {
 	r, err := s.SlaveStatus()
@@ -114,6 +126,6 @@ func (h *PseudoGTIDHandler) fetchReadPos(s *Server) (Position, error) {
 }
 
 func (h *PseudoGTIDHandler) waitUntilPosition(s *Server, pos Position) error {
-	_, err := s.Execute(fmt.Sprintf("SELECT MASTER_POS_WAIT(%s, %s)", pos.Name, pos.Pos))
+	_, err := s.Execute(fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %s)", pos.Name, pos.Pos))
 	return err
 }

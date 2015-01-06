@@ -16,4 +16,7 @@ type Handler interface {
 
 	// ensure all relay log done
 	WaitRelayLogDone(s *Server) error
+
+	// Wait until slave s catch all data from master m
+	WaitCatchMaster(s *Server, m *Server) error
 }

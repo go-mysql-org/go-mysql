@@ -45,7 +45,7 @@ func (s *Server) Close() {
 func (s *Server) Execute(cmd string, args ...interface{}) (r *Result, err error) {
 	retryNum := 3
 	for i := 0; i < retryNum; i++ {
-		if s.conn != nil {
+		if s.conn == nil {
 			s.conn, err = client.Connect(s.addr, s.user.Name, s.user.Password, "")
 			if err != nil {
 				return nil, err
@@ -115,4 +115,24 @@ func (s *Server) GTIDUsed() (bool, error) {
 	}
 	on, _ := r.GetString(0, 0)
 	return on == "ON", nil
+}
+
+func (s *Server) SetReadonly(b bool) error {
+	var err error
+	if b {
+		_, err = s.Execute("SET GLOBAL read_only = ON")
+	} else {
+		_, err = s.Execute("SET GLOBAL read_only = OFF")
+	}
+	return err
+}
+
+func (s *Server) LockTables() error {
+	_, err := s.Execute("FLUSH TABLES WITH READ LOCK")
+	return err
+}
+
+func (s *Server) UnlockTables() error {
+	_, err := s.Execute("UNLOCK TABLES")
+	return err
 }

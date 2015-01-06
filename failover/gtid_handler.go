@@ -55,8 +55,8 @@ func (h *GTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
 }
 
 const changeMasterToWithAuto = `CHANGE MASTER TO 
-    MASTER_HOST = %s, MASTER_PORT = %s, 
-    MASTER_USER = %s, MASTER_PASSWORD = %s, 
+    MASTER_HOST = "%s", MASTER_PORT = %s, 
+    MASTER_USER = "%s", MASTER_PASSWORD = "%s", 
     MASTER_AUTO_POSITION = 1`
 
 func (h *GTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
@@ -97,11 +97,23 @@ func (h *GTIDHandler) WaitRelayLogDone(s *Server) error {
 
 	// may only support MySQL version >= 5.6.9
 	// see http://dev.mysql.com/doc/refman/5.6/en/gtid-functions.html
-	if _, err := s.Execute(fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(%s)", retrieved)); err != nil {
+	return h.waitUntilAfterGTIDs(s, retrieved)
+}
+
+func (h *GTIDHandler) WaitCatchMaster(s *Server, m *Server) error {
+	r, err := m.MasterStatus()
+	if err != nil {
 		return err
 	}
 
-	return nil
+	masterGTIDSet, _ := r.GetStringByName(0, "Executed_Gtid_Set")
+
+	return h.waitUntilAfterGTIDs(s, masterGTIDSet)
+}
+
+func (h *GTIDHandler) waitUntilAfterGTIDs(s *Server, gtids string) error {
+	_, err := s.Execute(fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s')", gtids))
+	return err
 }
 
 func (h *GTIDHandler) readExecutedGTIDSet(s *Server) (*mysql.UUIDSet, error) {
