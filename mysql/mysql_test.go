@@ -39,6 +39,38 @@ func (t *mysqlTestSuite) TestGTIDInterval(c *check.C) {
 	c.Assert(err, check.IsNil)
 }
 
+func (t *mysqlTestSuite) TestGTIDIntervalSlice(c *check.C) {
+	i := IntervalSlice{Interval{1, 2}, Interval{2, 4}, Interval{2, 3}}
+	i.Sort()
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{1, 2}, Interval{2, 3}, Interval{2, 4}})
+	n := i.Normalize()
+	c.Assert(n, check.DeepEquals, IntervalSlice{Interval{1, 4}})
+
+	i = IntervalSlice{Interval{1, 2}, Interval{3, 5}, Interval{1, 3}}
+	i.Sort()
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{1, 2}, Interval{1, 3}, Interval{3, 5}})
+	n = i.Normalize()
+	c.Assert(n, check.DeepEquals, IntervalSlice{Interval{1, 5}})
+
+	i = IntervalSlice{Interval{1, 2}, Interval{4, 5}, Interval{1, 3}}
+	i.Sort()
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{1, 2}, Interval{1, 3}, Interval{4, 5}})
+	n = i.Normalize()
+	c.Assert(n, check.DeepEquals, IntervalSlice{Interval{1, 3}, Interval{4, 5}})
+
+	n1 := IntervalSlice{Interval{1, 3}, Interval{4, 5}}
+	n2 := IntervalSlice{Interval{1, 2}}
+
+	c.Assert(n1.Subset(n2), check.Equals, true)
+	c.Assert(n2.Subset(n1), check.Equals, false)
+
+	n1 = IntervalSlice{Interval{1, 3}, Interval{4, 5}}
+	n2 = IntervalSlice{Interval{1, 6}}
+
+	c.Assert(n1.Subset(n2), check.Equals, false)
+	c.Assert(n2.Subset(n1), check.Equals, true)
+}
+
 func (t *mysqlTestSuite) TestGTIDCodec(c *check.C) {
 	us, err := ParseUUIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
 	c.Assert(err, check.IsNil)
@@ -55,4 +87,15 @@ func (t *mysqlTestSuite) TestGTIDCodec(c *check.C) {
 	buf = gs.Encode()
 	err = gs.Decode(buf)
 	c.Assert(err, check.IsNil)
+}
+
+func (t *mysqlTestSuite) TestGTIDSubset(c *check.C) {
+	g1, err := ParseGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:23")
+	c.Assert(err, check.IsNil)
+
+	g2, err := ParseGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57")
+	c.Assert(err, check.IsNil)
+
+	c.Assert(g2.Subset(g1), check.Equals, true)
+	c.Assert(g1.Subset(g2), check.Equals, false)
 }
