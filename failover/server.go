@@ -98,6 +98,16 @@ func (s *Server) MasterStatus() (*Resultset, error) {
 	}
 }
 
+func (s *Server) ResetSlave() error {
+	_, err := s.Execute("RESET SLAVE")
+	return err
+}
+
+func (s *Server) ResetMaster() error {
+	_, err := s.Execute("RESET MASTER")
+	return err
+}
+
 func (s *Server) GTIDUsed() (bool, error) {
 	r, err := s.Execute("SELECT @@gtid_mode")
 	if err != nil {
