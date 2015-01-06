@@ -147,6 +147,7 @@ type UUIDSet struct {
 }
 
 func ParseUUIDSet(str string) (*UUIDSet, error) {
+	str = strings.TrimSpace(str)
 	sep := strings.Split(str, ":")
 	if len(sep) < 2 {
 		return nil, fmt.Errorf("invalid GTID format, must UUID:interval[:interval]")
