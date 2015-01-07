@@ -21,6 +21,7 @@ type Handler interface {
 	// Wait until slave s catch all data from master m at current time
 	WaitCatchMaster(s *Server, m *Server) error
 
-	// Sort slaves, the front has more up-to-date from master
-	Sort(slaves []*Server) ([]*Server, error)
+	// Find best slave which has the most up-to-date data from master
+	// If two or more slave have the same, find the higher weight
+	FindBestSlaves(slaves []*Server) ([]*Server, error)
 }

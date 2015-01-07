@@ -25,7 +25,7 @@ func Failover(slaves []*Server) ([]*Server, error) {
 		if err != nil {
 			return nil, err
 		} else if gtidMode != mode {
-			return nil, fmt.Errorf("%s use GTID %s, but %s use GTID %s", slaves[0].addr, gtidMode, slaves[i].addr, mode)
+			return nil, fmt.Errorf("%s use GTID %s, but %s use GTID %s", slaves[0].Addr, gtidMode, slaves[i].Addr, mode)
 		}
 	}
 
@@ -45,7 +45,7 @@ func Failover(slaves []*Server) ([]*Server, error) {
 	}
 
 	// Find best slave which has the most up-to-data data
-	if slaves, err = h.Sort(slaves); err != nil {
+	if slaves, err = h.FindBestSlaves(slaves); err != nil {
 		return nil, err
 	}
 

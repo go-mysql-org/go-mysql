@@ -3,7 +3,6 @@ package failover
 import (
 	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
-	"net"
 )
 
 type User struct {
@@ -12,13 +11,10 @@ type User struct {
 }
 
 type Server struct {
-	addr string
+	Addr string
 
-	host string
-	port string
-
-	user     User
-	replUser User
+	User     User
+	ReplUser User
 
 	conn *client.Conn
 }
@@ -26,12 +22,10 @@ type Server struct {
 func NewServer(addr string, user User, replUser User) *Server {
 	s := new(Server)
 
-	s.addr = addr
+	s.Addr = addr
 
-	s.host, s.port, _ = net.SplitHostPort(s.addr)
-
-	s.user = user
-	s.replUser = replUser
+	s.User = user
+	s.ReplUser = replUser
 
 	return s
 }
@@ -46,7 +40,7 @@ func (s *Server) Execute(cmd string, args ...interface{}) (r *Result, err error)
 	retryNum := 3
 	for i := 0; i < retryNum; i++ {
 		if s.conn == nil {
-			s.conn, err = client.Connect(s.addr, s.user.Name, s.user.Password, "")
+			s.conn, err = client.Connect(s.Addr, s.User.Name, s.User.Password, "")
 			if err != nil {
 				return nil, err
 			}

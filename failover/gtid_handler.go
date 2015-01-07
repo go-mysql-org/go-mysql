@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
+	"net"
 )
 
 type GTIDHandler struct {
@@ -34,14 +35,46 @@ func (h *GTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
 	}
 
 	if !uuid.Equal(set1.SID, set2.SID) {
-		return 0, fmt.Errorf("%s, %s have different master", s1.addr, s2.addr)
+		return 0, fmt.Errorf("%s, %s have different master", s1.Addr, s2.Addr)
 	}
 
 	return set1.Intervals.Compare(set2.Intervals), nil
 }
 
-func (h *GTIDHandler) Sort(slaves []*Server) ([]*Server, error) {
-	return nil, nil
+func (h *GTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
+	bestSlaves := []*Server{}
+
+	sets := make([]*mysql.UUIDSet, len(slaves))
+
+	var lastSet *mysql.UUIDSet = nil
+	for i, slave := range slaves {
+		set, err := h.readExecutedGTIDSet(slave)
+		if err != nil {
+			return nil, err
+		}
+
+		sets[i] = set
+
+		if lastSet == nil {
+			lastSet = set
+			bestSlaves = []*Server{slave}
+		} else if !uuid.Equal(lastSet.SID, set.SID) {
+			return nil, fmt.Errorf("%s, %s have different master", slaves[0].Addr, slave.Addr)
+		} else {
+			switch lastSet.Intervals.Compare(set.Intervals) {
+			case 1:
+				//do nothing
+			case -1:
+				lastSet = set
+				bestSlaves = []*Server{slave}
+			case 0:
+				// these two slaves have same data,
+				bestSlaves = append(bestSlaves, slave)
+			}
+		}
+	}
+
+	return bestSlaves, nil
 }
 
 const changeMasterToWithAuto = `CHANGE MASTER TO 
@@ -62,7 +95,9 @@ func (h *GTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
 		return err
 	}
 
-	if _, err := s.Execute(fmt.Sprintf(changeMasterToWithAuto, m.host, m.port, m.replUser.Name, m.replUser.Password)); err != nil {
+	host, port, _ := net.SplitHostPort(s.Addr)
+
+	if _, err := s.Execute(fmt.Sprintf(changeMasterToWithAuto, host, port, m.ReplUser.Name, m.ReplUser.Password)); err != nil {
 		return err
 	}
 

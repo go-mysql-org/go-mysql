@@ -100,7 +100,7 @@ func (h *PseudoGTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
 	}
 }
 
-func (h *PseudoGTIDHandler) Sort(slaves []*Server) ([]*Server, error) {
+func (h *PseudoGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
 	return nil, nil
 }
 
