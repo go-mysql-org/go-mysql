@@ -100,6 +100,10 @@ func (h *PseudoGTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
 	}
 }
 
+func (h *PseudoGTIDHandler) Sort(slaves []*Server) ([]*Server, error) {
+	return nil, nil
+}
+
 func (h *PseudoGTIDHandler) WaitCatchMaster(s *Server, m *Server) error {
 	r, err := m.MasterStatus()
 	if err != nil {

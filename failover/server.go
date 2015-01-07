@@ -108,13 +108,17 @@ func (s *Server) ResetMaster() error {
 	return err
 }
 
-func (s *Server) GTIDUsed() (bool, error) {
+func (s *Server) GTIDUsed() (string, error) {
 	r, err := s.Execute("SELECT @@gtid_mode")
 	if err != nil {
-		return false, err
+		return GTIDModeOff, err
 	}
 	on, _ := r.GetString(0, 0)
-	return on == "ON", nil
+	if on != GTIDModeOn {
+		return GTIDModeOff, nil
+	} else {
+		return GTIDModeOn, nil
+	}
 }
 
 func (s *Server) SetReadonly(b bool) error {

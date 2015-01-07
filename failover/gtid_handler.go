@@ -54,6 +54,10 @@ func (h *GTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
 	}
 }
 
+func (h *GTIDHandler) Sort(slaves []*Server) ([]*Server, error) {
+	return nil, nil
+}
+
 const changeMasterToWithAuto = `CHANGE MASTER TO 
     MASTER_HOST = "%s", MASTER_PORT = %s, 
     MASTER_USER = "%s", MASTER_PASSWORD = "%s", 
