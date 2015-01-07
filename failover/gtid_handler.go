@@ -91,13 +91,14 @@ func (h *GTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
 		return err
 	}
 
-	if err := s.ResetSlave(); err != nil {
-		return err
-	}
+	// if err := s.ResetSlave(); err != nil {
+	// 	return err
+	// }
 
-	host, port, _ := net.SplitHostPort(s.Addr)
+	host, port, _ := net.SplitHostPort(m.Addr)
 
-	if _, err := s.Execute(fmt.Sprintf(changeMasterToWithAuto, host, port, m.ReplUser.Name, m.ReplUser.Password)); err != nil {
+	if _, err := s.Execute(fmt.Sprintf(changeMasterToWithAuto,
+		host, port, m.ReplUser.Name, m.ReplUser.Password)); err != nil {
 		return err
 	}
 
