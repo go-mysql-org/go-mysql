@@ -2,6 +2,7 @@ package failover
 
 import (
 	"fmt"
+	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -32,26 +33,11 @@ func (h *GTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
 		return 0, err
 	}
 
-	// s1 and s2 has no data replicated from master
-	if set1 == nil && set2 == nil {
-		return 0, nil
-	} else if set1 == nil {
-		return -1, nil
-	} else if set2 == nil {
-		return 1, nil
-	}
-
-	if set1.SID.String() != set2.SID.String() {
+	if !uuid.Equal(set1.SID, set2.SID) {
 		return 0, fmt.Errorf("%s, %s have different master", s1.addr, s2.addr)
 	}
 
-	if set1.Intervals.Equal(set2.Intervals) {
-		return 0, nil
-	} else if set1.Intervals.Subset(set2.Intervals) {
-		return 1, nil
-	} else {
-		return -1, nil
-	}
+	return set1.Intervals.Compare(set2.Intervals), nil
 }
 
 func (h *GTIDHandler) Sort(slaves []*Server) ([]*Server, error) {
@@ -134,6 +120,11 @@ func (h *GTIDHandler) readExecutedGTIDSet(s *Server) (*mysql.UUIDSet, error) {
 		return nil, err
 	}
 
-	set, _ := g.Sets[masterUUID]
-	return set, nil
+	set, ok := g.Sets[masterUUID]
+	if ok {
+		return set, nil
+	} else {
+		u, _ := uuid.FromString(masterUUID)
+		return &mysql.UUIDSet{u, mysql.IntervalSlice{}}, nil
+	}
 }

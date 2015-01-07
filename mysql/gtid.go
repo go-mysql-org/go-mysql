@@ -139,6 +139,16 @@ func (s IntervalSlice) Equal(o IntervalSlice) bool {
 	return true
 }
 
+func (s IntervalSlice) Compare(o IntervalSlice) int {
+	if s.Equal(o) {
+		return 0
+	} else if s.Subset(o) {
+		return 1
+	} else {
+		return -1
+	}
+}
+
 // Refer http://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
 type UUIDSet struct {
 	SID uuid.UUID
