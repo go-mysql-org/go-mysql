@@ -7,6 +7,8 @@ ADD sources.list /etc/apt/sources.list
 RUN apt-get update \
     && apt-get install -y mysql-server-5.6 openssh-server
 
+RUN rm -rf /var/lib/mysql
+
 RUN mkdir /var/run/sshd
 RUN echo 'root:123123' | chpasswd
 RUN sed -i 's/PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -23,15 +25,9 @@ ADD my-default.cnf /usr/share/mysql/my-default.cnf
 ADD start.sh /start.sh
 RUN chmod +x /start.sh
 
-
-COPY init.sh /init.sh
-RUN chmod +x /init.sh
-
-# VOLUME ["/var/lib/mysql"]
+VOLUME ["/var/lib/mysql"]
 
 EXPOSE 3306
 EXPOSE 22
-
-RUN /init.sh
 
 CMD ["/start.sh"]
