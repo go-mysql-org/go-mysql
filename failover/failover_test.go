@@ -94,6 +94,10 @@ func (s *failoverTestSuite) TestGTID(c *C) {
 	s.checkCompare(c, h, s1, s2, 1)
 	s.checkCompare(c, h, s2, s1, -1)
 
+	best, err := h.FindBestSlaves([]*Server{s1, s2})
+	c.Assert(err, IsNil)
+	c.Assert(best, DeepEquals, []*Server{s1})
+
 	// promote s1 to master
 	err = h.Promote(s1)
 	c.Assert(err, IsNil)
@@ -122,6 +126,10 @@ func (s *failoverTestSuite) TestGTID(c *C) {
 
 	s.checkCompare(c, h, s1, s2, 0)
 
+	best, err = h.FindBestSlaves([]*Server{s1, s2})
+	c.Assert(err, IsNil)
+	c.Assert(best, DeepEquals, []*Server{s1, s2})
+
 	err = s2.StopSlaveIOThread()
 	c.Assert(err, IsNil)
 
@@ -129,6 +137,10 @@ func (s *failoverTestSuite) TestGTID(c *C) {
 	err = h.WaitCatchMaster(s1, m)
 
 	s.checkCompare(c, h, s1, s2, 1)
+
+	best, err = h.FindBestSlaves([]*Server{s1, s2})
+	c.Assert(err, IsNil)
+	c.Assert(best, DeepEquals, []*Server{s1})
 }
 
 func (s *failoverTestSuite) checkSelect(c *C, m *Server, id uint64, name string) {
