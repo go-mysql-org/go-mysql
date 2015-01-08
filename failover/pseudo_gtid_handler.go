@@ -73,6 +73,8 @@ func (h *PseudoGTIDHandler) WaitRelayLogDone(s *Server) error {
 }
 
 func (h *PseudoGTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
+	// todo, check same master
+
 	p1, err := h.fetchReadPos(s1)
 	if err != nil {
 		return 0, err
@@ -83,25 +85,44 @@ func (h *PseudoGTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
 		return 0, err
 	}
 
-	// First compare binlog name, format is xxx-bin.000000
-	if p1.Name > p2.Name {
-		return 1, nil
-	} else if p1.Name < p2.Name {
-		return -1, nil
-	} else {
-		// Same binlog file, compare position
-		if p1.Pos > p2.Pos {
-			return 1, nil
-		} else if p1.Pos < p2.Pos {
-			return -1, nil
-		} else {
-			return 0, nil
-		}
-	}
+	return p1.Compare(p2), nil
 }
 
 func (h *PseudoGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
-	return nil, nil
+	// todo, check same master
+
+	bestSlaves := []*Server{}
+
+	ps := make([]Position, len(slaves))
+
+	lastIndex := -1
+
+	for i, slave := range slaves {
+		pos, err := h.fetchReadPos(slave)
+		if err != nil {
+			return nil, err
+		}
+
+		ps[i] = pos
+
+		if lastIndex == -1 {
+			lastIndex = i
+			bestSlaves = []*Server{slave}
+		} else {
+			switch ps[lastIndex].Compare(pos) {
+			case 1:
+				//do nothing
+			case -1:
+				lastIndex = i
+				bestSlaves = []*Server{slave}
+			case 0:
+				// these two slaves have same data,
+				bestSlaves = append(bestSlaves, slave)
+			}
+		}
+	}
+
+	return bestSlaves, nil
 }
 
 func (h *PseudoGTIDHandler) WaitCatchMaster(s *Server, m *Server) error {

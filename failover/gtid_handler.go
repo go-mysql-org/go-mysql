@@ -91,9 +91,9 @@ func (h *GTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
 		return err
 	}
 
-	// if err := s.ResetSlave(); err != nil {
-	// 	return err
-	// }
+	if err := s.ResetSlave(); err != nil {
+		return err
+	}
 
 	host, port, _ := net.SplitHostPort(m.Addr)
 
