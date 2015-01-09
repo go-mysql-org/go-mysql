@@ -1,1 +1,0 @@
-If you use boot2docker, you must first use `boot2docker ip` to get the virtual host
