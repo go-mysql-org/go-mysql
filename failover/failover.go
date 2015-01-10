@@ -16,17 +16,9 @@ import (
 //
 func Failover(slaves []*Server) ([]*Server, error) {
 	// First check slaves use gtid or not
-	gtidMode, err := slaves[0].GTIDUsed()
+	gtidMode, err := CheckGTIDMode(slaves)
 	if err != nil {
 		return nil, err
-	}
-	for i := 1; i < len(slaves); i++ {
-		mode, err := slaves[i].GTIDUsed()
-		if err != nil {
-			return nil, err
-		} else if gtidMode != mode {
-			return nil, fmt.Errorf("%s use GTID %s, but %s use GTID %s", slaves[0].Addr, gtidMode, slaves[i].Addr, mode)
-		}
 	}
 
 	var h Handler
@@ -62,4 +54,22 @@ func Failover(slaves []*Server) ([]*Server, error) {
 	}
 
 	return slaves, nil
+}
+
+// Check slaves have same GTID used or not
+func CheckGTIDMode(slaves []*Server) (string, error) {
+	gtidMode, err := slaves[0].GTIDMode()
+	if err != nil {
+		return GTIDModeOff, err
+	}
+	for i := 1; i < len(slaves); i++ {
+		mode, err := slaves[i].GTIDMode()
+		if err != nil {
+			return GTIDModeOff, err
+		} else if gtidMode != mode {
+			return GTIDModeOff, fmt.Errorf("%s use GTID %s, but %s use GTID %s", slaves[0].Addr, gtidMode, slaves[i].Addr, mode)
+		}
+	}
+
+	return gtidMode, nil
 }

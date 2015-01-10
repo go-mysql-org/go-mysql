@@ -102,7 +102,7 @@ func (s *Server) ResetMaster() error {
 	return err
 }
 
-func (s *Server) GTIDUsed() (string, error) {
+func (s *Server) GTIDMode() (string, error) {
 	r, err := s.Execute("SELECT @@gtid_mode")
 	if err != nil {
 		return GTIDModeOff, err

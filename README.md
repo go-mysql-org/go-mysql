@@ -123,6 +123,11 @@ mysql -h127.0.0.1 -P4000 -uroot -p
 //Becuase empty handler does nothing, so here the MySQL client can only connect the proxy server. :-) 
 ```
 
+## Failover
+
+Failover supports to promote a new master and let other slaves replicate from it automatically when the old master was down.
+
+
 ## Feedback
 
 go-mysql is still in development, your feedback is very welcome. 
