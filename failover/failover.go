@@ -26,7 +26,7 @@ func Failover(slaves []*Server) ([]*Server, error) {
 	if gtidMode == GTIDModeOn {
 		h = new(GTIDHandler)
 	} else {
-		h = new(PseudoGTIDHandler)
+		return nil, fmt.Errorf("failover only supports GTID mode")
 	}
 
 	// Stop all slave IO_THREAD and wait the relay log done

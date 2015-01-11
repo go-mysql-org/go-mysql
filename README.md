@@ -127,6 +127,12 @@ mysql -h127.0.0.1 -P4000 -uroot -p
 
 Failover supports to promote a new master and let other slaves replicate from it automatically when the old master was down.
 
+Failover only support MySQL >= 5.6.9 with GTID mode, if you use lower version, e.g, MySQL 5.0 - 5.5, please use [MHA](http://code.google.com/p/mysql-master-ha/) or [orchestrator](https://github.com/outbrain/orchestrator).
+
+Failover may try to support MariaDB with GTID mode later.
+
+Why only GTID? Supporting failover with no GTID mode is very hard, because slave can not find the proper binlog filename and position with the new master. 
+Although there are many companies use MySQL 5.0 - 5.5, I think upgrade MySQL to 5.6 or higher is easy. 
 
 ## Feedback
 

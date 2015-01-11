@@ -1,156 +1,158 @@
 package failover
 
-import (
-	"fmt"
-	. "github.com/siddontang/go-mysql/mysql"
-)
+// Only support GTID mode
 
-type PseudoGTIDHandler struct {
-	Handler
-}
+// import (
+// 	"fmt"
+// 	. "github.com/siddontang/go-mysql/mysql"
+// )
 
-// Promote to master, you must not use this slave after Promote
-func (h *PseudoGTIDHandler) Promote(s *Server) error {
-	if err := h.WaitRelayLogDone(s); err != nil {
-		return err
-	}
+// type PseudoGTIDHandler struct {
+// 	Handler
+// }
 
-	if err := s.StopSlave(); err != nil {
-		return err
-	}
+// // Promote to master, you must not use this slave after Promote
+// func (h *PseudoGTIDHandler) Promote(s *Server) error {
+// 	if err := h.WaitRelayLogDone(s); err != nil {
+// 		return err
+// 	}
 
-	// todo.....
+// 	if err := s.StopSlave(); err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	// todo.....
 
-const changeMasterToWithPos = `CHANGE MASTER TO
-    MASTER_HOST="%s", MASTER_PORT=%s,
-    MASTER_USER="%s", MASTER_PASSWORD="%s",
-    MASTER_LOG_FILE="%s", MASTER_LOG_POS=%d`
+// 	return nil
+// }
 
-func (h *PseudoGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
-	// Wait all relay logs done with last master
-	if err := h.WaitRelayLogDone(s); err != nil {
-		return err
-	}
+// const changeMasterToWithPos = `CHANGE MASTER TO
+//     MASTER_HOST="%s", MASTER_PORT=%s,
+//     MASTER_USER="%s", MASTER_PASSWORD="%s",
+//     MASTER_LOG_FILE="%s", MASTER_LOG_POS=%d`
 
-	// Stop slave
-	if err := s.StopSlave(); err != nil {
-		return err
-	}
+// func (h *PseudoGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
+// 	// Wait all relay logs done with last master
+// 	if err := h.WaitRelayLogDone(s); err != nil {
+// 		return err
+// 	}
 
-	// Reset slave
-	if err := s.ResetSlave(); err != nil {
-		return err
-	}
+// 	// Stop slave
+// 	if err := s.StopSlave(); err != nil {
+// 		return err
+// 	}
 
-	// Change master to with position
+// 	// Reset slave
+// 	if err := s.ResetSlave(); err != nil {
+// 		return err
+// 	}
 
-	// Start slave
-	if err := s.StartSlave(); err != nil {
-		return err
-	}
+// 	// Change master to with position
 
-	return nil
-}
+// 	// Start slave
+// 	if err := s.StartSlave(); err != nil {
+// 		return err
+// 	}
 
-func (h *PseudoGTIDHandler) WaitRelayLogDone(s *Server) error {
-	if err := s.StopSlaveIOThread(); err != nil {
-		return err
-	}
+// 	return nil
+// }
 
-	pos, err := h.fetchReadPos(s)
-	if err != nil {
-		return err
-	}
+// func (h *PseudoGTIDHandler) WaitRelayLogDone(s *Server) error {
+// 	if err := s.StopSlaveIOThread(); err != nil {
+// 		return err
+// 	}
 
-	if err = h.waitUntilPosition(s, pos); err != nil {
-		return err
-	}
+// 	pos, err := h.fetchReadPos(s)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	if err = h.waitUntilPosition(s, pos); err != nil {
+// 		return err
+// 	}
 
-func (h *PseudoGTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
-	// todo, check same master
+// 	return nil
+// }
 
-	p1, err := h.fetchReadPos(s1)
-	if err != nil {
-		return 0, err
-	}
+// func (h *PseudoGTIDHandler) Compare(s1 *Server, s2 *Server) (int, error) {
+// 	// todo, check same master
 
-	p2, err := h.fetchReadPos(s2)
-	if err != nil {
-		return 0, err
-	}
+// 	p1, err := h.fetchReadPos(s1)
+// 	if err != nil {
+// 		return 0, err
+// 	}
 
-	return p1.Compare(p2), nil
-}
+// 	p2, err := h.fetchReadPos(s2)
+// 	if err != nil {
+// 		return 0, err
+// 	}
 
-func (h *PseudoGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
-	// todo, check same master
+// 	return p1.Compare(p2), nil
+// }
 
-	bestSlaves := []*Server{}
+// func (h *PseudoGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
+// 	// todo, check same master
 
-	ps := make([]Position, len(slaves))
+// 	bestSlaves := []*Server{}
 
-	lastIndex := -1
+// 	ps := make([]Position, len(slaves))
 
-	for i, slave := range slaves {
-		pos, err := h.fetchReadPos(slave)
-		if err != nil {
-			return nil, err
-		}
+// 	lastIndex := -1
 
-		ps[i] = pos
+// 	for i, slave := range slaves {
+// 		pos, err := h.fetchReadPos(slave)
+// 		if err != nil {
+// 			return nil, err
+// 		}
 
-		if lastIndex == -1 {
-			lastIndex = i
-			bestSlaves = []*Server{slave}
-		} else {
-			switch ps[lastIndex].Compare(pos) {
-			case 1:
-				//do nothing
-			case -1:
-				lastIndex = i
-				bestSlaves = []*Server{slave}
-			case 0:
-				// these two slaves have same data,
-				bestSlaves = append(bestSlaves, slave)
-			}
-		}
-	}
+// 		ps[i] = pos
 
-	return bestSlaves, nil
-}
+// 		if lastIndex == -1 {
+// 			lastIndex = i
+// 			bestSlaves = []*Server{slave}
+// 		} else {
+// 			switch ps[lastIndex].Compare(pos) {
+// 			case 1:
+// 				//do nothing
+// 			case -1:
+// 				lastIndex = i
+// 				bestSlaves = []*Server{slave}
+// 			case 0:
+// 				// these two slaves have same data,
+// 				bestSlaves = append(bestSlaves, slave)
+// 			}
+// 		}
+// 	}
 
-func (h *PseudoGTIDHandler) WaitCatchMaster(s *Server, m *Server) error {
-	r, err := m.MasterStatus()
-	if err != nil {
-		return err
-	}
+// 	return bestSlaves, nil
+// }
 
-	fname, _ := r.GetStringByName(0, "File")
-	pos, _ := r.GetIntByName(0, "Position")
+// func (h *PseudoGTIDHandler) WaitCatchMaster(s *Server, m *Server) error {
+// 	r, err := m.MasterStatus()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return h.waitUntilPosition(s, Position{fname, uint32(pos)})
-}
+// 	fname, _ := r.GetStringByName(0, "File")
+// 	pos, _ := r.GetIntByName(0, "Position")
 
-// Get current binlog filename and position read from master
-func (h *PseudoGTIDHandler) fetchReadPos(s *Server) (Position, error) {
-	r, err := s.SlaveStatus()
-	if err != nil {
-		return Position{}, err
-	}
+// 	return h.waitUntilPosition(s, Position{fname, uint32(pos)})
+// }
 
-	fname, _ := r.GetStringByName(0, "Master_Log_File")
-	pos, _ := r.GetIntByName(0, "Read_Master_Log_Pos")
+// // Get current binlog filename and position read from master
+// func (h *PseudoGTIDHandler) fetchReadPos(s *Server) (Position, error) {
+// 	r, err := s.SlaveStatus()
+// 	if err != nil {
+// 		return Position{}, err
+// 	}
 
-	return Position{fname, uint32(pos)}, nil
-}
+// 	fname, _ := r.GetStringByName(0, "Master_Log_File")
+// 	pos, _ := r.GetIntByName(0, "Read_Master_Log_Pos")
 
-func (h *PseudoGTIDHandler) waitUntilPosition(s *Server, pos Position) error {
-	_, err := s.Execute(fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %s)", pos.Name, pos.Pos))
-	return err
-}
+// 	return Position{fname, uint32(pos)}, nil
+// }
+
+// func (h *PseudoGTIDHandler) waitUntilPosition(s *Server, pos Position) error {
+// 	_, err := s.Execute(fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %s)", pos.Name, pos.Pos))
+// 	return err
+// }
