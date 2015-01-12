@@ -8,10 +8,8 @@ import (
 )
 
 // We will use go-mysql docker to test
-// go-mysql docker will build mysql 1-6 instances
-// mysql 1-3 use binlog file + position replication, port is 3306, 3307, 3308
-// mysql 4-6 use GTID replication, port is 3316, 3317, 3318
-var addr = flag.String("addr", "10.20.151.148", "go-mysql docker container address")
+// go-mysql docker will build mysql 1-3 instances
+var host = flag.String("host", "127.0.0.1", "go-mysql docker container address")
 
 func Test(t *testing.T) {
 	TestingT(t)
@@ -24,16 +22,16 @@ type failoverTestSuite struct {
 var _ = Suite(&failoverTestSuite{})
 
 func (s *failoverTestSuite) SetUpSuite(c *C) {
-	ports := []int{3306, 3307, 3308, 3316, 3317, 3318}
+	ports := []int{3306, 3307, 3308}
 
-	s.s = make([]*Server, 6)
+	s.s = make([]*Server, len(ports))
 
-	for i := 0; i < 6; i++ {
-		s.s[i] = NewServer(fmt.Sprintf("%s:%d", *addr, ports[i]), User{"root", ""}, User{"root", ""})
+	for i := 0; i < len(ports); i++ {
+		s.s[i] = NewServer(fmt.Sprintf("%s:%d", *host, ports[i]), User{"root", ""}, User{"root", ""})
 	}
 
 	var err error
-	for i := 0; i < 6; i++ {
+	for i := 0; i < len(ports); i++ {
 		err = s.s[i].StopSlave()
 		c.Assert(err, IsNil)
 
@@ -57,10 +55,9 @@ func (s *failoverTestSuite) TearDownSuite(c *C) {
 func (s *failoverTestSuite) TestGTID(c *C) {
 	h := new(GTIDHandler)
 
-	//s3 is master, s4 and s5 are s4's slave
-	m := s.s[3]
-	s1 := s.s[4]
-	s2 := s.s[5]
+	m := s.s[0]
+	s1 := s.s[1]
+	s2 := s.s[2]
 
 	var err error
 	err = h.ChangeMasterTo(s1, m)

@@ -17,11 +17,6 @@ var testPort = flag.Int("port", 3306, "MySQL master port")
 var testUser = flag.String("user", "root", "MySQL master user")
 var testPassword = flag.String("pass", "", "MySQL master password")
 
-var testGTIDHost = flag.String("gtid_host", "127.0.0.1", "MySQL master (uses GTID) host")
-var testGTIDPort = flag.Int("gtid_port", 3316, "MySQL master (uses GTID) port")
-var testGTIDUser = flag.String("gtid_user", "root", "MySQL master (uses GTID) user")
-var testGITDPassword = flag.String("gtid_pass", "", "MySQL master (uses GTID) password")
-
 var testOutputLogs = flag.Bool("o", true, "output binlog event")
 
 func TestBinLogSyncer(t *testing.T) {
@@ -38,6 +33,9 @@ type testSyncerSuite struct {
 var _ = Suite(&testSyncerSuite{})
 
 func (t *testSyncerSuite) SetUpSuite(c *C) {
+	var err error
+	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, *testPort), *testUser, *testPassword, "test")
+	c.Assert(err, IsNil)
 }
 
 func (t *testSyncerSuite) TearDownSuite(c *C) {
@@ -48,13 +46,12 @@ func (t *testSyncerSuite) TearDownSuite(c *C) {
 
 func (t *testSyncerSuite) SetUpTest(c *C) {
 	t.b = NewBinlogSyncer(100)
+
+	err := t.b.RegisterSlave(*testHost, uint16(*testPort), *testUser, *testPassword)
+	c.Assert(err, IsNil)
 }
 
 func (t *testSyncerSuite) TearDownTest(c *C) {
-	if t.c != nil {
-		t.c.Close()
-	}
-
 	t.b.Close()
 }
 
@@ -140,13 +137,6 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 }
 
 func (t *testSyncerSuite) TestSync(c *C) {
-	var err error
-	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, *testPort), *testUser, *testPassword, "test")
-	c.Assert(err, IsNil)
-
-	err = t.b.RegisterSlave(*testHost, uint16(*testPort), *testUser, *testPassword)
-	c.Assert(err, IsNil)
-
 	//get current master binlog file and position
 	r, err := t.c.Execute("SHOW MASTER STATUS")
 	c.Assert(err, IsNil)
@@ -159,18 +149,18 @@ func (t *testSyncerSuite) TestSync(c *C) {
 }
 
 func (t *testSyncerSuite) TestSyncGTID(c *C) {
-	var err error
-	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testGTIDHost, *testGTIDPort), *testGTIDUser, *testGITDPassword, "test")
+	r, err := t.c.Execute("SELECT @@gtid_mode")
 	c.Assert(err, IsNil)
-
-	err = t.b.RegisterSlave(*testGTIDHost, uint16(*testGTIDPort), *testGTIDUser, *testGITDPassword)
-	c.Assert(err, IsNil)
+	modeOn, _ := r.GetString(0, 0)
+	if modeOn != "ON" {
+		c.Skip("GTID mode is not ON")
+	}
 
 	masterUuid, err := t.b.GetMasterUUID()
 	c.Assert(err, IsNil)
 
 	set := new(mysql.GTIDSet)
-	set.Sets = []*mysql.UUIDSet{mysql.NewUUIDSet(masterUuid, mysql.Interval{1, 2})}
+	set.Sets = map[string]*mysql.UUIDSet{masterUuid.String(): mysql.NewUUIDSet(masterUuid, mysql.Interval{1, 2})}
 
 	s, err := t.b.StartSyncGTID(set)
 	c.Assert(err, IsNil)
