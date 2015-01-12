@@ -76,6 +76,14 @@ const (
 	PREVIOUS_GTIDS_EVENT
 )
 
+const (
+	// MariaDB event starts from 160
+	MARIADB_ANNOTATE_ROWS_EVENT EventType = 160 + iota
+	MARIADB_BINLOG_CHECKPOINT_EVENT
+	MARIADB_GTID_EVENT
+	MARIADB_GTID_LIST_EVENT
+)
+
 func (e EventType) String() string {
 	switch e {
 	case UNKNOWN_EVENT:
@@ -150,6 +158,7 @@ func (e EventType) String() string {
 		return "AnonymousGTIDEvent"
 	case PREVIOUS_GTIDS_EVENT:
 		return "PreviousGTIDsEvent"
+
 	default:
 		return "UnknownEvent"
 	}
