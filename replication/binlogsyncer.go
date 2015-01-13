@@ -163,8 +163,7 @@ func (b *BinlogSyncer) writeBinglogDumpCommand(p Position) error {
 	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
 	pos += 4
 
-	//only support 0x01 BINGLOG_DUMP_NON_BLOCK
-	binary.LittleEndian.PutUint16(data[pos:], BINLOG_DUMP_NON_BLOCK)
+	binary.LittleEndian.PutUint16(data[pos:], BINLOG_DUMP_NEVER_STOP)
 	pos += 2
 
 	binary.LittleEndian.PutUint32(data[pos:], b.serverID)
