@@ -132,7 +132,7 @@ func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 }
 
 func (b *BinlogSyncer) StartSyncGTID(gset *GTIDSet) (*BinlogStreamer, error) {
-	err := b.writeBinlogDumpGTIDCommand(BINLOG_DUMP_NON_BLOCK|BINLOG_THROUGH_GTID, Position{"", 4}, gset.Encode())
+	err := b.writeBinlogDumpGTIDCommand(Position{"", 4}, gset.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (b *BinlogSyncer) writeBinglogDumpCommand(p Position) error {
 	return b.c.WritePacket(data)
 }
 
-func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, p Position, gtidData []byte) error {
+func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(p Position, gtidData []byte) error {
 	b.c.ResetSequence()
 
 	data := make([]byte, 4+1+2+4+4+len(p.Name)+8+4+len(gtidData))
@@ -182,7 +182,7 @@ func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, p Position, gtid
 	data[pos] = COM_BINLOG_DUMP_GTID
 	pos++
 
-	binary.LittleEndian.PutUint16(data[pos:], flags)
+	binary.LittleEndian.PutUint16(data[pos:], 0)
 	pos += 2
 
 	binary.LittleEndian.PutUint32(data[pos:], b.serverID)
@@ -197,12 +197,11 @@ func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(flags uint16, p Position, gtid
 	binary.LittleEndian.PutUint64(data[pos:], uint64(p.Pos))
 	pos += 8
 
-	if flags&BINLOG_THROUGH_GTID > 0 {
-		binary.LittleEndian.PutUint32(data[pos:], uint32(len(gtidData)))
-		pos += 4
-		n = copy(data[pos:], gtidData)
-		pos += n
-	}
+	binary.LittleEndian.PutUint32(data[pos:], uint32(len(gtidData)))
+	pos += 4
+	n = copy(data[pos:], gtidData)
+	pos += n
+
 	data = data[0:pos]
 
 	return b.c.WritePacket(data)
