@@ -2,6 +2,7 @@ package failover
 
 import (
 	"fmt"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 // Failover will do below things after the master down
@@ -14,19 +15,22 @@ import (
 //  2, If the failover error, the whole topology may be wrong, we must handle this error manually
 //  3, Slaves must have same replication mode, all use GTID or not
 //
-func Failover(slaves []*Server) ([]*Server, error) {
-	// First check slaves use gtid or not
-	gtidMode, err := CheckGTIDMode(slaves)
-	if err != nil {
-		return nil, err
+func Failover(flavor string, slaves []*Server) ([]*Server, error) {
+	var h Handler
+	var err error
+
+	switch flavor {
+	case mysql.MySQLFlavor:
+		h = new(MysqlGTIDHandler)
+	case mysql.MariaDBFlavor:
+		return nil, fmt.Errorf("MariaDB failover is not supported now")
+	default:
+		return nil, fmt.Errorf("invalid flavor %s", flavor)
 	}
 
-	var h Handler
-
-	if gtidMode == GTIDModeOn {
-		h = new(GTIDHandler)
-	} else {
-		return nil, fmt.Errorf("failover only supports GTID mode")
+	// First check slaves use gtid or not
+	if err := h.CheckGTIDMode(slaves); err != nil {
+		return nil, err
 	}
 
 	// Stop all slave IO_THREAD and wait the relay log done
@@ -54,22 +58,4 @@ func Failover(slaves []*Server) ([]*Server, error) {
 	}
 
 	return slaves, nil
-}
-
-// Check slaves have same GTID used or not
-func CheckGTIDMode(slaves []*Server) (string, error) {
-	gtidMode, err := slaves[0].GTIDMode()
-	if err != nil {
-		return GTIDModeOff, err
-	}
-	for i := 1; i < len(slaves); i++ {
-		mode, err := slaves[i].GTIDMode()
-		if err != nil {
-			return GTIDModeOff, err
-		} else if gtidMode != mode {
-			return GTIDModeOff, fmt.Errorf("%s use GTID %s, but %s use GTID %s", slaves[0].Addr, gtidMode, slaves[i].Addr, mode)
-		}
-	}
-
-	return gtidMode, nil
 }

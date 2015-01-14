@@ -22,7 +22,7 @@ type failoverTestSuite struct {
 var _ = Suite(&failoverTestSuite{})
 
 func (s *failoverTestSuite) SetUpSuite(c *C) {
-	ports := []int{3306, 3307, 3308}
+	ports := []int{3306, 3307, 3308, 3316, 3317, 3318}
 
 	s.s = make([]*Server, len(ports))
 
@@ -36,6 +36,9 @@ func (s *failoverTestSuite) SetUpSuite(c *C) {
 		c.Assert(err, IsNil)
 
 		err = s.s[i].ResetSlave()
+		c.Assert(err, IsNil)
+
+		_, err = s.s[i].Execute("CREATE DATABASE IF NOT EXISTS test")
 		c.Assert(err, IsNil)
 
 		_, err = s.s[i].Execute("DROP TABLE IF EXISTS test.go_mysql_test")
@@ -52,8 +55,8 @@ func (s *failoverTestSuite) SetUpSuite(c *C) {
 func (s *failoverTestSuite) TearDownSuite(c *C) {
 }
 
-func (s *failoverTestSuite) TestGTID(c *C) {
-	h := new(GTIDHandler)
+func (s *failoverTestSuite) TestMysqlFailover(c *C) {
+	h := new(MysqlGTIDHandler)
 
 	m := s.s[0]
 	s1 := s.s[1]
@@ -88,9 +91,6 @@ func (s *failoverTestSuite) TestGTID(c *C) {
 
 	s.checkSelect(c, s1, id, "c")
 
-	s.checkCompare(c, h, s1, s2, 1)
-	s.checkCompare(c, h, s2, s1, -1)
-
 	best, err := h.FindBestSlaves([]*Server{s1, s2})
 	c.Assert(err, IsNil)
 	c.Assert(best, DeepEquals, []*Server{s1})
@@ -121,8 +121,6 @@ func (s *failoverTestSuite) TestGTID(c *C) {
 	err = h.WaitCatchMaster(s2, m)
 	c.Assert(err, IsNil)
 
-	s.checkCompare(c, h, s1, s2, 0)
-
 	best, err = h.FindBestSlaves([]*Server{s1, s2})
 	c.Assert(err, IsNil)
 	c.Assert(best, DeepEquals, []*Server{s1, s2})
@@ -132,8 +130,6 @@ func (s *failoverTestSuite) TestGTID(c *C) {
 
 	id = s.checkInsert(c, m, "e")
 	err = h.WaitCatchMaster(s1, m)
-
-	s.checkCompare(c, h, s1, s2, 1)
 
 	best, err = h.FindBestSlaves([]*Server{s1, s2})
 	c.Assert(err, IsNil)
@@ -152,10 +148,4 @@ func (s *failoverTestSuite) checkInsert(c *C, m *Server, name string) uint64 {
 	c.Assert(err, IsNil)
 
 	return r.InsertId
-}
-
-func (s *failoverTestSuite) checkCompare(c *C, h Handler, s1 *Server, s2 *Server, cv int) {
-	v, err := h.Compare(s1, s2)
-	c.Assert(err, IsNil)
-	c.Assert(v, Equals, cv)
 }

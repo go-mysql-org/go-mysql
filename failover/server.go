@@ -102,7 +102,7 @@ func (s *Server) ResetMaster() error {
 	return err
 }
 
-func (s *Server) GTIDMode() (string, error) {
+func (s *Server) MysqlGTIDMode() (string, error) {
 	r, err := s.Execute("SELECT @@gtid_mode")
 	if err != nil {
 		return GTIDModeOff, err
@@ -133,4 +133,30 @@ func (s *Server) LockTables() error {
 func (s *Server) UnlockTables() error {
 	_, err := s.Execute("UNLOCK TABLES")
 	return err
+}
+
+// Get current binlog filename and position read from master
+func (s *Server) FetchSlaveReadPos() (Position, error) {
+	r, err := s.SlaveStatus()
+	if err != nil {
+		return Position{}, err
+	}
+
+	fname, _ := r.GetStringByName(0, "Master_Log_File")
+	pos, _ := r.GetIntByName(0, "Read_Master_Log_Pos")
+
+	return Position{fname, uint32(pos)}, nil
+}
+
+// Get current executed binlog filename and position from master
+func (s *Server) FetchSlaveExecutePos() (Position, error) {
+	r, err := s.SlaveStatus()
+	if err != nil {
+		return Position{}, err
+	}
+
+	fname, _ := r.GetStringByName(0, "Relay_Master_Log_File")
+	pos, _ := r.GetIntByName(0, "Exec_Master_Log_Pos")
+
+	return Position{fname, uint32(pos)}, nil
 }

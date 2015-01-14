@@ -22,7 +22,7 @@ func (s *mysqlTestSuite) TearDownSuite(c *check.C) {
 
 }
 
-func (t *mysqlTestSuite) TestGTIDInterval(c *check.C) {
+func (t *mysqlTestSuite) TestMysqlGTIDInterval(c *check.C) {
 	i, err := parseInterval("1-2")
 	c.Assert(err, check.IsNil)
 	c.Assert(i, check.DeepEquals, Interval{1, 3})
@@ -39,7 +39,7 @@ func (t *mysqlTestSuite) TestGTIDInterval(c *check.C) {
 	c.Assert(err, check.IsNil)
 }
 
-func (t *mysqlTestSuite) TestGTIDIntervalSlice(c *check.C) {
+func (t *mysqlTestSuite) TestMysqlGTIDIntervalSlice(c *check.C) {
 	i := IntervalSlice{Interval{1, 2}, Interval{2, 4}, Interval{2, 3}}
 	i.Sort()
 	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{1, 2}, Interval{2, 3}, Interval{2, 4}})
@@ -61,17 +61,17 @@ func (t *mysqlTestSuite) TestGTIDIntervalSlice(c *check.C) {
 	n1 := IntervalSlice{Interval{1, 3}, Interval{4, 5}}
 	n2 := IntervalSlice{Interval{1, 2}}
 
-	c.Assert(n1.Subset(n2), check.Equals, true)
-	c.Assert(n2.Subset(n1), check.Equals, false)
+	c.Assert(n1.Contain(n2), check.Equals, true)
+	c.Assert(n2.Contain(n1), check.Equals, false)
 
 	n1 = IntervalSlice{Interval{1, 3}, Interval{4, 5}}
 	n2 = IntervalSlice{Interval{1, 6}}
 
-	c.Assert(n1.Subset(n2), check.Equals, false)
-	c.Assert(n2.Subset(n1), check.Equals, true)
+	c.Assert(n1.Contain(n2), check.Equals, false)
+	c.Assert(n2.Contain(n1), check.Equals, true)
 }
 
-func (t *mysqlTestSuite) TestGTIDCodec(c *check.C) {
+func (t *mysqlTestSuite) TestMysqlGTIDCodec(c *check.C) {
 	us, err := ParseUUIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
 	c.Assert(err, check.IsNil)
 
@@ -81,21 +81,22 @@ func (t *mysqlTestSuite) TestGTIDCodec(c *check.C) {
 	err = us.Decode(buf)
 	c.Assert(err, check.IsNil)
 
-	gs, err := ParseGTIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2,de278ad0-2106-11e4-9f8e-6edd0ca20948:1-2")
+	gs, err := ParseMysqlGTIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2,de278ad0-2106-11e4-9f8e-6edd0ca20948:1-2")
 	c.Assert(err, check.IsNil)
 
 	buf = gs.Encode()
-	err = gs.Decode(buf)
+	o, err := DecodeMysqlGTIDSet(buf)
 	c.Assert(err, check.IsNil)
+	c.Assert(gs, check.DeepEquals, o)
 }
 
-func (t *mysqlTestSuite) TestGTIDSubset(c *check.C) {
-	g1, err := ParseGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:23")
+func (t *mysqlTestSuite) TestMysqlGTIDContain(c *check.C) {
+	g1, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:23")
 	c.Assert(err, check.IsNil)
 
-	g2, err := ParseGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57")
+	g2, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57")
 	c.Assert(err, check.IsNil)
 
-	c.Assert(g2.Subset(g1), check.Equals, true)
-	c.Assert(g1.Subset(g2), check.Equals, false)
+	c.Assert(g2.Contain(g1), check.Equals, true)
+	c.Assert(g1.Contain(g2), check.Equals, false)
 }

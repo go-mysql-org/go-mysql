@@ -11,6 +11,8 @@ import (
 )
 
 type BinlogSyncer struct {
+	flavor string
+
 	c        *client.Conn
 	serverID uint32
 
@@ -32,8 +34,10 @@ type BinlogSyncer struct {
 	tables map[uint64]*TableMapEvent
 }
 
-func NewBinlogSyncer(serverID uint32) *BinlogSyncer {
+func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 	b := new(BinlogSyncer)
+	b.flavor = flavor
+
 	b.serverID = serverID
 
 	b.masterID = 0
@@ -131,8 +135,17 @@ func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 	return s, nil
 }
 
-func (b *BinlogSyncer) StartSyncGTID(gset *GTIDSet) (*BinlogStreamer, error) {
-	err := b.writeBinlogDumpGTIDCommand(Position{"", 4}, gset.Encode())
+func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
+	var err error
+	switch b.flavor {
+	case MySQLFlavor:
+		err = b.writeBinlogDumpMysqlGTIDCommand(Position{"", 4}, gset.Encode())
+	case MariaDBFlavor:
+		err = fmt.Errorf("mariadb GTID replication is not supported now")
+	default:
+		err = fmt.Errorf("invalid flavor %s", b.flavor)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +187,7 @@ func (b *BinlogSyncer) writeBinglogDumpCommand(p Position) error {
 	return b.c.WritePacket(data)
 }
 
-func (b *BinlogSyncer) writeBinlogDumpGTIDCommand(p Position, gtidData []byte) error {
+func (b *BinlogSyncer) writeBinlogDumpMysqlGTIDCommand(p Position, gtidData []byte) error {
 	b.c.ResetSequence()
 
 	data := make([]byte, 4+1+2+4+4+len(p.Name)+8+4+len(gtidData))

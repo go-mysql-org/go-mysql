@@ -12,12 +12,10 @@ import (
 	"time"
 )
 
+// Use docker mysql to test, mysql is 3306, mariadb is 3316
 var testHost = flag.String("host", "127.0.0.1", "MySQL master host")
-var testPort = flag.Int("port", 3306, "MySQL master port")
-var testUser = flag.String("user", "root", "MySQL master user")
-var testPassword = flag.String("pass", "", "MySQL master password")
 
-var testOutputLogs = flag.Bool("o", true, "output binlog event")
+var testOutputLogs = flag.Bool("out", true, "output binlog event")
 
 func TestBinLogSyncer(t *testing.T) {
 	TestingT(t)
@@ -28,31 +26,30 @@ type testSyncerSuite struct {
 	c *client.Conn
 
 	wg sync.WaitGroup
+
+	flavor string
 }
 
 var _ = Suite(&testSyncerSuite{})
 
 func (t *testSyncerSuite) SetUpSuite(c *C) {
-	var err error
-	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, *testPort), *testUser, *testPassword, "test")
-	c.Assert(err, IsNil)
+
 }
 
 func (t *testSyncerSuite) TearDownSuite(c *C) {
-	if t.c != nil {
-		t.c.Close()
-	}
 }
 
 func (t *testSyncerSuite) SetUpTest(c *C) {
-	t.b = NewBinlogSyncer(100)
-
-	err := t.b.RegisterSlave(*testHost, uint16(*testPort), *testUser, *testPassword)
-	c.Assert(err, IsNil)
 }
 
 func (t *testSyncerSuite) TearDownTest(c *C) {
-	t.b.Close()
+	if t.b != nil {
+		t.b.Close()
+	}
+
+	if t.c != nil {
+		t.c.Close()
+	}
 }
 
 func (t *testSyncerSuite) testExecute(c *C, query string) {
@@ -125,18 +122,57 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
 
 	id := 100
-	for _, image := range []string{BINLOG_ROW_IMAGE_FULL, BINLOG_ROW_IAMGE_MINIMAL, BINLOG_ROW_IMAGE_NOBLOB} {
-		t.testExecute(c, fmt.Sprintf("SET SESSION binlog_row_image = '%s'", image))
 
+	if t.flavor == mysql.MySQLFlavor {
+		for _, image := range []string{BINLOG_ROW_IMAGE_FULL, BINLOG_ROW_IAMGE_MINIMAL, BINLOG_ROW_IMAGE_NOBLOB} {
+			t.testExecute(c, fmt.Sprintf("SET SESSION binlog_row_image = '%s'", image))
+
+			t.testExecute(c, fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb) VALUES (%d, "4", 3.14, 100, "abc")`, id))
+			t.testExecute(c, fmt.Sprintf(`UPDATE test_replication SET f = 2.14 WHERE id = %d`, id))
+			t.testExecute(c, fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))
+			id++
+		}
+	} else {
 		t.testExecute(c, fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb) VALUES (%d, "4", 3.14, 100, "abc")`, id))
 		t.testExecute(c, fmt.Sprintf(`UPDATE test_replication SET f = 2.14 WHERE id = %d`, id))
 		t.testExecute(c, fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))
-		id++
 	}
+
 	t.wg.Wait()
 }
 
-func (t *testSyncerSuite) TestSync(c *C) {
+func (t *testSyncerSuite) setupTest(c *C, flavor string) {
+	var port uint16 = 3306
+	switch flavor {
+	case mysql.MariaDBFlavor:
+		port = 3316
+	}
+
+	t.flavor = flavor
+
+	var err error
+	if t.c != nil {
+		t.c.Close()
+	}
+
+	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, port), "root", "", "")
+	c.Assert(err, IsNil)
+
+	_, err = t.c.Execute("CREATE DATABASE IF NOT EXISTS test")
+	c.Assert(err, IsNil)
+
+	_, err = t.c.Execute("USE test")
+	c.Assert(err, IsNil)
+
+	t.b = NewBinlogSyncer(100, flavor)
+
+	err = t.b.RegisterSlave(*testHost, port, "root", "")
+	c.Assert(err, IsNil)
+}
+
+func (t *testSyncerSuite) testPostionSync(c *C, flavor string) {
+	t.setupTest(c, flavor)
+
 	//get current master binlog file and position
 	r, err := t.c.Execute("SHOW MASTER STATUS")
 	c.Assert(err, IsNil)
@@ -148,7 +184,13 @@ func (t *testSyncerSuite) TestSync(c *C) {
 	t.testSync(c, s)
 }
 
-func (t *testSyncerSuite) TestSyncGTID(c *C) {
+func (t *testSyncerSuite) TestMysqlPostionSync(c *C) {
+	t.testPostionSync(c, mysql.MySQLFlavor)
+}
+
+func (t *testSyncerSuite) TestMysqlGTIDSync(c *C) {
+	t.setupTest(c, mysql.MySQLFlavor)
+
 	r, err := t.c.Execute("SELECT @@gtid_mode")
 	c.Assert(err, IsNil)
 	modeOn, _ := r.GetString(0, 0)
@@ -159,11 +201,18 @@ func (t *testSyncerSuite) TestSyncGTID(c *C) {
 	masterUuid, err := t.b.GetMasterUUID()
 	c.Assert(err, IsNil)
 
-	set := new(mysql.GTIDSet)
-	set.Sets = map[string]*mysql.UUIDSet{masterUuid.String(): mysql.NewUUIDSet(masterUuid, mysql.Interval{1, 2})}
+	set, _ := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d-%d", masterUuid.String(), 1, 2))
 
 	s, err := t.b.StartSyncGTID(set)
 	c.Assert(err, IsNil)
 
 	t.testSync(c, s)
+}
+
+func (t *testSyncerSuite) TestMariadbPositionSync(c *C) {
+	t.testPostionSync(c, mysql.MariaDBFlavor)
+}
+
+func (t *testSyncerSuite) TestMariadbGTIDSync(c *C) {
+
 }

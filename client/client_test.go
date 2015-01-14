@@ -35,6 +35,10 @@ func (s *clientTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *clientTestSuite) TearDownSuite(c *C) {
+	if s.c == nil {
+		return
+	}
+
 	s.testConn_DropTable(c)
 	s.testStmt_DropTable(c)
 

@@ -155,3 +155,9 @@ const (
 	DEFAULT_COLLATION_ID   uint8  = 33
 	DEFAULT_COLLATION_NAME string = "utf8_general_ci"
 )
+
+// Like vitess, use flavor for different MySQL versions,
+const (
+	MySQLFlavor   = "mysql"
+	MariaDBFlavor = "mariadb"
+)
