@@ -196,6 +196,8 @@ type RowsEvent struct {
 	tables      map[uint64]*TableMapEvent
 	needBitmap2 bool
 
+	Table *TableMapEvent
+
 	TableID uint64
 
 	Flags uint16
@@ -245,22 +247,27 @@ func (e *RowsEvent) Decode(data []byte) error {
 		pos += bitCount
 	}
 
-	tableEvent, ok := e.tables[e.TableID]
+	var ok bool
+	e.Table, ok = e.tables[e.TableID]
 	if !ok {
 		return fmt.Errorf("invalid table id %d, no correspond table map event", e.TableID)
 	}
 
 	var err error
-	if n, err = e.decodeRows(data[pos:], tableEvent, e.ColumnBitmap1); err != nil {
-		return err
-	}
-	pos += n
 
-	if e.needBitmap2 {
-		if n, err = e.decodeRows(data[pos:], tableEvent, e.ColumnBitmap2); err != nil {
+	// ... repeat rows until event-end
+	for pos < len(data) {
+		if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap1); err != nil {
 			return err
 		}
 		pos += n
+
+		if e.needBitmap2 {
+			if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap2); err != nil {
+				return err
+			}
+			pos += n
+		}
 	}
 
 	return nil
