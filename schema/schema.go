@@ -7,11 +7,18 @@ package schema
 import (
 	"fmt"
 	"github.com/siddontang/go-mysql/client"
+	"strings"
+)
+
+const (
+	TYPE_NUMBER = iota + 1 //tinyint, smallint, mediumint, int, bigint, year
+	TYPE_FLOAT             //float, double
+	TYPE_STRING            //other
 )
 
 type TableColumn struct {
 	Name   string
-	Type   string
+	Type   int
 	IsAuto bool
 }
 
@@ -34,7 +41,14 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 	index := len(ta.Columns)
 	ta.Columns = append(ta.Columns, TableColumn{Name: name})
 
-	ta.Columns[index].Type = columnType
+	if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
+		ta.Columns[index].Type = TYPE_NUMBER
+	} else if columnType == "float" || columnType == "double" {
+		ta.Columns[index].Type = TYPE_FLOAT
+	} else {
+		ta.Columns[index].Type = TYPE_STRING
+	}
+
 	if extra == "auto_increment" {
 		ta.Columns[index].IsAuto = true
 	}
