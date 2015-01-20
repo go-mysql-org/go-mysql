@@ -54,6 +54,7 @@ func (b *BinlogSyncer) Close() {
 	close(b.quit)
 
 	if b.c != nil {
+		// todo, fix race test error???
 		b.c.Close()
 	}
 
