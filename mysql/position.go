@@ -1,5 +1,9 @@
 package mysql
 
+import (
+	"fmt"
+)
+
 // For binlog filename + position based replication
 type Position struct {
 	Name string
@@ -22,4 +26,8 @@ func (p Position) Compare(o Position) int {
 			return 0
 		}
 	}
+}
+
+func (p Position) String() string {
+	return fmt.Sprintf("(%s, %d)", p.Name, p.Pos)
 }
