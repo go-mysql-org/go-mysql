@@ -40,19 +40,26 @@ func Failover(flavor string, slaves []*Server) ([]*Server, error) {
 		}
 	}
 
+	var bestSlave *Server
 	// Find best slave which has the most up-to-data data
-	if slaves, err = h.FindBestSlaves(slaves); err != nil {
+	if bestSlaves, err := h.FindBestSlaves(slaves); err != nil {
 		return nil, err
+	} else {
+		bestSlave = bestSlaves[0]
 	}
 
 	// Promote the best slave to master
-	if err = h.Promote(slaves[0]); err != nil {
+	if err = h.Promote(bestSlave); err != nil {
 		return nil, err
 	}
 
 	// Change master
-	for i := 1; i < len(slaves); i++ {
-		if err = h.ChangeMasterTo(slaves[i], slaves[0]); err != nil {
+	for i := 0; i < len(slaves); i++ {
+		if bestSlave == slaves[i] {
+			continue
+		}
+
+		if err = h.ChangeMasterTo(slaves[i], bestSlave); err != nil {
 			return nil, err
 		}
 	}

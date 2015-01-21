@@ -38,7 +38,10 @@ func (s *failoverTestSuite) SetUpSuite(c *C) {
 		err = s.s[i].ResetSlave()
 		c.Assert(err, IsNil)
 
-		_, err = s.s[i].Execute("CREATE DATABASE IF NOT EXISTS test")
+		// _, err = s.s[i].Execute("CREATE DATABASE IF NOT EXISTS test")
+		// c.Assert(err, IsNil)
+
+		_, err = s.s[i].Execute(`SET GLOBAL BINLOG_FORMAT = "ROW"`)
 		c.Assert(err, IsNil)
 
 		_, err = s.s[i].Execute("DROP TABLE IF EXISTS test.go_mysql_test")
