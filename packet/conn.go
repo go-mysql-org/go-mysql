@@ -157,6 +157,5 @@ func (c *Conn) Close() {
 	c.Sequence = 0
 	if c.Conn != nil {
 		c.Conn.Close()
-		c.Conn = nil
 	}
 }
