@@ -31,9 +31,9 @@ const (
 )
 
 const (
-	BINLOG_ROW_IMAGE_FULL    = "full"
-	BINLOG_ROW_IAMGE_MINIMAL = "minimal"
-	BINLOG_ROW_IMAGE_NOBLOB  = "noblob"
+	BINLOG_ROW_IMAGE_FULL    = "FULL"
+	BINLOG_ROW_IAMGE_MINIMAL = "MINIMAL"
+	BINLOG_ROW_IMAGE_NOBLOB  = "NOBLOB"
 )
 
 type EventType byte
