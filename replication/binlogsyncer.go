@@ -54,11 +54,14 @@ func (b *BinlogSyncer) Close() {
 	close(b.quit)
 
 	if b.c != nil {
-		// todo, fix race test error???
-		b.c.Close()
+		b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	}
 
 	b.wg.Wait()
+
+	if b.c != nil {
+		b.c.Close()
+	}
 }
 
 func (b *BinlogSyncer) checksumUsed() error {
