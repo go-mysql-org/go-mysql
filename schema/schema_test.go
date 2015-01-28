@@ -34,6 +34,9 @@ func (s *schemaTestSuite) TearDownSuite(c *C) {
 }
 
 func (s *schemaTestSuite) TestSchema(c *C) {
+	_, err := s.conn.Execute(`DROP TABLE IF EXISTS schema_test`)
+	c.Assert(err, IsNil)
+
 	str := `
         CREATE TABLE IF NOT EXISTS schema_test (
             id INT,
@@ -41,6 +44,7 @@ func (s *schemaTestSuite) TestSchema(c *C) {
             id2 INT,
             name VARCHAR(256),
             e ENUM("a", "b", "c"),
+            se SET('a', 'b', 'c'),
             f FLOAT,
             PRIMARY KEY(id2, id),
             UNIQUE (id1),
@@ -48,16 +52,18 @@ func (s *schemaTestSuite) TestSchema(c *C) {
         ) ENGINE = INNODB;
     `
 
-	_, err := s.conn.Execute(str)
+	_, err = s.conn.Execute(str)
 	c.Assert(err, IsNil)
 
 	ta, err := NewTable(s.conn, "test", "schema_test")
 	c.Assert(err, IsNil)
 
-	c.Assert(ta.Columns, HasLen, 6)
+	c.Assert(ta.Columns, HasLen, 7)
 	c.Assert(ta.Indexes, HasLen, 3)
 	c.Assert(ta.PKColumns, DeepEquals, []int{2, 0})
 	c.Assert(ta.Indexes[0].Columns, HasLen, 2)
 	c.Assert(ta.Indexes[0].Name, Equals, "PRIMARY")
 	c.Assert(ta.Indexes[2].Name, Equals, "name_idx")
+	c.Assert(ta.Columns[4].EnumValues, DeepEquals, []string{"a", "b", "c"})
+	c.Assert(ta.Columns[5].SetValues, DeepEquals, []string{"a", "b", "c"})
 }

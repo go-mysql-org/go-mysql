@@ -13,13 +13,17 @@ import (
 const (
 	TYPE_NUMBER = iota + 1 //tinyint, smallint, mediumint, int, bigint, year
 	TYPE_FLOAT             //float, double
+	TYPE_ENUM              //enum
+	TYPE_SET               //set
 	TYPE_STRING            //other
 )
 
 type TableColumn struct {
-	Name   string
-	Type   int
-	IsAuto bool
+	Name       string
+	Type       int
+	IsAuto     bool
+	EnumValues []string
+	SetValues  []string
 }
 
 type Index struct {
@@ -45,6 +49,24 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 		ta.Columns[index].Type = TYPE_NUMBER
 	} else if columnType == "float" || columnType == "double" {
 		ta.Columns[index].Type = TYPE_FLOAT
+	} else if strings.HasPrefix(columnType, "enum") {
+		ta.Columns[index].Type = TYPE_ENUM
+		ta.Columns[index].EnumValues = strings.Split(strings.Replace(
+			strings.TrimSuffix(
+				strings.TrimPrefix(
+					columnType, "enum("),
+				")"),
+			"'", "", -1),
+			",")
+	} else if strings.HasPrefix(columnType, "set") {
+		ta.Columns[index].Type = TYPE_SET
+		ta.Columns[index].SetValues = strings.Split(strings.Replace(
+			strings.TrimSuffix(
+				strings.TrimPrefix(
+					columnType, "set("),
+				")"),
+			"'", "", -1),
+			",")
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
 	}

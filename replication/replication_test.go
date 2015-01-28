@@ -101,12 +101,15 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	         tm TIME,
 	         t TEXT,
 	         bb BLOB,
+	         se SET('a', 'b', 'c'),
 	      PRIMARY KEY (id)
 	       ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
 	t.testExecute(c, str)
 
 	//use row format
+	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
+
 	t.testExecute(c, `INSERT INTO test_replication (str, f, i) VALUES ("3", 3.14, 10)`)
 	t.testExecute(c, `INSERT INTO test_replication (e) VALUES ("e1")`)
 	t.testExecute(c, `INSERT INTO test_replication (b) VALUES (0b0011)`)
@@ -118,8 +121,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	t.testExecute(c, `INSERT INTO test_replication (de) VALUES (122.24)`)
 	t.testExecute(c, `INSERT INTO test_replication (t) VALUES ("abc")`)
 	t.testExecute(c, `INSERT INTO test_replication (bb) VALUES ("12345")`)
-
-	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
+	t.testExecute(c, `INSERT INTO test_replication (se) VALUES ("a,b")`)
 
 	id := 100
 
