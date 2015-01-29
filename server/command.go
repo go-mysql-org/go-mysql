@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"fmt"
+
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
@@ -15,9 +16,9 @@ type Handler interface {
 	HandleQuery(query string) (*Result, error)
 	//handle COM_FILED_LIST command
 	HandleFieldList(table string, fieldWildcard string) ([]*Field, error)
-	//handle COM_STMT_PREAPRE, params is the param number for this statement, columns is the column number
+	//handle COM_STMT_PREPARE, params is the param number for this statement, columns is the column number
 	//context will be used later for statement execute
-	HandleStmtPreprare(query string) (params int, columns int, context interface{}, err error)
+	HandleStmtPrepare(query string) (params int, columns int, context interface{}, err error)
 	//handle COM_STMT_EXECUTE, context is the previous one set in prepare
 	//query is the statement prepare query, and args is the params for this statement
 	HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error)
@@ -86,7 +87,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		st.ID = c.stmtID
 		st.Query = hack.String(data)
 		var err error
-		if st.Params, st.Columns, st.Context, err = c.h.HandleStmtPreprare(st.Query); err != nil {
+		if st.Params, st.Columns, st.Context, err = c.h.HandleStmtPrepare(st.Query); err != nil {
 			return err
 		} else {
 			st.ResetParams()
@@ -132,7 +133,7 @@ func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
 func (h EmptyHandler) HandleFieldList(table string, fieldWildcard string) ([]*Field, error) {
 	return nil, fmt.Errorf("not supported now")
 }
-func (h EmptyHandler) HandleStmtPreprare(query string) (int, int, interface{}, error) {
+func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, error) {
 	return 0, 0, nil, fmt.Errorf("not supported now")
 }
 func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error) {

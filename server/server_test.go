@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	mysql "github.com/siddontang/go-mysql/mysql"
-	. "gopkg.in/check.v1"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
+	mysql "github.com/siddontang/go-mysql/mysql"
+	. "gopkg.in/check.v1"
 )
 
 var testAddr = flag.String("addr", "127.0.0.1:4000", "MySQL proxy server address")
@@ -82,7 +83,7 @@ func (h *testHandler) HandleQuery(query string) (*mysql.Result, error) {
 func (h *testHandler) HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error) {
 	return nil, nil
 }
-func (h *testHandler) HandleStmtPreprare(sql string) (params int, columns int, ctx interface{}, err error) {
+func (h *testHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx interface{}, err error) {
 	ss := strings.Split(sql, " ")
 	switch strings.ToLower(ss[0]) {
 	case "select":
