@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -126,7 +127,7 @@ func (c *Conn) writeValue(value interface{}) error {
 	case nil:
 		return c.writeOK(nil)
 	case *Result:
-		if v.Resultset != nil {
+		if v != nil && v.Resultset != nil {
 			return c.writeResultset(v.Resultset)
 		} else {
 			return c.writeOK(v)
