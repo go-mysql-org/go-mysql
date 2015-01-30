@@ -35,11 +35,8 @@ func (s *failoverTestSuite) SetUpSuite(c *C) {
 		err = s.s[i].StopSlave()
 		c.Assert(err, IsNil)
 
-		err = s.s[i].ResetSlave()
+		err = s.s[i].ResetSlaveALL()
 		c.Assert(err, IsNil)
-
-		// _, err = s.s[i].Execute("CREATE DATABASE IF NOT EXISTS test")
-		// c.Assert(err, IsNil)
 
 		_, err = s.s[i].Execute(`SET GLOBAL BINLOG_FORMAT = "ROW"`)
 		c.Assert(err, IsNil)
@@ -65,6 +62,25 @@ func (s *failoverTestSuite) TestMysqlFailover(c *C) {
 	s1 := s.s[1]
 	s2 := s.s[2]
 
+	s.testFailover(c, h, m, s1, s2)
+}
+
+func (s *failoverTestSuite) TestMariadbFailover(c *C) {
+	h := new(MariadbGTIDHandler)
+
+	for i := 3; i <= 5; i++ {
+		_, err := s.s[i].Execute("SET GLOBAL gtid_slave_pos = ''")
+		c.Assert(err, IsNil)
+	}
+
+	m := s.s[3]
+	s1 := s.s[4]
+	s2 := s.s[5]
+
+	s.testFailover(c, h, m, s1, s2)
+}
+
+func (s *failoverTestSuite) testFailover(c *C, h Handler, m *Server, s1 *Server, s2 *Server) {
 	var err error
 	err = h.ChangeMasterTo(s1, m)
 	c.Assert(err, IsNil)

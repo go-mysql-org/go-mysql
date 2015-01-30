@@ -1,6 +1,7 @@
 package failover
 
 import (
+	"fmt"
 	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
 )
@@ -97,6 +98,11 @@ func (s *Server) ResetSlave() error {
 	return err
 }
 
+func (s *Server) ResetSlaveALL() error {
+	_, err := s.Execute("RESET SLAVE ALL")
+	return err
+}
+
 func (s *Server) ResetMaster() error {
 	_, err := s.Execute("RESET MASTER")
 	return err
@@ -159,4 +165,9 @@ func (s *Server) FetchSlaveExecutePos() (Position, error) {
 	pos, _ := r.GetIntByName(0, "Exec_Master_Log_Pos")
 
 	return Position{fname, uint32(pos)}, nil
+}
+
+func (s *Server) MasterPosWait(pos Position, timeout int) error {
+	_, err := s.Execute(fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %d)", pos.Name, pos.Pos, timeout))
+	return err
 }
