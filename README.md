@@ -16,13 +16,19 @@ import (
     "os"
 )
 // Create a binlog syncer with a unique server id, the server id must be different from other MySQL's. 
-syncer := replication.NewBinlogSyncer(100)
+// flavor is mysql or mariadb
+syncer := replication.NewBinlogSyncer(100, "mysql")
 
 // Register slave, the MySQL master is at 127.0.0.1:3306, with user root and an empty password
 syncer.RegisterSlave("127.0.0.1", 3306, "root", "")
 
 // Start sync with sepcified binlog file and position
 streamer, _ := syncer.StartSync(binlogFile, binlogPos)
+
+// or you can start a gtid replication like
+// streamer, _ := syncer.StartSyncGTID(gtidSet)
+// the mysql GTID set likes this "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2"
+// the mariadb GTID set likes this "0-1-100"
 
 for {
     ev, _ := streamer.GetEvent()
@@ -127,9 +133,9 @@ mysql -h127.0.0.1 -P4000 -uroot -p
 
 Failover supports to promote a new master and let other slaves replicate from it automatically when the old master was down.
 
-Failover only support MySQL >= 5.6.9 with GTID mode, if you use lower version, e.g, MySQL 5.0 - 5.5, please use [MHA](http://code.google.com/p/mysql-master-ha/) or [orchestrator](https://github.com/outbrain/orchestrator).
+Failover supports MySQL >= 5.6.9 with GTID mode, if you use lower version, e.g, MySQL 5.0 - 5.5, please use [MHA](http://code.google.com/p/mysql-master-ha/) or [orchestrator](https://github.com/outbrain/orchestrator).
 
-Failover may try to support MariaDB with GTID mode later.
+At the same time, Failover supports MariaDB >= 10.0.9 with GTID mode too. 
 
 Why only GTID? Supporting failover with no GTID mode is very hard, because slave can not find the proper binlog filename and position with the new master. 
 Although there are many companies use MySQL 5.0 - 5.5, I think upgrade MySQL to 5.6 or higher is easy. 

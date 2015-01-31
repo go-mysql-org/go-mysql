@@ -126,6 +126,11 @@ func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, pass
 }
 
 func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
+	//always start from position 4
+	if pos.Pos < 4 {
+		pos.Pos = 4
+	}
+
 	err := b.writeBinglogDumpCommand(pos)
 	if err != nil {
 		return nil, err
@@ -143,9 +148,9 @@ func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 	var err error
 	switch b.flavor {
 	case MySQLFlavor:
-		err = b.writeBinlogDumpMysqlGTIDCommand(Position{"", 4}, gset.Encode())
+		err = b.writeBinlogDumpMysqlGTIDCommand(gset)
 	case MariaDBFlavor:
-		err = fmt.Errorf("mariadb GTID replication is not supported now")
+		err = b.writeBinlogDumpMariadbGTIDCommand(gset)
 	default:
 		err = fmt.Errorf("invalid flavor %s", b.flavor)
 	}
@@ -164,11 +169,6 @@ func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 }
 
 func (b *BinlogSyncer) writeBinglogDumpCommand(p Position) error {
-	//always start from position 4
-	if p.Pos < 4 {
-		p.Pos = 4
-	}
-
 	b.c.ResetSequence()
 
 	data := make([]byte, 4+1+4+2+4+len(p.Name))
@@ -191,7 +191,10 @@ func (b *BinlogSyncer) writeBinglogDumpCommand(p Position) error {
 	return b.c.WritePacket(data)
 }
 
-func (b *BinlogSyncer) writeBinlogDumpMysqlGTIDCommand(p Position, gtidData []byte) error {
+func (b *BinlogSyncer) writeBinlogDumpMysqlGTIDCommand(gset GTIDSet) error {
+	p := Position{"", 4}
+	gtidData := gset.Encode()
+
 	b.c.ResetSequence()
 
 	data := make([]byte, 4+1+2+4+4+len(p.Name)+8+4+len(gtidData))
@@ -222,6 +225,36 @@ func (b *BinlogSyncer) writeBinlogDumpMysqlGTIDCommand(p Position, gtidData []by
 	data = data[0:pos]
 
 	return b.c.WritePacket(data)
+}
+
+func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
+	// Copy from vitess
+
+	startPos := gset.String()
+
+	// Tell the server that we understand GTIDs by setting our slave capability
+	// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
+	if _, err := b.c.Execute("SET @mariadb_slave_capability=4"); err != nil {
+		return fmt.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
+	}
+
+	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP to
+	// provide the start position in GTID form.
+	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
+
+	if _, err := b.c.Execute(query); err != nil {
+		return fmt.Errorf("failed to set @slave_connect_state='%s': %v", startPos, err)
+	}
+
+	// Real slaves set this upon connecting if their gtid_strict_mode option was
+	// enabled. We always use gtid_strict_mode because we need it to make our
+	// internal GTID comparisons safe.
+	if _, err := b.c.Execute("SET @slave_gtid_strict_mode=1"); err != nil {
+		return fmt.Errorf("failed to set @slave_gtid_strict_mode=1: %v", err)
+	}
+
+	// Since we use @slave_connect_state, the file and position here are ignored.
+	return b.writeBinglogDumpCommand(Position{"", 0})
 }
 
 func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
@@ -357,6 +390,16 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		e = &RowsQueryEvent{}
 	case GTID_EVENT:
 		e = &GTIDEvent{}
+	case MARIADB_ANNOTATE_ROWS_EVENT:
+		e = &MariadbAnnotaeRowsEvent{}
+	case MARIADB_BINLOG_CHECKPOINT_EVENT:
+		e = &MariadbBinlogCheckPointEvent{}
+	case MARIADB_GTID_LIST_EVENT:
+		e = &MariadbGTIDListEvent{}
+	case MARIADB_GTID_EVENT:
+		ee := &MariadbGTIDEvent{}
+		ee.GTID.ServerID = h.ServerID
+		e = ee
 	default:
 		e = &GenericEvent{}
 	}

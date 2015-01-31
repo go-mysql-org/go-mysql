@@ -14,6 +14,10 @@ type MariadbGTID struct {
 
 // We don't support multi source replication, so the mariadb gtid set may have only domain-server-sequence
 func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
+	if len(str) == 0 {
+		return MariadbGTID{0, 0, 0}, nil
+	}
+
 	seps := strings.Split(str, "-")
 
 	var gtid MariadbGTID
@@ -44,6 +48,10 @@ func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 }
 
 func (gtid MariadbGTID) String() string {
+	if gtid.DomainID == 0 && gtid.ServerID == 0 && gtid.SequenceNumber == 0 {
+		return ""
+	}
+
 	return fmt.Sprintf("%d-%d-%d", gtid.DomainID, gtid.ServerID, gtid.SequenceNumber)
 }
 

@@ -239,3 +239,81 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
 	fmt.Fprintln(w)
 }
+
+// case MARIADB_ANNOTATE_ROWS_EVENT:
+// 	return "MariadbAnnotateRowsEvent"
+
+type MariadbAnnotaeRowsEvent struct {
+	Query []byte
+}
+
+func (e *MariadbAnnotaeRowsEvent) Decode(data []byte) error {
+	e.Query = data
+	return nil
+}
+
+func (e *MariadbAnnotaeRowsEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "Query: %s\n", e.Query)
+	fmt.Fprintln(w)
+}
+
+type MariadbBinlogCheckPointEvent struct {
+	Info []byte
+}
+
+func (e *MariadbBinlogCheckPointEvent) Decode(data []byte) error {
+	e.Info = data
+	return nil
+}
+
+func (e *MariadbBinlogCheckPointEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "Info: %s\n", e.Info)
+	fmt.Fprintln(w)
+}
+
+type MariadbGTIDEvent struct {
+	GTID MariadbGTID
+}
+
+func (e *MariadbGTIDEvent) Decode(data []byte) error {
+	e.GTID.SequenceNumber = binary.LittleEndian.Uint64(data)
+	e.GTID.DomainID = binary.LittleEndian.Uint32(data[8:])
+
+	// we don't care commit id now, maybe later
+
+	return nil
+}
+
+func (e *MariadbGTIDEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "GTID: %s\n", e.GTID)
+	fmt.Fprintln(w)
+}
+
+type MariadbGTIDListEvent struct {
+	GTIDs []MariadbGTID
+}
+
+func (e *MariadbGTIDListEvent) Decode(data []byte) error {
+	pos := 0
+	v := binary.LittleEndian.Uint32(data[pos:])
+	pos += 4
+
+	count := v & uint32((1<<28)-1)
+
+	e.GTIDs = make([]MariadbGTID, count)
+
+	for i := uint32(0); i < count; i++ {
+		e.GTIDs[i].DomainID = binary.LittleEndian.Uint32(data[pos:])
+		pos += 4
+		e.GTIDs[i].ServerID = binary.LittleEndian.Uint32(data[pos:])
+		pos += 4
+		e.GTIDs[i].SequenceNumber = binary.LittleEndian.Uint64(data[pos:])
+	}
+
+	return nil
+}
+
+func (e *MariadbGTIDListEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "Lists: %v\n", e.GTIDs)
+	fmt.Fprintln(w)
+}

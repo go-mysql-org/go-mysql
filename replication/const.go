@@ -160,6 +160,15 @@ func (e EventType) String() string {
 	case PREVIOUS_GTIDS_EVENT:
 		return "PreviousGTIDsEvent"
 
+	case MARIADB_ANNOTATE_ROWS_EVENT:
+		return "MariadbAnnotateRowsEvent"
+	case MARIADB_BINLOG_CHECKPOINT_EVENT:
+		return "MariadbBinLogCheckPointEvent"
+	case MARIADB_GTID_EVENT:
+		return "MariadbGTIDEvent"
+	case MARIADB_GTID_LIST_EVENT:
+		return "MariadbGTIDListEvent"
+
 	default:
 		return "UnknownEvent"
 	}

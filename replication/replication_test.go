@@ -45,10 +45,12 @@ func (t *testSyncerSuite) SetUpTest(c *C) {
 func (t *testSyncerSuite) TearDownTest(c *C) {
 	if t.b != nil {
 		t.b.Close()
+		t.b = nil
 	}
 
 	if t.c != nil {
 		t.c.Close()
+		t.c = nil
 	}
 }
 
@@ -160,11 +162,15 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, port), "root", "", "")
 	c.Assert(err, IsNil)
 
-	_, err = t.c.Execute("CREATE DATABASE IF NOT EXISTS test")
-	c.Assert(err, IsNil)
+	// _, err = t.c.Execute("CREATE DATABASE IF NOT EXISTS test")
+	// c.Assert(err, IsNil)
 
 	_, err = t.c.Execute("USE test")
 	c.Assert(err, IsNil)
+
+	if t.b != nil {
+		t.b.Close()
+	}
 
 	t.b = NewBinlogSyncer(100, flavor)
 
@@ -179,8 +185,9 @@ func (t *testSyncerSuite) testPostionSync(c *C, flavor string) {
 	r, err := t.c.Execute("SHOW MASTER STATUS")
 	c.Assert(err, IsNil)
 	binFile, _ := r.GetString(0, 0)
+	binPos, _ := r.GetInt(0, 1)
 
-	s, err := t.b.StartSync(mysql.Position{binFile, uint32(4)})
+	s, err := t.b.StartSync(mysql.Position{binFile, uint32(binPos)})
 	c.Assert(err, IsNil)
 
 	t.testSync(c, s)
@@ -216,5 +223,17 @@ func (t *testSyncerSuite) TestMariadbPositionSync(c *C) {
 }
 
 func (t *testSyncerSuite) TestMariadbGTIDSync(c *C) {
+	t.setupTest(c, mysql.MariaDBFlavor)
 
+	// get current master gtid binlog pos
+	r, err := t.c.Execute("SELECT @@gtid_binlog_pos")
+	c.Assert(err, IsNil)
+
+	str, _ := r.GetString(0, 0)
+	set, _ := mysql.ParseMariadbGTIDSet(str)
+
+	s, err := t.b.StartSyncGTID(set)
+	c.Assert(err, IsNil)
+
+	t.testSync(c, s)
 }
