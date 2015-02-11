@@ -5,12 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go/hack"
 	"io"
 	"math"
 	"strconv"
 	"time"
+
+	. "github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go/hack"
 )
 
 type TableMapEvent struct {
@@ -508,14 +509,15 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	// Support negative
 	// The sign is encoded in the high bit of the the byte
 	// But this bit can also be used in the value
-	value := int64(data[pos])
+	value := uint32(data[pos])
 	var res bytes.Buffer
-	var mask int64 = 0
-	if value&0x80 != 0 {
-		mask = 0
-	} else {
-		mask = -1
+
+	// signed value
+	if value&0x80 == 0 {
 		res.WriteString("-")
+		for i := 0; i < binSize; i++ {
+			data[pos+i] ^= 0xff
+		}
 	}
 
 	//clear sign
@@ -523,13 +525,13 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 
 	size := compressedBytes[compIntegral]
 	if size > 0 {
-		value = int64(BFixedLengthInt(data[pos:pos+size])) ^ mask
+		value = uint32(BFixedLengthInt(data[pos:pos+size]))
 		res.WriteString(fmt.Sprintf("%d", value))
 		pos += size
 	}
 
 	for i := 0; i < uncompIntegral; i++ {
-		value = int64(binary.BigEndian.Uint32(data[pos:])) ^ mask
+		value = binary.BigEndian.Uint32(data[pos:])
 		pos += 4
 		res.WriteString(fmt.Sprintf("%09d", value))
 	}
@@ -537,20 +539,19 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	res.WriteString(".")
 
 	for i := 0; i < uncompFractional; i++ {
-		value = int64(binary.BigEndian.Uint32(data[pos:])) ^ mask
+		value = binary.BigEndian.Uint32(data[pos:])
 		pos += 4
 		res.WriteString(fmt.Sprintf("%09d", value))
 	}
 
 	size = compressedBytes[compFractional]
 	if size > 0 {
-		value = int64(BFixedLengthInt(data[pos:pos+size])) ^ mask
+		value = uint32(BFixedLengthInt(data[pos:pos+size]))
 		pos += size
 
 		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
 	}
 
-	//return hack.String(res.Bytes()), pos, nil
 	f, err := strconv.ParseFloat(hack.String(res.Bytes()), 64)
 	return f, pos, err
 }
