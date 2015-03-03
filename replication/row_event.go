@@ -508,13 +508,13 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	// Support negative
 	// The sign is encoded in the high bit of the the byte
 	// But this bit can also be used in the value
-	value := int64(data[pos])
+	value := uint32(data[pos])
 	var res bytes.Buffer
-	var mask int64 = 0
+	var mask uint32 = 0
 	if value&0x80 != 0 {
 		mask = 0
 	} else {
-		mask = -1
+		mask = uint32((1 << 32) - 1)
 		res.WriteString("-")
 	}
 
@@ -523,13 +523,13 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 
 	size := compressedBytes[compIntegral]
 	if size > 0 {
-		value = int64(BFixedLengthInt(data[pos:pos+size])) ^ mask
+		value = uint32(BFixedLengthInt(data[pos:pos+size])) ^ mask
 		res.WriteString(fmt.Sprintf("%d", value))
 		pos += size
 	}
 
 	for i := 0; i < uncompIntegral; i++ {
-		value = int64(binary.BigEndian.Uint32(data[pos:])) ^ mask
+		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 		pos += 4
 		res.WriteString(fmt.Sprintf("%09d", value))
 	}
@@ -537,17 +537,20 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	res.WriteString(".")
 
 	for i := 0; i < uncompFractional; i++ {
-		value = int64(binary.BigEndian.Uint32(data[pos:])) ^ mask
+		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 		pos += 4
 		res.WriteString(fmt.Sprintf("%09d", value))
 	}
 
 	size = compressedBytes[compFractional]
 	if size > 0 {
-		value = int64(BFixedLengthInt(data[pos:pos+size])) ^ mask
+		value = uint32(BFixedLengthInt(data[pos:pos+size])) ^ mask
 		pos += size
 
-		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
+		// we could not use %0*d directly, value is uint32, if compFractional is 2, size is 1, we should only print
+		// uint8(value) with width compFractional, not uint32(value), otherwise, the output would be incorrect.
+		// res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
+		res.WriteString(fmt.Sprintf("%0*d", compFractional, value%(uint32(size)<<8)))
 	}
 
 	//return hack.String(res.Bytes()), pos, nil
