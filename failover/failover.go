@@ -2,6 +2,7 @@ package failover
 
 import (
 	"fmt"
+
 	"github.com/siddontang/go-mysql/mysql"
 )
 

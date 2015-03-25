@@ -3,8 +3,9 @@ package client
 import (
 	"encoding/binary"
 	"fmt"
-	. "github.com/siddontang/go-mysql/mysql"
 	"math"
+
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 type Stmt struct {

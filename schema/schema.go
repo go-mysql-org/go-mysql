@@ -6,8 +6,9 @@ package schema
 
 import (
 	"fmt"
-	"github.com/siddontang/go-mysql/client"
 	"strings"
+
+	"github.com/siddontang/go-mysql/client"
 )
 
 const (

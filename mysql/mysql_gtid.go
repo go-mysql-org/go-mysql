@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/satori/go.uuid"
-	"github.com/siddontang/go/hack"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/satori/go.uuid"
+	"github.com/siddontang/go/hack"
 )
 
 // Like MySQL GTID Interval struct, [start, stop), left closed and right open

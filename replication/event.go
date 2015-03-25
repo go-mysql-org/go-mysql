@@ -4,10 +4,11 @@ import (
 	"encoding/binary"
 	//"encoding/hex"
 	"fmt"
-	"github.com/satori/go.uuid"
-	. "github.com/siddontang/go-mysql/mysql"
 	"io"
 	"time"
+
+	"github.com/satori/go.uuid"
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 const (

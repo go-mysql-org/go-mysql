@@ -3,9 +3,10 @@ package schema
 import (
 	"flag"
 	"fmt"
+	"testing"
+
 	"github.com/siddontang/go-mysql/client"
 	. "gopkg.in/check.v1"
-	"testing"
 )
 
 // use docker mysql for test

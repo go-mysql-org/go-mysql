@@ -3,9 +3,10 @@ package mysql
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/siddontang/go/hack"
 	"math"
 	"strconv"
+
+	"github.com/siddontang/go/hack"
 )
 
 type RowData []byte

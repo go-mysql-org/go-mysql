@@ -3,9 +3,10 @@ package server
 import (
 	"encoding/binary"
 	"fmt"
-	. "github.com/siddontang/go-mysql/mysql"
 	"math"
 	"strconv"
+
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 var paramFieldData []byte

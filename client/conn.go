@@ -2,11 +2,12 @@ package client
 
 import (
 	"fmt"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/packet"
 	"net"
 	"strings"
 	"time"
+
+	. "github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/packet"
 )
 
 type Conn struct {

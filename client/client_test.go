@@ -3,9 +3,10 @@ package client
 import (
 	"flag"
 	"fmt"
-	"github.com/siddontang/go-mysql/mysql"
 	. "gopkg.in/check.v1"
 	"testing"
+
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 var testAddr = flag.String("addr", "127.0.0.1:3306", "MySQL server address")

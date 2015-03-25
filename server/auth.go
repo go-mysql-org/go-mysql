@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/binary"
+
 	. "github.com/siddontang/go-mysql/mysql"
 )
 

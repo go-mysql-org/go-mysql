@@ -3,11 +3,12 @@ package replication
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
-	"sync"
-	"time"
 )
 
 type BinlogSyncer struct {

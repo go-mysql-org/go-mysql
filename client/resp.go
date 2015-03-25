@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/binary"
 	"errors"
+
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )

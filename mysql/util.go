@@ -5,10 +5,11 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
-	"github.com/siddontang/go/hack"
 	"io"
 	"runtime"
 	"strings"
+
+	"github.com/siddontang/go/hack"
 )
 
 func Pstack() string {

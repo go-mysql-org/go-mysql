@@ -3,8 +3,9 @@ package failover
 import (
 	"flag"
 	"fmt"
-	. "gopkg.in/check.v1"
 	"testing"
+
+	. "gopkg.in/check.v1"
 )
 
 // We will use go-mysql docker to test

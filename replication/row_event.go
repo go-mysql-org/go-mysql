@@ -5,12 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go/hack"
 	"io"
 	"math"
 	"strconv"
 	"time"
+
+	. "github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go/hack"
 )
 
 type TableMapEvent struct {

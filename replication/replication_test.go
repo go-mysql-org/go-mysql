@@ -3,13 +3,14 @@ package replication
 import (
 	"flag"
 	"fmt"
-	"github.com/siddontang/go-mysql/client"
-	"github.com/siddontang/go-mysql/mysql"
-	. "gopkg.in/check.v1"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/siddontang/go-mysql/client"
+	"github.com/siddontang/go-mysql/mysql"
+	. "gopkg.in/check.v1"
 )
 
 // Use docker mysql to test, mysql is 3306, mariadb is 3316

@@ -2,8 +2,9 @@ package failover
 
 import (
 	"fmt"
-	. "github.com/siddontang/go-mysql/mysql"
 	"net"
+
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 type MysqlGTIDHandler struct {

@@ -4,9 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	. "github.com/siddontang/go-mysql/mysql"
 	"io"
 	"net"
+
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 /*

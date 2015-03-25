@@ -2,9 +2,10 @@ package mysql
 
 import (
 	"fmt"
-	"github.com/siddontang/go/hack"
 	"math"
 	"strconv"
+
+	"github.com/siddontang/go/hack"
 )
 
 func formatTextValue(value interface{}) ([]byte, error) {
