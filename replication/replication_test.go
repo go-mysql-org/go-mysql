@@ -125,6 +125,8 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	t.testExecute(c, `INSERT INTO test_replication (bb) VALUES ("12345")`)
 	t.testExecute(c, `INSERT INTO test_replication (se) VALUES ("a,b")`)
 
+	t.testExecute(c, `FLUSH BINARY LOGS`)
+
 	id := 100
 
 	if t.flavor == mysql.MySQLFlavor {
