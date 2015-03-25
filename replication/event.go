@@ -16,8 +16,9 @@ const (
 )
 
 type BinlogEvent struct {
-	//raw binlog package, don't include last 4 bytes CRC32 checkout
-	Data   []byte
+	// raw binlog data, including crc32 checksum if exists
+	RawData []byte
+
 	Header *EventHeader
 	Event  Event
 }
@@ -25,6 +26,10 @@ type BinlogEvent struct {
 func (e *BinlogEvent) Dump(w io.Writer) {
 	e.Header.Dump(w)
 	e.Event.Dump(w)
+}
+
+func (e *BinlogEvent) DumpRaw(w io.Writer) {
+	w.Write(e.RawData)
 }
 
 type Event interface {

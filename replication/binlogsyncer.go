@@ -386,6 +386,8 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		data = data[2:]
 	}
 
+	rawData := data
+
 	h := new(EventHeader)
 	err := h.Decode(data)
 	if err != nil {
@@ -395,16 +397,14 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	data = data[EventHeaderSize:]
 	eventLen := int(h.EventSize) - EventHeaderSize
 
-	if len(data) < eventLen {
+	if len(data) != eventLen {
 		return fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
 	}
 
 	if b.useChecksum {
-		//last 4 bytes is crc32, check later
+		//last 4 bytes is crc32
 		data = data[0 : len(data)-4]
 	}
-
-	evData := data
 
 	var e Event
 	switch h.EventType {
@@ -474,7 +474,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.nextPos.Pos = uint32(re.Position)
 	}
 
-	s.ch <- &BinlogEvent{evData, h, e}
+	s.ch <- &BinlogEvent{rawData, h, e}
 
 	if needACK {
 		err := b.replySemiSyncACK(lastPos)
