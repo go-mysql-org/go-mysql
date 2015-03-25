@@ -32,6 +32,8 @@ type BinlogSyncer struct {
 	format *FormatDescriptionEvent
 
 	tables map[uint64]*TableMapEvent
+
+	nextPos Position
 }
 
 func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
@@ -123,6 +125,20 @@ func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, pass
 	}
 
 	return nil
+}
+
+func (b *BinlogSyncer) EnableSemiSync() error {
+	if r, err := b.c.Execute("SHOW VARIABLES LIKE 'rpl_semi_sync_master_enabled';"); err != nil {
+		return err
+	} else {
+		s, _ := r.GetString(0, 1)
+		if s != "ON" {
+			return fmt.Errorf("master does not support semi synchronous replication")
+		}
+	}
+
+	_, err := b.c.Execute(`SET @rpl_semi_sync_slave = 1;`)
+	return err
 }
 
 func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
@@ -296,6 +312,31 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	return b.c.WritePacket(data)
 }
 
+func (b *BinlogSyncer) replySemiSyncACK(p Position) error {
+	b.c.ResetSequence()
+
+	data := make([]byte, 4+1+4+len(p.Name))
+	pos := 4
+	// semi sync indicator
+	data[pos] = SemiSyncIndicator
+	pos++
+
+	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
+	pos += 4
+
+	copy(data[pos:], p.Name)
+
+	err := b.c.WritePacket(data)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.c.ReadOKPacket()
+	if err != nil {
+	}
+	return err
+}
+
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	defer func() {
 		if e := recover(); e != nil {
@@ -336,6 +377,13 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	//skip 0x00
 	data = data[1:]
+
+	needACK := false
+	if data[0] == SemiSyncIndicator {
+		needACK = (data[1] == 0x01)
+		//skip semi sync header
+		data = data[2:]
+	}
 
 	h := new(EventHeader)
 	err := h.Decode(data)
@@ -412,15 +460,27 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.tables[te.TableID] = te
 	}
 
+	lastPos := b.nextPos
+	b.nextPos.Pos = h.LogPos
+
 	//If MySQL restart, it may use the same table id for different tables.
 	//We must clear the table map before parsing new events.
 	//We have no better way to known whether the event is before or after restart,
 	//So we have to clear the table map on every rotate event.
-	if h.EventType == ROTATE_EVENT {
+	if re, ok := e.(*RotateEvent); ok {
 		b.tables = make(map[uint64]*TableMapEvent)
+		b.nextPos.Name = string(re.NextLogName)
+		b.nextPos.Pos = uint32(re.Position)
 	}
 
 	s.ch <- &BinlogEvent{evData, h, e}
+
+	if needACK {
+		err := b.replySemiSyncACK(lastPos)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

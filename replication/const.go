@@ -8,6 +8,8 @@ const (
 var (
 	//binlog header [ fe `bin` ]
 	BinLogFileHeader []byte = []byte{0xfe, 0x62, 0x69, 0x6e}
+
+	SemiSyncIndicator byte = 0xef
 )
 
 const (
@@ -159,7 +161,6 @@ func (e EventType) String() string {
 		return "AnonymousGTIDEvent"
 	case PREVIOUS_GTIDS_EVENT:
 		return "PreviousGTIDsEvent"
-
 	case MARIADB_ANNOTATE_ROWS_EVENT:
 		return "MariadbAnnotateRowsEvent"
 	case MARIADB_BINLOG_CHECKPOINT_EVENT:

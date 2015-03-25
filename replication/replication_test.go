@@ -65,7 +65,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		defer t.wg.Done()
 
 		for {
-			e, err := s.GetEventTimeout(1 * time.Second)
+			e, err := s.GetEventTimeout(2 * time.Second)
 			if err != nil {
 				if err != ErrGetEventTimeout {
 					c.Fatal(err)
@@ -178,7 +178,7 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testSyncerSuite) testPostionSync(c *C, flavor string) {
+func (t *testSyncerSuite) testPositionSync(c *C, flavor string) {
 	t.setupTest(c, flavor)
 
 	//get current master binlog file and position
@@ -193,8 +193,8 @@ func (t *testSyncerSuite) testPostionSync(c *C, flavor string) {
 	t.testSync(c, s)
 }
 
-func (t *testSyncerSuite) TestMysqlPostionSync(c *C) {
-	t.testPostionSync(c, mysql.MySQLFlavor)
+func (t *testSyncerSuite) TestMysqlPositionSync(c *C) {
+	t.testPositionSync(c, mysql.MySQLFlavor)
 }
 
 func (t *testSyncerSuite) TestMysqlGTIDSync(c *C) {
@@ -219,7 +219,7 @@ func (t *testSyncerSuite) TestMysqlGTIDSync(c *C) {
 }
 
 func (t *testSyncerSuite) TestMariadbPositionSync(c *C) {
-	t.testPostionSync(c, mysql.MariaDBFlavor)
+	t.testPositionSync(c, mysql.MariaDBFlavor)
 }
 
 func (t *testSyncerSuite) TestMariadbGTIDSync(c *C) {
@@ -233,6 +233,26 @@ func (t *testSyncerSuite) TestMariadbGTIDSync(c *C) {
 	set, _ := mysql.ParseMariadbGTIDSet(str)
 
 	s, err := t.b.StartSyncGTID(set)
+	c.Assert(err, IsNil)
+
+	t.testSync(c, s)
+}
+
+func (t *testSyncerSuite) TestMysqlSemiPositionSync(c *C) {
+	t.setupTest(c, mysql.MySQLFlavor)
+
+	err := t.b.EnableSemiSync()
+	if err != nil {
+		c.Skip(fmt.Sprintf("mysql doest not support semi synchronous replication %v", err))
+	}
+
+	//get current master binlog file and position
+	r, err := t.c.Execute("SHOW MASTER STATUS")
+	c.Assert(err, IsNil)
+	binFile, _ := r.GetString(0, 0)
+	binPos, _ := r.GetInt(0, 1)
+
+	s, err := t.b.StartSync(mysql.Position{binFile, uint32(binPos)})
 	c.Assert(err, IsNil)
 
 	t.testSync(c, s)
