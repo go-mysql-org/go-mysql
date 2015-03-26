@@ -17,8 +17,7 @@ func (e *GenericEvent) Dump(w io.Writer) {
 }
 
 func (e *GenericEvent) Decode(data []byte) error {
-	e.Data = make([]byte, len(data))
-	copy(e.Data, data)
+	e.Data = data
 
 	return nil
 }

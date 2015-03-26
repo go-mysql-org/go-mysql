@@ -157,6 +157,10 @@ func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 	return s, nil
 }
 
+func (b *BinlogSyncer) SetRawMode(mode bool) {
+	b.parser.SetRawMode(mode)
+}
+
 func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 	var err error
 	switch b.flavor {
@@ -337,7 +341,7 @@ func (b *BinlogSyncer) replySemiSyncACK(p Position) error {
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	defer func() {
 		if e := recover(); e != nil {
-			s.ech <- fmt.Errorf("Err: %v\n Stack: %s", e, Pstack())
+			s.CloseWithError(fmt.Errorf("Err: %v\n Stack: %s", e, Pstack()))
 		}
 		b.wg.Done()
 	}()
@@ -345,7 +349,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	for {
 		select {
 		case <-b.quit:
-			s.ech <- ErrSyncClosed
+			s.Close()
 			return
 		default:
 			data, err := b.c.ReadPacket()

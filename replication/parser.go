@@ -8,6 +8,9 @@ type BinlogParser struct {
 	format *FormatDescriptionEvent
 
 	tables map[uint64]*TableMapEvent
+
+	// for rawMode, we only parse FormatDescriptionEvent and RotateEvent
+	rawMode bool
 }
 
 func NewBinlogParser() *BinlogParser {
@@ -16,6 +19,10 @@ func NewBinlogParser() *BinlogParser {
 	p.tables = make(map[uint64]*TableMapEvent)
 
 	return p
+}
+
+func (p *BinlogParser) SetRawMode(mode bool) {
+	p.rawMode = mode
 }
 
 func (p *BinlogParser) parse(data []byte) (*BinlogEvent, error) {
@@ -43,46 +50,51 @@ func (p *BinlogParser) parse(data []byte) (*BinlogEvent, error) {
 		if p.format != nil && p.format.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
 			data = data[0 : len(data)-4]
 		}
-		switch h.EventType {
-		case ROTATE_EVENT:
+
+		if h.EventType == ROTATE_EVENT {
 			e = &RotateEvent{}
-		case QUERY_EVENT:
-			e = &QueryEvent{}
-		case XID_EVENT:
-			e = &XIDEvent{}
-		case TABLE_MAP_EVENT:
-			te := &TableMapEvent{}
-			if p.format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {
-				te.tableIDSize = 4
-			} else {
-				te.tableIDSize = 6
+		} else if !p.rawMode {
+			switch h.EventType {
+			case QUERY_EVENT:
+				e = &QueryEvent{}
+			case XID_EVENT:
+				e = &XIDEvent{}
+			case TABLE_MAP_EVENT:
+				te := &TableMapEvent{}
+				if p.format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {
+					te.tableIDSize = 4
+				} else {
+					te.tableIDSize = 6
+				}
+				e = te
+			case WRITE_ROWS_EVENTv0,
+				UPDATE_ROWS_EVENTv0,
+				DELETE_ROWS_EVENTv0,
+				WRITE_ROWS_EVENTv1,
+				DELETE_ROWS_EVENTv1,
+				UPDATE_ROWS_EVENTv1,
+				WRITE_ROWS_EVENTv2,
+				UPDATE_ROWS_EVENTv2,
+				DELETE_ROWS_EVENTv2:
+				e = p.newRowsEvent(h)
+			case ROWS_QUERY_EVENT:
+				e = &RowsQueryEvent{}
+			case GTID_EVENT:
+				e = &GTIDEvent{}
+			case MARIADB_ANNOTATE_ROWS_EVENT:
+				e = &MariadbAnnotaeRowsEvent{}
+			case MARIADB_BINLOG_CHECKPOINT_EVENT:
+				e = &MariadbBinlogCheckPointEvent{}
+			case MARIADB_GTID_LIST_EVENT:
+				e = &MariadbGTIDListEvent{}
+			case MARIADB_GTID_EVENT:
+				ee := &MariadbGTIDEvent{}
+				ee.GTID.ServerID = h.ServerID
+				e = ee
+			default:
+				e = &GenericEvent{}
 			}
-			e = te
-		case WRITE_ROWS_EVENTv0,
-			UPDATE_ROWS_EVENTv0,
-			DELETE_ROWS_EVENTv0,
-			WRITE_ROWS_EVENTv1,
-			DELETE_ROWS_EVENTv1,
-			UPDATE_ROWS_EVENTv1,
-			WRITE_ROWS_EVENTv2,
-			UPDATE_ROWS_EVENTv2,
-			DELETE_ROWS_EVENTv2:
-			e = p.newRowsEvent(h)
-		case ROWS_QUERY_EVENT:
-			e = &RowsQueryEvent{}
-		case GTID_EVENT:
-			e = &GTIDEvent{}
-		case MARIADB_ANNOTATE_ROWS_EVENT:
-			e = &MariadbAnnotaeRowsEvent{}
-		case MARIADB_BINLOG_CHECKPOINT_EVENT:
-			e = &MariadbBinlogCheckPointEvent{}
-		case MARIADB_GTID_LIST_EVENT:
-			e = &MariadbGTIDListEvent{}
-		case MARIADB_GTID_EVENT:
-			ee := &MariadbGTIDEvent{}
-			ee.GTID.ServerID = h.ServerID
-			e = ee
-		default:
+		} else {
 			e = &GenericEvent{}
 		}
 	}
