@@ -113,33 +113,16 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	//use row format
 	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
 
-	t.testExecute(c, `INSERT INTO test_replication (str, f, i) VALUES ("3", -3.14, 10)`)
-	t.testExecute(c, `INSERT INTO test_replication (e) VALUES ("e1")`)
-	t.testExecute(c, `INSERT INTO test_replication (b) VALUES (0b0011)`)
-	t.testExecute(c, `INSERT INTO test_replication (y) VALUES (1985)`)
-	t.testExecute(c, `INSERT INTO test_replication (da) VALUES ("2012-05-07")`)
-	t.testExecute(c, `INSERT INTO test_replication (ts) VALUES ("2012-05-07 14:01:01")`)
-	t.testExecute(c, `INSERT INTO test_replication (dt) VALUES ("2012-05-07 14:01:01")`)
-	t.testExecute(c, `INSERT INTO test_replication (tm) VALUES ("14:01:01")`)
-	t.testExecute(c, `INSERT INTO test_replication (de) VALUES (-45363.64), (-21212322.12)`)
-	t.testExecute(c, `INSERT INTO test_replication (t) VALUES ("abc")`)
-	t.testExecute(c, `INSERT INTO test_replication (bb) VALUES ("12345")`)
-	t.testExecute(c, `INSERT INTO test_replication (se) VALUES ("a,b")`)
-
-	t.testExecute(c, `FLUSH BINARY LOGS`)
+	t.testExecute(c, `INSERT INTO test_replication (str, f, i, e, b, y, da, ts, dt, tm, de, t, bb, se)
+		VALUES ("3", -3.14, 10, "e1", 0b0011, 1985,
+		"2012-05-07", "2012-05-07 14:01:01", "2012-05-07 14:01:01",
+		"14:01:01", -45363.64, "abc", "12345", "a,b")`)
 
 	id := 100
 
 	if t.flavor == mysql.MySQLFlavor {
-		for _, image := range []string{BINLOG_ROW_IMAGE_FULL, BINLOG_ROW_IAMGE_MINIMAL, BINLOG_ROW_IMAGE_NOBLOB} {
-			t.testExecute(c, fmt.Sprintf("SET SESSION binlog_row_image = '%s'", image))
+		t.testExecute(c, "SET SESSION binlog_row_image = 'MINIMAL'")
 
-			t.testExecute(c, fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb, de) VALUES (%d, "4", -3.14, 100, "abc", -45635.64)`, id))
-			t.testExecute(c, fmt.Sprintf(`UPDATE test_replication SET f = -12.14, de = 555.34 WHERE id = %d`, id))
-			t.testExecute(c, fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))
-			id++
-		}
-	} else {
 		t.testExecute(c, fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb, de) VALUES (%d, "4", -3.14, 100, "abc", -45635.64)`, id))
 		t.testExecute(c, fmt.Sprintf(`UPDATE test_replication SET f = -12.14, de = 555.34 WHERE id = %d`, id))
 		t.testExecute(c, fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))

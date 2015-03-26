@@ -174,3 +174,12 @@ func (e EventType) String() string {
 		return "UnknownEvent"
 	}
 }
+
+const (
+	BINLOG_CHECKSUM_ALG_OFF byte = 0 // Events are without checksum though its generator
+	// is checksum-capable New Master (NM).
+	BINLOG_CHECKSUM_ALG_CRC32 byte = 1 // CRC32 of zlib algorithm.
+	//  BINLOG_CHECKSUM_ALG_ENUM_END,  // the cut line: valid alg range is [1, 0x7f].
+	BINLOG_CHECKSUM_ALG_UNDEF byte = 255 // special value to tag undetermined yet checksum
+	// or events from checksum-unaware servers
+)

@@ -28,11 +28,7 @@ type BinlogSyncer struct {
 
 	quit chan struct{}
 
-	useChecksum bool
-
-	format *FormatDescriptionEvent
-
-	tables map[uint64]*TableMapEvent
+	parser *BinlogParser
 
 	nextPos Position
 }
@@ -46,9 +42,8 @@ func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 	b.masterID = 0
 
 	b.quit = make(chan struct{})
-	b.useChecksum = false
 
-	b.tables = make(map[uint64]*TableMapEvent)
+	b.parser = NewBinlogParser()
 
 	return b
 }
@@ -65,20 +60,6 @@ func (b *BinlogSyncer) Close() {
 	if b.c != nil {
 		b.c.Close()
 	}
-}
-
-func (b *BinlogSyncer) checksumUsed() error {
-	if r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM'"); err != nil {
-		return err
-	} else {
-		s, _ := r.GetString(0, 1)
-		if s == "" || s == "NONE" {
-			b.useChecksum = false
-		} else {
-			b.useChecksum = true
-		}
-	}
-	return nil
 }
 
 func (b *BinlogSyncer) GetMasterUUID() (uuid.UUID, error) {
@@ -107,13 +88,28 @@ func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, pass
 	}
 
 	//for mysql 5.6+, binlog has a crc32 checksum
-	//see https://github.com/alibaba/canal/wiki/BinlogChange(mysql5.6)
 	//before mysql 5.6, this will not work, don't matter.:-)
-	if err = b.checksumUsed(); err != nil {
+	if r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM'"); err != nil {
 		return err
-	} else if b.useChecksum {
-		if _, err = b.c.Execute(`SET @master_binlog_checksum=@@global.binlog_checksum`); err != nil {
-			return err
+	} else {
+		s, _ := r.GetString(0, 1)
+		if s != "" {
+			// maybe CRC32 or NONE
+
+			// mysqlbinlog.cc use NONE, see its below comments:
+			// Make a notice to the server that this client
+			// is checksum-aware. It does not need the first fake Rotate
+			// necessary checksummed.
+			// That preference is specified below.
+
+			if _, err = b.c.Execute(`SET @master_binlog_checksum='NONE'`); err != nil {
+				return err
+			}
+
+			// if _, err = b.c.Execute(`SET @master_binlog_checksum=@@global.binlog_checksum`); err != nil {
+			// 	return err
+			// }
+
 		}
 	}
 
@@ -316,14 +312,14 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 func (b *BinlogSyncer) replySemiSyncACK(p Position) error {
 	b.c.ResetSequence()
 
-	data := make([]byte, 4+1+4+len(p.Name))
+	data := make([]byte, 4+1+8+len(p.Name))
 	pos := 4
 	// semi sync indicator
 	data[pos] = SemiSyncIndicator
 	pos++
 
-	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
-	pos += 4
+	binary.LittleEndian.PutUint64(data[pos:], uint64(p.Pos))
+	pos += 8
 
 	copy(data[pos:], p.Name)
 
@@ -386,139 +382,26 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		data = data[2:]
 	}
 
-	rawData := data
-
-	h := new(EventHeader)
-	err := h.Decode(data)
+	e, err := b.parser.parse(data)
 	if err != nil {
 		return err
 	}
 
-	data = data[EventHeaderSize:]
-	eventLen := int(h.EventSize) - EventHeaderSize
+	b.nextPos.Pos = e.Header.LogPos
 
-	if len(data) != eventLen {
-		return fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
-	}
-
-	if b.useChecksum {
-		//last 4 bytes is crc32
-		data = data[0 : len(data)-4]
-	}
-
-	var e Event
-	switch h.EventType {
-	case FORMAT_DESCRIPTION_EVENT:
-		b.format = &FormatDescriptionEvent{}
-		e = b.format
-	case ROTATE_EVENT:
-		e = &RotateEvent{}
-	case QUERY_EVENT:
-		e = &QueryEvent{}
-	case XID_EVENT:
-		e = &XIDEvent{}
-	case TABLE_MAP_EVENT:
-		te := &TableMapEvent{}
-		if b.format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {
-			te.tableIDSize = 4
-		} else {
-			te.tableIDSize = 6
-		}
-		e = te
-	case WRITE_ROWS_EVENTv0,
-		UPDATE_ROWS_EVENTv0,
-		DELETE_ROWS_EVENTv0,
-		WRITE_ROWS_EVENTv1,
-		DELETE_ROWS_EVENTv1,
-		UPDATE_ROWS_EVENTv1,
-		WRITE_ROWS_EVENTv2,
-		UPDATE_ROWS_EVENTv2,
-		DELETE_ROWS_EVENTv2:
-		e = b.newRowsEvent(h)
-	case ROWS_QUERY_EVENT:
-		e = &RowsQueryEvent{}
-	case GTID_EVENT:
-		e = &GTIDEvent{}
-	case MARIADB_ANNOTATE_ROWS_EVENT:
-		e = &MariadbAnnotaeRowsEvent{}
-	case MARIADB_BINLOG_CHECKPOINT_EVENT:
-		e = &MariadbBinlogCheckPointEvent{}
-	case MARIADB_GTID_LIST_EVENT:
-		e = &MariadbGTIDListEvent{}
-	case MARIADB_GTID_EVENT:
-		ee := &MariadbGTIDEvent{}
-		ee.GTID.ServerID = h.ServerID
-		e = ee
-	default:
-		e = &GenericEvent{}
-	}
-
-	if err := e.Decode(data); err != nil {
-		return &EventError{h, err.Error(), data}
-	}
-
-	if te, ok := e.(*TableMapEvent); ok {
-		b.tables[te.TableID] = te
-	}
-
-	lastPos := b.nextPos
-	b.nextPos.Pos = h.LogPos
-
-	//If MySQL restart, it may use the same table id for different tables.
-	//We must clear the table map before parsing new events.
-	//We have no better way to known whether the event is before or after restart,
-	//So we have to clear the table map on every rotate event.
-	if re, ok := e.(*RotateEvent); ok {
-		b.tables = make(map[uint64]*TableMapEvent)
+	if re, ok := e.Event.(*RotateEvent); ok {
 		b.nextPos.Name = string(re.NextLogName)
 		b.nextPos.Pos = uint32(re.Position)
 	}
 
-	s.ch <- &BinlogEvent{rawData, h, e}
+	s.ch <- e
 
 	if needACK {
-		err := b.replySemiSyncACK(lastPos)
+		err := b.replySemiSyncACK(b.nextPos)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
-}
-
-func (b *BinlogSyncer) newRowsEvent(h *EventHeader) *RowsEvent {
-	e := &RowsEvent{}
-	if b.format.EventTypeHeaderLengths[h.EventType-1] == 6 {
-		e.tableIDSize = 4
-	} else {
-		e.tableIDSize = 6
-	}
-
-	e.needBitmap2 = false
-	e.tables = b.tables
-
-	switch h.EventType {
-	case WRITE_ROWS_EVENTv0:
-		e.Version = 0
-	case UPDATE_ROWS_EVENTv0:
-		e.Version = 0
-	case DELETE_ROWS_EVENTv0:
-		e.Version = 0
-	case WRITE_ROWS_EVENTv1:
-		e.Version = 1
-	case DELETE_ROWS_EVENTv1:
-		e.Version = 1
-	case UPDATE_ROWS_EVENTv1:
-		e.Version = 1
-		e.needBitmap2 = true
-	case WRITE_ROWS_EVENTv2:
-		e.Version = 2
-	case UPDATE_ROWS_EVENTv2:
-		e.Version = 2
-		e.needBitmap2 = true
-	case DELETE_ROWS_EVENTv2:
-		e.Version = 2
-	}
-
-	return e
 }
