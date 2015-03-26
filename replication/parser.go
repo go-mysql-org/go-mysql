@@ -1,7 +1,10 @@
 package replication
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"os"
 )
 
 type BinlogParser struct {
@@ -21,26 +24,96 @@ func NewBinlogParser() *BinlogParser {
 	return p
 }
 
+func (p *BinlogParser) ParseFile(name string, offset int64) (*BinlogStreamer, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	b := make([]byte, 4)
+	if _, err = f.Read(b); err != nil {
+		return nil, err
+	} else if !bytes.Equal(b, BinLogFileHeader) {
+		return nil, fmt.Errorf("%s is not a valid binlog file, head 4 bytes must fe'bin' ", name)
+	}
+
+	if offset < 4 {
+		offset = 4
+	}
+
+	if _, err = f.Seek(offset, os.SEEK_SET); err != nil {
+		return nil, fmt.Errorf("seek %s to %d error %v", name, offset, err)
+	}
+
+	return p.ParseReader(f)
+}
+
+func (p *BinlogParser) ParseReader(r io.Reader) (*BinlogStreamer, error) {
+	s := newBinlogStreamer()
+
+	go func(s *BinlogStreamer) {
+		var buf bytes.Buffer
+		var err error
+
+		for {
+			buf.Reset()
+
+			if _, err = io.CopyN(&buf, r, EventHeaderSize); err != nil {
+				break
+			}
+
+			data := buf.Bytes()
+			h, err := p.parseHeader(data)
+			if err != nil {
+				break
+			}
+
+			if _, err = io.CopyN(&buf, r, int64(h.EventSize)); err != nil {
+				break
+			}
+
+			data = buf.Bytes()
+			rawData := data
+
+			data = data[EventHeaderSize:]
+			eventLen := int(h.EventSize) - EventHeaderSize
+
+			if len(data) != eventLen {
+				err = fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
+				break
+			}
+
+			var e Event
+			e, err = p.parseEvent(h, data)
+			if err != nil {
+				break
+			}
+
+			s.ch <- &BinlogEvent{rawData, h, e}
+		}
+
+		s.CloseWithError(err)
+	}(s)
+
+	return s, nil
+}
+
 func (p *BinlogParser) SetRawMode(mode bool) {
 	p.rawMode = mode
 }
 
-func (p *BinlogParser) parse(data []byte) (*BinlogEvent, error) {
-	rawData := data
-
+func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
 	h := new(EventHeader)
 	err := h.Decode(data)
 	if err != nil {
 		return nil, err
 	}
 
-	data = data[EventHeaderSize:]
-	eventLen := int(h.EventSize) - EventHeaderSize
+	return h, nil
+}
 
-	if len(data) != eventLen {
-		return nil, fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
-	}
-
+func (p *BinlogParser) parseEvent(h *EventHeader, data []byte) (Event, error) {
 	var e Event
 
 	if h.EventType == FORMAT_DESCRIPTION_EVENT {
@@ -113,6 +186,30 @@ func (p *BinlogParser) parse(data []byte) (*BinlogEvent, error) {
 	//So we have to clear the table map on every rotate event.
 	if _, ok := e.(*RotateEvent); ok {
 		p.tables = make(map[uint64]*TableMapEvent)
+	}
+
+	return e, nil
+}
+
+func (p *BinlogParser) parse(data []byte) (*BinlogEvent, error) {
+	rawData := data
+
+	h, err := p.parseHeader(data)
+
+	if err != nil {
+		return nil, err
+	}
+
+	data = data[EventHeaderSize:]
+	eventLen := int(h.EventSize) - EventHeaderSize
+
+	if len(data) != eventLen {
+		return nil, fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
+	}
+
+	e, err := p.parseEvent(h, data)
+	if err != nil {
+		return nil, err
 	}
 
 	return &BinlogEvent{rawData, h, e}, nil
