@@ -49,6 +49,12 @@ func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 }
 
 func (b *BinlogSyncer) Close() {
+	select {
+	case <-b.quit:
+		return
+	default:
+	}
+
 	close(b.quit)
 
 	if b.c != nil {

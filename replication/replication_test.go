@@ -65,6 +65,10 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	go func() {
 		defer t.wg.Done()
 
+		if s == nil {
+			return
+		}
+
 		for {
 			e, err := s.GetEventTimeout(2 * time.Second)
 			if err != nil {
@@ -164,9 +168,7 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testSyncerSuite) testPositionSync(c *C, flavor string) {
-	t.setupTest(c, flavor)
-
+func (t *testSyncerSuite) testPositionSync(c *C) {
 	//get current master binlog file and position
 	r, err := t.c.Execute("SHOW MASTER STATUS")
 	c.Assert(err, IsNil)
@@ -180,7 +182,8 @@ func (t *testSyncerSuite) testPositionSync(c *C, flavor string) {
 }
 
 func (t *testSyncerSuite) TestMysqlPositionSync(c *C) {
-	t.testPositionSync(c, mysql.MySQLFlavor)
+	t.setupTest(c, mysql.MySQLFlavor)
+	t.testPositionSync(c)
 }
 
 func (t *testSyncerSuite) TestMysqlGTIDSync(c *C) {
@@ -205,7 +208,9 @@ func (t *testSyncerSuite) TestMysqlGTIDSync(c *C) {
 }
 
 func (t *testSyncerSuite) TestMariadbPositionSync(c *C) {
-	t.testPositionSync(c, mysql.MariaDBFlavor)
+	t.setupTest(c, mysql.MariaDBFlavor)
+
+	t.testPositionSync(c)
 }
 
 func (t *testSyncerSuite) TestMariadbGTIDSync(c *C) {
@@ -232,14 +237,43 @@ func (t *testSyncerSuite) TestMysqlSemiPositionSync(c *C) {
 		c.Skip(fmt.Sprintf("mysql doest not support semi synchronous replication %v", err))
 	}
 
-	//get current master binlog file and position
-	r, err := t.c.Execute("SHOW MASTER STATUS")
-	c.Assert(err, IsNil)
-	binFile, _ := r.GetString(0, 0)
-	binPos, _ := r.GetInt(0, 1)
+	t.testPositionSync(c)
+}
 
-	s, err := t.b.StartSync(mysql.Position{binFile, uint32(binPos)})
+func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
+	t.setupTest(c, mysql.MySQLFlavor)
+
+	t.testExecute(c, "RESET MASTER")
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		t.testSync(c, nil)
+
+		t.testExecute(c, "FLUSH LOGS")
+
+		t.testSync(c, nil)
+	}()
+
+	err := t.b.StartBackup("./var", mysql.Position{"", uint32(0)}, 2*time.Second)
+	c.Check(err, Equals, ErrGetEventTimeout)
+
+	p := NewBinlogParser()
+
+	f := func(e *BinlogEvent) error {
+		if *testOutputLogs {
+			e.Dump(os.Stdout)
+			os.Stdout.Sync()
+		}
+		return nil
+	}
+
+	err = p.ParseFile("./var/mysql.000001", 0, f)
 	c.Assert(err, IsNil)
 
-	t.testSync(c, s)
+	err = p.ParseFile("./var/mysql.000002", 0, f)
+	c.Assert(err, IsNil)
 }

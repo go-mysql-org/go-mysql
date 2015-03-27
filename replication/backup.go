@@ -4,13 +4,14 @@ import (
 	"io"
 	"os"
 	"path"
+	"time"
 
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
 // Like mysqlbinlog remote raw backup
 // Backup remote binlog from position (filename, offset) and write in backupDir
-func (b *BinlogSyncer) StartBackup(backupDir string, p Position) error {
+func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Duration) error {
 	b.SetRawMode(true)
 
 	os.MkdirAll(backupDir, 0755)
@@ -31,7 +32,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position) error {
 	}()
 
 	for {
-		e, err := s.GetEvent()
+		e, err := s.GetEventTimeout(timeout)
 		if err != nil {
 			return err
 		}

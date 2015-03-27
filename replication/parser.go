@@ -24,18 +24,20 @@ func NewBinlogParser() *BinlogParser {
 	return p
 }
 
-func (p *BinlogParser) ParseFile(name string, offset int64) (*BinlogStreamer, error) {
+type OnEventFunc func(*BinlogEvent) error
+
+func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc) error {
 	f, err := os.Open(name)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer f.Close()
 
 	b := make([]byte, 4)
 	if _, err = f.Read(b); err != nil {
-		return nil, err
+		return err
 	} else if !bytes.Equal(b, BinLogFileHeader) {
-		return nil, fmt.Errorf("%s is not a valid binlog file, head 4 bytes must fe'bin' ", name)
+		return fmt.Errorf("%s is not a valid binlog file, head 4 bytes must fe'bin' ", name)
 	}
 
 	if offset < 4 {
@@ -43,60 +45,67 @@ func (p *BinlogParser) ParseFile(name string, offset int64) (*BinlogStreamer, er
 	}
 
 	if _, err = f.Seek(offset, os.SEEK_SET); err != nil {
-		return nil, fmt.Errorf("seek %s to %d error %v", name, offset, err)
+		return fmt.Errorf("seek %s to %d error %v", name, offset, err)
 	}
 
-	return p.ParseReader(f)
+	return p.ParseReader(f, onEvent)
 }
 
-func (p *BinlogParser) ParseReader(r io.Reader) (*BinlogStreamer, error) {
-	s := newBinlogStreamer()
+func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
+	p.tables = make(map[uint64]*TableMapEvent)
+	p.format = nil
 
-	go func(s *BinlogStreamer) {
+	var err error
+	var n int64
+
+	for {
 		var buf bytes.Buffer
-		var err error
 
-		for {
-			buf.Reset()
-
-			if _, err = io.CopyN(&buf, r, EventHeaderSize); err != nil {
-				break
+		if n, err = io.CopyN(&buf, r, EventHeaderSize); err != nil {
+			if n == 0 {
+				return nil
 			}
-
-			data := buf.Bytes()
-			h, err := p.parseHeader(data)
-			if err != nil {
-				break
-			}
-
-			if _, err = io.CopyN(&buf, r, int64(h.EventSize)); err != nil {
-				break
-			}
-
-			data = buf.Bytes()
-			rawData := data
-
-			data = data[EventHeaderSize:]
-			eventLen := int(h.EventSize) - EventHeaderSize
-
-			if len(data) != eventLen {
-				err = fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
-				break
-			}
-
-			var e Event
-			e, err = p.parseEvent(h, data)
-			if err != nil {
-				break
-			}
-
-			s.ch <- &BinlogEvent{rawData, h, e}
+			return err
 		}
 
-		s.closeWithError(err)
-	}(s)
+		data := buf.Bytes()
+		var h *EventHeader
+		h, err = p.parseHeader(data)
+		if err != nil {
+			return err
+		}
 
-	return s, nil
+		if h.EventSize <= uint32(EventHeaderSize) {
+			return fmt.Errorf("invalid event header, event size is %d, too small", h.EventSize)
+
+		}
+
+		if _, err = io.CopyN(&buf, r, int64(h.EventSize)-int64(EventHeaderSize)); err != nil {
+			return err
+		}
+
+		data = buf.Bytes()
+		rawData := data
+
+		data = data[EventHeaderSize:]
+		eventLen := int(h.EventSize) - EventHeaderSize
+
+		if len(data) != eventLen {
+			return fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
+		}
+
+		var e Event
+		e, err = p.parseEvent(h, data)
+		if err != nil {
+			break
+		}
+
+		if err = onEvent(&BinlogEvent{rawData, h, e}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p *BinlogParser) SetRawMode(mode bool) {
