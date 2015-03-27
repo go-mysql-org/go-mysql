@@ -31,10 +31,6 @@ func (e *BinlogEvent) Dump(w io.Writer) {
 	e.Event.Dump(w)
 }
 
-func (e *BinlogEvent) DumpRaw(w io.Writer) {
-	w.Write(e.RawData)
-}
-
 type Event interface {
 	//Dump Event, format like python-mysql-replication
 	Dump(w io.Writer)

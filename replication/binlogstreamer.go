@@ -38,11 +38,11 @@ func (s *BinlogStreamer) GetEventTimeout(d time.Duration) (*BinlogEvent, error) 
 	}
 }
 
-func (s *BinlogStreamer) Close() {
-	s.CloseWithError(ErrSyncClosed)
+func (s *BinlogStreamer) close() {
+	s.closeWithError(ErrSyncClosed)
 }
 
-func (s *BinlogStreamer) CloseWithError(err error) {
+func (s *BinlogStreamer) closeWithError(err error) {
 	if err == nil {
 		err = ErrSyncClosed
 	}

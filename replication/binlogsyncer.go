@@ -341,7 +341,7 @@ func (b *BinlogSyncer) replySemiSyncACK(p Position) error {
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	defer func() {
 		if e := recover(); e != nil {
-			s.CloseWithError(fmt.Errorf("Err: %v\n Stack: %s", e, Pstack()))
+			s.closeWithError(fmt.Errorf("Err: %v\n Stack: %s", e, Pstack()))
 		}
 		b.wg.Done()
 	}()
@@ -349,24 +349,25 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	for {
 		select {
 		case <-b.quit:
-			s.Close()
+			s.close()
 			return
 		default:
 			data, err := b.c.ReadPacket()
 			if err != nil {
-				s.ech <- err
+				s.closeWithError(err)
 				return
 			}
 
 			switch data[0] {
 			case OK_HEADER:
 				if err = b.parseEvent(s, data); err != nil {
-					s.ech <- err
+					s.closeWithError(err)
 					return
 				}
 			case ERR_HEADER:
 				err = b.c.HandleErrorPacket(data)
-				s.ech <- err
+				s.closeWithError(err)
+				return
 			case EOF_HEADER:
 				//no binlog now, sleep and wait a moment again
 				time.Sleep(500 * time.Millisecond)

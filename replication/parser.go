@@ -93,7 +93,7 @@ func (p *BinlogParser) ParseReader(r io.Reader) (*BinlogStreamer, error) {
 			s.ch <- &BinlogEvent{rawData, h, e}
 		}
 
-		s.CloseWithError(err)
+		s.closeWithError(err)
 	}(s)
 
 	return s, nil
