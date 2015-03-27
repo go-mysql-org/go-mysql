@@ -1,0 +1,30 @@
+{
+	"ImportPath": "github.com/siddontang/go-mysql",
+	"GoVersion": "go1.4.2",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/go-sql-driver/mysql",
+			"Comment": "v1.2-28-gcebeb35",
+			"Rev": "cebeb3599d51814753350e87cd21f24b3ddaa66e"
+		},
+		{
+			"ImportPath": "github.com/satori/go.uuid",
+			"Rev": "a07c134f8289edd9ac6ee6f0aa5f3d345f4aaf27"
+		},
+		{
+			"ImportPath": "github.com/siddontang/go/hack",
+			"Rev": "c2b33271306fcb7c6532efceac33ec45ee2439e0"
+		},
+		{
+			"ImportPath": "github.com/siddontang/go/sync2",
+			"Rev": "c2b33271306fcb7c6532efceac33ec45ee2439e0"
+		},
+		{
+			"ImportPath": "gopkg.in/check.v1",
+			"Rev": "5b76b26efe7f426789852e983fbde4de62c42282"
+		}
+	]
+}
