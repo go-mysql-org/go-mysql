@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -44,28 +45,35 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 
 		offset = e.Header.LogPos
 
-		if rotateEvent, ok := e.Event.(*RotateEvent); ok {
+		if e.Header.EventType == ROTATE_EVENT {
+			rotateEvent := e.Event.(*RotateEvent)
 			filename = string(rotateEvent.NextLogName)
-			//offset = uint32(rotateEvent.Position)
-			if offset == 0 {
-				//this is the dummy RotateEvent, we will close old one and create a new
 
-				if f != nil {
-					f.Close()
-				}
-
-				f, err = os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
-				if err != nil {
-					return err
-				}
-
-				// write binlog header fe'bin'
-				if _, err = f.Write(BinLogFileHeader); err != nil {
-					return err
-				}
-
+			if e.Header.Timestamp == 0 || offset == 0 {
+				// fake rotate event
 				continue
 			}
+		} else if e.Header.EventType == FORMAT_DESCRIPTION_EVENT {
+			// FormateDescriptionEvent is the first event in binlog, we will close old one and create a new
+
+			if f != nil {
+				f.Close()
+			}
+
+			if len(filename) == 0 {
+				return fmt.Errorf("empty binlog filename for FormateDescriptionEvent")
+			}
+
+			f, err = os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				return err
+			}
+
+			// write binlog header fe'bin'
+			if _, err = f.Write(BinLogFileHeader); err != nil {
+				return err
+			}
+
 		}
 
 		if n, err := f.Write(e.RawData); err != nil {
