@@ -204,7 +204,7 @@ func (r *rows) Close() error {
 }
 
 func (r *rows) Next(dest []sqldriver.Value) error {
-	if r.step == r.Resultset.RowNumber() {
+	if r.step >= r.Resultset.RowNumber() {
 		return io.EOF
 	} else if r.step == -1 {
 		return io.ErrUnexpectedEOF
@@ -218,6 +218,8 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 
 		dest[i] = sqldriver.Value(value)
 	}
+
+	r.step++
 
 	return nil
 }
