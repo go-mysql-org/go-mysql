@@ -4,19 +4,21 @@ package driver
 
 import (
 	"database/sql"
-	"database/sql/driver"
+	sqldriver "database/sql/driver"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go/hack"
 )
 
-type Driver struct {
+type driver struct {
 }
 
 // DSN user:password@addr[?db]
-func (d Driver) Open(dsn string) (driver.Conn, error) {
+func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	seps := strings.Split(dsn, "@")
 	if len(seps) != 2 {
 		return nil, fmt.Errorf("invalid dsn, must user:password@addr[?db]")
@@ -43,98 +45,183 @@ func (d Driver) Open(dsn string) (driver.Conn, error) {
 		return nil, fmt.Errorf("invalid dsn, must user:password@addr[?db]")
 	}
 
-	conn, err := client.Connect(addr, user, password, db)
+	c, err := client.Connect(addr, user, password, db)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Conn{conn}, nil
+	return &conn{c}, nil
 }
 
-type Conn struct {
+type conn struct {
 	*client.Conn
 }
 
-func (c *Conn) Prepare(stmt string) (driver.Stmt, error) {
-	return nil, nil
+func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
+	st, err := c.Conn.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &stmt{st}, nil
 }
 
-func (c *Conn) Close() error {
-	return nil
+func (c *conn) Close() error {
+	return c.Conn.Close()
 }
 
-func (c *Conn) Begin() (driver.Tx, error) {
+func (c *conn) Begin() (sqldriver.Tx, error) {
+	err := c.Conn.Begin()
+	if err != nil {
+		return nil, err
+	}
 
+	return &tx{c.Conn}, nil
 }
 
-func (c *Conn) Exec(args []driver.Value) (driver.Result, error) {
-	return nil, nil
+func buildArgs(args []sqldriver.Value) []interface{} {
+	a := make([]interface{}, len(args))
+
+	for i, arg := range args {
+		a[i] = arg
+	}
+
+	return a
 }
 
-func (c *Conn) Query(args []driver.Value) (driver.Rows, error) {
-	return nil, nil
+func replyError(err error) error {
+	if err == mysql.ErrBadConn {
+		return sqldriver.ErrBadConn
+	} else {
+		return err
+	}
 }
 
-type Stmt struct {
+func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, error) {
+	a := buildArgs(args)
+	r, err := c.Conn.Execute(query, a...)
+	if err != nil {
+		return nil, replyError(err)
+	}
+	return &result{r}, nil
+}
+
+func (c *conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, error) {
+	a := buildArgs(args)
+	r, err := c.Conn.Execute(query, a...)
+	if err != nil {
+		return nil, replyError(err)
+	}
+	return newRows(r.Resultset)
+}
+
+type stmt struct {
 	*client.Stmt
 }
 
-func (s *Stmt) Close() error {
-	return nil
+func (s *stmt) Close() error {
+	return s.Stmt.Close()
 }
 
-func (s *Stmt) NumInput() int {
-	return 0
+func (s *stmt) NumInput() int {
+	return s.Stmt.ParamNum()
 }
 
-func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
-	return nil, nil
+func (s *stmt) Exec(args []sqldriver.Value) (sqldriver.Result, error) {
+	a := buildArgs(args)
+	r, err := s.Stmt.Execute(a...)
+	if err != nil {
+		return nil, replyError(err)
+	}
+	return &result{r}, nil
 }
 
-func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
-	return nil, nil
+func (s *stmt) Query(args []sqldriver.Value) (sqldriver.Rows, error) {
+	a := buildArgs(args)
+	r, err := s.Stmt.Execute(a...)
+	if err != nil {
+		return nil, replyError(err)
+	}
+	return newRows(r.Resultset)
 }
 
-type Tx struct {
+type tx struct {
 	*client.Conn
 }
 
-func (t *Tx) Commit() error {
-	return nil
+func (t *tx) Commit() error {
+	return t.Conn.Commit()
 }
 
-func (t *Tx) Rollback() error {
-	return nil
+func (t *tx) Rollback() error {
+	return t.Conn.Rollback()
 }
 
-type Result struct {
+type result struct {
 	*mysql.Result
 }
 
-func (r *Result) LastInsertId() (int64, error) {
-	return 0, nil
+func (r *result) LastInsertId() (int64, error) {
+	return int64(r.Result.InsertId), nil
 }
 
-func (r *Result) RowsAffected() (int64, error) {
-	return 0, nil
+func (r *result) RowsAffected() (int64, error) {
+	return int64(r.Result.AffectedRows), nil
 }
 
-type Rows struct {
+type rows struct {
 	*mysql.Resultset
+
+	columns []string
+	step    int
 }
 
-func (r *Rows) Columns() []string {
+func newRows(r *mysql.Resultset) (*rows, error) {
+	if r == nil {
+		return nil, fmt.Errorf("invalid mysql query, no correct result")
+	}
+
+	rs := new(rows)
+	rs.Resultset = r
+
+	rs.columns = make([]string, len(r.Fields))
+
+	for i, f := range r.Fields {
+		rs.columns[i] = hack.String(f.Name)
+	}
+	rs.step = 0
+
+	return rs, nil
+}
+
+func (r *rows) Columns() []string {
+	return r.columns
+}
+
+func (r *rows) Close() error {
+	r.step = -1
 	return nil
 }
 
-func (r *Rows) Close() error {
-	return nil
-}
+func (r *rows) Next(dest []sqldriver.Value) error {
+	if r.step == r.Resultset.RowNumber() {
+		return io.EOF
+	} else if r.step == -1 {
+		return io.ErrUnexpectedEOF
+	}
 
-func (r *Rows) Next(dest []driver.Value) error {
+	for i := 0; i < r.Resultset.ColumnNumber(); i++ {
+		value, err := r.Resultset.GetValue(r.step, i)
+		if err != nil {
+			return err
+		}
+
+		dest[i] = sqldriver.Value(value)
+	}
+
 	return nil
 }
 
 func init() {
-	sql.Register("mysql", Driver{})
+	sql.Register("mysql", driver{})
 }

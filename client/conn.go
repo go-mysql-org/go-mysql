@@ -84,8 +84,8 @@ func (c *Conn) handshake() error {
 	return nil
 }
 
-func (c *Conn) Close() {
-	c.Conn.Close()
+func (c *Conn) Close() error {
+	return c.Conn.Close()
 }
 
 func (c *Conn) Ping() error {

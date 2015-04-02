@@ -140,6 +140,25 @@ At the same time, Failover supports MariaDB >= 10.0.9 with GTID mode too.
 Why only GTID? Supporting failover with no GTID mode is very hard, because slave can not find the proper binlog filename and position with the new master. 
 Although there are many companies use MySQL 5.0 - 5.5, I think upgrade MySQL to 5.6 or higher is easy. 
 
+## Driver
+
+Driver is the package that you can use go-mysql with go database/sql like other drivers. A simple example:
+
+```
+import (
+    "database/sql"
+
+    - "github.com/siddontang/go-mysql/driver"
+)
+
+func main() {
+    // dsn format: "user:password@addr?dbname"
+    dsn := "root@127.0.0.1:3306?test"
+    db, _ := sql.Open(dsn)
+    db.Close()
+}
+```
+
 ## Feedback
 
 go-mysql is still in development, your feedback is very welcome. 
