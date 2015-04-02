@@ -159,6 +159,8 @@ func main() {
 }
 ```
 
+We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)
+
 ## Feedback
 
 go-mysql is still in development, your feedback is very welcome. 
