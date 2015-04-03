@@ -109,6 +109,7 @@ func (b *BinlogSyncer) GetMasterUUID() (uuid.UUID, error) {
 }
 
 // You must register slave at first before you do other operations
+// This function will close old replication sync if exists
 func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, password string) error {
 	b.m.Lock()
 	defer b.m.Unlock()
@@ -125,6 +126,26 @@ func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, pass
 	if err != nil {
 		b.close()
 	}
+	return err
+}
+
+// If you close sync before and want to restart again, you can call this before other operations
+// This function will close old replication sync if exists
+func (b *BinlogSyncer) ReRegisterSlave() error {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	if len(b.host) == 0 || len(b.user) == 0 {
+		return fmt.Errorf("empty host and user, you must register slave before")
+	}
+
+	b.close()
+
+	err := b.registerSlave()
+	if err != nil {
+		b.close()
+	}
+
 	return err
 }
 
