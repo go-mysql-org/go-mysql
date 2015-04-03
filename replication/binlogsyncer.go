@@ -2,6 +2,7 @@ package replication
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -11,7 +12,14 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
+var (
+	errSyncRunning   = errors.New("Sync is running, must Close first")
+	errNotRegistered = errors.New("Syncer is not registered as a slave")
+)
+
 type BinlogSyncer struct {
+	m sync.Mutex
+
 	flavor string
 
 	c        *client.Conn
@@ -26,11 +34,11 @@ type BinlogSyncer struct {
 
 	wg sync.WaitGroup
 
-	quit chan struct{}
-
 	parser *BinlogParser
 
 	nextPos Position
+
+	running bool
 }
 
 func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
@@ -41,22 +49,21 @@ func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 
 	b.masterID = 0
 
-	b.quit = make(chan struct{})
-
 	b.parser = NewBinlogParser()
+
+	b.running = false
 
 	return b
 }
 
 func (b *BinlogSyncer) Close() {
-	select {
-	case <-b.quit:
-		return
-	default:
-	}
+	b.m.Lock()
+	defer b.m.Unlock()
 
-	close(b.quit)
+	b.close()
+}
 
+func (b *BinlogSyncer) close() {
 	if b.c != nil {
 		b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	}
@@ -66,9 +73,29 @@ func (b *BinlogSyncer) Close() {
 	if b.c != nil {
 		b.c.Close()
 	}
+
+	b.running = false
+	b.c = nil
+}
+
+func (b *BinlogSyncer) checkExec() error {
+	if b.running {
+		return errSyncRunning
+	} else if b.c == nil {
+		return errNotRegistered
+	}
+
+	return nil
 }
 
 func (b *BinlogSyncer) GetMasterUUID() (uuid.UUID, error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	if err := b.checkExec(); err != nil {
+		return uuid.UUID{}, err
+	}
+
 	if r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'SERVER_UUID'"); err != nil {
 		return uuid.UUID{}, err
 	} else {
@@ -81,14 +108,29 @@ func (b *BinlogSyncer) GetMasterUUID() (uuid.UUID, error) {
 	}
 }
 
+// You must register slave at first before you do other operations
 func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, password string) error {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	// first, close old replication sync
+	b.close()
+
 	b.host = host
 	b.port = port
 	b.user = user
 	b.password = password
 
+	err := b.registerSlave()
+	if err != nil {
+		b.close()
+	}
+	return err
+}
+
+func (b *BinlogSyncer) registerSlave() error {
 	var err error
-	b.c, err = client.Connect(fmt.Sprintf("%s:%d", host, port), user, password, "")
+	b.c, err = client.Connect(fmt.Sprintf("%s:%d", b.host, b.port), b.user, b.password, "")
 	if err != nil {
 		return err
 	}
@@ -131,6 +173,13 @@ func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, pass
 }
 
 func (b *BinlogSyncer) EnableSemiSync() error {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	if err := b.checkExec(); err != nil {
+		return err
+	}
+
 	if r, err := b.c.Execute("SHOW VARIABLES LIKE 'rpl_semi_sync_master_enabled';"); err != nil {
 		return err
 	} else {
@@ -144,7 +193,24 @@ func (b *BinlogSyncer) EnableSemiSync() error {
 	return err
 }
 
+func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
+	b.running = true
+
+	s := newBinlogStreamer()
+
+	b.wg.Add(1)
+	go b.onStream(s)
+	return s
+}
+
 func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	if err := b.checkExec(); err != nil {
+		return nil, err
+	}
+
 	//always start from position 4
 	if pos.Pos < 4 {
 		pos.Pos = 4
@@ -155,19 +221,29 @@ func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 		return nil, err
 	}
 
-	s := newBinlogStreamer()
-
-	b.wg.Add(1)
-	go b.onStream(s)
-
-	return s, nil
+	return b.startDumpStream(), nil
 }
 
-func (b *BinlogSyncer) SetRawMode(mode bool) {
+func (b *BinlogSyncer) SetRawMode(mode bool) error {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	if err := b.checkExec(); err != nil {
+		return err
+	}
+
 	b.parser.SetRawMode(mode)
+	return nil
 }
 
 func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	if err := b.checkExec(); err != nil {
+		return nil, err
+	}
+
 	var err error
 	switch b.flavor {
 	case MySQLFlavor:
@@ -182,13 +258,7 @@ func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 		return nil, err
 	}
 
-	//to do later
-	s := newBinlogStreamer()
-
-	b.wg.Add(1)
-	go b.onStream(s)
-
-	return s, nil
+	return b.startDumpStream(), nil
 }
 
 func (b *BinlogSyncer) writeBinglogDumpCommand(p Position) error {
@@ -353,31 +423,25 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	}()
 
 	for {
-		select {
-		case <-b.quit:
-			s.close()
+		data, err := b.c.ReadPacket()
+		if err != nil {
+			s.closeWithError(err)
+			return
+		}
+
+		switch data[0] {
+		case OK_HEADER:
+			if err = b.parseEvent(s, data); err != nil {
+				s.closeWithError(err)
+				return
+			}
+		case ERR_HEADER:
+			err = b.c.HandleErrorPacket(data)
+			s.closeWithError(err)
 			return
 		default:
-			data, err := b.c.ReadPacket()
-			if err != nil {
-				s.closeWithError(err)
-				return
-			}
-
-			switch data[0] {
-			case OK_HEADER:
-				if err = b.parseEvent(s, data); err != nil {
-					s.closeWithError(err)
-					return
-				}
-			case ERR_HEADER:
-				err = b.c.HandleErrorPacket(data)
-				s.closeWithError(err)
-				return
-			case EOF_HEADER:
-				//no binlog now, sleep and wait a moment again
-				time.Sleep(500 * time.Millisecond)
-			}
+			s.closeWithError(fmt.Errorf("invalid stream header %c", data[0]))
+			return
 		}
 	}
 }
