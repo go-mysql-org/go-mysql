@@ -138,3 +138,22 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	return cmd.Run()
 }
+
+// Dump MySQL and parse immediately
+func (d *Dumper) DumpAndParse(h ParseHandler) error {
+	r, w := io.Pipe()
+
+	done := make(chan error, 1)
+	go func() {
+		err := Parse(r, h)
+		r.CloseWithError(err)
+		done <- err
+	}()
+
+	err := d.Dump(w)
+	w.CloseWithError(err)
+
+	err = <-done
+
+	return err
+}
