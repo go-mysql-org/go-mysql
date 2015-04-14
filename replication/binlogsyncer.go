@@ -257,6 +257,17 @@ func (b *BinlogSyncer) SetRawMode(mode bool) error {
 	return nil
 }
 
+func (b *BinlogSyncer) ExecuteSql(query string, args ...interface{}) (*Result, error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	if err := b.checkExec(); err != nil {
+		return nil, err
+	}
+
+	return b.c.Execute(query, args...)
+}
+
 func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 	b.m.Lock()
 	defer b.m.Unlock()
