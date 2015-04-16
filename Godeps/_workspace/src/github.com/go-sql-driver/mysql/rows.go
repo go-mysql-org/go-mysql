@@ -1,6 +1,7 @@
 // Go MySQL Driver - A MySQL-Driver for Go's database/sql package
 //
-// Copyright 2012 The Go-MySQL-Driver Authors. All rights reserved.
+// Copyright 2012 Julien Schmidt. All rights reserved.
+// http://www.julienschmidt.com
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -10,92 +11,67 @@ package mysql
 
 import (
 	"database/sql/driver"
+	"errors"
 	"io"
 )
 
 type mysqlField struct {
 	name      string
-	flags     fieldFlag
 	fieldType byte
-	decimals  byte
+	flags     fieldFlag
 }
 
 type mysqlRows struct {
 	mc      *mysqlConn
+	binary  bool
 	columns []mysqlField
+	eof     bool
 }
 
-type binaryRows struct {
-	mysqlRows
-}
-
-type textRows struct {
-	mysqlRows
-}
-
-type emptyRows struct{}
-
-func (rows *mysqlRows) Columns() []string {
-	columns := make([]string, len(rows.columns))
+func (rows *mysqlRows) Columns() (columns []string) {
+	columns = make([]string, len(rows.columns))
 	for i := range columns {
 		columns[i] = rows.columns[i].name
 	}
-	return columns
+	return
 }
 
-func (rows *mysqlRows) Close() error {
-	mc := rows.mc
-	if mc == nil {
-		return nil
-	}
-	if mc.netConn == nil {
-		return ErrInvalidConn
-	}
+func (rows *mysqlRows) Close() (err error) {
+	defer func() {
+		rows.mc = nil
+	}()
 
 	// Remove unread packets from stream
-	err := mc.readUntilEOF()
-	rows.mc = nil
+	if !rows.eof {
+		if rows.mc == nil {
+			return errors.New("Invalid Connection")
+		}
+
+		err = rows.mc.readUntilEOF()
+	}
+
+	return
+}
+
+func (rows *mysqlRows) Next(dest []driver.Value) error {
+	if rows.eof {
+		return io.EOF
+	}
+
+	if rows.mc == nil {
+		return errors.New("Invalid Connection")
+	}
+
+	// Fetch next row from stream
+	var err error
+	if rows.binary {
+		err = rows.readBinaryRow(dest)
+	} else {
+		err = rows.readRow(dest)
+	}
+
+	if err == io.EOF {
+		rows.eof = true
+	}
 	return err
-}
-
-func (rows *binaryRows) Next(dest []driver.Value) error {
-	if mc := rows.mc; mc != nil {
-		if mc.netConn == nil {
-			return ErrInvalidConn
-		}
-
-		// Fetch next row from stream
-		if err := rows.readRow(dest); err != io.EOF {
-			return err
-		}
-		rows.mc = nil
-	}
-	return io.EOF
-}
-
-func (rows *textRows) Next(dest []driver.Value) error {
-	if mc := rows.mc; mc != nil {
-		if mc.netConn == nil {
-			return ErrInvalidConn
-		}
-
-		// Fetch next row from stream
-		if err := rows.readRow(dest); err != io.EOF {
-			return err
-		}
-		rows.mc = nil
-	}
-	return io.EOF
-}
-
-func (rows emptyRows) Columns() []string {
-	return nil
-}
-
-func (rows emptyRows) Close() error {
-	return nil
-}
-
-func (rows emptyRows) Next(dest []driver.Value) error {
-	return io.EOF
 }

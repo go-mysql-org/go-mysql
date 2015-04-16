@@ -1,6 +1,7 @@
 // Go MySQL Driver - A MySQL-Driver for Go's database/sql package
 //
-// Copyright 2012 The Go-MySQL-Driver Authors. All rights reserved.
+// Copyright 2012 Julien Schmidt. All rights reserved.
+// http://www.julienschmidt.com
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -11,7 +12,7 @@ package mysql
 const (
 	minProtocolVersion byte = 10
 	maxPacketSize           = 1<<24 - 1
-	timeFormat              = "2006-01-02 15:04:05.999999"
+	timeFormat              = "2006-01-02 15:04:05"
 )
 
 // MySQL constants documentation:

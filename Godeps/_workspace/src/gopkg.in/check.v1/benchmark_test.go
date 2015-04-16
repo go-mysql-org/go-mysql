@@ -86,6 +86,6 @@ func (s *BenchmarkS) TestBenchmarkMem(c *C) {
 	}
 	Run(&helper, &runConf)
 
-	expected := "PASS: check_test\\.go:[0-9]+: FixtureHelper\\.Benchmark3\t *100\t *[12][0-9]{5} ns/op\t *4[48] B/op\t *1 allocs/op\n"
+	expected := "PASS: check_test\\.go:[0-9]+: FixtureHelper\\.Benchmark3\t *100\t *[12][0-9]{5} ns/op\t *[0-9]+ B/op\t *[1-9] allocs/op\n"
 	c.Assert(output.value, Matches, expected)
 }

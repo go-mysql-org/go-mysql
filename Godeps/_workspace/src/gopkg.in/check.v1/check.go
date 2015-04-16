@@ -136,7 +136,7 @@ func (td *tempDir) newPath() string {
 	if td.path == "" {
 		var err error
 		for i := 0; i != 100; i++ {
-			path := fmt.Sprintf("%s/check-%d", os.TempDir(), rand.Int())
+			path := fmt.Sprintf("%s%ccheck-%d", os.TempDir(), os.PathSeparator, rand.Int())
 			if err = os.Mkdir(path, 0700); err == nil {
 				td.path = path
 				break
@@ -146,7 +146,7 @@ func (td *tempDir) newPath() string {
 			panic("Couldn't create temporary directory: " + err.Error())
 		}
 	}
-	result := path.Join(td.path, strconv.Itoa(td.counter))
+	result := filepath.Join(td.path, strconv.Itoa(td.counter))
 	td.counter += 1
 	return result
 }
@@ -311,26 +311,28 @@ var valueGo = filepath.Join("reflect", "value.go")
 var asmGo = filepath.Join("runtime", "asm_")
 
 func (c *C) logPanic(skip int, value interface{}) {
-	skip += 1 // Our own frame.
+	skip++ // Our own frame.
 	initialSkip := skip
-	for {
+	for ; ; skip++ {
 		if pc, file, line, ok := runtime.Caller(skip); ok {
 			if skip == initialSkip {
 				c.logf("... Panic: %s (PC=0x%X)\n", value, pc)
 			}
 			name := niceFuncName(pc)
 			path := nicePath(file)
+			if strings.Contains(path, "/gopkg.in/check.v") {
+				continue
+			}
 			if name == "Value.call" && strings.HasSuffix(path, valueGo) {
-				break
+				continue
 			}
 			if name == "call16" && strings.Contains(path, asmGo) {
-				break
+				continue
 			}
 			c.logf("%s:%d\n  in %s", nicePath(file), line, name)
 		} else {
 			break
 		}
-		skip += 1
 	}
 }
 
