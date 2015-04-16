@@ -3,6 +3,7 @@ package canal
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
 	"strconv"
@@ -40,9 +41,8 @@ type Canal struct {
 
 	wg sync.WaitGroup
 
-	tableLock     sync.Mutex
-	tableExecuter *tableExecuter
-	tables        map[string]*schema.Table
+	tableLock sync.Mutex
+	tables    map[string]*schema.Table
 
 	quit   chan struct{}
 	closed sync2.AtomicBool
@@ -54,10 +54,11 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.closed.Set(false)
 	c.quit = make(chan struct{})
 
+	os.MkdirAll(cfg.DataDir, 0755)
+
 	c.dumpDoneCh = make(chan struct{})
 	c.rsHandlers = make([]RowsEventHandler, 0, 4)
 	c.tables = make(map[string]*schema.Table)
-	c.tableExecuter = &tableExecuter{c}
 
 	var err error
 	if c.master, err = loadMasterInfo(c.masterInfoPath()); err != nil {
@@ -82,10 +83,18 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		return nil, err
 	}
 
+	return c, nil
+}
+
+func (c *Canal) Start() error {
+	if err := c.checkBinlogFormat(); err != nil {
+		return err
+	}
+
 	c.wg.Add(1)
 	go c.run()
 
-	return c, nil
+	return nil
 }
 
 func (c *Canal) run() error {
@@ -99,7 +108,9 @@ func (c *Canal) run() error {
 	close(c.dumpDoneCh)
 
 	if err := c.startSyncBinlog(); err != nil {
-		log.Errorf("canal start sync binlog err: %v", err)
+		if !c.isClosed() {
+			log.Errorf("canal start sync binlog err: %v", err)
+		}
 		return err
 	}
 
@@ -143,14 +154,6 @@ func (c *Canal) WaitDumpDone() <-chan struct{} {
 	return c.dumpDoneCh
 }
 
-type tableExecuter struct {
-	c *Canal
-}
-
-func (e *tableExecuter) Execute(query string, args ...interface{}) (*mysql.Result, error) {
-	return e.c.executeSql(query, args...)
-}
-
 func (c *Canal) getTable(db string, table string) (*schema.Table, error) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
@@ -161,7 +164,7 @@ func (c *Canal) getTable(db string, table string) (*schema.Table, error) {
 		return t, nil
 	}
 
-	t, err := schema.NewTable(c.tableExecuter, db, table)
+	t, err := schema.NewTable(c, db, table)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +177,7 @@ func (c *Canal) getTable(db string, table string) (*schema.Table, error) {
 }
 
 func (c *Canal) checkBinlogFormat() error {
-	res, err := c.executeSql(`SHOW GLOBAL VARIABLES LIKE "binlog_format";`)
+	res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_format";`)
 	if err != nil {
 		return err
 	} else if f, _ := res.GetString(0, 1); f != "ROW" {
@@ -184,7 +187,7 @@ func (c *Canal) checkBinlogFormat() error {
 	// need to check MySQL binlog row image? full, minimal or noblob?
 	// now only log
 	if c.cfg.Flavor == mysql.MySQLFlavor {
-		if res, err = c.executeSql(`SHOW GLOBAL VARIABLES LIKE "binlog_row_image"`); err != nil {
+		if res, err = c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_row_image"`); err != nil {
 			return err
 		}
 
@@ -218,7 +221,8 @@ func (c *Canal) masterInfoPath() string {
 	return path.Join(c.cfg.DataDir, "master.info")
 }
 
-func (c *Canal) executeSql(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
+// Execute a SQL
+func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
 
