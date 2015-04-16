@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/siddontang/go-mysql/client"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 const (
@@ -117,7 +117,11 @@ func (idx *Index) FindColumn(name string) int {
 	return -1
 }
 
-func NewTable(conn *client.Conn, schema string, name string) (*Table, error) {
+type Executer interface {
+	Execute(query string, args ...interface{}) (*mysql.Result, error)
+}
+
+func NewTable(conn Executer, schema string, name string) (*Table, error) {
 	ta := &Table{
 		Schema:  schema,
 		Name:    name,
@@ -136,7 +140,7 @@ func NewTable(conn *client.Conn, schema string, name string) (*Table, error) {
 	return ta, nil
 }
 
-func (ta *Table) fetchColumns(conn *client.Conn) error {
+func (ta *Table) fetchColumns(conn Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("describe %s.%s", ta.Schema, ta.Name))
 	if err != nil {
 		return err
@@ -153,7 +157,7 @@ func (ta *Table) fetchColumns(conn *client.Conn) error {
 	return nil
 }
 
-func (ta *Table) fetchIndexes(conn *client.Conn) error {
+func (ta *Table) fetchIndexes(conn Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("show index from %s.%s", ta.Schema, ta.Name))
 	if err != nil {
 		return err
