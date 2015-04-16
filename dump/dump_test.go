@@ -3,12 +3,13 @@ package dump
 import (
 	"flag"
 	"fmt"
-	"github.com/siddontang/go-mysql/client"
-	. "gopkg.in/check.v1"
 	"io/ioutil"
 	//"os"
 	"bytes"
 	"testing"
+
+	"github.com/siddontang/go-mysql/client"
+	. "gopkg.in/check.v1"
 )
 
 // use docker mysql for test
