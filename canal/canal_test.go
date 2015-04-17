@@ -73,7 +73,7 @@ type testRowsEventHandler struct {
 }
 
 func (h *testRowsEventHandler) Do(e *RowsEvent) error {
-	log.Infof("%s %v\n", e.Action, e.Events)
+	log.Infof("%s %v\n", e.Action, e.Rows)
 	return nil
 }
 

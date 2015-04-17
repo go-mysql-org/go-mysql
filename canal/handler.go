@@ -20,20 +20,20 @@ const (
 type RowsEvent struct {
 	Table  *schema.Table
 	Action string
-	// event list
+	// changed row list
 	// binlog has three update event version, v0, v1 and v2.
-	// for v1 and v2, the events number must be even.
-	// Two events for one row, format is [delete, insert]
-	// for update v0, only one event for a row, and we don't support this version.
-	Events [][]interface{}
+	// for v1 and v2, the rows number must be even.
+	// Two rows for one event, format is [before update row, after update row]
+	// for update v0, only one row for a event, and we don't support this version.
+	Rows [][]interface{}
 }
 
-func newRowsEvent(table *schema.Table, action string, events [][]interface{}) *RowsEvent {
+func newRowsEvent(table *schema.Table, action string, rows [][]interface{}) *RowsEvent {
 	e := new(RowsEvent)
 
 	e.Table = table
 	e.Action = action
-	e.Events = events
+	e.Rows = rows
 
 	return e
 }
