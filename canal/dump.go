@@ -28,7 +28,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		return errCanalClosed
 	}
 
-	tableInfo, err := h.c.getTable(db, table)
+	tableInfo, err := h.c.GetTable(db, table)
 	if err != nil {
 		log.Errorf("get %s.%s information err: %v", db, table, err)
 		return err

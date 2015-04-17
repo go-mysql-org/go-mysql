@@ -48,6 +48,7 @@ func (c *Canal) startSyncBinlog() error {
 			// we only focus row based event
 			if err = c.handleRowsEvent(ev); err != nil {
 				log.Errorf("handle rows event error %v", err)
+				return err
 			}
 		default:
 		}
@@ -66,7 +67,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	schema := string(ev.Table.Schema)
 	table := string(ev.Table.Table)
 
-	t, err := c.getTable(schema, table)
+	t, err := c.GetTable(schema, table)
 	if err != nil {
 		return err
 	}

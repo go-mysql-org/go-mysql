@@ -154,7 +154,7 @@ func (c *Canal) WaitDumpDone() <-chan struct{} {
 	return c.dumpDoneCh
 }
 
-func (c *Canal) getTable(db string, table string) (*schema.Table, error) {
+func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
 	t, ok := c.tables[key]

@@ -39,6 +39,8 @@ func newRowsEvent(table *schema.Table, action string, events [][]interface{}) *R
 }
 
 type RowsEventHandler interface {
+	// Handle RowsEvent, if return ErrHandleInterrupted, canal will
+	// stop the sync
 	Do(e *RowsEvent) error
 	String() string
 }
