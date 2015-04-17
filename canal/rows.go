@@ -1,7 +1,6 @@
 package canal
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/siddontang/go-mysql/schema"
@@ -51,16 +50,4 @@ func GetPKValues(table *schema.Table, row []interface{}) ([]interface{}, error) 
 	}
 
 	return values, nil
-}
-
-func FormatPKValues(pks []interface{}) string {
-	var buf bytes.Buffer
-
-	sep := ""
-	for _, value := range pks {
-		buf.WriteString(fmt.Sprintf("%s%v", sep, value))
-		sep = ":"
-	}
-
-	return buf.String()
 }
