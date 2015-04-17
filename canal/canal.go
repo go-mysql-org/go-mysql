@@ -3,6 +3,7 @@ package canal
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -71,12 +72,8 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	c.master.Addr = c.cfg.Addr
 
-	if c.dumper, err = dump.NewDumper(c.cfg.Dump.ExecutionPath, c.cfg.Addr, c.cfg.User, c.cfg.Password); err != nil {
-		if err != exec.ErrNotFound {
-			return nil, err
-		}
-		//no mysqldump, use binlog only
-		c.dumper = nil
+	if err := c.prepareDumper(); err != nil {
+		return nil, err
 	}
 
 	if err = c.prepareSyncer(); err != nil {
@@ -84,6 +81,38 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	}
 
 	return c, nil
+}
+
+func (c *Canal) prepareDumper() error {
+	var err error
+	if c.dumper, err = dump.NewDumper(c.cfg.Dump.ExecutionPath,
+		c.cfg.Addr, c.cfg.User, c.cfg.Password); err != nil {
+		if err != exec.ErrNotFound {
+			return err
+		}
+		//no mysqldump, use binlog only
+		c.dumper = nil
+		return nil
+	}
+
+	dbs := c.cfg.Dump.Databases
+	tables := c.cfg.Dump.Tables
+	tableDB := c.cfg.Dump.TableDB
+
+	if len(tables) == 0 {
+		c.dumper.AddDatabases(dbs...)
+	} else {
+		c.dumper.AddTables(tableDB, tables...)
+	}
+
+	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
+		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
+			c.dumper.AddIgnoreTables(seps[0], seps[1])
+		}
+	}
+
+	c.dumper.SetErrOut(ioutil.Discard)
+	return nil
 }
 
 func (c *Canal) Start() error {

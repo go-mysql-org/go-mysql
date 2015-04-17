@@ -1,9 +1,7 @@
 package canal
 
 import (
-	"io/ioutil"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/siddontang/go-mysql/dump"
@@ -67,6 +65,30 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 	return h.c.travelRowsEventHandler(events)
 }
 
+func (c *Canal) AddDumpDatabases(dbs ...string) {
+	if c.dumper == nil {
+		return
+	}
+
+	c.dumper.AddDatabases(dbs...)
+}
+
+func (c *Canal) AddDumpTables(db string, tables ...string) {
+	if c.dumper == nil {
+		return
+	}
+
+	c.dumper.AddTables(db, tables...)
+}
+
+func (c *Canal) AddDumpIgnoreTables(db string, tables ...string) {
+	if c.dumper == nil {
+		return
+	}
+
+	c.dumper.AddIgnoreTables(db, tables...)
+}
+
 func (c *Canal) tryDump() error {
 	if len(c.master.Name) > 0 && c.master.Position > 0 {
 		// we will sync with binlog name and position
@@ -78,24 +100,6 @@ func (c *Canal) tryDump() error {
 		log.Info("skip dump, no mysqldump")
 		return nil
 	}
-
-	dbs := c.cfg.Dump.Databases
-	tables := c.cfg.Dump.Tables
-	tableDB := c.cfg.Dump.TableDB
-
-	if len(tables) == 0 {
-		c.dumper.AddDatabases(dbs...)
-	} else {
-		c.dumper.AddTables(tableDB, tables...)
-	}
-
-	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
-		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
-			c.dumper.AddIgnoreTables(seps[0], seps[1])
-		}
-	}
-
-	c.dumper.SetErrOut(ioutil.Discard)
 
 	h := &dumpParseHandler{c: c}
 
