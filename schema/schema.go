@@ -42,6 +42,10 @@ type Table struct {
 	PKColumns []int
 }
 
+func (ta *Table) String() string {
+	return fmt.Sprintf("%s.%s", ta.Schema, ta.Name)
+}
+
 func (ta *Table) AddColumn(name string, columnType string, extra string) {
 	index := len(ta.Columns)
 	ta.Columns = append(ta.Columns, TableColumn{Name: name})
