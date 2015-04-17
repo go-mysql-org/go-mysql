@@ -284,3 +284,7 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 	}
 	return
 }
+
+func (c *Canal) SyncedPosition() mysql.Position {
+	return c.master.Pos()
+}
