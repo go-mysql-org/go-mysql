@@ -80,6 +80,10 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		return nil, err
 	}
 
+	if err := c.checkBinlogRowFormat(); err != nil {
+		return nil, err
+	}
+
 	return c, nil
 }
 
@@ -116,10 +120,6 @@ func (c *Canal) prepareDumper() error {
 }
 
 func (c *Canal) Start() error {
-	if err := c.checkBinlogFormat(); err != nil {
-		return err
-	}
-
 	c.wg.Add(1)
 	go c.run()
 
@@ -205,23 +205,30 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	return t, nil
 }
 
-func (c *Canal) checkBinlogFormat() error {
+// Check MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
+func (c *Canal) CheckBinlogRowImage(image string) error {
+	// need to check MySQL binlog row image? full, minimal or noblob?
+	// now only log
+	if c.cfg.Flavor == mysql.MySQLFlavor {
+		if res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_row_image"`); err != nil {
+			return err
+		} else {
+			rowImage, _ := res.GetString(0, 1)
+			if !strings.EqualFold(rowImage, image) {
+				return fmt.Errorf("MySQL uses %s binlog row image, but we want %s", rowImage, image)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *Canal) checkBinlogRowFormat() error {
 	res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_format";`)
 	if err != nil {
 		return err
 	} else if f, _ := res.GetString(0, 1); f != "ROW" {
 		return fmt.Errorf("binlog must ROW format, but %s now", f)
-	}
-
-	// need to check MySQL binlog row image? full, minimal or noblob?
-	// now only log
-	if c.cfg.Flavor == mysql.MySQLFlavor {
-		if res, err = c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_row_image"`); err != nil {
-			return err
-		}
-
-		rowImage, _ := res.GetString(0, 1)
-		log.Infof("MySQL use binlog row %s image", rowImage)
 	}
 
 	return nil
