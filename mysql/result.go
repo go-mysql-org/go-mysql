@@ -8,3 +8,7 @@ type Result struct {
 
 	*Resultset
 }
+
+type Executer interface {
+	Execute(query string, args ...interface{}) (*Result, error)
+}

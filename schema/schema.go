@@ -121,11 +121,7 @@ func (idx *Index) FindColumn(name string) int {
 	return -1
 }
 
-type Executer interface {
-	Execute(query string, args ...interface{}) (*mysql.Result, error)
-}
-
-func NewTable(conn Executer, schema string, name string) (*Table, error) {
+func NewTable(conn mysql.Executer, schema string, name string) (*Table, error) {
 	ta := &Table{
 		Schema:  schema,
 		Name:    name,
@@ -144,7 +140,7 @@ func NewTable(conn Executer, schema string, name string) (*Table, error) {
 	return ta, nil
 }
 
-func (ta *Table) fetchColumns(conn Executer) error {
+func (ta *Table) fetchColumns(conn mysql.Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("describe %s.%s", ta.Schema, ta.Name))
 	if err != nil {
 		return err
@@ -161,7 +157,7 @@ func (ta *Table) fetchColumns(conn Executer) error {
 	return nil
 }
 
-func (ta *Table) fetchIndexes(conn Executer) error {
+func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("show index from %s.%s", ta.Schema, ta.Name))
 	if err != nil {
 		return err
