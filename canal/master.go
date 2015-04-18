@@ -43,6 +43,9 @@ func loadMasterInfo(name string) (*masterInfo, error) {
 }
 
 func (m *masterInfo) Save(force bool) error {
+	m.l.Lock()
+	defer m.l.Unlock()
+
 	n := time.Now()
 	if !force && n.Sub(m.lastSaveTime) < time.Second {
 		return nil
@@ -51,9 +54,7 @@ func (m *masterInfo) Save(force bool) error {
 	var buf bytes.Buffer
 	e := toml.NewEncoder(&buf)
 
-	m.l.Lock()
 	e.Encode(m)
-	m.l.Unlock()
 
 	var err error
 	if err = ioutil2.WriteFileAtomic(m.name, buf.Bytes(), 0644); err != nil {
