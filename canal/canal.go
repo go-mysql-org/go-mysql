@@ -213,8 +213,9 @@ func (c *Canal) CheckBinlogRowImage(image string) error {
 		if res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_row_image"`); err != nil {
 			return err
 		} else {
+			// MySQL has binlog row image from 5.6, so older will return empty
 			rowImage, _ := res.GetString(0, 1)
-			if !strings.EqualFold(rowImage, image) {
+			if rowImage != "" && !strings.EqualFold(rowImage, image) {
 				return fmt.Errorf("MySQL uses %s binlog row image, but we want %s", rowImage, image)
 			}
 		}
