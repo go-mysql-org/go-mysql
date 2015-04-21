@@ -105,6 +105,8 @@ c.RegRowsEventHandler(&MyRowsEventHandler{})
 c.Start()
 ```
 
+You can see [go-mysql-elasticsearch](https://github.com/siddontang/go-mysql-elasticsearch) for how to sync MySQL data into Elasticsearch. 
+
 ## Client
 
 Client package supports a simple MySQL connection driver which you can use it to communicate with MySQL server. 
