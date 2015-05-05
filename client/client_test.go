@@ -3,8 +3,9 @@ package client
 import (
 	"flag"
 	"fmt"
-	. "gopkg.in/check.v1"
 	"testing"
+
+	. "gopkg.in/check.v1"
 
 	"github.com/siddontang/go-mysql/mysql"
 )

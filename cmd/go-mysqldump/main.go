@@ -3,9 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/siddontang/go-mysql/dump"
 	"os"
 	"strings"
+
+	"github.com/siddontang/go-mysql/dump"
 )
 
 var addr = flag.String("addr", "127.0.0.1:3306", "MySQL addr")
