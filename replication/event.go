@@ -268,7 +268,7 @@ func (e *QueryEvent) Decode(data []byte) error {
 }
 
 func (e *QueryEvent) Dump(w io.Writer) {
-	fmt.Fprintf(w, "Salve proxy ID: %d\n", e.SlaveProxyID)
+	fmt.Fprintf(w, "Slave proxy ID: %d\n", e.SlaveProxyID)
 	fmt.Fprintf(w, "Execution time: %d\n", e.ExecutionTime)
 	fmt.Fprintf(w, "Error code: %d\n", e.ErrorCode)
 	//fmt.Fprintf(w, "Status vars: \n%s", hex.Dump(e.StatusVars))
@@ -296,6 +296,85 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Commit flag: %d\n", e.CommitFlag)
 	u, _ := uuid.FromBytes(e.SID)
 	fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
+	fmt.Fprintln(w)
+}
+
+type BeginLoadQueryEvent struct {
+	FileID    uint32
+	BlockData []byte
+}
+
+func (e *BeginLoadQueryEvent) Decode(data []byte) error {
+	pos := 0
+
+	e.FileID = binary.LittleEndian.Uint32(data[pos:])
+	pos += 4
+
+	e.BlockData = data[pos:]
+
+    return nil
+}
+
+func (e *BeginLoadQueryEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "File ID: %d\n", e.FileID)
+	fmt.Fprintf(w, "Block data: %s\n", e.BlockData)
+	fmt.Fprintln(w)
+}
+
+type ExecuteLoadQueryEvent struct {
+	SlaveProxyID     uint32
+	ExecutionTime    uint32
+	SchemaLength     uint8
+	ErrorCode        uint16
+	StatusVars       uint16
+	FileID           uint32
+	StartPos         uint32
+	EndPos           uint32
+	DupHandlingFlags uint8
+}
+
+func (e *ExecuteLoadQueryEvent) Decode(data []byte) error {
+	pos := 0
+
+	e.SlaveProxyID = binary.LittleEndian.Uint32(data[pos:])
+	pos += 4
+
+	e.ExecutionTime = binary.LittleEndian.Uint32(data[pos:])
+	pos += 4
+
+	e.SchemaLength = uint8(data[pos])
+	pos++
+
+	e.ErrorCode = binary.LittleEndian.Uint16(data[pos:])
+	pos += 2
+
+	e.StatusVars = binary.LittleEndian.Uint16(data[pos:])
+	pos += 2
+
+	e.FileID = binary.LittleEndian.Uint32(data[pos:])
+	pos += 4
+
+	e.StartPos = binary.LittleEndian.Uint32(data[pos:])
+	pos += 4
+
+	e.EndPos = binary.LittleEndian.Uint32(data[pos:])
+	pos += 4
+
+	e.DupHandlingFlags = uint8(data[pos])
+
+    return nil
+}
+
+func (e *ExecuteLoadQueryEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "Slave proxy ID: %d\n", e.SlaveProxyID)
+	fmt.Fprintf(w, "Execution time: %d\n", e.ExecutionTime)
+	fmt.Fprintf(w, "Schame length: %d\n", e.SchemaLength)
+	fmt.Fprintf(w, "Error code: %d\n", e.ErrorCode)
+	fmt.Fprintf(w, "Status vars length: %d\n", e.StatusVars)
+	fmt.Fprintf(w, "File ID: %d\n", e.FileID)
+	fmt.Fprintf(w, "Start pos: %d\n", e.StartPos)
+	fmt.Fprintf(w, "End pos: %d\n", e.EndPos)
+	fmt.Fprintf(w, "Dup handling flags: %d\n", e.DupHandlingFlags)
 	fmt.Fprintln(w)
 }
 
