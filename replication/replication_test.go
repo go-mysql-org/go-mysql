@@ -150,7 +150,9 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 	}
 
 	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, port), "root", "", "")
-	c.Assert(err, IsNil)
+	if err != nil {
+		c.Skip(err.Error())
+	}
 
 	// _, err = t.c.Execute("CREATE DATABASE IF NOT EXISTS test")
 	// c.Assert(err, IsNil)
