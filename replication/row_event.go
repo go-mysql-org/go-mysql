@@ -289,11 +289,11 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 	var n int
 	var err error
 	for i := 0; i < int(e.ColumnCount); i++ {
-		isNull := (uint32(nullBitmap[nullbitIndex/8]) >> uint32(nullbitIndex%8)) & 0x01
-
 		if bitGet(bitmap, i) == 0 {
 			continue
 		}
+
+		isNull := (uint32(nullBitmap[nullbitIndex/8]) >> uint32(nullbitIndex%8)) & 0x01
 
 		if isNull > 0 {
 			rows[i] = nil
