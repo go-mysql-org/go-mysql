@@ -1,10 +1,10 @@
 package replication
 
 import (
-	"testing"
+	. "gopkg.in/check.v1"
 )
 
-func TestIndexOutOfRange(t *testing.T) {
+func (t *testSyncerSuite) TestIndexOutOfRange(c *C) {
 	parser := NewBinlogParser()
 
 	parser.format = &FormatDescriptionEvent{
@@ -38,7 +38,5 @@ func TestIndexOutOfRange(t *testing.T) {
 		0x65, 0x6d, 0xb1, 0x3c, 0x38, 0xcb,
 	})
 
-	if err != nil {
-		t.Errorf("error: %+v", err)
-	}
+	c.Assert(err, IsNil)
 }
