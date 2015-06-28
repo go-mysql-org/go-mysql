@@ -15,6 +15,7 @@ import (
 var (
 	errSyncRunning   = errors.New("Sync is running, must Close first")
 	errNotRegistered = errors.New("Syncer is not registered as a slave")
+	errSkipParse     = errors.New("Skip parsing incorrect binlog")
 )
 
 type BinlogSyncer struct {
@@ -491,6 +492,11 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 
 	e, err := b.parser.parse(data)
 	if err != nil {
+		if err == errSkipParse {
+			//"meet an incorrect binlog, skip it"
+			return nil
+		}
+
 		return err
 	}
 
