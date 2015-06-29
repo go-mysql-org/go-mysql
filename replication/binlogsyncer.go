@@ -39,6 +39,7 @@ type BinlogSyncer struct {
 	nextPos Position
 
 	running bool
+	semiSyncEnabled bool
 }
 
 func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
@@ -52,6 +53,7 @@ func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 	b.parser = NewBinlogParser()
 
 	b.running = false
+	b.semiSyncEnabled = false
 
 	return b
 }
@@ -211,6 +213,11 @@ func (b *BinlogSyncer) EnableSemiSync() error {
 	}
 
 	_, err := b.c.Execute(`SET @rpl_semi_sync_slave = 1;`)
+	
+	if err != nil {
+		b.semiSyncEnabled = true
+	}
+	
 	return err
 }
 
@@ -479,11 +486,11 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 }
 
 func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
-	//skip 0x00
+	//skip OK byte, 0x00
 	data = data[1:]
 
 	needACK := false
-	if data[0] == SemiSyncIndicator {
+	if b.semiSyncEnabled && (data[0] == SemiSyncIndicator) {
 		needACK = (data[1] == 0x01)
 		//skip semi sync header
 		data = data[2:]
