@@ -115,7 +115,12 @@ func (c *Canal) prepareDumper() error {
 		}
 	}
 
-	c.dumper.SetErrOut(ioutil.Discard)
+	if c.cfg.Dump.DiscardErr {
+		c.dumper.SetErrOut(ioutil.Discard)
+	} else {
+		c.dumper.SetErrOut(os.Stderr)
+	}
+
 	return nil
 }
 

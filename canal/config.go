@@ -20,6 +20,9 @@ type DumpConfig struct {
 
 	// Ignore table format is db.table
 	IgnoreTables []string `toml:"ignore_tables"`
+
+	// If true, discard error msg, else, output to stderr
+	DiscardErr bool `toml:"discard_err"`
 }
 
 type Config struct {
@@ -68,6 +71,7 @@ func NewDefaultConfig() *Config {
 
 	c.DataDir = "./var"
 	c.Dump.ExecutionPath = "mysqldump"
+	c.Dump.DiscardErr = true
 
 	return c
 }
