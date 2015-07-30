@@ -52,7 +52,9 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 
 	if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
 		ta.Columns[index].Type = TYPE_NUMBER
-	} else if columnType == "float" || columnType == "double" {
+	} else if strings.HasPrefix(columnType, "float") ||
+		strings.HasPrefix(columnType, "double") ||
+		strings.HasPrefix(columnType, "decimal") {
 		ta.Columns[index].Type = TYPE_FLOAT
 	} else if strings.HasPrefix(columnType, "enum") {
 		ta.Columns[index].Type = TYPE_ENUM
