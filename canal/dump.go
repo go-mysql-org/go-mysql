@@ -41,19 +41,19 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER {
 				n, err := strconv.ParseInt(v, 10, 64)
 				if err != nil {
-					log.Errorf("paser row %v at %d error %v, skip", values, i, err)
+					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
 					return dump.ErrSkip
 				}
 				vs[i] = n
 			} else if tableInfo.Columns[i].Type == schema.TYPE_FLOAT {
 				f, err := strconv.ParseFloat(v, 64)
 				if err != nil {
-					log.Errorf("paser row %v at %d error %v, skip", values, i, err)
+					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
 					return dump.ErrSkip
 				}
 				vs[i] = f
 			} else {
-				log.Errorf("paser row %v error, invalid type at %d, skip", values, i)
+				log.Errorf("parse row %v error, invalid type at %d, skip", values, i)
 				return dump.ErrSkip
 			}
 		} else {
