@@ -23,7 +23,7 @@ syncer := replication.NewBinlogSyncer(100, "mysql")
 syncer.RegisterSlave("127.0.0.1", 3306, "root", "")
 
 // Start sync with sepcified binlog file and position
-streamer, _ := syncer.StartSync(binlogFile, binlogPos)
+streamer, _ := syncer.StartSync(mysql.Position{binlogFile, binlogPos})
 
 // or you can start a gtid replication like
 // streamer, _ := syncer.StartSyncGTID(gtidSet)
