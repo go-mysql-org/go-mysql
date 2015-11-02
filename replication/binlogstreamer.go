@@ -19,7 +19,7 @@ type BinlogStreamer struct {
 
 func (s *BinlogStreamer) GetEvent() (*BinlogEvent, error) {
 	// we use a very very long timeout here
-	return s.GetEventTimeout(time.Second * 3600 * 24 * 30)
+	return s.GetEventTimeout(time.Second * 1)
 }
 
 // if timeout, ErrGetEventTimeout will returns
