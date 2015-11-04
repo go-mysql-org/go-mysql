@@ -35,6 +35,17 @@ for {
     // Dump event
     ev.Dump(os.Stdout)
 }
+
+// or use timeout use GetEventTimeout but you should deal with the timeout exception
+import (
+    "time"
+) 
+for {
+    // timeout value won't be set too large or waste lots of memory
+    ev, _ := streamer.GetEventTimeout(time.Second * 1)
+    // Dump event
+    ev.Dump(os.Stdout)
+}
 ```
 
 The output looks:
