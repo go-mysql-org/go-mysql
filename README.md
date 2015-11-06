@@ -41,7 +41,7 @@ import (
     "time"
 ) 
 for {
-    // timeout value won't be set too large or waste lots of memory
+    // timeout value won't be set too large, otherwise it may waste lots of memory
     ev, _ := streamer.GetEventTimeout(time.Second * 1)
     // Dump event
     ev.Dump(os.Stdout)

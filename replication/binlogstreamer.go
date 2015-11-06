@@ -31,7 +31,7 @@ func (s *BinlogStreamer) GetEvent() (*BinlogEvent, error) {
 }
 
 // if timeout, ErrGetEventTimeout will returns
-// timeout value won't be set too large or waste lots of memory
+// timeout value won't be set too large, otherwise it may waste lots of memory
 func (s *BinlogStreamer) GetEventTimeout(d time.Duration) (*BinlogEvent, error) {
 	if s.err != nil {
 		return nil, ErrNeedSyncAgain
