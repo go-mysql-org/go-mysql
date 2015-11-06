@@ -36,7 +36,7 @@ for {
     ev.Dump(os.Stdout)
 }
 
-// or use timeout use GetEventTimeout but you should deal with the timeout exception
+//or use timeout with GetEventTimeout, and you should deal with the timeout exception 
 import (
     "time"
 ) 
