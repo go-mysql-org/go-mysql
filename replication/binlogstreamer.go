@@ -18,11 +18,20 @@ type BinlogStreamer struct {
 }
 
 func (s *BinlogStreamer) GetEvent() (*BinlogEvent, error) {
-	// we use a very very long timeout here
-	return s.GetEventTimeout(time.Second * 3600 * 24 * 30)
+	if s.err != nil {
+		return nil, ErrNeedSyncAgain
+	}
+
+	select {
+	case c := <-s.ch:
+		return c, nil
+	case s.err = <-s.ech:
+		return nil, s.err
+	}
 }
 
 // if timeout, ErrGetEventTimeout will returns
+// timeout value won't be set too large, otherwise it may waste lots of memory
 func (s *BinlogStreamer) GetEventTimeout(d time.Duration) (*BinlogEvent, error) {
 	if s.err != nil {
 		return nil, ErrNeedSyncAgain
