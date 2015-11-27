@@ -2,9 +2,13 @@ package replication
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
+
+	"github.com/siddontang/go/log"
 )
 
 type BinlogParser struct {
@@ -91,16 +95,19 @@ func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 		eventLen := int(h.EventSize) - EventHeaderSize
 
 		if len(data) != eventLen {
+			// todo, skip it?
 			return fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
 		}
 
 		var e Event
-		e, err = p.parseEvent(h, data)
+		e, err = p.parseEvent(h, data, rawData)
 		if err != nil {
-			break
+			// todo, skip it?
+			return err
 		}
 
 		if err = onEvent(&BinlogEvent{rawData, h, e}); err != nil {
+			// todo, skip it?
 			return err
 		}
 	}
@@ -122,7 +129,7 @@ func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
 	return h, nil
 }
 
-func (p *BinlogParser) parseEvent(h *EventHeader, data []byte) (Event, error) {
+func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (Event, error) {
 	var e Event
 
 	if h.EventType == FORMAT_DESCRIPTION_EVENT {
@@ -130,7 +137,15 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte) (Event, error) {
 		e = p.format
 	} else {
 		if p.format != nil && p.format.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
+			rawData = rawData[0 : len(rawData)-4]
+
+			got := binary.LittleEndian.Uint32(data[len(data)-4:])
 			data = data[0 : len(data)-4]
+
+			checkSum := crc32.ChecksumIEEE(rawData)
+			if got != checkSum {
+				return nil, fmt.Errorf("invalid binlog checksum in event %v, we got %d, but calculate %d, skip it", h, got, checkSum)
+			}
 		}
 
 		if h.EventType == ROTATE_EVENT {
@@ -217,12 +232,14 @@ func (p *BinlogParser) parse(data []byte) (*BinlogEvent, error) {
 	eventLen := int(h.EventSize) - EventHeaderSize
 
 	if len(data) != eventLen {
-		return nil, fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
+		log.Errorf("invalid data size %d in event %v, less event length %d, skip it", len(data), h, eventLen)
+		return nil, errSkipParse
 	}
 
-	e, err := p.parseEvent(h, data)
+	e, err := p.parseEvent(h, data, rawData)
 	if err != nil {
-		return nil, err
+		log.Errorf("parse event %v err %v, skip it", h, err)
+		return nil, errSkipParse
 	}
 
 	return &BinlogEvent{rawData, h, e}, nil
