@@ -512,9 +512,7 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	value := uint32(data[pos])
 	var res bytes.Buffer
 	var mask uint32 = 0
-	if value&0x80 != 0 {
-		mask = 0
-	} else {
+	if value&0x80 == 0 {
 		mask = uint32((1 << 32) - 1)
 		res.WriteString("-")
 	}
@@ -522,8 +520,17 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	//clear sign
 	data[0] ^= 0x80
 
+	// size is always greater then or equal to zero.
 	size := compressedBytes[compIntegral]
-	if size > 0 {
+	switch size {
+	case 0: // NOOP
+	case 1:
+		// When we are dealing only with a single byte (size==1) masking
+		// with a 4 byte values was causing incorrect data values. This is
+		// only a problem with negative numbers as the mask is not zero.
+		res.WriteString(fmt.Sprintf("%d", data[0]^uint8(mask)))
+		pos = 1
+	default:
 		value = uint32(BFixedLengthInt(data[pos:pos+size])) ^ mask
 		res.WriteString(fmt.Sprintf("%d", value))
 		pos += size
