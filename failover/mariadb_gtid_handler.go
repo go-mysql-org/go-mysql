@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -16,11 +17,11 @@ type MariadbGTIDHandler struct {
 
 func (h *MariadbGTIDHandler) Promote(s *Server) error {
 	if err := h.WaitRelayLogDone(s); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := s.StopSlave(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -38,7 +39,7 @@ func (h *MariadbGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error)
 		rr, err := slave.Execute("SELECT @@gtid_current_pos")
 
 		if err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 
 		str, _ := rr.GetString(0, 0)
@@ -47,7 +48,7 @@ func (h *MariadbGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error)
 		} else {
 			g, err := ParseMariadbGTIDSet(str)
 			if err != nil {
-				return nil, err
+				return nil, errors.Trace(err)
 			}
 
 			seq = g.(MariadbGTID).SequenceNumber
@@ -79,26 +80,26 @@ const changeMasterToWithCurrentPos = `CHANGE MASTER TO
 
 func (h *MariadbGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
 	if err := h.WaitRelayLogDone(s); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := s.StopSlave(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := s.ResetSlave(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	host, port, _ := net.SplitHostPort(m.Addr)
 
 	if _, err := s.Execute(fmt.Sprintf(changeMasterToWithCurrentPos,
 		host, port, m.ReplUser.Name, m.ReplUser.Password)); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := s.StartSlave(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -106,12 +107,12 @@ func (h *MariadbGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
 
 func (h *MariadbGTIDHandler) WaitRelayLogDone(s *Server) error {
 	if err := s.StopSlaveIOThread(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	r, err := s.SlaveStatus()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	fname, _ := r.GetStringByName(0, "Master_Log_File")
@@ -123,7 +124,7 @@ func (h *MariadbGTIDHandler) WaitRelayLogDone(s *Server) error {
 func (h *MariadbGTIDHandler) WaitCatchMaster(s *Server, m *Server) error {
 	r, err := m.Execute("SELECT @@gtid_binlog_pos")
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	pos, _ := r.GetString(0, 0)

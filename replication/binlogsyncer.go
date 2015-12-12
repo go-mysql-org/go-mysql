@@ -2,11 +2,11 @@ package replication
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
@@ -137,7 +137,7 @@ func (b *BinlogSyncer) RegisterSlave(host string, port uint16, user string, pass
 	if err != nil {
 		b.close()
 	}
-	return err
+	return errors.Trace(err)
 }
 
 // If you close sync before and want to restart again, you can call this before other operations
@@ -147,7 +147,7 @@ func (b *BinlogSyncer) ReRegisterSlave() error {
 	defer b.m.Unlock()
 
 	if len(b.host) == 0 || len(b.user) == 0 {
-		return fmt.Errorf("empty host and user, you must register slave before")
+		return errors.Errorf("empty host and user, you must register slave before")
 	}
 
 	b.close()
@@ -157,20 +157,20 @@ func (b *BinlogSyncer) ReRegisterSlave() error {
 		b.close()
 	}
 
-	return err
+	return errors.Trace(err)
 }
 
 func (b *BinlogSyncer) registerSlave() error {
 	var err error
 	b.c, err = client.Connect(fmt.Sprintf("%s:%d", b.host, b.port), b.user, b.password, "")
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	//for mysql 5.6+, binlog has a crc32 checksum
 	//before mysql 5.6, this will not work, don't matter.:-)
 	if r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM'"); err != nil {
-		return err
+		return errors.Trace(err)
 	} else {
 		s, _ := r.GetString(0, 1)
 		if s != "" {
@@ -183,22 +183,22 @@ func (b *BinlogSyncer) registerSlave() error {
 			// That preference is specified below.
 
 			if _, err = b.c.Execute(`SET @master_binlog_checksum='NONE'`); err != nil {
-				return err
+				return errors.Trace(err)
 			}
 
 			// if _, err = b.c.Execute(`SET @master_binlog_checksum=@@global.binlog_checksum`); err != nil {
-			// 	return err
+			// 	return errors.Trace(err)
 			// }
 
 		}
 	}
 
 	if err = b.writeRegisterSlaveCommand(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if _, err = b.c.ReadOKPacket(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -209,15 +209,15 @@ func (b *BinlogSyncer) EnableSemiSync() error {
 	defer b.m.Unlock()
 
 	if err := b.checkExec(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if r, err := b.c.Execute("SHOW VARIABLES LIKE 'rpl_semi_sync_master_enabled';"); err != nil {
-		return err
+		return errors.Trace(err)
 	} else {
 		s, _ := r.GetString(0, 1)
 		if s != "ON" {
-			return fmt.Errorf("master does not support semi synchronous replication")
+			return errors.Errorf("master does not support semi synchronous replication")
 		}
 	}
 
@@ -227,7 +227,7 @@ func (b *BinlogSyncer) EnableSemiSync() error {
 		b.semiSyncEnabled = true
 	}
 
-	return err
+	return errors.Trace(err)
 }
 
 func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
@@ -267,7 +267,7 @@ func (b *BinlogSyncer) SetRawMode(mode bool) error {
 	defer b.m.Unlock()
 
 	if err := b.checkExec(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	b.parser.SetRawMode(mode)
@@ -377,7 +377,7 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 	// Tell the server that we understand GTIDs by setting our slave capability
 	// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
 	if _, err := b.c.Execute("SET @mariadb_slave_capability=4"); err != nil {
-		return fmt.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
+		return errors.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
 	}
 
 	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP to
@@ -385,14 +385,14 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
 
 	if _, err := b.c.Execute(query); err != nil {
-		return fmt.Errorf("failed to set @slave_connect_state='%s': %v", startPos, err)
+		return errors.Errorf("failed to set @slave_connect_state='%s': %v", startPos, err)
 	}
 
 	// Real slaves set this upon connecting if their gtid_strict_mode option was
 	// enabled. We always use gtid_strict_mode because we need it to make our
 	// internal GTID comparisons safe.
 	if _, err := b.c.Execute("SET @slave_gtid_strict_mode=1"); err != nil {
-		return fmt.Errorf("failed to set @slave_gtid_strict_mode=1: %v", err)
+		return errors.Errorf("failed to set @slave_gtid_strict_mode=1: %v", err)
 	}
 
 	// Since we use @slave_connect_state, the file and position here are ignored.
@@ -454,13 +454,13 @@ func (b *BinlogSyncer) replySemiSyncACK(p Position) error {
 
 	err := b.c.WritePacket(data)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	_, err = b.c.ReadOKPacket()
 	if err != nil {
 	}
-	return err
+	return errors.Trace(err)
 }
 
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
@@ -508,7 +508,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 
 	e, err := b.parser.parse(data)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	b.nextPos.Pos = e.Header.LogPos
@@ -528,7 +528,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	if needACK {
 		err := b.replySemiSyncACK(b.nextPos)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 

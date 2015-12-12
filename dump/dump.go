@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/juju/errors"
 )
 
 // Unlick mysqldump, Dumper is designed for parsing and syning data easily.
@@ -35,7 +37,7 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 
 	path, err := exec.LookPath(executionPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	d := new(Dumper)
@@ -155,5 +157,5 @@ func (d *Dumper) DumpAndParse(h ParseHandler) error {
 
 	err = <-done
 
-	return err
+	return errors.Trace(err)
 }

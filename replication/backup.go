@@ -1,12 +1,12 @@
 package replication
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path"
 	"time"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -24,7 +24,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 
 	s, err := b.StartSync(p)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	var filename string
@@ -39,8 +39,11 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 
 	for {
 		e, err := s.GetEventTimeout(timeout)
-		if err != nil {
-			return err
+		if errors.Cause(err) == ErrGetEventTimeout {
+			// for backward compatibility
+			return ErrGetEventTimeout
+		} else if err != nil {
+			return errors.Trace(err)
 		}
 
 		offset = e.Header.LogPos
@@ -61,25 +64,25 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			}
 
 			if len(filename) == 0 {
-				return fmt.Errorf("empty binlog filename for FormateDescriptionEvent")
+				return errors.Errorf("empty binlog filename for FormateDescriptionEvent")
 			}
 
 			f, err = os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 
 			// write binlog header fe'bin'
 			if _, err = f.Write(BinLogFileHeader); err != nil {
-				return err
+				return errors.Trace(err)
 			}
 
 		}
 
 		if n, err := f.Write(e.RawData); err != nil {
-			return err
+			return errors.Trace(err)
 		} else if n != len(e.RawData) {
-			return io.ErrShortWrite
+			return errors.Trace(io.ErrShortWrite)
 		}
 	}
 

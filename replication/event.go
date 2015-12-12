@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/juju/errors"
 	"github.com/satori/go.uuid"
 	. "github.com/siddontang/go-mysql/mysql"
 )
@@ -63,7 +64,7 @@ type EventHeader struct {
 
 func (h *EventHeader) Decode(data []byte) error {
 	if len(data) < EventHeaderSize {
-		return fmt.Errorf("header size too short %d, must 19", len(data))
+		return errors.Errorf("header size too short %d, must 19", len(data))
 	}
 
 	pos := 0
@@ -87,7 +88,7 @@ func (h *EventHeader) Decode(data []byte) error {
 	pos += 2
 
 	if h.EventSize < uint32(EventHeaderSize) {
-		return fmt.Errorf("invalid event size %d, must >= 19", h.EventSize)
+		return errors.Errorf("invalid event size %d, must >= 19", h.EventSize)
 	}
 
 	return nil
@@ -165,7 +166,7 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 	pos++
 
 	if e.EventHeaderLength != byte(EventHeaderSize) {
-		return fmt.Errorf("invalid event header length %d, must 19", e.EventHeaderLength)
+		return errors.Errorf("invalid event header length %d, must 19", e.EventHeaderLength)
 	}
 
 	server := string(e.ServerVersion)
@@ -312,7 +313,7 @@ func (e *BeginLoadQueryEvent) Decode(data []byte) error {
 
 	e.BlockData = data[pos:]
 
-    return nil
+	return nil
 }
 
 func (e *BeginLoadQueryEvent) Dump(w io.Writer) {
@@ -362,7 +363,7 @@ func (e *ExecuteLoadQueryEvent) Decode(data []byte) error {
 
 	e.DupHandlingFlags = uint8(data[pos])
 
-    return nil
+	return nil
 }
 
 func (e *ExecuteLoadQueryEvent) Dump(w io.Writer) {

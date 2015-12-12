@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -27,7 +28,7 @@ func (s *Stmt) ColumnNum() int {
 
 func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 	if err := s.write(args...); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	return s.conn.readResult(true)
@@ -35,7 +36,7 @@ func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 
 func (s *Stmt) Close() error {
 	if err := s.conn.writeCommandUint32(COM_STMT_CLOSE, s.id); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -165,12 +166,12 @@ func (s *Stmt) write(args ...interface{}) error {
 
 func (c *Conn) Prepare(query string) (*Stmt, error) {
 	if err := c.writeCommandStr(COM_STMT_PREPARE, query); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	data, err := c.ReadPacket()
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if data[0] == ERR_HEADER {
@@ -201,13 +202,13 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 
 	if s.params > 0 {
 		if err := s.conn.readUntilEOF(); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 	}
 
 	if s.columns > 0 {
 		if err := s.conn.readUntilEOF(); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 	}
 

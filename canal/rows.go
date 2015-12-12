@@ -1,8 +1,7 @@
 package canal
 
 import (
-	"fmt"
-
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/schema"
 )
 
@@ -37,9 +36,9 @@ func newRowsEvent(table *schema.Table, action string, rows [][]interface{}) *Row
 func GetPKValues(table *schema.Table, row []interface{}) ([]interface{}, error) {
 	indexes := table.PKColumns
 	if len(indexes) == 0 {
-		return nil, fmt.Errorf("table %s has no PK", table)
+		return nil, errors.Errorf("table %s has no PK", table)
 	} else if len(table.Columns) != len(row) {
-		return nil, fmt.Errorf("table %s has %d columns, but row data %v len is %d", table,
+		return nil, errors.Errorf("table %s has %d columns, but row data %v len is %d", table,
 			len(table.Columns), row, len(row))
 	}
 

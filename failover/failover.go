@@ -1,8 +1,7 @@
 package failover
 
 import (
-	"fmt"
-
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -24,34 +23,34 @@ func Failover(flavor string, slaves []*Server) ([]*Server, error) {
 	case mysql.MySQLFlavor:
 		h = new(MysqlGTIDHandler)
 	case mysql.MariaDBFlavor:
-		return nil, fmt.Errorf("MariaDB failover is not supported now")
+		return nil, errors.Errorf("MariaDB failover is not supported now")
 	default:
-		return nil, fmt.Errorf("invalid flavor %s", flavor)
+		return nil, errors.Errorf("invalid flavor %s", flavor)
 	}
 
 	// First check slaves use gtid or not
 	if err := h.CheckGTIDMode(slaves); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	// Stop all slave IO_THREAD and wait the relay log done
 	for _, slave := range slaves {
 		if err = h.WaitRelayLogDone(slave); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 	}
 
 	var bestSlave *Server
 	// Find best slave which has the most up-to-data data
 	if bestSlaves, err := h.FindBestSlaves(slaves); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	} else {
 		bestSlave = bestSlaves[0]
 	}
 
 	// Promote the best slave to master
 	if err = h.Promote(bestSlave); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	// Change master
@@ -61,7 +60,7 @@ func Failover(flavor string, slaves []*Server) ([]*Server, error) {
 		}
 
 		if err = h.ChangeMasterTo(slaves[i], bestSlave); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 	}
 

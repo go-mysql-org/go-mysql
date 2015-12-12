@@ -1,8 +1,7 @@
 package canal
 
 import (
-	"errors"
-
+	"github.com/juju/errors"
 	"github.com/siddontang/go/log"
 )
 
@@ -33,7 +32,7 @@ func (c *Canal) travelRowsEventHandler(e *RowsEvent) error {
 			log.Errorf("handle %v err: %v", h, err)
 		} else if err == ErrHandleInterrupted {
 			log.Errorf("handle %v err, interrupted", h)
-			return err
+			return ErrHandleInterrupted
 		}
 
 	}

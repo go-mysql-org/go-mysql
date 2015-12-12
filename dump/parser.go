@@ -2,11 +2,12 @@ package dump
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
 	"strconv"
+
+	"github.com/juju/errors"
 )
 
 var (
@@ -41,7 +42,7 @@ func Parse(r io.Reader, h ParseHandler) error {
 	for {
 		line, err := rb.ReadString('\n')
 		if err != nil && err != io.EOF {
-			return err
+			return errors.Trace(err)
 		} else if err == io.EOF {
 			break
 		}
@@ -53,11 +54,11 @@ func Parse(r io.Reader, h ParseHandler) error {
 				name := m[0][1]
 				pos, err := strconv.ParseUint(m[0][2], 10, 64)
 				if err != nil {
-					return fmt.Errorf("parse binlog %v err, invalid number", line)
+					return errors.Errorf("parse binlog %v err, invalid number", line)
 				}
 
 				if err = h.BinLog(name, pos); err != nil && err != ErrSkip {
-					return err
+					return errors.Trace(err)
 				}
 
 				binlogParsed = true
@@ -73,11 +74,11 @@ func Parse(r io.Reader, h ParseHandler) error {
 
 			values, err := parseValues(m[0][2])
 			if err != nil {
-				return fmt.Errorf("parse values %v err", line)
+				return errors.Errorf("parse values %v err", line)
 			}
 
 			if err = h.Data(db, table, values); err != nil && err != ErrSkip {
-				return err
+				return errors.Trace(err)
 			}
 		}
 	}

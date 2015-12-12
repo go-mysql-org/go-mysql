@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -145,7 +146,7 @@ func NewTable(conn mysql.Executer, schema string, name string) (*Table, error) {
 func (ta *Table) fetchColumns(conn mysql.Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("describe %s.%s", ta.Schema, ta.Name))
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	for i := 0; i < r.RowNumber(); i++ {
@@ -162,7 +163,7 @@ func (ta *Table) fetchColumns(conn mysql.Executer) error {
 func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("show index from %s.%s", ta.Schema, ta.Name))
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	var currentIndex *Index
 	currentName := ""

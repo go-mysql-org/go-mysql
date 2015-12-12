@@ -1,8 +1,9 @@
 package replication
 
 import (
-	"errors"
 	"time"
+
+	"github.com/juju/errors"
 )
 
 var (

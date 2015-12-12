@@ -10,6 +10,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/juju/errors"
 	mysql "github.com/siddontang/go-mysql/mysql"
 	. "gopkg.in/check.v1"
 )
@@ -57,7 +58,7 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 		}
 
 		if err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		} else {
 			return &mysql.Result{0, 0, 0, r}, nil
 		}

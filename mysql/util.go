@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go/hack"
 )
 
@@ -51,7 +52,7 @@ func RandomBuf(size int) ([]byte, error) {
 	buf := make([]byte, size)
 
 	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	// avoid to generate '\0'
@@ -214,7 +215,7 @@ func FormatBinaryDate(n int, data []byte) ([]byte, error) {
 			data[2],
 			data[3])), nil
 	default:
-		return nil, fmt.Errorf("invalid date packet length %d", n)
+		return nil, errors.Errorf("invalid date packet length %d", n)
 	}
 }
 
@@ -247,7 +248,7 @@ func FormatBinaryDateTime(n int, data []byte) ([]byte, error) {
 			data[6],
 			binary.LittleEndian.Uint32(data[7:11]))), nil
 	default:
-		return nil, fmt.Errorf("invalid datetime packet length %d", n)
+		return nil, errors.Errorf("invalid datetime packet length %d", n)
 	}
 }
 
@@ -280,7 +281,7 @@ func FormatBinaryTime(n int, data []byte) ([]byte, error) {
 			binary.LittleEndian.Uint32(data[8:12]),
 		)), nil
 	default:
-		return nil, fmt.Errorf("invalid time packet length %d", n)
+		return nil, errors.Errorf("invalid time packet length %d", n)
 	}
 }
 

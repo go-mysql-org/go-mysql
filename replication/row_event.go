@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
@@ -68,11 +69,11 @@ func (e *TableMapEvent) Decode(data []byte) error {
 	var err error
 	var metaData []byte
 	if metaData, _, n, err = LengthEnodedString(data[pos:]); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err = e.decodeMeta(metaData); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	pos += n
@@ -169,7 +170,7 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 			MYSQL_TYPE_TINY_BLOB,
 			MYSQL_TYPE_MEDIUM_BLOB,
 			MYSQL_TYPE_LONG_BLOB:
-			return fmt.Errorf("unsupport type in binlog %d", t)
+			return errors.Errorf("unsupport type in binlog %d", t)
 		default:
 			e.ColumnMeta[i] = 0
 		}
@@ -251,7 +252,7 @@ func (e *RowsEvent) Decode(data []byte) error {
 	var ok bool
 	e.Table, ok = e.tables[e.TableID]
 	if !ok {
-		return fmt.Errorf("invalid table id %d, no correspond table map event", e.TableID)
+		return errors.Errorf("invalid table id %d, no correspond table map event", e.TableID)
 	}
 
 	var err error
@@ -259,13 +260,13 @@ func (e *RowsEvent) Decode(data []byte) error {
 	// ... repeat rows until event-end
 	for pos < len(data) {
 		if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap1); err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		pos += n
 
 		if e.needBitmap2 {
 			if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap2); err != nil {
-				return err
+				return errors.Trace(err)
 			}
 			pos += n
 		}

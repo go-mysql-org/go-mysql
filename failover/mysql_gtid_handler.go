@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -13,11 +14,11 @@ type MysqlGTIDHandler struct {
 
 func (h *MysqlGTIDHandler) Promote(s *Server) error {
 	if err := h.WaitRelayLogDone(s); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := s.StopSlave(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -36,7 +37,7 @@ func (h *MysqlGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
 		pos, err := slave.FetchSlaveExecutePos()
 
 		if err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 
 		ps[i] = pos
@@ -68,26 +69,26 @@ const changeMasterToWithAuto = `CHANGE MASTER TO
 
 func (h *MysqlGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
 	if err := h.WaitRelayLogDone(s); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := s.StopSlave(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := s.ResetSlave(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	host, port, _ := net.SplitHostPort(m.Addr)
 
 	if _, err := s.Execute(fmt.Sprintf(changeMasterToWithAuto,
 		host, port, m.ReplUser.Name, m.ReplUser.Password)); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := s.StartSlave(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -95,12 +96,12 @@ func (h *MysqlGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {
 
 func (h *MysqlGTIDHandler) WaitRelayLogDone(s *Server) error {
 	if err := s.StopSlaveIOThread(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	r, err := s.SlaveStatus()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	retrieved, _ := r.GetStringByName(0, "Retrieved_Gtid_Set")
@@ -113,7 +114,7 @@ func (h *MysqlGTIDHandler) WaitRelayLogDone(s *Server) error {
 func (h *MysqlGTIDHandler) WaitCatchMaster(s *Server, m *Server) error {
 	r, err := m.MasterStatus()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	masterGTIDSet, _ := r.GetStringByName(0, "Executed_Gtid_Set")
@@ -125,9 +126,9 @@ func (h *MysqlGTIDHandler) CheckGTIDMode(slaves []*Server) error {
 	for i := 0; i < len(slaves); i++ {
 		mode, err := slaves[i].MysqlGTIDMode()
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		} else if mode != GTIDModeOn {
-			return fmt.Errorf("%s use not GTID mode", slaves[i].Addr)
+			return errors.Errorf("%s use not GTID mode", slaves[i].Addr)
 		}
 	}
 

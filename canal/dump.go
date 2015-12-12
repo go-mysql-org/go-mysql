@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/schema"
 	"github.com/siddontang/go/log"
@@ -29,7 +30,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 	tableInfo, err := h.c.GetTable(db, table)
 	if err != nil {
 		log.Errorf("get %s.%s information err: %v", db, table, err)
-		return err
+		return errors.Trace(err)
 	}
 
 	vs := make([]interface{}, len(values))
@@ -106,7 +107,7 @@ func (c *Canal) tryDump() error {
 	start := time.Now()
 	log.Info("try dump MySQL and parse")
 	if err := c.dumper.DumpAndParse(h); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at (%s, %d)",

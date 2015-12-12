@@ -2,8 +2,8 @@ package client
 
 import (
 	"encoding/binary"
-	"errors"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
@@ -84,7 +84,7 @@ func (c *Conn) handleErrorPacket(data []byte) error {
 func (c *Conn) readOK() (*Result, error) {
 	data, err := c.ReadPacket()
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if data[0] == OK_HEADER {
@@ -99,7 +99,7 @@ func (c *Conn) readOK() (*Result, error) {
 func (c *Conn) readResult(binary bool) (*Result, error) {
 	data, err := c.ReadPacket()
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if data[0] == OK_HEADER {
@@ -133,11 +133,11 @@ func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 	result.FieldNames = make(map[string]int, count)
 
 	if err := c.readResultColumns(result); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if err := c.readResultRows(result, binary); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	return result, nil
@@ -211,7 +211,7 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 		result.Values[i], err = result.RowDatas[i].Parse(result.Fields, isBinary)
 
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 

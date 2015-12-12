@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 	"github.com/siddontang/go/log"
@@ -31,7 +32,7 @@ func loadMasterInfo(name string) (*masterInfo, error) {
 
 	f, err := os.Open(name)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, err
+		return nil, errors.Trace(err)
 	} else if os.IsNotExist(err) {
 		return &m, nil
 	}
@@ -63,7 +64,7 @@ func (m *masterInfo) Save(force bool) error {
 
 	m.lastSaveTime = n
 
-	return err
+	return errors.Trace(err)
 }
 
 func (m *masterInfo) Update(name string, pos uint32) {

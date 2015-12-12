@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
 )
@@ -45,7 +46,7 @@ func Connect(addr string, user string, password string, dbName string) (*Conn, e
 	var err error
 	conn, err := net.DialTimeout(proto, addr, 10*time.Second)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	c.Conn = packet.NewConn(conn)
@@ -57,7 +58,7 @@ func Connect(addr string, user string, password string, dbName string) (*Conn, e
 	c.charset = DEFAULT_CHARSET
 
 	if err = c.handshake(); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	return c, nil
@@ -67,18 +68,18 @@ func (c *Conn) handshake() error {
 	var err error
 	if err = c.readInitialHandshake(); err != nil {
 		c.Close()
-		return err
+		return errors.Trace(err)
 	}
 
 	if err := c.writeAuthHandshake(); err != nil {
 		c.Close()
 
-		return err
+		return errors.Trace(err)
 	}
 
 	if _, err := c.readOK(); err != nil {
 		c.Close()
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -90,11 +91,11 @@ func (c *Conn) Close() error {
 
 func (c *Conn) Ping() error {
 	if err := c.writeCommand(COM_PING); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if _, err := c.readOK(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -106,11 +107,11 @@ func (c *Conn) UseDB(dbName string) error {
 	}
 
 	if err := c.writeCommandStr(COM_INIT_DB, dbName); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if _, err := c.readOK(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	c.db = dbName
@@ -126,7 +127,7 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 		return c.exec(command)
 	} else {
 		if s, err := c.Prepare(command); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		} else {
 			var r *Result
 			r, err = s.Execute(args...)
@@ -138,17 +139,17 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 
 func (c *Conn) Begin() error {
 	_, err := c.exec("BEGIN")
-	return err
+	return errors.Trace(err)
 }
 
 func (c *Conn) Commit() error {
 	_, err := c.exec("COMMIT")
-	return err
+	return errors.Trace(err)
 }
 
 func (c *Conn) Rollback() error {
 	_, err := c.exec("ROLLBACK")
-	return err
+	return errors.Trace(err)
 }
 
 func (c *Conn) SetCharset(charset string) error {
@@ -157,7 +158,7 @@ func (c *Conn) SetCharset(charset string) error {
 	}
 
 	if _, err := c.exec(fmt.Sprintf("SET NAMES %s", charset)); err != nil {
-		return err
+		return errors.Trace(err)
 	} else {
 		c.charset = charset
 		return nil
@@ -166,12 +167,12 @@ func (c *Conn) SetCharset(charset string) error {
 
 func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 	if err := c.writeCommandStrStr(COM_FIELD_LIST, table, wildcard); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	data, err := c.ReadPacket()
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	fs := make([]*Field, 0, 4)
@@ -181,7 +182,7 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 	} else {
 		for {
 			if data, err = c.ReadPacket(); err != nil {
-				return nil, err
+				return nil, errors.Trace(err)
 			}
 
 			// EOF Packet
@@ -190,7 +191,7 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 			}
 
 			if f, err = FieldData(data).Parse(); err != nil {
-				return nil, err
+				return nil, errors.Trace(err)
 			}
 			fs = append(fs, f)
 		}
@@ -201,7 +202,7 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 func (c *Conn) SetAutoCommit() error {
 	if !c.IsAutoCommit() {
 		if _, err := c.exec("SET AUTOCOMMIT = 1"); err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 	return nil
@@ -238,7 +239,7 @@ func (c *Conn) ReadOKPacket() (*Result, error) {
 
 func (c *Conn) exec(query string) (*Result, error) {
 	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	return c.readResult(false)

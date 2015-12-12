@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 )
@@ -33,7 +34,7 @@ func main() {
 	b := replication.NewBinlogSyncer(101, *flavor)
 
 	if err := b.RegisterSlave(*host, uint16(*port), *user, *password); err != nil {
-		fmt.Printf("Register slave error: %v \n", err)
+		fmt.Printf("Register slave error: %v \n", errors.ErrorStack(err))
 		return
 	}
 
@@ -41,7 +42,7 @@ func main() {
 
 	if *semiSync {
 		if err := b.EnableSemiSync(); err != nil {
-			fmt.Printf("Enable semi sync replication mode err: %v\n", err)
+			fmt.Printf("Enable semi sync replication mode err: %v\n", errors.ErrorStack(err))
 			return
 		}
 	}
@@ -53,20 +54,20 @@ func main() {
 
 		err := b.StartBackup(*backupPath, pos, 0)
 		if err != nil {
-			fmt.Printf("Start backup error: %v\n", err)
+			fmt.Printf("Start backup error: %v\n", errors.ErrorStack(err))
 			return
 		}
 	} else {
 		s, err := b.StartSync(pos)
 		if err != nil {
-			fmt.Printf("Start sync error: %v\n", err)
+			fmt.Printf("Start sync error: %v\n", errors.ErrorStack(err))
 			return
 		}
 
 		for {
 			e, err := s.GetEvent()
 			if err != nil {
-				fmt.Printf("Get event error: %v\n", err)
+				fmt.Printf("Get event error: %v\n", errors.ErrorStack(err))
 				return
 			}
 
