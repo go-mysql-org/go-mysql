@@ -488,10 +488,18 @@ const digitsPerInteger int = 9
 
 var compressedBytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
 
+func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size int, value uint32) {
+	size = compressedBytes[compIndx]
+	databuff := make([]byte, size)
+	for i := 0; i < size; i++ {
+		databuff[i] = data[i] ^ mask
+	}
+	value = uint32(BFixedLengthInt(databuff))
+	return
+}
+
 func decodeDecimal(data []byte, precision int, decimals int) (float64, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
-	pos := 0
-
 	integral := (precision - decimals)
 	uncompIntegral := int(integral / digitsPerInteger)
 	uncompFractional := int(decimals / digitsPerInteger)
@@ -510,12 +518,10 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	// Support negative
 	// The sign is encoded in the high bit of the the byte
 	// But this bit can also be used in the value
-	value := uint32(data[pos])
+	value := uint32(data[0])
 	var res bytes.Buffer
 	var mask uint32 = 0
-	if value&0x80 != 0 {
-		mask = 0
-	} else {
+	if value&0x80 == 0 {
 		mask = uint32((1 << 32) - 1)
 		res.WriteString("-")
 	}
@@ -523,12 +529,8 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	//clear sign
 	data[0] ^= 0x80
 
-	size := compressedBytes[compIntegral]
-	if size > 0 {
-		value = uint32(BFixedLengthInt(data[pos:pos+size])) ^ mask
-		res.WriteString(fmt.Sprintf("%d", value))
-		pos += size
-	}
+	pos, value := decodeDecimalDecompressValue(compIntegral, data, uint8(mask))
+	res.WriteString(fmt.Sprintf("%d", value))
 
 	for i := 0; i < uncompIntegral; i++ {
 		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
@@ -544,18 +546,11 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 		res.WriteString(fmt.Sprintf("%09d", value))
 	}
 
-	size = compressedBytes[compFractional]
-	if size > 0 {
-		value = uint32(BFixedLengthInt(data[pos:pos+size])) ^ mask
+	if size, value := decodeDecimalDecompressValue(compFractional, data[pos:], uint8(mask)); size > 0 {
+		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
 		pos += size
-
-		// we could not use %0*d directly, value is uint32, if compFractional is 2, size is 1, we should only print
-		// uint8(value) with width compFractional, not uint32(value), otherwise, the output would be incorrect.
-		// res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
-		res.WriteString(fmt.Sprintf("%0*d", compFractional, value%(uint32(size)<<8)))
 	}
 
-	//return hack.String(res.Bytes()), pos, nil
 	f, err := strconv.ParseFloat(hack.String(res.Bytes()), 64)
 	return f, pos, err
 }
