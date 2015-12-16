@@ -2,9 +2,10 @@ package client
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/juju/errors"
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/karmakaze/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
 
@@ -92,7 +93,7 @@ func (c *Conn) readOK() (*Result, error) {
 	} else if data[0] == ERR_HEADER {
 		return nil, c.handleErrorPacket(data)
 	} else {
-		return nil, errors.New("invalid ok packet")
+		return nil, errors.New(fmt.Sprintf("invalid ok packet: %v", data))
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/karmakaze/go-mysql/mysql"
 )
 
 var testAddr = flag.String("addr", "127.0.0.1:3306", "MySQL server address")
