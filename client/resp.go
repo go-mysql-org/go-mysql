@@ -2,9 +2,10 @@ package client
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/juju/errors"
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/karmakaze/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
 
