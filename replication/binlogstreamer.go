@@ -18,6 +18,14 @@ type BinlogStreamer struct {
 	err error
 }
 
+func (s *BinlogStreamer) GetEventChannel() chan *BinlogEvent {
+	return s.ch
+}
+
+func (s *BinlogStreamer) GetErrorChannel() chan error {
+	return s.ech
+}
+
 func (s *BinlogStreamer) GetEvent() (*BinlogEvent, error) {
 	if s.err != nil {
 		return nil, ErrNeedSyncAgain
