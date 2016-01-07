@@ -276,7 +276,7 @@ func (e *RowsEvent) Decode(data []byte) error {
 }
 
 func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte) (int, error) {
-	rows := make([]interface{}, e.ColumnCount)
+	row := make([]interface{}, e.ColumnCount)
 
 	pos := 0
 
@@ -297,12 +297,12 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 		isNull := (uint32(nullBitmap[nullbitIndex/8]) >> uint32(nullbitIndex%8)) & 0x01
 
 		if isNull > 0 {
-			rows[i] = nil
+			row[i] = nil
 			nullbitIndex++
 			continue
 		}
 
-		rows[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.ColumnMeta[i])
+		row[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.ColumnMeta[i])
 
 		if err != nil {
 			return 0, nil
@@ -312,7 +312,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 		nullbitIndex++
 	}
 
-	e.Rows = append(e.Rows, rows)
+	e.Rows = append(e.Rows, row)
 	return pos, nil
 }
 
@@ -342,20 +342,19 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		return nil, 0, nil
 	case MYSQL_TYPE_LONG:
 		n = 4
-		v = int64(binary.LittleEndian.Uint32(data))
+		v = ParseBinaryInt32(data)
 	case MYSQL_TYPE_TINY:
 		n = 1
-		v = int64(data[0])
+		v = ParseBinaryInt8(data)
 	case MYSQL_TYPE_SHORT:
 		n = 2
-		v = int64(binary.LittleEndian.Uint16(data))
+		v = ParseBinaryInt16(data)
 	case MYSQL_TYPE_INT24:
 		n = 3
-		v = int64(FixedLengthInt(data[0:3]))
+		v = ParseBinaryInt24(data)
 	case MYSQL_TYPE_LONGLONG:
-		//em, maybe overflow for int64......
 		n = 8
-		v = int64(binary.LittleEndian.Uint64(data))
+		v = ParseBinaryInt64(data)
 	case MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
