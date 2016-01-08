@@ -103,43 +103,43 @@ func (t *mysqlTestSuite) TestMysqlGTIDContain(c *check.C) {
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt8(c *check.C) {
-	i64 := ParseBinaryInt8([]byte{128})
-	c.Assert(i64, check.Equals, int64(-128))
+	i8 := ParseBinaryInt8([]byte{128})
+	c.Assert(i8, check.Equals, int8(-128))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryUint8(c *check.C) {
-	u64 := ParseBinaryUint8([]byte{128})
-	c.Assert(u64, check.Equals, uint64(128))
+	u8 := ParseBinaryUint8([]byte{128})
+	c.Assert(u8, check.Equals, uint8(128))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt16(c *check.C) {
-	i64 := ParseBinaryInt16([]byte{1, 128})
-	c.Assert(i64, check.Equals, int64(-128*256 + 1))
+	i16 := ParseBinaryInt16([]byte{1, 128})
+	c.Assert(i16, check.Equals, int16(-128*256 + 1))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryUint16(c *check.C) {
-	u64 := ParseBinaryUint16([]byte{1, 128})
-	c.Assert(u64, check.Equals, uint64(128*256 + 1))
+	u16 := ParseBinaryUint16([]byte{1, 128})
+	c.Assert(u16, check.Equals, uint16(128*256 + 1))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt24(c *check.C) {
-	i64 := ParseBinaryInt24([]byte{1, 2, 128})
-	c.Assert(i64, check.Equals, int64(-128*65536 + 2*256 + 1))
+	i32 := ParseBinaryInt24([]byte{1, 2, 128})
+	c.Assert(i32, check.Equals, int32(-128*65536 + 2*256 + 1))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryUint24(c *check.C) {
-	u64 := ParseBinaryUint24([]byte{1, 2, 128})
-	c.Assert(u64, check.Equals, uint64(128*65536 + 2*256 + 1))
+	u32 := ParseBinaryUint24([]byte{1, 2, 128})
+	c.Assert(u32, check.Equals, uint32(128*65536 + 2*256 + 1))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt32(c *check.C) {
-	i64 := ParseBinaryInt32([]byte{1, 2, 3, 128})
-	c.Assert(i64, check.Equals, int64(-128*16777216 + 3*65536 + 2*256 + 1))
+	i32 := ParseBinaryInt32([]byte{1, 2, 3, 128})
+	c.Assert(i32, check.Equals, int32(-128*16777216 + 3*65536 + 2*256 + 1))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryUint32(c *check.C) {
-	u64 := ParseBinaryUint32([]byte{1, 2, 3, 128})
-	c.Assert(u64, check.Equals, uint64(128*16777216 + 3*65536 + 2*256 + 1))
+	u32 := ParseBinaryUint32([]byte{1, 2, 3, 128})
+	c.Assert(u32, check.Equals, uint32(128*16777216 + 3*65536 + 2*256 + 1))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt64(c *check.C) {

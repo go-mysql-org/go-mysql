@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"time"
 
@@ -361,10 +360,10 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		v, n, err = decodeDecimal(data, int(prec), int(scale))
 	case MYSQL_TYPE_FLOAT:
 		n = 4
-		v = float64(math.Float32frombits(binary.LittleEndian.Uint32(data)))
+		v = ParseBinaryFloat32(data)
 	case MYSQL_TYPE_DOUBLE:
 		n = 8
-		v = math.Float64frombits(binary.LittleEndian.Uint64(data))
+		v = ParseBinaryFloat64(data)
 	case MYSQL_TYPE_BIT:
 		nbits := ((meta >> 8) * 8) + (meta & 0xFF)
 		n = int(nbits+7) / 8
