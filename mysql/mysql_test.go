@@ -101,3 +101,53 @@ func (t *mysqlTestSuite) TestMysqlGTIDContain(c *check.C) {
 	c.Assert(g2.Contain(g1), check.Equals, true)
 	c.Assert(g1.Contain(g2), check.Equals, false)
 }
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryInt8(c *check.C) {
+	i64 := ParseBinaryInt8([]byte{128})
+	c.Assert(i64, check.Equals, int64(-128))
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryUint8(c *check.C) {
+	u64 := ParseBinaryUint8([]byte{128})
+	c.Assert(u64, check.Equals, uint64(128))
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryInt16(c *check.C) {
+	i64 := ParseBinaryInt16([]byte{1, 128})
+	c.Assert(i64, check.Equals, int64(-128*256 + 1))
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryUint16(c *check.C) {
+	u64 := ParseBinaryUint16([]byte{1, 128})
+	c.Assert(u64, check.Equals, uint64(128*256 + 1))
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryInt24(c *check.C) {
+	i64 := ParseBinaryInt24([]byte{1, 2, 128})
+	c.Assert(i64, check.Equals, int64(-128*65536 + 2*256 + 1))
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryUint24(c *check.C) {
+	u64 := ParseBinaryUint24([]byte{1, 2, 128})
+	c.Assert(u64, check.Equals, uint64(128*65536 + 2*256 + 1))
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryInt32(c *check.C) {
+	i64 := ParseBinaryInt32([]byte{1, 2, 3, 128})
+	c.Assert(i64, check.Equals, int64(-128*16777216 + 3*65536 + 2*256 + 1))
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryUint32(c *check.C) {
+	u64 := ParseBinaryUint32([]byte{1, 2, 3, 128})
+	c.Assert(u64, check.Equals, uint64(128*16777216 + 3*65536 + 2*256 + 1))
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryInt64(c *check.C) {
+	i64 := ParseBinaryInt64([]byte{1, 2, 3, 4, 5, 6, 7, 128})
+	c.Assert(i64, check.Equals, -128*int64(72057594037927936) + 7*int64(281474976710656) + 6*int64(1099511627776) + 5*int64(4294967296) + 4*16777216 + 3*65536 + 2*256 + 1)
+}
+
+func (t *mysqlTestSuite) TestMysqlParseBinaryUint64(c *check.C) {
+	u64 := ParseBinaryUint64([]byte{1, 2, 3, 4, 5, 6, 7, 128})
+	c.Assert(u64, check.Equals, 128*uint64(72057594037927936) + 7*uint64(281474976710656) + 6*uint64(1099511627776) + 5*uint64(4294967296) + 4*16777216 + 3*65536 + 2*256 + 1)
+}

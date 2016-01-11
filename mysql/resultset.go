@@ -24,7 +24,7 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 
 	var err error
 	var v []byte
-	var isNull, isUnsigned bool
+	var isNull bool
 	var pos int = 0
 	var n int = 0
 
@@ -39,7 +39,7 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 		if isNull {
 			data[i] = nil
 		} else {
-			isUnsigned = (f[i].Flag&UNSIGNED_FLAG > 0)
+			isUnsigned := f[i].Flag&UNSIGNED_FLAG != 0
 
 			switch f[i].Type {
 			case MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_INT24,
@@ -75,7 +75,6 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 
 	nullBitmap := p[1:pos]
 
-	var isUnsigned bool
 	var isNull bool
 	var n int
 	var err error
@@ -86,7 +85,7 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			continue
 		}
 
-		isUnsigned = f[i].Flag&UNSIGNED_FLAG > 0
+		isUnsigned := f[i].Flag&UNSIGNED_FLAG != 0
 
 		switch f[i].Type {
 		case MYSQL_TYPE_NULL:
@@ -95,36 +94,45 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 
 		case MYSQL_TYPE_TINY:
 			if isUnsigned {
-				data[i] = uint64(p[pos])
+				data[i] = ParseBinaryUint8(p[pos : pos+1])
 			} else {
-				data[i] = int64(p[pos])
+				data[i] = ParseBinaryInt8(p[pos : pos+1])
 			}
 			pos++
 			continue
 
 		case MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
 			if isUnsigned {
-				data[i] = uint64(binary.LittleEndian.Uint16(p[pos : pos+2]))
+				data[i] = ParseBinaryUint16(p[pos : pos+2])
 			} else {
-				data[i] = int64((binary.LittleEndian.Uint16(p[pos : pos+2])))
+				data[i] = ParseBinaryInt16(p[pos : pos+2])
 			}
 			pos += 2
 			continue
 
-		case MYSQL_TYPE_INT24, MYSQL_TYPE_LONG:
+		case MYSQL_TYPE_INT24:
 			if isUnsigned {
-				data[i] = uint64(binary.LittleEndian.Uint32(p[pos : pos+4]))
+				data[i] = ParseBinaryUint24(p[pos : pos+3])
 			} else {
-				data[i] = int64(binary.LittleEndian.Uint32(p[pos : pos+4]))
+				data[i] = ParseBinaryInt24(p[pos : pos+3])
+			}
+			pos += 4
+			continue
+
+		case MYSQL_TYPE_LONG:
+			if isUnsigned {
+				data[i] = ParseBinaryUint32(p[pos : pos+4])
+			} else {
+				data[i] = ParseBinaryInt32(p[pos : pos+4])
 			}
 			pos += 4
 			continue
 
 		case MYSQL_TYPE_LONGLONG:
 			if isUnsigned {
-				data[i] = binary.LittleEndian.Uint64(p[pos : pos+8])
+				data[i] = ParseBinaryUint64(p[pos : pos+8])
 			} else {
-				data[i] = int64(binary.LittleEndian.Uint64(p[pos : pos+8]))
+				data[i] = ParseBinaryInt64(p[pos : pos+8])
 			}
 			pos += 8
 			continue
