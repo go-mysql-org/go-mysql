@@ -118,6 +118,9 @@ func (p FieldData) Parse() (f *Field, err error) {
 }
 
 func (f *Field) Dump() []byte {
+	if f == nil {
+		f = &Field{}
+	}
 	if f.Data != nil {
 		return []byte(f.Data)
 	}
