@@ -65,7 +65,7 @@ func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 	return b
 }
 
-func (b *BinlogSyncer) LocalHostname() string {
+func (b *BinlogSyncer) localhostName() string {
 
 	if b.LocalHost == "" {
 		h, _ := os.Hostname()
@@ -412,7 +412,7 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	b.c.ResetSequence()
 
-	hostname := b.LocalHostname()
+	hostname := b.localhostName()
 
 	// This should be the name of slave host not the host we are connecting to.
 	data := make([]byte, 4+1+4+1+len(hostname)+1+len(b.user)+1+len(b.password)+2+4+4)
