@@ -67,11 +67,11 @@ func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 
 func (b *BinlogSyncer) LocalHostname() string {
 
-	if b.MyHost == "" {
+	if b.LocalHost == "" {
 		h, _ := os.Hostname()
 		return h
 	}
-	return b.MyHost
+	return b.LocalHost
 }
 
 func (b *BinlogSyncer) Close() {
