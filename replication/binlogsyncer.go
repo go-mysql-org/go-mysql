@@ -3,6 +3,7 @@ package replication
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -25,10 +26,12 @@ type BinlogSyncer struct {
 	c        *client.Conn
 	serverID uint32
 
-	host     string
-	port     uint16
-	user     string
-	password string
+	// LocalHost is the name of you want to present to the MySQL master. If it is not set it will default to os.Hostname()
+	LocalHost string
+	host      string
+	port      uint16
+	user      string
+	password  string
 
 	masterID uint32
 
@@ -60,6 +63,15 @@ func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 	b.stopCh = make(chan struct{}, 1)
 
 	return b
+}
+
+func (b *BinlogSyncer) LocalHostname() string {
+
+	if b.MyHost == "" {
+		h, _ := os.Hostname()
+		return h
+	}
+	return b.MyHost
 }
 
 func (b *BinlogSyncer) Close() {
@@ -222,11 +234,9 @@ func (b *BinlogSyncer) EnableSemiSync() error {
 	}
 
 	_, err := b.c.Execute(`SET @rpl_semi_sync_slave = 1;`)
-
 	if err != nil {
 		b.semiSyncEnabled = true
 	}
-
 	return errors.Trace(err)
 }
 
@@ -402,7 +412,10 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	b.c.ResetSequence()
 
-	data := make([]byte, 4+1+4+1+len(b.host)+1+len(b.user)+1+len(b.password)+2+4+4)
+	hostname := b.LocalHostname()
+
+	// This should be the name of slave host not the host we are connecting to.
+	data := make([]byte, 4+1+4+1+len(hostname)+1+len(b.user)+1+len(b.password)+2+4+4)
 	pos := 4
 
 	data[pos] = COM_REGISTER_SLAVE
@@ -411,9 +424,10 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	binary.LittleEndian.PutUint32(data[pos:], b.serverID)
 	pos += 4
 
-	data[pos] = uint8(len(b.host))
+	// This should be the name of slave hostname not the host we are connecting to.
+	data[pos] = uint8(len(hostname))
 	pos++
-	n := copy(data[pos:], b.host)
+	n := copy(data[pos:], hostname)
 	pos += n
 
 	data[pos] = uint8(len(b.user))
