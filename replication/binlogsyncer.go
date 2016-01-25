@@ -26,8 +26,7 @@ type BinlogSyncer struct {
 	c        *client.Conn
 	serverID uint32
 
-	// LocalHost is the name of you want to present to the MySQL master. If it is not set it will default to os.Hostname()
-	LocalHost string
+	localhost string
 	host      string
 	port      uint16
 	user      string
@@ -65,13 +64,19 @@ func NewBinlogSyncer(serverID uint32, flavor string) *BinlogSyncer {
 	return b
 }
 
-func (b *BinlogSyncer) localhostName() string {
+// LocalHostname returns the hostname that register slave would register as.
+func (b *BinlogSyncer) LocalHostname() string {
 
-	if b.LocalHost == "" {
+	if b.localhost == "" {
 		h, _ := os.Hostname()
 		return h
 	}
-	return b.LocalHost
+	return b.localhost
+}
+
+// SetLocalHostname set's the hostname that register salve would register as.
+func (b *NewBinlogSyncer) SetLocalHostname(name string) {
+	b.localhost = name
 }
 
 func (b *BinlogSyncer) Close() {
@@ -412,7 +417,7 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	b.c.ResetSequence()
 
-	hostname := b.localhostName()
+	hostname := b.LocalHostname()
 
 	// This should be the name of slave host not the host we are connecting to.
 	data := make([]byte, 4+1+4+1+len(hostname)+1+len(b.user)+1+len(b.password)+2+4+4)
