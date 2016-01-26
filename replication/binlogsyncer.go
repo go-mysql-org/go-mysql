@@ -75,7 +75,7 @@ func (b *BinlogSyncer) LocalHostname() string {
 }
 
 // SetLocalHostname set's the hostname that register salve would register as.
-func (b *NewBinlogSyncer) SetLocalHostname(name string) {
+func (b *BinlogSyncer) SetLocalHostname(name string) {
 	b.localhost = name
 }
 
