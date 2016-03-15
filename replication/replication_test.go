@@ -260,6 +260,8 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 		t.testSync(c, nil)
 	}()
 
+	os.RemoveAll("./var")
+
 	err := t.b.StartBackup("./var", mysql.Position{"", uint32(0)}, 2*time.Second)
 	c.Check(err, Equals, ErrGetEventTimeout)
 

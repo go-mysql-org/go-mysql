@@ -1,11 +1,13 @@
+ROOT_PATH=$(shell pwd)
+
 all: build
 
 build:
-	export GOBIN=./bin && \
+	export GOBIN=${ROOT_PATH}/bin && \
 	godep go install ./...
 
 test: build
-	export GOBIN=./bin && \
+	export GOBIN=${ROOT_PATH}/bin && \
 	godep go test ./...
 
 clean:
