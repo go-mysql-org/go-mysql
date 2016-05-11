@@ -108,6 +108,10 @@ func (h *testHandler) HandleStmtPrepare(sql string) (params int, columns int, ct
 	return params, columns, nil, err
 }
 
+func (h *testHandler) HandleStmtClose(context interface{}) error {
+	return nil
+}
+
 func (h *testHandler) HandleStmtExecute(ctx interface{}, query string, args []interface{}) (*mysql.Result, error) {
 	return h.handleQuery(query, true)
 }
