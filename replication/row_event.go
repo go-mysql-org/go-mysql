@@ -436,10 +436,10 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			err = fmt.Errorf("Unknown ENUM packlen=%d", l)
 		}
 	case MYSQL_TYPE_SET:
-		nbits := meta & 0xFF
-		n = int(nbits+7) / 8
+		n = int(meta & 0xFF)
+		nbits := n * 8
 
-		v, err = decodeBit(data, int(nbits), n)
+		v, err = decodeBit(data, nbits, n)
 	case MYSQL_TYPE_BLOB:
 		switch meta {
 		case 1:
