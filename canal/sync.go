@@ -48,7 +48,7 @@ func (c *Canal) startSyncBinlog() error {
 			// we only focus row based event
 			if err = c.handleRowsEvent(ev); err != nil {
 				log.Errorf("handle rows event error %v", err)
-				return errors.Trace(err)
+				//return errors.Trace(err)
 			}
 		case *replication.TableMapEvent:
 			continue
