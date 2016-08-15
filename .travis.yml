@@ -8,6 +8,7 @@ services:
 
 before_script:
   - mysql -e 'create database if not exists test;'
+  - mysql -e 'set global binlog_format = 'ROW';'
 
 script:
   - make test
