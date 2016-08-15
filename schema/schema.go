@@ -13,11 +13,15 @@ import (
 )
 
 const (
-	TYPE_NUMBER = iota + 1 //tinyint, smallint, mediumint, int, bigint, year
-	TYPE_FLOAT             //float, double
-	TYPE_ENUM              //enum
-	TYPE_SET               //set
-	TYPE_STRING            //other
+	TYPE_NUMBER    = iota + 1 //tinyint, smallint, mediumint, int, bigint, year
+	TYPE_FLOAT                //float, double
+	TYPE_ENUM                 //enum
+	TYPE_SET                  //set
+	TYPE_STRING               //other
+	TYPE_DATETIME             //datetime
+	TYPE_TIMESTAMP            //timestamp
+	TYPE_DATE                 //date
+	TYPE_TIME                 //time
 )
 
 type TableColumn struct {
@@ -75,6 +79,14 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 				")"),
 			"'", "", -1),
 			",")
+	} else if "datetime" == columnType {
+		ta.Columns[index].Type = TYPE_DATETIME
+	} else if "timestamp" == columnType {
+		ta.Columns[index].Type = TYPE_TIMESTAMP
+	} else if "date" == columnType {
+		ta.Columns[index].Type = TYPE_DATE
+	} else if "time" == columnType {
+		ta.Columns[index].Type = TYPE_TIME
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
 	}
