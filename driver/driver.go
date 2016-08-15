@@ -91,7 +91,7 @@ func buildArgs(args []sqldriver.Value) []interface{} {
 }
 
 func replyError(err error) error {
-	if err == mysql.ErrBadConn {
+	if mysql.ErrorEqual(err, mysql.ErrBadConn) {
 		return sqldriver.ErrBadConn
 	} else {
 		return errors.Trace(err)

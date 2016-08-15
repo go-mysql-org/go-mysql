@@ -278,9 +278,9 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 		}
 
 		rr, err = c.conn.Execute(cmd, args...)
-		if err != nil && err != mysql.ErrBadConn {
+		if err != nil && !mysql.ErrorEqual(err, mysql.ErrBadConn) {
 			return
-		} else if err == mysql.ErrBadConn {
+		} else if mysql.ErrorEqual(err, mysql.ErrBadConn) {
 			c.conn.Close()
 			c.conn = nil
 			continue

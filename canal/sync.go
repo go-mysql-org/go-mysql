@@ -23,9 +23,9 @@ func (c *Canal) startSyncBinlog() error {
 	forceSavePos := false
 	for {
 		ev, err := s.GetEventTimeout(timeout)
-		if err != nil && err != replication.ErrGetEventTimeout {
+		if err != nil && !mysql.ErrorEqual(err, replication.ErrGetEventTimeout) {
 			return errors.Trace(err)
-		} else if err == replication.ErrGetEventTimeout {
+		} else if mysql.ErrorEqual(err, replication.ErrGetEventTimeout) {
 			timeout = 2 * timeout
 			continue
 		}
