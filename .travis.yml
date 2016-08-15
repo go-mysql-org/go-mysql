@@ -1,0 +1,13 @@
+language: go
+
+go:
+  - 1.6
+
+services:
+  - mysql
+
+before_script:
+  - mysql -e 'create database if not exists test;'
+
+script:
+  - make test
