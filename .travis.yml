@@ -28,4 +28,4 @@ before_script:
 
 
 script:
-  - go test --race -timeout 2m canal client driver replication schema replication server dump
+  - go test --race -timeout 2m ./canal ./client ./driver ./replication ./schema ./replication ./server ./dump
