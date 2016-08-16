@@ -272,6 +272,8 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(files, HasLen, 2)
 
+	c.Logf("[%s, %s]", files[0].Name(), files[1].Name())
+
 	p := NewBinlogParser()
 
 	f := func(e *BinlogEvent) error {
