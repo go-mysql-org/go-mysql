@@ -49,9 +49,9 @@ func (s *Server) Execute(cmd string, args ...interface{}) (r *Result, err error)
 		}
 
 		r, err = s.conn.Execute(cmd, args...)
-		if err != nil && err != ErrBadConn {
+		if err != nil && ErrorEqual(err, ErrBadConn) {
 			return
-		} else if err == ErrBadConn {
+		} else if ErrorEqual(err, ErrBadConn) {
 			s.conn = nil
 			continue
 		} else {

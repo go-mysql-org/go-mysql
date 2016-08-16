@@ -2,6 +2,7 @@ package canal
 
 import (
 	"github.com/juju/errors"
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/log"
 )
 
@@ -28,9 +29,9 @@ func (c *Canal) travelRowsEventHandler(e *RowsEvent) error {
 
 	var err error
 	for _, h := range c.rsHandlers {
-		if err = h.Do(e); err != nil && err != ErrHandleInterrupted {
+		if err = h.Do(e); err != nil && !mysql.ErrorEqual(err, ErrHandleInterrupted) {
 			log.Errorf("handle %v err: %v", h, err)
-		} else if err == ErrHandleInterrupted {
+		} else if mysql.ErrorEqual(err, ErrHandleInterrupted) {
 			log.Errorf("handle %v err, interrupted", h)
 			return ErrHandleInterrupted
 		}

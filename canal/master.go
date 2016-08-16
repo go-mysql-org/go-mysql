@@ -31,9 +31,9 @@ func loadMasterInfo(name string) (*masterInfo, error) {
 	m.name = name
 
 	f, err := os.Open(name)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !os.IsNotExist(errors.Cause(err)) {
 		return nil, errors.Trace(err)
-	} else if os.IsNotExist(err) {
+	} else if os.IsNotExist(errors.Cause(err)) {
 		return &m, nil
 	}
 	defer f.Close()

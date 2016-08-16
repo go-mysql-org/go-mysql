@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/juju/errors"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 var (
@@ -43,7 +44,7 @@ func Parse(r io.Reader, h ParseHandler) error {
 		line, err := rb.ReadString('\n')
 		if err != nil && err != io.EOF {
 			return errors.Trace(err)
-		} else if err == io.EOF {
+		} else if mysql.ErrorEqual(err, io.EOF) {
 			break
 		}
 
