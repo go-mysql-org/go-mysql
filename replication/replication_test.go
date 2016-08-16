@@ -249,6 +249,7 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	defer wg.Wait()
 
 	go func() {
 		defer wg.Done()
