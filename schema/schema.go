@@ -79,14 +79,14 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 				")"),
 			"'", "", -1),
 			",")
-	} else if "datetime" == columnType {
+	} else if strings.HasPrefix(columnType, "datetime") {
 		ta.Columns[index].Type = TYPE_DATETIME
-	} else if "timestamp" == columnType {
+	} else if strings.HasPrefix(columnType, "timestamp") {
 		ta.Columns[index].Type = TYPE_TIMESTAMP
+	} else if strings.HasPrefix(columnType, "time") {
+		ta.Columns[index].Type = TYPE_TIME
 	} else if "date" == columnType {
 		ta.Columns[index].Type = TYPE_DATE
-	} else if "time" == columnType {
-		ta.Columns[index].Type = TYPE_TIME
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
 	}
