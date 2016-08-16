@@ -3,7 +3,6 @@ package replication
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -267,12 +266,6 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 
 	err := t.b.StartBackup("./var", mysql.Position{"", uint32(0)}, 2*time.Second)
 	c.Assert(err, Equals, errors.Cause(ErrGetEventTimeout))
-
-	files, err := ioutil.ReadDir("./var")
-	c.Assert(err, IsNil)
-	c.Assert(files, HasLen, 2)
-
-	c.Logf("[%s, %s]", files[0].Name(), files[1].Name())
 
 	p := NewBinlogParser()
 
