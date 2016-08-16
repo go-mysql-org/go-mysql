@@ -17,7 +17,7 @@ before_script:
   - "sudo /etc/init.d/mysql stop || true"
   - "echo '[mysqld]'            | sudo tee /etc/mysql/conf.d/replication.cnf"
   - "echo 'server-id=1'         | sudo tee -a /etc/mysql/conf.d/replication.cnf"
-  - "echo 'log-bin=mysql-bin'   | sudo tee -a /etc/mysql/conf.d/replication.cnf"
+  - "echo 'log-bin=mysql'       | sudo tee -a /etc/mysql/conf.d/replication.cnf"
   - "echo 'binlog-format = row' | sudo tee -a /etc/mysql/conf.d/replication.cnf"
 
   # Start mysql (avoid errors to have logs)
