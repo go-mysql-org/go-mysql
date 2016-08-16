@@ -3,11 +3,13 @@ package replication
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/mysql"
 	. "gopkg.in/check.v1"
@@ -16,7 +18,7 @@ import (
 // Use docker mysql to test, mysql is 3306, mariadb is 3316
 var testHost = flag.String("host", "127.0.0.1", "MySQL master host")
 
-var testOutputLogs = flag.Bool("out", true, "output binlog event")
+var testOutputLogs = flag.Bool("out", false, "output binlog event")
 
 func TestBinLogSyncer(t *testing.T) {
 	TestingT(t)
@@ -264,7 +266,11 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 	os.RemoveAll("./var")
 
 	err := t.b.StartBackup("./var", mysql.Position{"", uint32(0)}, 2*time.Second)
-	c.Check(err, Equals, ErrGetEventTimeout)
+	c.Assert(err, Equals, errors.Cause(ErrGetEventTimeout))
+
+	files, err := ioutil.ReadDir("./var")
+	c.Assert(err, IsNil)
+	c.Assert(files, HasLen, 2)
 
 	p := NewBinlogParser()
 
