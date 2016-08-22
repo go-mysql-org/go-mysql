@@ -11,6 +11,7 @@ import (
 
 type DumpConfig struct {
 	// mysqldump execution path, like mysqldump or /usr/bin/mysqldump, etc...
+	// If not set, ignore using mysqldump.
 	ExecutionPath string `toml:"mysqldump"`
 
 	// Will override Databases, tables is in database table_db

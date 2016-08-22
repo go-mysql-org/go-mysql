@@ -27,6 +27,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
 	cfg.User = "root"
+	cfg.Dump.ExecutionPath = "mysqldump"
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
 
