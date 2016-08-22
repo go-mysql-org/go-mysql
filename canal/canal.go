@@ -89,13 +89,18 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 func (c *Canal) prepareDumper() error {
 	var err error
-	if c.dumper, err = dump.NewDumper(c.cfg.Dump.ExecutionPath,
+	dumpPath := c.cfg.Dump.ExecutionPath
+	if len(dumpPath) == 0 {
+		// ignore mysqldump, use binlog only
+		return nil
+	}
+
+	if c.dumper, err = dump.NewDumper(dumpPath,
 		c.cfg.Addr, c.cfg.User, c.cfg.Password); err != nil {
 		if err != exec.ErrNotFound {
 			return errors.Trace(err)
 		}
 		//no mysqldump, use binlog only
-		c.dumper = nil
 		return nil
 	}
 
