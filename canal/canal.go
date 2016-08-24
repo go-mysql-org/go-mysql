@@ -34,8 +34,9 @@ type Canal struct {
 	dumpDoneCh chan struct{}
 	syncer     *replication.BinlogSyncer
 
-	rsLock     sync.Mutex
-	rsHandlers []RowsEventHandler
+	rsLock         sync.Mutex
+	rsHandlers     []EventHandler
+	rsRowsHandlers []RowsEventHandler
 
 	connLock sync.Mutex
 	conn     *client.Conn
@@ -58,7 +59,8 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	os.MkdirAll(cfg.DataDir, 0755)
 
 	c.dumpDoneCh = make(chan struct{})
-	c.rsHandlers = make([]RowsEventHandler, 0, 4)
+	c.rsHandlers = make([]EventHandler, 0, 1)
+	c.rsRowsHandlers = make([]RowsEventHandler, 0, 1)
 	c.tables = make(map[string]*schema.Table)
 
 	var err error

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/log"
 	. "gopkg.in/check.v1"
 )
@@ -52,6 +53,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 
 	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
 
+	s.c.RegEventHandler(&testEventHandler{})
 	s.c.RegRowsEventHandler(&testRowsEventHandler{})
 	err = s.c.Start()
 	c.Assert(err, IsNil)
@@ -68,6 +70,17 @@ func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql
 	r, err := s.c.Execute(query, args...)
 	c.Assert(err, IsNil)
 	return r
+}
+
+type testEventHandler struct {
+}
+
+func (h *testEventHandler) Do(e *replication.BinlogEvent) error {
+	return nil
+}
+
+func (h *testEventHandler) String() string {
+	return "testEventHandler"
 }
 
 type testRowsEventHandler struct {

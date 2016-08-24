@@ -37,6 +37,10 @@ func (c *Canal) startSyncBinlog() error {
 
 		forceSavePos = false
 
+		if err = c.travelEventHandler(ev); err != nil {
+			return errors.Trace(err)
+		}
+
 		switch e := ev.Event.(type) {
 		case *replication.RotateEvent:
 			pos.Name = string(e.NextLogName)
