@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
-	. "gopkg.in/check.v1"
+	. "github.com/pingcap/check"
 )
 
 // Use docker mysql to test, mysql is 3306

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	. "github.com/pingcap/check"
 )
 
 // We will use go-mysql docker to test

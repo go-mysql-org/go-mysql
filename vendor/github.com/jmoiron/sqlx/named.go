@@ -79,7 +79,7 @@ func (n *NamedStmt) Queryx(arg interface{}) (*Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Rows{Rows: r, Mapper: n.Stmt.Mapper}, err
+	return &Rows{Rows: r, Mapper: n.Stmt.Mapper, unsafe: isUnsafe(n)}, err
 }
 
 // QueryRowx this NamedStmt.  Because of limitations with QueryRow, this is
@@ -90,7 +90,7 @@ func (n *NamedStmt) QueryRowx(arg interface{}) *Row {
 
 // Select using this NamedStmt
 func (n *NamedStmt) Select(dest interface{}, arg interface{}) error {
-	rows, err := n.Query(arg)
+	rows, err := n.Queryx(arg)
 	if err != nil {
 		return err
 	}
@@ -103,6 +103,13 @@ func (n *NamedStmt) Select(dest interface{}, arg interface{}) error {
 func (n *NamedStmt) Get(dest interface{}, arg interface{}) error {
 	r := n.QueryRowx(arg)
 	return r.scanAny(dest, false)
+}
+
+// Unsafe creates an unsafe version of the NamedStmt
+func (n *NamedStmt) Unsafe() *NamedStmt {
+	r := &NamedStmt{Params: n.Params, Stmt: n.Stmt, QueryString: n.QueryString}
+	r.Stmt.unsafe = true
+	return r
 }
 
 // A union interface of preparer and binder, required to be able to prepare
@@ -286,9 +293,17 @@ func compileNamedQuery(qs []byte, bindType int) (query string, names []string, e
 	return string(rebound), names, err
 }
 
-// Bind binds a struct or a map to a query with named parameters.
+// BindNamed binds a struct or a map to a query with named parameters.
+// DEPRECATED: use sqlx.Named` instead of this, it may be removed in future.
 func BindNamed(bindType int, query string, arg interface{}) (string, []interface{}, error) {
 	return bindNamedMapper(bindType, query, arg, mapper())
+}
+
+// Named takes a query using named parameters and an argument and
+// returns a new query with a list of args that can be executed by
+// a database.  The return value uses the `?` bindvar.
+func Named(query string, arg interface{}) (string, []interface{}, error) {
+	return bindNamedMapper(QUESTION, query, arg, mapper())
 }
 
 func bindNamedMapper(bindType int, query string, arg interface{}, m *reflectx.Mapper) (string, []interface{}, error) {
