@@ -118,7 +118,8 @@ func (enc *Encoder) encode(key Key, rv reflect.Value) {
 
 	k := rv.Kind()
 	switch k {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32,
 		reflect.Uint64,
 		reflect.Float32, reflect.Float64, reflect.String, reflect.Bool:
@@ -173,7 +174,8 @@ func (enc *Encoder) eElement(rv reflect.Value) {
 	switch rv.Kind() {
 	case reflect.Bool:
 		enc.wf(strconv.FormatBool(rv.Bool()))
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Int64:
 		enc.wf(strconv.FormatInt(rv.Int(), 10))
 	case reflect.Uint, reflect.Uint8, reflect.Uint16,
 		reflect.Uint32, reflect.Uint64:
@@ -223,28 +225,28 @@ func (enc *Encoder) eArrayOfTables(key Key, rv reflect.Value) {
 	if len(key) == 0 {
 		encPanic(errNoKey)
 	}
-	panicIfInvalidKey(key, true)
 	for i := 0; i < rv.Len(); i++ {
 		trv := rv.Index(i)
 		if isNil(trv) {
 			continue
 		}
+		panicIfInvalidKey(key)
 		enc.newline()
-		enc.wf("%s[[%s]]", enc.indentStr(key), key.String())
+		enc.wf("%s[[%s]]", enc.indentStr(key), key.maybeQuotedAll())
 		enc.newline()
 		enc.eMapOrStruct(key, trv)
 	}
 }
 
 func (enc *Encoder) eTable(key Key, rv reflect.Value) {
+	panicIfInvalidKey(key)
 	if len(key) == 1 {
 		// Output an extra new line between top-level tables.
 		// (The newline isn't written if nothing else has been written though.)
 		enc.newline()
 	}
 	if len(key) > 0 {
-		panicIfInvalidKey(key, true)
-		enc.wf("%s[%s]", enc.indentStr(key), key.String())
+		enc.wf("%s[%s]", enc.indentStr(key), key.maybeQuotedAll())
 		enc.newline()
 	}
 	enc.eMapOrStruct(key, rv)
@@ -341,6 +343,14 @@ func (enc *Encoder) eStruct(key Key, rv reflect.Value) {
 			if keyName == "" {
 				keyName = sft.Name
 			}
+
+			keyName, opts := getOptions(keyName)
+			if _, ok := opts["omitempty"]; ok && isEmpty(sf) {
+				continue
+			} else if _, ok := opts["omitzero"]; ok && isZero(sf) {
+				continue
+			}
+
 			enc.encode(key.add(keyName), sf)
 		}
 	}
@@ -348,10 +358,10 @@ func (enc *Encoder) eStruct(key Key, rv reflect.Value) {
 	writeFields(fieldsSub)
 }
 
-// tomlTypeName returns the TOML type name of the Go value's type. It is used to
-// determine whether the types of array elements are mixed (which is forbidden).
-// If the Go value is nil, then it is illegal for it to be an array element, and
-// valueIsNil is returned as true.
+// tomlTypeName returns the TOML type name of the Go value's type. It is
+// used to determine whether the types of array elements are mixed (which is
+// forbidden). If the Go value is nil, then it is illegal for it to be an array
+// element, and valueIsNil is returned as true.
 
 // Returns the TOML type of a Go value. The type may be `nil`, which means
 // no concrete TOML type could be found.
@@ -362,7 +372,8 @@ func tomlTypeOfGo(rv reflect.Value) tomlType {
 	switch rv.Kind() {
 	case reflect.Bool:
 		return tomlBool
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32,
 		reflect.Uint64:
 		return tomlInteger
@@ -430,6 +441,53 @@ func tomlArrayType(rv reflect.Value) tomlType {
 	return firstType
 }
 
+func getOptions(keyName string) (string, map[string]struct{}) {
+	opts := make(map[string]struct{})
+	ss := strings.Split(keyName, ",")
+	name := ss[0]
+	if len(ss) > 1 {
+		for _, opt := range ss {
+			opts[opt] = struct{}{}
+		}
+	}
+
+	return name, opts
+}
+
+func isZero(rv reflect.Value) bool {
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if rv.Int() == 0 {
+			return true
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if rv.Uint() == 0 {
+			return true
+		}
+	case reflect.Float32, reflect.Float64:
+		if rv.Float() == 0.0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isEmpty(rv reflect.Value) bool {
+	switch rv.Kind() {
+	case reflect.String:
+		if len(strings.TrimSpace(rv.String())) == 0 {
+			return true
+		}
+	case reflect.Array, reflect.Slice, reflect.Map:
+		if rv.Len() == 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (enc *Encoder) newline() {
 	if enc.hasWritten {
 		enc.wf("\n")
@@ -440,8 +498,8 @@ func (enc *Encoder) keyEqElement(key Key, val reflect.Value) {
 	if len(key) == 0 {
 		encPanic(errNoKey)
 	}
-	panicIfInvalidKey(key, false)
-	enc.wf("%s%s = ", enc.indentStr(key), key[len(key)-1])
+	panicIfInvalidKey(key)
+	enc.wf("%s%s = ", enc.indentStr(key), key.maybeQuoted(len(key)-1))
 	enc.eElement(val)
 	enc.newline()
 }
@@ -479,37 +537,15 @@ func isNil(rv reflect.Value) bool {
 	}
 }
 
-func panicIfInvalidKey(key Key, hash bool) {
-	if hash {
-		for _, k := range key {
-			if !isValidTableName(k) {
-				encPanic(e("Key '%s' is not a valid table name. Table names "+
-					"cannot contain '[', ']' or '.'.", key.String()))
-			}
-		}
-	} else {
-		if !isValidKeyName(key[len(key)-1]) {
-			encPanic(e("Key '%s' is not a name. Key names "+
-				"cannot contain whitespace.", key.String()))
+func panicIfInvalidKey(key Key) {
+	for _, k := range key {
+		if len(k) == 0 {
+			encPanic(e("Key '%s' is not a valid table name. Key names "+
+				"cannot be empty.", key.maybeQuotedAll()))
 		}
 	}
-}
-
-func isValidTableName(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	for _, r := range s {
-		if r == '[' || r == ']' || r == '.' {
-			return false
-		}
-	}
-	return true
 }
 
 func isValidKeyName(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	return true
+	return len(s) != 0
 }

@@ -8,51 +8,52 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/BurntSushi/toml",
-			"Rev": "2ceedfee35ad3848e49308ab0c9a4f640cfb5fb2"
+			"Comment": "v0.1.0-21-g056c9bc",
+			"Rev": "056c9bc7be7190eaa7715723883caffa5f8fa3e4"
 		},
 		{
 			"ImportPath": "github.com/go-sql-driver/mysql",
-			"Comment": "v1.2-191-g1421caf",
-			"Rev": "1421caf44f6464fd2ee8de694c7508ee13f92964"
+			"Comment": "v1.2-196-g3654d25",
+			"Rev": "3654d25ec346ee8ce71a68431025458d52a38ac0"
 		},
 		{
 			"ImportPath": "github.com/jmoiron/sqlx",
-			"Comment": "sqlx-v1.0-58-gac7070c",
-			"Rev": "ac7070c8a115e759a26e524fd299efdac81b7e86"
+			"Comment": "sqlx-v1.1-53-g54aec3f",
+			"Rev": "54aec3fd91a2b2129ffaca0d652b8a9223ee2d9e"
 		},
 		{
 			"ImportPath": "github.com/jmoiron/sqlx/reflectx",
-			"Comment": "sqlx-v1.0-58-gac7070c",
-			"Rev": "ac7070c8a115e759a26e524fd299efdac81b7e86"
+			"Comment": "sqlx-v1.1-53-g54aec3f",
+			"Rev": "54aec3fd91a2b2129ffaca0d652b8a9223ee2d9e"
 		},
 		{
 			"ImportPath": "github.com/juju/errors",
-			"Rev": "b2c7a7da5b2995941048f60146e67702a292e468"
+			"Rev": "6f54ff6318409d31ff16261533ce2c8381a4fd5d"
+		},
+		{
+			"ImportPath": "github.com/ngaut/log",
+			"Rev": "cec23d3e10b016363780d894a0eb732a12c06e02"
+		},
+		{
+			"ImportPath": "github.com/pingcap/check",
+			"Rev": "ce8a2f822ab1e245a4eefcef2996531c79c943f1"
 		},
 		{
 			"ImportPath": "github.com/satori/go.uuid",
-			"Comment": "v1.0.0",
-			"Rev": "f9ab0dce87d815821e221626b772e3475a0d2749"
+			"Comment": "v1.1.0",
+			"Rev": "879c5887cd475cd7864858769793b2ceb0d44feb"
 		},
 		{
 			"ImportPath": "github.com/siddontang/go/hack",
-			"Rev": "b151716326d7c7faf22473c0b04fb7ceac88b587"
+			"Rev": "354e14e6c093c661abb29fd28403b3c19cff5514"
 		},
 		{
 			"ImportPath": "github.com/siddontang/go/ioutil2",
-			"Rev": "b151716326d7c7faf22473c0b04fb7ceac88b587"
-		},
-		{
-			"ImportPath": "github.com/siddontang/go/log",
-			"Rev": "b151716326d7c7faf22473c0b04fb7ceac88b587"
+			"Rev": "354e14e6c093c661abb29fd28403b3c19cff5514"
 		},
 		{
 			"ImportPath": "github.com/siddontang/go/sync2",
-			"Rev": "b151716326d7c7faf22473c0b04fb7ceac88b587"
-		},
-		{
-			"ImportPath": "gopkg.in/check.v1",
-			"Rev": "64131543e7896d5bcc6bd5a76287eb75ea96c673"
+			"Rev": "354e14e6c093c661abb29fd28403b3c19cff5514"
 		}
 	]
 }

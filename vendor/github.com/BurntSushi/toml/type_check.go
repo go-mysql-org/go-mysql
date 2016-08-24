@@ -56,6 +56,12 @@ func (p *parser) typeOfPrimitive(lexItem item) tomlType {
 		return tomlDatetime
 	case itemString:
 		return tomlString
+	case itemMultilineString:
+		return tomlString
+	case itemRawString:
+		return tomlString
+	case itemRawMultilineString:
+		return tomlString
 	case itemBool:
 		return tomlBool
 	}
@@ -77,8 +83,8 @@ func (p *parser) typeOfArray(types []tomlType) tomlType {
 	theType := types[0]
 	for _, t := range types[1:] {
 		if !typeEqual(theType, t) {
-			p.panicf("Array contains values of type '%s' and '%s', but arrays "+
-				"must be homogeneous.", theType, t)
+			p.panicf("Array contains values of type '%s' and '%s', but "+
+				"arrays must be homogeneous.", theType, t)
 		}
 	}
 	return tomlArray

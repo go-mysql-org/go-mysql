@@ -9,7 +9,7 @@ representations. (There is an example of this below.)
 Spec: https://github.com/mojombo/toml
 
 Compatible with TOML version
-[v0.2.0](https://github.com/mojombo/toml/blob/master/versions/toml-v0.2.0.md)
+[v0.2.0](https://github.com/toml-lang/toml/blob/master/versions/en/toml-v0.2.0.md)
 
 Documentation: http://godoc.org/github.com/BurntSushi/toml
 
@@ -111,7 +111,7 @@ type songs struct {
   Song []song
 }
 var favorites songs
-if _, err := Decode(blob, &favorites); err != nil {
+if _, err := toml.Decode(blob, &favorites); err != nil {
   log.Fatal(err)
 }
 

@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/schema"
-	"github.com/siddontang/go/log"
 )
 
 type dumpParseHandler struct {
