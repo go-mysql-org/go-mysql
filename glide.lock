@@ -1,0 +1,26 @@
+hash: bc8bbfb13d4fdb5ca968d388707eb1b882d695a352386448df862fd81f2f7b26
+updated: 2016-08-30T16:47:10.100784328+08:00
+imports:
+- name: github.com/BurntSushi/toml
+  version: 056c9bc7be7190eaa7715723883caffa5f8fa3e4
+- name: github.com/go-sql-driver/mysql
+  version: 3654d25ec346ee8ce71a68431025458d52a38ac0
+- name: github.com/jmoiron/sqlx
+  version: 54aec3fd91a2b2129ffaca0d652b8a9223ee2d9e
+  subpackages:
+  - reflectx
+- name: github.com/juju/errors
+  version: 6f54ff6318409d31ff16261533ce2c8381a4fd5d
+- name: github.com/ngaut/log
+  version: cec23d3e10b016363780d894a0eb732a12c06e02
+- name: github.com/pingcap/check
+  version: ce8a2f822ab1e245a4eefcef2996531c79c943f1
+- name: github.com/satori/go.uuid
+  version: 879c5887cd475cd7864858769793b2ceb0d44feb
+- name: github.com/siddontang/go
+  version: 354e14e6c093c661abb29fd28403b3c19cff5514
+  subpackages:
+  - hack
+  - ioutil2
+  - sync2
+testImports: []
