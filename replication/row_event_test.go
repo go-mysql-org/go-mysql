@@ -326,3 +326,42 @@ func (_ *testDecodeSuite) TestDecodeDecimal(c *C) {
 		c.Assert(value, DecodeDecimalsEquals, pos, err, tc.Expected, tc.ExpectedPos, tc.ExpectedErr, i)
 	}
 }
+
+func (_ *testDecodeSuite) TestLastNull(c *C) {
+	// Table format:
+	// desc funnytable;
+	// +-------+------------+------+-----+---------+-------+
+	// | Field | Type       | Null | Key | Default | Extra |
+	// +-------+------------+------+-----+---------+-------+
+	// | value | tinyint(4) | YES  |     | NULL    |       |
+	// +-------+------------+------+-----+---------+-------+
+
+	// insert into funnytable values (1), (2), (null);
+	// insert into funnytable values (1), (null), (2);
+	// all must get 3 rows
+
+	tableMapEventData := []byte("\xd3\x01\x00\x00\x00\x00\x01\x00\x04test\x00\nfunnytable\x00\x01\x01\x00\x01")
+
+	tableMapEvent := new(TableMapEvent)
+	tableMapEvent.tableIDSize = 6
+	err := tableMapEvent.Decode(tableMapEventData)
+	c.Assert(err, IsNil)
+
+	rows := new(RowsEvent)
+	rows.tableIDSize = 6
+	rows.tables = make(map[uint64]*TableMapEvent)
+	rows.tables[tableMapEvent.TableID] = tableMapEvent
+	rows.Version = 2
+
+	tbls := [][]byte{
+		[]byte("\xd3\x01\x00\x00\x00\x00\x01\x00\x02\x00\x01\xff\xfe\x01\xff\xfe\x02"),
+		[]byte("\xd3\x01\x00\x00\x00\x00\x01\x00\x02\x00\x01\xff\xfe\x01\xfe\x02\xff"),
+	}
+
+	for _, tbl := range tbls {
+		rows.Rows = nil
+		err = rows.Decode(tbl)
+		c.Assert(err, IsNil)
+		c.Assert(rows.Rows, HasLen, 3)
+	}
+}
