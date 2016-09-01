@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
 )
 
 var (
@@ -56,6 +57,7 @@ func (s *BinlogStreamer) closeWithError(err error) {
 	if err == nil {
 		err = ErrSyncClosed
 	}
+	log.Errorf("close sync with err: %v", err)
 	select {
 	case s.ech <- err:
 	default:
@@ -65,7 +67,7 @@ func (s *BinlogStreamer) closeWithError(err error) {
 func newBinlogStreamer() *BinlogStreamer {
 	s := new(BinlogStreamer)
 
-	s.ch = make(chan *BinlogEvent, 1024)
+	s.ch = make(chan *BinlogEvent, 10240)
 	s.ech = make(chan error, 4)
 
 	return s
