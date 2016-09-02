@@ -283,7 +283,7 @@ func (e *RowsEvent) Decode(data []byte) error {
 }
 
 func isBitSet(bitmap []byte, i int) bool {
-	return bitmap[i/8]&(1<<(uint(i)%8)) > 0
+	return bitmap[i>>3]&(1<<(uint(i)&7)) > 0
 }
 
 func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte) (int, error) {
