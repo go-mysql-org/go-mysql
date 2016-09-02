@@ -365,3 +365,23 @@ func (_ *testDecodeSuite) TestLastNull(c *C) {
 		c.Assert(rows.Rows, HasLen, 3)
 	}
 }
+
+func (_ *testDecodeSuite) TestParseRowPanic(c *C) {
+	tableMapEvent := new(TableMapEvent)
+	tableMapEvent.tableIDSize = 6
+	tableMapEvent.TableID = 1810
+	tableMapEvent.ColumnType = []byte{3, 15, 15, 15, 9, 15, 15, 252, 3, 3, 3, 15, 3, 3, 3, 15, 3, 15, 1, 15, 3, 1, 252, 15, 15, 15}
+	tableMapEvent.ColumnMeta = []uint16{0, 108, 60, 765, 0, 765, 765, 4, 0, 0, 0, 765, 0, 0, 0, 3, 0, 3, 0, 765, 0, 0, 2, 108, 108, 108}
+
+	rows := new(RowsEvent)
+	rows.tableIDSize = 6
+	rows.tables = make(map[uint64]*TableMapEvent)
+	rows.tables[tableMapEvent.TableID] = tableMapEvent
+	rows.Version = 2
+
+	data := []byte{18, 7, 0, 0, 0, 0, 1, 0, 2, 0, 26, 1, 1, 16, 252, 248, 142, 63, 0, 0, 13, 0, 0, 0, 13, 0, 0, 0}
+
+	err := rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[0][0], Equals, int32(16270))
+}

@@ -260,13 +260,11 @@ func (e *RowsEvent) Decode(data []byte) error {
 
 	// ... repeat rows until event-end
 	defer func() {
-		// Some people meet panic when we use `pos < len(data)`, but using `pos < len(data) - 1`
-		// before also misses data, see Decode TestLastNull suite.
-		// So we log detailed information to debug here and terminate the program.
 		if r := recover(); r != nil {
 			log.Fatalf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v", r, data, e, e.Table)
 		}
 	}()
+
 	for pos < len(data) {
 		if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap1); err != nil {
 			return errors.Trace(err)
@@ -284,12 +282,23 @@ func (e *RowsEvent) Decode(data []byte) error {
 	return nil
 }
 
+func isBitSet(bitmap []byte, i int) bool {
+	return bitmap[i/8]&(1<<(uint(i)%8)) > 0
+}
+
 func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte) (int, error) {
 	row := make([]interface{}, e.ColumnCount)
 
 	pos := 0
 
-	count := (bitCount(bitmap) + 7) / 8
+	// refer: https://github.com/alibaba/canal/blob/c3e38e50e269adafdd38a48c63a1740cde304c67/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogBuffer.java#L63
+	count := 0
+	for i := 0; i < int(e.ColumnCount); i++ {
+		if isBitSet(bitmap, i) {
+			count++
+		}
+	}
+	count = (count + 7) / 8
 
 	nullBitmap := data[pos : pos+count]
 	pos += count
@@ -299,15 +308,15 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 	var n int
 	var err error
 	for i := 0; i < int(e.ColumnCount); i++ {
-		if bitGet(bitmap, i) == 0 {
+		if !isBitSet(bitmap, i) {
 			continue
 		}
 
 		isNull := (uint32(nullBitmap[nullbitIndex/8]) >> uint32(nullbitIndex%8)) & 0x01
+		nullbitIndex++
 
 		if isNull > 0 {
 			row[i] = nil
-			nullbitIndex++
 			continue
 		}
 
@@ -317,8 +326,6 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 			return 0, nil
 		}
 		pos += n
-
-		nullbitIndex++
 	}
 
 	e.Rows = append(e.Rows, row)
