@@ -31,7 +31,9 @@ func (c *Canal) startSyncBinlog() error {
 		if ctx.Err() == context.DeadlineExceeded {
 			timeout = 2 * timeout
 			continue
-		} else if err != nil {
+		}
+
+		if err != nil {
 			return errors.Trace(err)
 		}
 
