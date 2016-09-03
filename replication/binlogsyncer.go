@@ -71,6 +71,8 @@ func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
 
 	b.cfg = cfg
 	b.parser = NewBinlogParser()
+	b.parser.SetRawMode(b.cfg.RawModeEanbled)
+
 	b.running = false
 	b.stopCh = make(chan struct{}, 1)
 
