@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
@@ -180,6 +181,7 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 
 func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "TableID: %d\n", e.TableID)
+	fmt.Fprintf(w, "TableID size: %d\n", e.tableIDSize)
 	fmt.Fprintf(w, "Flags: %d\n", e.Flags)
 	fmt.Fprintf(w, "Schema: %s\n", e.Schema)
 	fmt.Fprintf(w, "Table: %s\n", e.Table)
@@ -257,13 +259,13 @@ func (e *RowsEvent) Decode(data []byte) error {
 	var err error
 
 	// ... repeat rows until event-end
-	// Why using pos < len(data) - 1 instead of origin pos < len(data) to check?
-	// See mysql
-	//  https://github.com/mysql/mysql-server/blob/5.7/sql/log_event.cc#L9006
-	//	https://github.com/mysql/mysql-server/blob/5.7/sql/log_event.cc#L2492
-	// A user panics here but he can't give me more information, and using len(data) - 1
-	// fixes this panic, so I will try to construct a test case for this later.
-	for pos < len(data)-1 {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Fatalf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v", r, data, e, e.Table)
+		}
+	}()
+
+	for pos < len(data) {
 		if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap1); err != nil {
 			return errors.Trace(err)
 		}
@@ -280,12 +282,23 @@ func (e *RowsEvent) Decode(data []byte) error {
 	return nil
 }
 
+func isBitSet(bitmap []byte, i int) bool {
+	return bitmap[i>>3]&(1<<(uint(i)&7)) > 0
+}
+
 func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte) (int, error) {
 	row := make([]interface{}, e.ColumnCount)
 
 	pos := 0
 
-	count := (bitCount(bitmap) + 7) / 8
+	// refer: https://github.com/alibaba/canal/blob/c3e38e50e269adafdd38a48c63a1740cde304c67/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogBuffer.java#L63
+	count := 0
+	for i := 0; i < int(e.ColumnCount); i++ {
+		if isBitSet(bitmap, i) {
+			count++
+		}
+	}
+	count = (count + 7) / 8
 
 	nullBitmap := data[pos : pos+count]
 	pos += count
@@ -295,15 +308,15 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 	var n int
 	var err error
 	for i := 0; i < int(e.ColumnCount); i++ {
-		if bitGet(bitmap, i) == 0 {
+		if !isBitSet(bitmap, i) {
 			continue
 		}
 
 		isNull := (uint32(nullBitmap[nullbitIndex/8]) >> uint32(nullbitIndex%8)) & 0x01
+		nullbitIndex++
 
 		if isNull > 0 {
 			row[i] = nil
-			nullbitIndex++
 			continue
 		}
 
@@ -313,8 +326,6 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 			return 0, nil
 		}
 		pos += n
-
-		nullbitIndex++
 	}
 
 	e.Rows = append(e.Rows, row)
