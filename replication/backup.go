@@ -18,7 +18,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 		timeout = 30 * 3600 * 24 * time.Second
 	}
 
-	b.SetRawMode(true)
+	b.cfg.RawModeEanbled = true
 
 	os.MkdirAll(backupDir, 0755)
 
