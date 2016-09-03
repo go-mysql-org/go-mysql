@@ -246,8 +246,6 @@ func (c *Canal) checkBinlogRowFormat() error {
 }
 
 func (c *Canal) prepareSyncer() error {
-	c.syncer = replication.NewBinlogSyncer(c.cfg.ServerID, c.cfg.Flavor)
-
 	seps := strings.Split(c.cfg.Addr, ":")
 	if len(seps) != 2 {
 		return errors.Errorf("invalid mysql addr format %s, must host:port", c.cfg.Addr)
@@ -258,9 +256,17 @@ func (c *Canal) prepareSyncer() error {
 		return errors.Trace(err)
 	}
 
-	if err = c.syncer.RegisterSlave(seps[0], uint16(port), c.cfg.User, c.cfg.Password); err != nil {
-		return errors.Trace(err)
+	cfg := replication.BinlogSyncerConfig{
+		ServerID: c.cfg.ServerID,
+		Flavor:   c.cfg.Flavor,
+		Host:     seps[0],
+		Port:     uint16(port),
+		User:     c.cfg.User,
+		Password: c.cfg.Password,
 	}
+
+	c.syncer = replication.NewBinlogSyncer(&cfg)
+
 	return nil
 }
 

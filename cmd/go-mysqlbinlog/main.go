@@ -33,27 +33,23 @@ var rawMode = flag.Bool("raw", false, "Use raw mode")
 func main() {
 	flag.Parse()
 
-	b := replication.NewBinlogSyncer(101, *flavor)
+	cfg := replication.BinlogSyncerConfig{
+		ServerID: 101,
+		Flavor:   *flavor,
 
-	if err := b.RegisterSlave(*host, uint16(*port), *user, *password); err != nil {
-		fmt.Printf("Register slave error: %v \n", errors.ErrorStack(err))
-		return
+		Host:            *host,
+		Port:            uint16(*port),
+		User:            *user,
+		Password:        *password,
+		RawModeEanbled:  *rawMode,
+		SemiSyncEnabled: *semiSync,
 	}
 
-	b.SetRawMode(*rawMode)
-
-	if *semiSync {
-		if err := b.EnableSemiSync(); err != nil {
-			fmt.Printf("Enable semi sync replication mode err: %v\n", errors.ErrorStack(err))
-			return
-		}
-	}
+	b := replication.NewBinlogSyncer(&cfg)
 
 	pos := mysql.Position{*file, uint32(*pos)}
 	if len(*backupPath) > 0 {
-		// must raw mode
-		b.SetRawMode(true)
-
+		// Backup will always use RawMode.
 		err := b.StartBackup(*backupPath, pos, 0)
 		if err != nil {
 			fmt.Printf("Start backup error: %v\n", errors.ErrorStack(err))

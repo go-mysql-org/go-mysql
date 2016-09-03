@@ -17,10 +17,15 @@ import (
 )
 // Create a binlog syncer with a unique server id, the server id must be different from other MySQL's. 
 // flavor is mysql or mariadb
-syncer := replication.NewBinlogSyncer(100, "mysql")
-
-// Register slave, the MySQL master is at 127.0.0.1:3306, with user root and an empty password
-syncer.RegisterSlave("127.0.0.1", 3306, "root", "")
+cfg := replication.BinlogSyncerConfig {
+    ServerID: 100,
+    Flavor:   "mysql",
+    Host:     "127.0.0.1",
+    Port:     3306,
+    User:     "root",
+    Password: "",
+}
+syncer := replication.NewBinlogSyncer(&cfg)
 
 // Start sync with sepcified binlog file and position
 streamer, _ := syncer.StartSync(mysql.Position{binlogFile, binlogPos})
