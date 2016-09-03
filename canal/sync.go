@@ -3,6 +3,8 @@ package canal
 import (
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
@@ -22,12 +24,15 @@ func (c *Canal) startSyncBinlog() error {
 	timeout := time.Second
 	forceSavePos := false
 	for {
-		ev, err := s.GetEventTimeout(timeout)
-		if err != nil && !mysql.ErrorEqual(err, replication.ErrGetEventTimeout) {
-			return errors.Trace(err)
-		} else if mysql.ErrorEqual(err, replication.ErrGetEventTimeout) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ev, err := s.GetEvent(ctx)
+		cancel()
+
+		if ctx.Err() == context.DeadlineExceeded {
 			timeout = 2 * timeout
 			continue
+		} else if err != nil {
+			return errors.Trace(err)
 		}
 
 		timeout = time.Second

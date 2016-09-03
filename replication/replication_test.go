@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/juju/errors"
+	"golang.org/x/net/context"
+
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/mysql"
@@ -71,13 +72,15 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		}
 
 		for {
-			e, err := s.GetEventTimeout(2 * time.Second)
-			if err != nil {
-				if err != ErrGetEventTimeout {
-					c.Fatal(err)
-				}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			e, err := s.GetEvent(ctx)
+			cancel()
+
+			if ctx.Err() == context.DeadlineExceeded {
 				return
 			}
+
+			c.Assert(err, IsNil)
 
 			if *testOutputLogs {
 				e.Dump(os.Stdout)
@@ -265,7 +268,7 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 	os.RemoveAll("./var")
 
 	err := t.b.StartBackup("./var", mysql.Position{"", uint32(0)}, 2*time.Second)
-	c.Assert(err, Equals, errors.Cause(ErrGetEventTimeout))
+	c.Assert(err, IsNil)
 
 	p := NewBinlogParser()
 
