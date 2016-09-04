@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 
+	"golang.org/x/net/context"
+
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -61,7 +63,7 @@ func main() {
 		}
 
 		for {
-			e, err := s.GetEvent()
+			e, err := s.GetEvent(context.Background())
 			if err != nil {
 				fmt.Printf("Get event error: %v\n", errors.ErrorStack(err))
 				return

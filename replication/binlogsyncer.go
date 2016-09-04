@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/client"
@@ -60,7 +62,8 @@ type BinlogSyncer struct {
 
 	running bool
 
-	stopCh chan struct{}
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
@@ -74,7 +77,7 @@ func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetRawMode(b.cfg.RawModeEanbled)
 
 	b.running = false
-	b.stopCh = make(chan struct{}, 1)
+	b.ctx, b.cancel = context.WithCancel(context.Background())
 
 	return b
 }
@@ -92,8 +95,10 @@ func (b *BinlogSyncer) close() {
 		return
 	}
 
+	log.Info("syncer is closing...")
+
 	b.running = false
-	close(b.stopCh)
+	b.cancel()
 
 	if b.c != nil {
 		b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
@@ -104,11 +109,13 @@ func (b *BinlogSyncer) close() {
 	if b.c != nil {
 		b.c.Close()
 	}
+
+	log.Info("syncer is closed")
 }
 
 func (b *BinlogSyncer) isClosed() bool {
 	select {
-	case <-b.stopCh:
+	case <-b.ctx.Done():
 		return true
 	default:
 		return false
@@ -120,6 +127,7 @@ func (b *BinlogSyncer) registerSlave() error {
 		b.c.Close()
 	}
 
+	log.Infof("register slave for master server %s:%d", b.cfg.Host, b.cfg.Port)
 	var err error
 	b.c, err = client.Connect(fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port), b.cfg.User, b.cfg.Password, "")
 	if err != nil {
@@ -215,6 +223,8 @@ func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
 
 // StartSync starts syncing from the `pos` position.
 func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
+	log.Infof("begin to sync binlog from position %s", pos)
+
 	b.m.Lock()
 	defer b.m.Unlock()
 
@@ -231,6 +241,8 @@ func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 
 // StartSyncGTID starts syncing from the `gset` GTIDSet.
 func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
+	log.Infof("begin to sync binlog from GTID %s", gset)
+
 	b.m.Lock()
 	defer b.m.Unlock()
 
@@ -478,7 +490,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			// TODO: add a max retry count.
 			for {
 				select {
-				case <-b.stopCh:
+				case <-b.ctx.Done():
 					s.close()
 					return
 				case <-time.After(time.Second):
@@ -538,7 +550,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	needStop := false
 	select {
 	case s.ch <- e:
-	case <-b.stopCh:
+	case <-b.ctx.Done():
 		needStop = true
 	}
 
