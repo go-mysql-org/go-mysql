@@ -47,7 +47,7 @@ for {
     e, _ := s.GetEvent(ctx)
     cancel()
 
-    if ctx.Err() == context.DeadlineExceeded {
+    if err == context.DeadlineExceeded {
         // meet timeout
         continue
     }

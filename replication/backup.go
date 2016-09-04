@@ -45,7 +45,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 		e, err := s.GetEvent(ctx)
 		cancel()
 
-		if ctx.Err() == context.DeadlineExceeded {
+		if err == context.DeadlineExceeded {
 			return nil
 		}
 
