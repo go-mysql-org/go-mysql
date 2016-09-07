@@ -191,6 +191,9 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
+// RowsEventStmtEndFlag is set in the end of the statement.
+const RowsEventStmtEndFlag = 0x01
+
 type RowsEvent struct {
 	//0, 1, 2
 	Version int
