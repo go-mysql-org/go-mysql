@@ -545,6 +545,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	if re, ok := e.Event.(*RotateEvent); ok {
 		b.nextPos.Name = string(re.NextLogName)
 		b.nextPos.Pos = uint32(re.Position)
+		log.Infof("rotate to %s", b.nextPos)
 	}
 
 	needStop := false
