@@ -442,6 +442,7 @@ func (b *BinlogSyncer) retrySync() error {
 
 	log.Infof("begin to re-sync from %s", b.nextPos)
 
+	b.parser.Reset()
 	if err := b.prepareSyncPos(b.nextPos); err != nil {
 		return errors.Trace(err)
 	}
@@ -540,7 +541,10 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		return errors.Trace(err)
 	}
 
-	b.nextPos.Pos = e.Header.LogPos
+	if e.Header.LogPos > 0 {
+		// Some events like FormatDescriptionEvent return 0, ignore.
+		b.nextPos.Pos = e.Header.LogPos
+	}
 
 	if re, ok := e.Event.(*RotateEvent); ok {
 		b.nextPos.Name = string(re.NextLogName)
