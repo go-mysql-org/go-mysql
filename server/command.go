@@ -24,7 +24,7 @@ type Handler interface {
 	HandleStmtExecute(context interface{}, query string, args ...interface{}) (*Result, error)
 	//handle COM_STMT_CLOSE, context is the previous one set in prepare
 	//this handler has no response
-	HandleStmtClose(context interface{}) error
+	HandleStmtClose(context interface{}) (error)
 }
 
 func (c *Conn) HandleCommand() error {
@@ -141,8 +141,4 @@ func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, er
 }
 func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error) {
 	return nil, fmt.Errorf("not supported now")
-}
-
-func (h EmptyHandler) HandleStmtClose(context interface{}) error {
-	return nil
 }
