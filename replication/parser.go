@@ -27,7 +27,6 @@ func NewBinlogParser() *BinlogParser {
 }
 
 func (p *BinlogParser) Reset() {
-	p.tables = make(map[uint64]*TableMapEvent)
 	p.format = nil
 }
 
@@ -55,10 +54,10 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 		return errors.Errorf("seek %s to %d error %v", name, offset, err)
 	}
 
-	return p.ParseReader(f, onEvent)
+	return p.parseReader(f, onEvent)
 }
 
-func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
+func (p *BinlogParser) parseReader(r io.Reader, onEvent OnEventFunc) error {
 	p.Reset()
 
 	var err error
