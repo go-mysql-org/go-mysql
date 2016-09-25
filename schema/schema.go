@@ -13,15 +13,16 @@ import (
 )
 
 const (
-	TYPE_NUMBER    = iota + 1 //tinyint, smallint, mediumint, int, bigint, year
-	TYPE_FLOAT                //float, double
-	TYPE_ENUM                 //enum
-	TYPE_SET                  //set
-	TYPE_STRING               //other
-	TYPE_DATETIME             //datetime
-	TYPE_TIMESTAMP            //timestamp
-	TYPE_DATE                 //date
-	TYPE_TIME                 //time
+	TYPE_NUMBER    = iota + 1 // tinyint, smallint, mediumint, int, bigint, year
+	TYPE_FLOAT                // float, double
+	TYPE_ENUM                 // enum
+	TYPE_SET                  // set
+	TYPE_STRING               // other
+	TYPE_DATETIME             // datetime
+	TYPE_TIMESTAMP            // timestamp
+	TYPE_DATE                 // date
+	TYPE_TIME                 // time
+	TYPE_BIT                  // bit
 )
 
 type TableColumn struct {
@@ -87,6 +88,8 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 		ta.Columns[index].Type = TYPE_TIME
 	} else if "date" == columnType {
 		ta.Columns[index].Type = TYPE_DATE
+	} else if strings.HasPrefix(columnType, "bit") {
+		ta.Columns[index].Type = TYPE_BIT
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
 	}
