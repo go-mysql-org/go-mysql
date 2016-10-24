@@ -35,6 +35,7 @@ func (c *Conn) HandleCommand() error {
 	data, err := c.ReadPacket()
 	if err != nil {
 		c.Close()
+		c.Conn = nil
 		return err
 	}
 
@@ -48,6 +49,7 @@ func (c *Conn) HandleCommand() error {
 
 	if err != nil {
 		c.Close()
+		c.Conn = nil
 	}
 	return err
 }
@@ -59,6 +61,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 	switch cmd {
 	case COM_QUIT:
 		c.Close()
+		c.Conn = nil
 		return noResponse{}
 	case COM_QUERY:
 		if r, err := c.h.HandleQuery(hack.String(data)); err != nil {
