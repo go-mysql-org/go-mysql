@@ -385,3 +385,47 @@ func (_ *testDecodeSuite) TestParseRowPanic(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rows.Rows[0][0], Equals, int32(16270))
 }
+
+func (_ *testDecodeSuite) TestParseJson(c *C) {
+	// Table format:
+	// mysql> desc t10;
+	// +-------+---------------+------+-----+---------+-------+
+	// | Field | Type          | Null | Key | Default | Extra |
+	// +-------+---------------+------+-----+---------+-------+
+	// | c1    | json          | YES  |     | NULL    |       |
+	// | c2    | decimal(10,0) | YES  |     | NULL    |       |
+	// +-------+---------------+------+-----+---------+-------+
+
+	// CREATE TABLE `t10` (
+	//   `c1` json DEFAULT NULL,
+	//   `c2` decimal(10,0)
+	// ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+	// INSERT INTO `t10` (`c2`) VALUES (1);
+	// INSERT INTO `t10` (`c1`, `c2`) VALUES ('{"key1": "value1", "key2": "value2"}', 1);
+
+	tableMapEventData := []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x03t10\x00\x02\xf5\xf6\x03\x04\n\x00\x03")
+
+	tableMapEvent := new(TableMapEvent)
+	tableMapEvent.tableIDSize = 6
+	err := tableMapEvent.Decode(tableMapEventData)
+	c.Assert(err, IsNil)
+
+	rows := new(RowsEvent)
+	rows.tableIDSize = 6
+	rows.tables = make(map[uint64]*TableMapEvent)
+	rows.tables[tableMapEvent.TableID] = tableMapEvent
+	rows.Version = 2
+
+	tbls := [][]byte{
+		[]byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfd\x80\x00\x00\x00\x01"),
+		[]byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc)\x00\x00\x00\x00\x02\x00(\x00\x12\x00\x04\x00\x16\x00\x04\x00\f\x1a\x00\f!\x00key1key2\x06value1\x06value2\x80\x00\x00\x00\x01"),
+	}
+
+	for _, tbl := range tbls {
+		rows.Rows = nil
+		err = rows.Decode(tbl)
+		c.Assert(err, IsNil)
+		c.Assert(rows.Rows[0][1], Equals, float64(1))
+	}
+}

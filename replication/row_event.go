@@ -156,7 +156,8 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 		case MYSQL_TYPE_BLOB,
 			MYSQL_TYPE_DOUBLE,
 			MYSQL_TYPE_FLOAT,
-			MYSQL_TYPE_GEOMETRY:
+			MYSQL_TYPE_GEOMETRY,
+			MYSQL_TYPE_JSON:
 			e.ColumnMeta[i] = uint16(data[pos])
 			pos++
 		case MYSQL_TYPE_TIME2,
@@ -264,7 +265,7 @@ func (e *RowsEvent) Decode(data []byte) error {
 	// ... repeat rows until event-end
 	defer func() {
 		if r := recover(); r != nil {
-			log.Fatalf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v", r, data, e, e.Table)
+			log.Fatalf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v\n%s", r, data, e, e.Table, Pstack())
 		}
 	}()
 
@@ -481,6 +482,11 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		v, n = decodeString(data, length)
 	case MYSQL_TYPE_STRING:
 		v, n = decodeString(data, length)
+	case MYSQL_TYPE_JSON:
+		length = int(binary.LittleEndian.Uint16(data[0:]))
+		n = length + int(meta)
+		// TODO: parse the json
+		v = hack.String(data[meta:n])
 	default:
 		err = fmt.Errorf("unsupport type %d in binlog and don't know how to handle", tp)
 	}
