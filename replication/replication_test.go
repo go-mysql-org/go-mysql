@@ -98,7 +98,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	str := `DROP TABLE IF EXISTS test_replication`
 	t.testExecute(c, str)
 
-	str = `CREATE TABLE IF NOT EXISTS test_replication (
+	str = `CREATE TABLE test_replication (
 			id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
 			str VARCHAR(256),
 			f FLOAT,
@@ -143,7 +143,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	str = `DROP TABLE IF EXISTS test_json`
 	t.testExecute(c, str)
 
-	str = `CREATE TABLE IF NOT EXISTS test_json (
+	str = `CREATE TABLE test_json (
 			id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
 			c1 JSON,
 			c2 DECIMAL(10, 0),

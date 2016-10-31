@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	//"os"
-
 	"testing"
 
 	. "github.com/pingcap/check"
