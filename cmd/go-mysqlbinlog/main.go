@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"os"
 
+	"golang.org/x/net/context"
+
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 )
@@ -30,43 +33,39 @@ var rawMode = flag.Bool("raw", false, "Use raw mode")
 func main() {
 	flag.Parse()
 
-	b := replication.NewBinlogSyncer(101, *flavor)
+	cfg := replication.BinlogSyncerConfig{
+		ServerID: 101,
+		Flavor:   *flavor,
 
-	if err := b.RegisterSlave(*host, uint16(*port), *user, *password); err != nil {
-		fmt.Printf("Register slave error: %v \n", err)
-		return
+		Host:            *host,
+		Port:            uint16(*port),
+		User:            *user,
+		Password:        *password,
+		RawModeEanbled:  *rawMode,
+		SemiSyncEnabled: *semiSync,
 	}
 
-	b.SetRawMode(*rawMode)
-
-	if *semiSync {
-		if err := b.EnableSemiSync(); err != nil {
-			fmt.Printf("Enable semi sync replication mode err: %v\n", err)
-			return
-		}
-	}
+	b := replication.NewBinlogSyncer(&cfg)
 
 	pos := mysql.Position{*file, uint32(*pos)}
 	if len(*backupPath) > 0 {
-		// must raw mode
-		b.SetRawMode(true)
-
+		// Backup will always use RawMode.
 		err := b.StartBackup(*backupPath, pos, 0)
 		if err != nil {
-			fmt.Printf("Start backup error: %v\n", err)
+			fmt.Printf("Start backup error: %v\n", errors.ErrorStack(err))
 			return
 		}
 	} else {
 		s, err := b.StartSync(pos)
 		if err != nil {
-			fmt.Printf("Start sync error: %v\n", err)
+			fmt.Printf("Start sync error: %v\n", errors.ErrorStack(err))
 			return
 		}
 
 		for {
-			e, err := s.GetEvent()
+			e, err := s.GetEvent(context.Background())
 			if err != nil {
-				fmt.Printf("Get event error: %v\n", err)
+				fmt.Printf("Get event error: %v\n", errors.ErrorStack(err))
 				return
 			}
 

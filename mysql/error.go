@@ -1,8 +1,9 @@
 package mysql
 
 import (
-	"errors"
 	"fmt"
+
+	"github.com/juju/errors"
 )
 
 var (

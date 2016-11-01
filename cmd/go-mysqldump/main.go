@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/dump"
 )
 
@@ -25,7 +26,7 @@ func main() {
 
 	d, err := dump.NewDumper(*execution, *addr, *user, *password)
 	if err != nil {
-		fmt.Printf("Create Dumper error %v\n", err)
+		fmt.Printf("Create Dumper error %v\n", errors.ErrorStack(err))
 		return
 	}
 
@@ -51,7 +52,7 @@ func main() {
 	if len(*output) > 0 {
 		f, err = os.OpenFile(*output, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			fmt.Printf("Open file error %v\n", err)
+			fmt.Printf("Open file error %v\n", errors.ErrorStack(err))
 			return
 		}
 	}
@@ -59,7 +60,7 @@ func main() {
 	defer f.Close()
 
 	if err = d.Dump(f); err != nil {
-		fmt.Printf("Dump MySQL error %v\n", err)
+		fmt.Printf("Dump MySQL error %v\n", errors.ErrorStack(err))
 		return
 	}
 }

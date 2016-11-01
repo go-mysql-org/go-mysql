@@ -1,8 +1,6 @@
 package mysql
 
-import (
-	"fmt"
-)
+import "github.com/juju/errors"
 
 type GTIDSet interface {
 	String() string
@@ -22,6 +20,6 @@ func ParseGTIDSet(flavor string, s string) (GTIDSet, error) {
 	case MariaDBFlavor:
 		return ParseMariadbGTIDSet(s)
 	default:
-		return nil, fmt.Errorf("invalid flavor %s", flavor)
+		return nil, errors.Errorf("invalid flavor %s", flavor)
 	}
 }

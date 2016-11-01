@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
@@ -21,7 +22,7 @@ type driver struct {
 func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	seps := strings.Split(dsn, "@")
 	if len(seps) != 2 {
-		return nil, fmt.Errorf("invalid dsn, must user:password@addr[?db]")
+		return nil, errors.Errorf("invalid dsn, must user:password@addr[?db]")
 	}
 
 	var user string
@@ -34,7 +35,7 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	} else if len(ss) == 1 {
 		user = ss[0]
 	} else {
-		return nil, fmt.Errorf("invalid dsn, must user:password@addr[?db]")
+		return nil, errors.Errorf("invalid dsn, must user:password@addr[?db]")
 	}
 
 	if ss := strings.Split(seps[1], "?"); len(ss) == 2 {
@@ -42,7 +43,7 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	} else if len(ss) == 1 {
 		addr = ss[0]
 	} else {
-		return nil, fmt.Errorf("invalid dsn, must user:password@addr[?db]")
+		return nil, errors.Errorf("invalid dsn, must user:password@addr[?db]")
 	}
 
 	c, err := client.Connect(addr, user, password, db)
@@ -60,7 +61,7 @@ type conn struct {
 func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
 	st, err := c.Conn.Prepare(query)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	return &stmt{st}, nil
@@ -73,7 +74,7 @@ func (c *conn) Close() error {
 func (c *conn) Begin() (sqldriver.Tx, error) {
 	err := c.Conn.Begin()
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	return &tx{c.Conn}, nil
@@ -90,10 +91,10 @@ func buildArgs(args []sqldriver.Value) []interface{} {
 }
 
 func replyError(err error) error {
-	if err == mysql.ErrBadConn {
+	if mysql.ErrorEqual(err, mysql.ErrBadConn) {
 		return sqldriver.ErrBadConn
 	} else {
-		return err
+		return errors.Trace(err)
 	}
 }
 

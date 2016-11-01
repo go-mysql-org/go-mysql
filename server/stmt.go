@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -69,7 +70,7 @@ func (c *Conn) writePrepare(s *Stmt) error {
 			data = append(data, []byte(paramFieldData)...)
 
 			if err := c.WritePacket(data); err != nil {
-				return err
+				return errors.Trace(err)
 			}
 		}
 
@@ -84,7 +85,7 @@ func (c *Conn) writePrepare(s *Stmt) error {
 			data = append(data, []byte(columnFieldData)...)
 
 			if err := c.WritePacket(data); err != nil {
-				return err
+				return errors.Trace(err)
 			}
 		}
 
@@ -149,14 +150,14 @@ func (c *Conn) handleStmtExecute(data []byte) (*Result, error) {
 		}
 
 		if err := c.bindStmtArgs(s, nullBitmaps, paramTypes, paramValues); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 	}
 
 	var r *Result
 	var err error
 	if r, err = c.h.HandleStmtExecute(s.Context, s.Query, s.Args); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	s.ResetParams()
@@ -272,7 +273,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			v, isNull, n, err = LengthEnodedString(paramValues[pos:])
 			pos += n
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 
 			if !isNull {
@@ -283,7 +284,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 				continue
 			}
 		default:
-			return fmt.Errorf("Stmt Unknown FieldType %d", tp)
+			return errors.Errorf("Stmt Unknown FieldType %d", tp)
 		}
 	}
 	return nil
@@ -346,6 +347,15 @@ func (c *Conn) handleStmtClose(data []byte) error {
 	}
 
 	id := binary.LittleEndian.Uint32(data[0:4])
+
+	stmt, ok := c.stmts[id]
+	if !ok {
+		return nil
+	}
+
+	if err := c.h.HandleStmtClose(stmt.Context); err != nil {
+		return err
+	}
 
 	delete(c.stmts, id)
 

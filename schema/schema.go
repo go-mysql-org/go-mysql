@@ -8,15 +8,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
 const (
-	TYPE_NUMBER = iota + 1 //tinyint, smallint, mediumint, int, bigint, year
-	TYPE_FLOAT             //float, double
-	TYPE_ENUM              //enum
-	TYPE_SET               //set
-	TYPE_STRING            //other
+	TYPE_NUMBER    = iota + 1 // tinyint, smallint, mediumint, int, bigint, year
+	TYPE_FLOAT                // float, double
+	TYPE_ENUM                 // enum
+	TYPE_SET                  // set
+	TYPE_STRING               // other
+	TYPE_DATETIME             // datetime
+	TYPE_TIMESTAMP            // timestamp
+	TYPE_DATE                 // date
+	TYPE_TIME                 // time
+	TYPE_BIT                  // bit
 )
 
 type TableColumn struct {
@@ -74,6 +80,16 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 				")"),
 			"'", "", -1),
 			",")
+	} else if strings.HasPrefix(columnType, "datetime") {
+		ta.Columns[index].Type = TYPE_DATETIME
+	} else if strings.HasPrefix(columnType, "timestamp") {
+		ta.Columns[index].Type = TYPE_TIMESTAMP
+	} else if strings.HasPrefix(columnType, "time") {
+		ta.Columns[index].Type = TYPE_TIME
+	} else if "date" == columnType {
+		ta.Columns[index].Type = TYPE_DATE
+	} else if strings.HasPrefix(columnType, "bit") {
+		ta.Columns[index].Type = TYPE_BIT
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
 	}
@@ -145,7 +161,7 @@ func NewTable(conn mysql.Executer, schema string, name string) (*Table, error) {
 func (ta *Table) fetchColumns(conn mysql.Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("describe %s.%s", ta.Schema, ta.Name))
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	for i := 0; i < r.RowNumber(); i++ {
@@ -162,7 +178,7 @@ func (ta *Table) fetchColumns(conn mysql.Executer) error {
 func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("show index from %s.%s", ta.Schema, ta.Name))
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	var currentIndex *Index
 	currentName := ""

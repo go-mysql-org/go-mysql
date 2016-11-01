@@ -1,7 +1,6 @@
 package canal
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -11,12 +10,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-	"github.com/siddontang/go/log"
 	"github.com/siddontang/go/sync2"
 )
 
@@ -63,7 +63,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	var err error
 	if c.master, err = loadMasterInfo(c.masterInfoPath()); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	} else if len(c.master.Addr) != 0 && c.master.Addr != c.cfg.Addr {
 		log.Infof("MySQL addr %s in old master.info, but new %s, reset", c.master.Addr, c.cfg.Addr)
 		// may use another MySQL, reset
@@ -73,15 +73,15 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.master.Addr = c.cfg.Addr
 
 	if err := c.prepareDumper(); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if err = c.prepareSyncer(); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if err := c.checkBinlogRowFormat(); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	return c, nil
@@ -89,13 +89,18 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 func (c *Canal) prepareDumper() error {
 	var err error
-	if c.dumper, err = dump.NewDumper(c.cfg.Dump.ExecutionPath,
+	dumpPath := c.cfg.Dump.ExecutionPath
+	if len(dumpPath) == 0 {
+		// ignore mysqldump, use binlog only
+		return nil
+	}
+
+	if c.dumper, err = dump.NewDumper(dumpPath,
 		c.cfg.Addr, c.cfg.User, c.cfg.Password); err != nil {
 		if err != exec.ErrNotFound {
-			return err
+			return errors.Trace(err)
 		}
 		//no mysqldump, use binlog only
-		c.dumper = nil
 		return nil
 	}
 
@@ -136,7 +141,7 @@ func (c *Canal) run() error {
 
 	if err := c.tryDump(); err != nil {
 		log.Errorf("canal dump mysql err: %v", err)
-		return err
+		return errors.Trace(err)
 	}
 
 	close(c.dumpDoneCh)
@@ -145,7 +150,7 @@ func (c *Canal) run() error {
 		if !c.isClosed() {
 			log.Errorf("canal start sync binlog err: %v", err)
 		}
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -200,7 +205,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 
 	t, err := schema.NewTable(c, db, table)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	c.tableLock.Lock()
@@ -216,12 +221,12 @@ func (c *Canal) CheckBinlogRowImage(image string) error {
 	// now only log
 	if c.cfg.Flavor == mysql.MySQLFlavor {
 		if res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_row_image"`); err != nil {
-			return err
+			return errors.Trace(err)
 		} else {
 			// MySQL has binlog row image from 5.6, so older will return empty
 			rowImage, _ := res.GetString(0, 1)
 			if rowImage != "" && !strings.EqualFold(rowImage, image) {
-				return fmt.Errorf("MySQL uses %s binlog row image, but we want %s", rowImage, image)
+				return errors.Errorf("MySQL uses %s binlog row image, but we want %s", rowImage, image)
 			}
 		}
 	}
@@ -232,30 +237,36 @@ func (c *Canal) CheckBinlogRowImage(image string) error {
 func (c *Canal) checkBinlogRowFormat() error {
 	res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_format";`)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	} else if f, _ := res.GetString(0, 1); f != "ROW" {
-		return fmt.Errorf("binlog must ROW format, but %s now", f)
+		return errors.Errorf("binlog must ROW format, but %s now", f)
 	}
 
 	return nil
 }
 
 func (c *Canal) prepareSyncer() error {
-	c.syncer = replication.NewBinlogSyncer(c.cfg.ServerID, c.cfg.Flavor)
-
 	seps := strings.Split(c.cfg.Addr, ":")
 	if len(seps) != 2 {
-		return fmt.Errorf("invalid mysql addr format %s, must host:port", c.cfg.Addr)
+		return errors.Errorf("invalid mysql addr format %s, must host:port", c.cfg.Addr)
 	}
 
 	port, err := strconv.ParseUint(seps[1], 10, 16)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
-	if err = c.syncer.RegisterSlave(seps[0], uint16(port), c.cfg.User, c.cfg.Password); err != nil {
-		return err
+	cfg := replication.BinlogSyncerConfig{
+		ServerID: c.cfg.ServerID,
+		Flavor:   c.cfg.Flavor,
+		Host:     seps[0],
+		Port:     uint16(port),
+		User:     c.cfg.User,
+		Password: c.cfg.Password,
 	}
+
+	c.syncer = replication.NewBinlogSyncer(&cfg)
+
 	return nil
 }
 
@@ -273,14 +284,14 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 		if c.conn == nil {
 			c.conn, err = client.Connect(c.cfg.Addr, c.cfg.User, c.cfg.Password, "")
 			if err != nil {
-				return nil, err
+				return nil, errors.Trace(err)
 			}
 		}
 
 		rr, err = c.conn.Execute(cmd, args...)
-		if err != nil && err != mysql.ErrBadConn {
+		if err != nil && !mysql.ErrorEqual(err, mysql.ErrBadConn) {
 			return
-		} else if err == mysql.ErrBadConn {
+		} else if mysql.ErrorEqual(err, mysql.ErrBadConn) {
 			c.conn.Close()
 			c.conn = nil
 			continue

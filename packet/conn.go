@@ -3,10 +3,10 @@ package packet
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"net"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -33,7 +33,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 	var buf bytes.Buffer
 
 	if err := c.ReadPacketTo(&buf); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	} else {
 		return buf.Bytes(), nil
 	}
@@ -84,13 +84,13 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
 	if length < 1 {
-		return fmt.Errorf("invalid payload length %d", length)
+		return errors.Errorf("invalid payload length %d", length)
 	}
 
 	sequence := uint8(header[3])
 
 	if sequence != c.Sequence {
-		return fmt.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
+		return errors.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
 	}
 
 	c.Sequence++

@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
-	"github.com/siddontang/go/log"
 )
 
 type masterInfo struct {
@@ -30,9 +31,9 @@ func loadMasterInfo(name string) (*masterInfo, error) {
 	m.name = name
 
 	f, err := os.Open(name)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	} else if os.IsNotExist(err) {
+	if err != nil && !os.IsNotExist(errors.Cause(err)) {
+		return nil, errors.Trace(err)
+	} else if os.IsNotExist(errors.Cause(err)) {
 		return &m, nil
 	}
 	defer f.Close()
@@ -63,7 +64,7 @@ func (m *masterInfo) Save(force bool) error {
 
 	m.lastSaveTime = n
 
-	return err
+	return errors.Trace(err)
 }
 
 func (m *masterInfo) Update(name string, pos uint32) {

@@ -17,10 +17,15 @@ import (
 )
 // Create a binlog syncer with a unique server id, the server id must be different from other MySQL's. 
 // flavor is mysql or mariadb
-syncer := replication.NewBinlogSyncer(100, "mysql")
-
-// Register slave, the MySQL master is at 127.0.0.1:3306, with user root and an empty password
-syncer.RegisterSlave("127.0.0.1", 3306, "root", "")
+cfg := replication.BinlogSyncerConfig {
+    ServerID: 100,
+    Flavor:   "mysql",
+    Host:     "127.0.0.1",
+    Port:     3306,
+    User:     "root",
+    Password: "",
+}
+syncer := replication.NewBinlogSyncer(&cfg)
 
 // Start sync with sepcified binlog file and position
 streamer, _ := syncer.StartSync(mysql.Position{binlogFile, binlogPos})
@@ -31,19 +36,22 @@ streamer, _ := syncer.StartSync(mysql.Position{binlogFile, binlogPos})
 // the mariadb GTID set likes this "0-1-100"
 
 for {
-    ev, _ := streamer.GetEvent()
+    ev, _ := streamer.GetEvent(context.Background())
     // Dump event
     ev.Dump(os.Stdout)
 }
 
-//or use timeout with GetEventTimeout, and you should deal with the timeout exception 
-import (
-    "time"
-) 
+// or we can use a timeout context
 for {
-    // timeout value won't be set too large, otherwise it may waste lots of memory
-    ev, _ := streamer.GetEventTimeout(time.Second * 1)
-    // Dump event
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    e, _ := s.GetEvent(ctx)
+    cancel()
+
+    if err == context.DeadlineExceeded {
+        // meet timeout
+        continue
+    }
+
     ev.Dump(os.Stdout)
 }
 ```
@@ -161,7 +169,7 @@ import (
     "net"
 )
 
-l, _ := net.Listen("127.0.0.1:4000")
+l, _ := net.Listen("tcp", "127.0.0.1:4000")
 
 c, _ := l.Accept()
 

@@ -3,16 +3,15 @@ package client
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
-	"fmt"
 
+	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
 func (c *Conn) readInitialHandshake() error {
 	data, err := c.ReadPacket()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if data[0] == ERR_HEADER {
@@ -20,7 +19,7 @@ func (c *Conn) readInitialHandshake() error {
 	}
 
 	if data[0] < MinProtocolVersion {
-		return fmt.Errorf("invalid protocol version %d, must >= 10", data[0])
+		return errors.Errorf("invalid protocol version %d, must >= 10", data[0])
 	}
 
 	//skip mysql version

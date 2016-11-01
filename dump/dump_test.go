@@ -8,8 +8,8 @@ import (
 	"bytes"
 	"testing"
 
+	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/client"
-	. "gopkg.in/check.v1"
 )
 
 // use docker mysql for test

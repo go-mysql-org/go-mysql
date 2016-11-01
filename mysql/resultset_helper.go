@@ -1,10 +1,10 @@
 package mysql
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 
+	"github.com/juju/errors"
 	"github.com/siddontang/go/hack"
 )
 
@@ -39,7 +39,7 @@ func formatTextValue(value interface{}) ([]byte, error) {
 	case string:
 		return hack.Slice(v), nil
 	default:
-		return nil, fmt.Errorf("invalid type %T", value)
+		return nil, errors.Errorf("invalid type %T", value)
 	}
 }
 
@@ -74,7 +74,7 @@ func formatBinaryValue(value interface{}) ([]byte, error) {
 	case string:
 		return hack.Slice(v), nil
 	default:
-		return nil, fmt.Errorf("invalid type %T", value)
+		return nil, errors.Errorf("invalid type %T", value)
 	}
 }
 func formatField(field *Field, value interface{}) error {
@@ -95,7 +95,7 @@ func formatField(field *Field, value interface{}) error {
 		field.Charset = 33
 		field.Type = MYSQL_TYPE_VAR_STRING
 	default:
-		return fmt.Errorf("unsupport type %T for resultset", value)
+		return errors.Errorf("unsupport type %T for resultset", value)
 	}
 	return nil
 }
@@ -110,7 +110,7 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 
 	for i, vs := range values {
 		if len(vs) != len(r.Fields) {
-			return nil, fmt.Errorf("row %d has %d column not equal %d", i, len(vs), len(r.Fields))
+			return nil, errors.Errorf("row %d has %d column not equal %d", i, len(vs), len(r.Fields))
 		}
 
 		var row []byte
@@ -121,13 +121,13 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 				field.Name = hack.Slice(names[j])
 
 				if err = formatField(field, value); err != nil {
-					return nil, err
+					return nil, errors.Trace(err)
 				}
 			}
 			b, err = formatTextValue(value)
 
 			if err != nil {
-				return nil, err
+				return nil, errors.Trace(err)
 			}
 
 			row = append(row, PutLengthEncodedString(b)...)
@@ -151,7 +151,7 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 
 	for i, vs := range values {
 		if len(vs) != len(r.Fields) {
-			return nil, fmt.Errorf("row %d has %d column not equal %d", i, len(vs), len(r.Fields))
+			return nil, errors.Errorf("row %d has %d column not equal %d", i, len(vs), len(r.Fields))
 		}
 
 		var row []byte
@@ -167,7 +167,7 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 				field.Name = hack.Slice(names[j])
 
 				if err = formatField(field, value); err != nil {
-					return nil, err
+					return nil, errors.Trace(err)
 				}
 			}
 			if value == nil {
@@ -178,7 +178,7 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 			b, err = formatBinaryValue(value)
 
 			if err != nil {
-				return nil, err
+				return nil, errors.Trace(err)
 			}
 
 			if r.Fields[j].Type == MYSQL_TYPE_VAR_STRING {

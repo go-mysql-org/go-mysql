@@ -6,9 +6,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ngaut/log"
+	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go/log"
-	. "gopkg.in/check.v1"
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL host")
@@ -27,6 +27,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
 	cfg.User = "root"
+	cfg.Dump.ExecutionPath = "mysqldump"
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
 

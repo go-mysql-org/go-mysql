@@ -6,10 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"time"
 
+	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
@@ -68,11 +69,11 @@ func (e *TableMapEvent) Decode(data []byte) error {
 	var err error
 	var metaData []byte
 	if metaData, _, n, err = LengthEnodedString(data[pos:]); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if err = e.decodeMeta(metaData); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	pos += n
@@ -169,7 +170,7 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 			MYSQL_TYPE_TINY_BLOB,
 			MYSQL_TYPE_MEDIUM_BLOB,
 			MYSQL_TYPE_LONG_BLOB:
-			return fmt.Errorf("unsupport type in binlog %d", t)
+			return errors.Errorf("unsupport type in binlog %d", t)
 		default:
 			e.ColumnMeta[i] = 0
 		}
@@ -180,6 +181,7 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 
 func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "TableID: %d\n", e.TableID)
+	fmt.Fprintf(w, "TableID size: %d\n", e.tableIDSize)
 	fmt.Fprintf(w, "Flags: %d\n", e.Flags)
 	fmt.Fprintf(w, "Schema: %s\n", e.Schema)
 	fmt.Fprintf(w, "Table: %s\n", e.Table)
@@ -188,6 +190,9 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "NULL bitmap: \n%s", hex.Dump(e.NullBitmap))
 	fmt.Fprintln(w)
 }
+
+// RowsEventStmtEndFlag is set in the end of the statement.
+const RowsEventStmtEndFlag = 0x01
 
 type RowsEvent struct {
 	//0, 1, 2
@@ -251,21 +256,27 @@ func (e *RowsEvent) Decode(data []byte) error {
 	var ok bool
 	e.Table, ok = e.tables[e.TableID]
 	if !ok {
-		return fmt.Errorf("invalid table id %d, no correspond table map event", e.TableID)
+		return errors.Errorf("invalid table id %d, no correspond table map event", e.TableID)
 	}
 
 	var err error
 
 	// ... repeat rows until event-end
+	defer func() {
+		if r := recover(); r != nil {
+			log.Fatalf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v", r, data, e, e.Table)
+		}
+	}()
+
 	for pos < len(data) {
 		if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap1); err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		pos += n
 
 		if e.needBitmap2 {
 			if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap2); err != nil {
-				return err
+				return errors.Trace(err)
 			}
 			pos += n
 		}
@@ -274,12 +285,23 @@ func (e *RowsEvent) Decode(data []byte) error {
 	return nil
 }
 
+func isBitSet(bitmap []byte, i int) bool {
+	return bitmap[i>>3]&(1<<(uint(i)&7)) > 0
+}
+
 func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte) (int, error) {
-	rows := make([]interface{}, e.ColumnCount)
+	row := make([]interface{}, e.ColumnCount)
 
 	pos := 0
 
-	count := (bitCount(bitmap) + 7) / 8
+	// refer: https://github.com/alibaba/canal/blob/c3e38e50e269adafdd38a48c63a1740cde304c67/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogBuffer.java#L63
+	count := 0
+	for i := 0; i < int(e.ColumnCount); i++ {
+		if isBitSet(bitmap, i) {
+			count++
+		}
+	}
+	count = (count + 7) / 8
 
 	nullBitmap := data[pos : pos+count]
 	pos += count
@@ -289,29 +311,27 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 	var n int
 	var err error
 	for i := 0; i < int(e.ColumnCount); i++ {
-		if bitGet(bitmap, i) == 0 {
+		if !isBitSet(bitmap, i) {
 			continue
 		}
 
 		isNull := (uint32(nullBitmap[nullbitIndex/8]) >> uint32(nullbitIndex%8)) & 0x01
+		nullbitIndex++
 
 		if isNull > 0 {
-			rows[i] = nil
-			nullbitIndex++
+			row[i] = nil
 			continue
 		}
 
-		rows[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.ColumnMeta[i])
+		row[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.ColumnMeta[i])
 
 		if err != nil {
 			return 0, nil
 		}
 		pos += n
-
-		nullbitIndex++
 	}
 
-	e.Rows = append(e.Rows, rows)
+	e.Rows = append(e.Rows, row)
 	return pos, nil
 }
 
@@ -341,30 +361,29 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		return nil, 0, nil
 	case MYSQL_TYPE_LONG:
 		n = 4
-		v = int64(binary.LittleEndian.Uint32(data))
+		v = ParseBinaryInt32(data)
 	case MYSQL_TYPE_TINY:
 		n = 1
-		v = int64(data[0])
+		v = ParseBinaryInt8(data)
 	case MYSQL_TYPE_SHORT:
 		n = 2
-		v = int64(binary.LittleEndian.Uint16(data))
+		v = ParseBinaryInt16(data)
 	case MYSQL_TYPE_INT24:
 		n = 3
-		v = int64(FixedLengthInt(data[0:3]))
+		v = ParseBinaryInt24(data)
 	case MYSQL_TYPE_LONGLONG:
-		//em, maybe overflow for int64......
 		n = 8
-		v = int64(binary.LittleEndian.Uint64(data))
+		v = ParseBinaryInt64(data)
 	case MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
 		v, n, err = decodeDecimal(data, int(prec), int(scale))
 	case MYSQL_TYPE_FLOAT:
 		n = 4
-		v = float64(math.Float32frombits(binary.LittleEndian.Uint32(data)))
+		v = ParseBinaryFloat32(data)
 	case MYSQL_TYPE_DOUBLE:
 		n = 8
-		v = math.Float64frombits(binary.LittleEndian.Uint64(data))
+		v = ParseBinaryFloat64(data)
 	case MYSQL_TYPE_BIT:
 		nbits := ((meta >> 8) * 8) + (meta & 0xFF)
 		n = int(nbits+7) / 8
@@ -431,10 +450,10 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			err = fmt.Errorf("Unknown ENUM packlen=%d", l)
 		}
 	case MYSQL_TYPE_SET:
-		nbits := meta & 0xFF
-		n = int(nbits+7) / 8
+		n = int(meta & 0xFF)
+		nbits := n * 8
 
-		v, err = decodeBit(data, int(nbits), n)
+		v, err = decodeBit(data, nbits, n)
 	case MYSQL_TYPE_BLOB:
 		switch meta {
 		case 1:
@@ -487,10 +506,18 @@ const digitsPerInteger int = 9
 
 var compressedBytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
 
+func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size int, value uint32) {
+	size = compressedBytes[compIndx]
+	databuff := make([]byte, size)
+	for i := 0; i < size; i++ {
+		databuff[i] = data[i] ^ mask
+	}
+	value = uint32(BFixedLengthInt(databuff))
+	return
+}
+
 func decodeDecimal(data []byte, precision int, decimals int) (float64, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
-	pos := 0
-
 	integral := (precision - decimals)
 	uncompIntegral := int(integral / digitsPerInteger)
 	uncompFractional := int(decimals / digitsPerInteger)
@@ -509,12 +536,10 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	// Support negative
 	// The sign is encoded in the high bit of the the byte
 	// But this bit can also be used in the value
-	value := uint32(data[pos])
+	value := uint32(data[0])
 	var res bytes.Buffer
 	var mask uint32 = 0
-	if value&0x80 != 0 {
-		mask = 0
-	} else {
+	if value&0x80 == 0 {
 		mask = uint32((1 << 32) - 1)
 		res.WriteString("-")
 	}
@@ -522,12 +547,8 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	//clear sign
 	data[0] ^= 0x80
 
-	size := compressedBytes[compIntegral]
-	if size > 0 {
-		value = uint32(BFixedLengthInt(data[pos:pos+size])) ^ mask
-		res.WriteString(fmt.Sprintf("%d", value))
-		pos += size
-	}
+	pos, value := decodeDecimalDecompressValue(compIntegral, data, uint8(mask))
+	res.WriteString(fmt.Sprintf("%d", value))
 
 	for i := 0; i < uncompIntegral; i++ {
 		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
@@ -543,18 +564,11 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 		res.WriteString(fmt.Sprintf("%09d", value))
 	}
 
-	size = compressedBytes[compFractional]
-	if size > 0 {
-		value = uint32(BFixedLengthInt(data[pos:pos+size])) ^ mask
+	if size, value := decodeDecimalDecompressValue(compFractional, data[pos:], uint8(mask)); size > 0 {
+		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
 		pos += size
-
-		// we could not use %0*d directly, value is uint32, if compFractional is 2, size is 1, we should only print
-		// uint8(value) with width compFractional, not uint32(value), otherwise, the output would be incorrect.
-		// res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
-		res.WriteString(fmt.Sprintf("%0*d", compFractional, value%(uint32(size)<<8)))
 	}
 
-	//return hack.String(res.Bytes()), pos, nil
 	f, err := strconv.ParseFloat(hack.String(res.Bytes()), 64)
 	return f, pos, err
 }

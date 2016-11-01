@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/juju/errors"
 )
 
 type MariadbGTID struct {
@@ -23,22 +25,22 @@ func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 	var gtid MariadbGTID
 
 	if len(seps) != 3 {
-		return gtid, fmt.Errorf("invalid Mariadb GTID %v, must domain-server-sequence", str)
+		return gtid, errors.Errorf("invalid Mariadb GTID %v, must domain-server-sequence", str)
 	}
 
 	domainID, err := strconv.ParseUint(seps[0], 10, 32)
 	if err != nil {
-		return gtid, fmt.Errorf("invalid MariaDB GTID Domain ID (%v): %v", seps[0], err)
+		return gtid, errors.Errorf("invalid MariaDB GTID Domain ID (%v): %v", seps[0], err)
 	}
 
 	serverID, err := strconv.ParseUint(seps[1], 10, 32)
 	if err != nil {
-		return gtid, fmt.Errorf("invalid MariaDB GTID Server ID (%v): %v", seps[1], err)
+		return gtid, errors.Errorf("invalid MariaDB GTID Server ID (%v): %v", seps[1], err)
 	}
 
 	sequenceID, err := strconv.ParseUint(seps[2], 10, 64)
 	if err != nil {
-		return gtid, fmt.Errorf("invalid MariaDB GTID Sequence number (%v): %v", seps[2], err)
+		return gtid, errors.Errorf("invalid MariaDB GTID Sequence number (%v): %v", seps[2], err)
 	}
 
 	return MariadbGTID{

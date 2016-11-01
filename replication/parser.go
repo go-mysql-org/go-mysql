@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/juju/errors"
 )
 
 type BinlogParser struct {
@@ -24,20 +26,24 @@ func NewBinlogParser() *BinlogParser {
 	return p
 }
 
+func (p *BinlogParser) Reset() {
+	p.format = nil
+}
+
 type OnEventFunc func(*BinlogEvent) error
 
 func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc) error {
 	f, err := os.Open(name)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	defer f.Close()
 
 	b := make([]byte, 4)
 	if _, err = f.Read(b); err != nil {
-		return err
+		return errors.Trace(err)
 	} else if !bytes.Equal(b, BinLogFileHeader) {
-		return fmt.Errorf("%s is not a valid binlog file, head 4 bytes must fe'bin' ", name)
+		return errors.Errorf("%s is not a valid binlog file, head 4 bytes must fe'bin' ", name)
 	}
 
 	if offset < 4 {
@@ -45,53 +51,50 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 	}
 
 	if _, err = f.Seek(offset, os.SEEK_SET); err != nil {
-		return fmt.Errorf("seek %s to %d error %v", name, offset, err)
+		return errors.Errorf("seek %s to %d error %v", name, offset, err)
 	}
 
-	return p.ParseReader(f, onEvent)
+	return p.parseReader(f, onEvent)
 }
 
-func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
-	p.tables = make(map[uint64]*TableMapEvent)
-	p.format = nil
+func (p *BinlogParser) parseReader(r io.Reader, onEvent OnEventFunc) error {
+	p.Reset()
 
 	var err error
 	var n int64
 
 	for {
-		var buf bytes.Buffer
+		headBuf := make([]byte, EventHeaderSize)
 
-		if n, err = io.CopyN(&buf, r, EventHeaderSize); err != nil {
-			if n == 0 {
-				return nil
-			}
-			return err
+		if _, err = io.ReadFull(r, headBuf); err == io.EOF {
+			return nil
+		} else if err != nil {
+			return errors.Trace(err)
 		}
 
-		data := buf.Bytes()
 		var h *EventHeader
-		h, err = p.parseHeader(data)
+		h, err = p.parseHeader(headBuf)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 
 		if h.EventSize <= uint32(EventHeaderSize) {
-			return fmt.Errorf("invalid event header, event size is %d, too small", h.EventSize)
+			return errors.Errorf("invalid event header, event size is %d, too small", h.EventSize)
 
 		}
 
-		if _, err = io.CopyN(&buf, r, int64(h.EventSize)-int64(EventHeaderSize)); err != nil {
-			return err
+		var buf bytes.Buffer
+		if n, err = io.CopyN(&buf, r, int64(h.EventSize)-int64(EventHeaderSize)); err != nil {
+			return errors.Errorf("get event body err %v, need %d - %d, but got %d", err, h.EventSize, EventHeaderSize, n)
 		}
 
-		data = buf.Bytes()
+		data := buf.Bytes()
 		rawData := data
 
-		data = data[EventHeaderSize:]
 		eventLen := int(h.EventSize) - EventHeaderSize
 
 		if len(data) != eventLen {
-			return fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
+			return errors.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
 		}
 
 		var e Event
@@ -101,7 +104,7 @@ func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 		}
 
 		if err = onEvent(&BinlogEvent{rawData, h, e}); err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 
@@ -193,12 +196,11 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte) (Event, error) {
 		p.tables[te.TableID] = te
 	}
 
-	//If MySQL restart, it may use the same table id for different tables.
-	//We must clear the table map before parsing new events.
-	//We have no better way to known whether the event is before or after restart,
-	//So we have to clear the table map on every rotate event.
-	if _, ok := e.(*RotateEvent); ok {
-		p.tables = make(map[uint64]*TableMapEvent)
+	if re, ok := e.(*RowsEvent); ok {
+		if (re.Flags & RowsEventStmtEndFlag) > 0 {
+			// Refer https://github.com/alibaba/canal/blob/38cc81b7dab29b51371096fb6763ca3a8432ffee/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogEvent.java#L176
+			p.tables = make(map[uint64]*TableMapEvent)
+		}
 	}
 
 	return e, nil

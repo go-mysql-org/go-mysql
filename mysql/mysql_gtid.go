@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/juju/errors"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go/hack"
 )
@@ -34,7 +35,7 @@ func parseInterval(str string) (i Interval, err error) {
 		i.Stop, err = strconv.ParseInt(p[1], 10, 64)
 		i.Stop = i.Stop + 1
 	default:
-		err = fmt.Errorf("invalid interval format, must n[-n]")
+		err = errors.Errorf("invalid interval format, must n[-n]")
 	}
 
 	if err != nil {
@@ -42,7 +43,7 @@ func parseInterval(str string) (i Interval, err error) {
 	}
 
 	if i.Stop <= i.Start {
-		err = fmt.Errorf("invalid interval format, must n[-n] and the end must >= start")
+		err = errors.Errorf("invalid interval format, must n[-n] and the end must >= start")
 	}
 
 	return
@@ -161,19 +162,19 @@ func ParseUUIDSet(str string) (*UUIDSet, error) {
 	str = strings.TrimSpace(str)
 	sep := strings.Split(str, ":")
 	if len(sep) < 2 {
-		return nil, fmt.Errorf("invalid GTID format, must UUID:interval[:interval]")
+		return nil, errors.Errorf("invalid GTID format, must UUID:interval[:interval]")
 	}
 
 	var err error
 	s := new(UUIDSet)
 	if s.SID, err = uuid.FromString(sep[0]); err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	// Handle interval
 	for i := 1; i < len(sep); i++ {
 		if in, err := parseInterval(sep[i]); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		} else {
 			s.Intervals = append(s.Intervals, in)
 		}
@@ -246,7 +247,7 @@ func (s *UUIDSet) Encode() []byte {
 
 func (s *UUIDSet) decode(data []byte) (int, error) {
 	if len(data) < 24 {
-		return 0, fmt.Errorf("invalid uuid set buffer, less 24")
+		return 0, errors.Errorf("invalid uuid set buffer, less 24")
 	}
 
 	pos := 0
@@ -259,7 +260,7 @@ func (s *UUIDSet) decode(data []byte) (int, error) {
 	n := int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
 	pos += 8
 	if len(data) < int(16*n)+pos {
-		return 0, fmt.Errorf("invalid uuid set buffer, must %d, but %d", pos+int(16*n), len(data))
+		return 0, errors.Errorf("invalid uuid set buffer, must %d, but %d", pos+int(16*n), len(data))
 	}
 
 	s.Intervals = make([]Interval, 0, n)
@@ -279,7 +280,7 @@ func (s *UUIDSet) decode(data []byte) (int, error) {
 func (s *UUIDSet) Decode(data []byte) error {
 	n, err := s.decode(data)
 	if n != len(data) {
-		return fmt.Errorf("invalid uuid set buffer, must %d, but %d", n, len(data))
+		return errors.Errorf("invalid uuid set buffer, must %d, but %d", n, len(data))
 	}
 	return err
 }
@@ -298,7 +299,7 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 	//todo, handle redundant same uuid
 	for i := 0; i < len(sp); i++ {
 		if set, err := ParseUUIDSet(sp[i]); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		} else {
 			s.AddSet(set)
 		}
@@ -311,7 +312,7 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 	s := new(MysqlGTIDSet)
 
 	if len(data) < 8 {
-		return nil, fmt.Errorf("invalid gtid set buffer, less 4")
+		return nil, errors.Errorf("invalid gtid set buffer, less 4")
 	}
 
 	n := int(binary.LittleEndian.Uint64(data))
@@ -322,7 +323,7 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 	for i := 0; i < n; i++ {
 		set := new(UUIDSet)
 		if n, err := set.decode(data[pos:]); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		} else {
 			pos += n
 
