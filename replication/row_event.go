@@ -655,7 +655,6 @@ func decodeDatetime2(data []byte, dec uint16) (string, int, error) {
 		tmp = -tmp
 	}
 
-	//ingore second part, no precision now
 	var secPart int64 = tmp % (1 << 24)
 	ymdhms := tmp >> 24
 
