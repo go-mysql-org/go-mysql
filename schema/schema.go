@@ -23,6 +23,7 @@ const (
 	TYPE_DATE                 // date
 	TYPE_TIME                 // time
 	TYPE_BIT                  // bit
+	TYPE_JSON                 // json
 )
 
 type TableColumn struct {
@@ -90,6 +91,8 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 		ta.Columns[index].Type = TYPE_DATE
 	} else if strings.HasPrefix(columnType, "bit") {
 		ta.Columns[index].Type = TYPE_BIT
+	} else if strings.HasPrefix(columnType, "json") {
+		ta.Columns[index].Type = TYPE_JSON
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
 	}

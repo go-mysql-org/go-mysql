@@ -98,26 +98,26 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	str := `DROP TABLE IF EXISTS test_replication`
 	t.testExecute(c, str)
 
-	str = `CREATE TABLE IF NOT EXISTS test_replication (
-	         id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
-	         str VARCHAR(256),
-	         f FLOAT,
-	         d DOUBLE,
-	         de DECIMAL(10,2),
-	         i INT,
-	         bi BIGINT,
-	         e enum ("e1", "e2"),
-	         b BIT(8),
-	         y YEAR,
-	         da DATE,
-	         ts TIMESTAMP,
-	         dt DATETIME,
-	         tm TIME,
-	         t TEXT,
-	         bb BLOB,
-	         se SET('a', 'b', 'c'),
-	      PRIMARY KEY (id)
-	       ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
+	str = `CREATE TABLE test_replication (
+			id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
+			str VARCHAR(256),
+			f FLOAT,
+			d DOUBLE,
+			de DECIMAL(10,2),
+			i INT,
+			bi BIGINT,
+			e enum ("e1", "e2"),
+			b BIT(8),
+			y YEAR,
+			da DATE,
+			ts TIMESTAMP,
+			dt DATETIME,
+			tm TIME,
+			t TEXT,
+			bb BLOB,
+			se SET('a', 'b', 'c'),
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
 	t.testExecute(c, str)
 
@@ -137,6 +137,22 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		t.testExecute(c, fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb, de) VALUES (%d, "4", -3.14, 100, "abc", -45635.64)`, id))
 		t.testExecute(c, fmt.Sprintf(`UPDATE test_replication SET f = -12.14, de = 555.34 WHERE id = %d`, id))
 		t.testExecute(c, fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))
+	}
+
+	// check whether we can create the table including the json field
+	str = `DROP TABLE IF EXISTS test_json`
+	t.testExecute(c, str)
+
+	str = `CREATE TABLE test_json (
+			id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
+			c1 JSON,
+			c2 DECIMAL(10, 0),
+			PRIMARY KEY (id)
+			) ENGINE=InnoDB`
+
+	if _, err := t.c.Execute(str); err == nil {
+		t.testExecute(c, `INSERT INTO test_json (c2) VALUES (1)`)
+		t.testExecute(c, `INSERT INTO test_json (c1, c2) VALUES ('{"key1": "value1", "key2": "value2"}', 1)`)
 	}
 
 	t.wg.Wait()
