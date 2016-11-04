@@ -655,8 +655,7 @@ func decodeDatetime2(data []byte, dec uint16) (string, int, error) {
 		tmp = -tmp
 	}
 
-	//ingore second part, no precision now
-	//var secPart int64 = tmp % (1 << 24)
+	var secPart int64 = tmp % (1 << 24)
 	ymdhms := tmp >> 24
 
 	ymd := ymdhms >> 17
@@ -671,6 +670,9 @@ func decodeDatetime2(data []byte, dec uint16) (string, int, error) {
 	minute := int((hms >> 6) % (1 << 6))
 	hour := int((hms >> 12))
 
+	if secPart != 0 {
+		return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%d", year, month, day, hour, minute, second, secPart), n, nil
+	}
 	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second), n, nil
 }
 
