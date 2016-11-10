@@ -59,6 +59,8 @@ func (c *Canal) startSyncBinlog() error {
 			}
 		case *replication.TableMapEvent:
 			continue
+		case *replication.FormatDescriptionEvent:
+			continue
 		default:
 		}
 
