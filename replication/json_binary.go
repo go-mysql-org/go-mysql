@@ -2,6 +2,7 @@ package replication
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 
 	"github.com/juju/errors"
@@ -194,7 +195,7 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 		tp := data[entryOffset]
 
 		if isInlineValue(tp, isSmall) {
-			values[i] = d.decodeValue(tp, data[entryOffset+1:entryOffset+valueEntrySize-1])
+			values[i] = d.decodeValue(tp, data[entryOffset+1:entryOffset+valueEntrySize])
 			continue
 		}
 
@@ -348,11 +349,93 @@ func (d *jsonBinaryDecoder) decodeString(data []byte) string {
 }
 
 func (d *jsonBinaryDecoder) decodeOpaque(data []byte) interface{} {
-	if d.err != nil {
+	if d.isDataShort(data, 1) {
 		return nil
 	}
 
+	tp := data[0]
+	data = data[1:]
+
+	l, n := d.decodeVariableLength(data)
+
+	if d.isDataShort(data, int(l)+n) {
+		return nil
+	}
+
+	data = data[n : int(l)+n]
+
+	switch tp {
+	case MYSQL_TYPE_NEWDECIMAL:
+		return d.decodeDecimal(data)
+	case MYSQL_TYPE_TIME:
+		return d.decodeTime(data)
+	case MYSQL_TYPE_DATE, MYSQL_TYPE_DATETIME, MYSQL_TYPE_TIMESTAMP:
+		return d.decodeDateTime(data)
+	default:
+		return hack.String(data)
+	}
+
 	return nil
+}
+
+func (d *jsonBinaryDecoder) decodeDecimal(data []byte) interface{} {
+	precision := int(data[0])
+	scale := int(data[1])
+
+	v, _, err := decodeDecimal(data[2:], precision, scale)
+	d.err = err
+
+	return v
+}
+
+func (d *jsonBinaryDecoder) decodeTime(data []byte) interface{} {
+	v := d.decodeInt64(data)
+
+	if v == 0 {
+		return "00:00:00"
+	}
+
+	sign := ""
+	if v < 0 {
+		sign = "-"
+		v = -v
+	}
+
+	intPart := v >> 24
+	hour := (intPart >> 12) % (1 << 10)
+	min := (intPart >> 6) % (1 << 6)
+	sec := intPart % (1 << 6)
+	frac := v % (1 << 24)
+
+	return fmt.Sprintf("%s%02d:%02d:%02d.%06d", sign, hour, min, sec, frac)
+}
+
+func (d *jsonBinaryDecoder) decodeDateTime(data []byte) interface{} {
+	v := d.decodeInt64(data)
+	if v == 0 {
+		return "0000-00-00 00:00:00"
+	}
+
+	// handle negative?
+	if v < 0 {
+		v = -v
+	}
+
+	intPart := v >> 24
+	ymd := intPart >> 17
+	ym := ymd >> 5
+	hms := intPart % (1 << 17)
+
+	year := ym / 13
+	month := ym % 13
+	day := ymd % (1 << 5)
+	hour := (hms >> 12)
+	minute := (hms >> 6) % (1 << 6)
+	second := hms % (1 << 6)
+	frac := v % (1 << 24)
+
+	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, minute, second, frac)
+
 }
 
 func (d *jsonBinaryDecoder) decodeCount(data []byte, isSmall bool) int {
