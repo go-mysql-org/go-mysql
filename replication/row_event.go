@@ -327,7 +327,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 		row[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.ColumnMeta[i])
 
 		if err != nil {
-			return 0, nil
+			return 0, err
 		}
 		pos += n
 	}
@@ -486,7 +486,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + int(meta)
 		// TODO: parse the json
-		v = hack.String(data[meta:n])
+		v, err = decodeJsonBinary(data[meta:n])
 	default:
 		err = fmt.Errorf("unsupport type %d in binlog and don't know how to handle", tp)
 	}
