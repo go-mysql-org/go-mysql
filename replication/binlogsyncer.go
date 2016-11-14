@@ -518,6 +518,13 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			err = b.c.HandleErrorPacket(data)
 			s.closeWithError(err)
 			return
+		case EOF_HEADER:
+			// Refer http://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
+			// In the MySQL client/server protocol, EOF and OK packets serve the same purpose.
+			// Some users told me that they received EOF packet here, but I don't know why.
+			// So we only log a message and retry ReadPacket.
+			log.Info("receive EOF packet, retry ReadPacket")
+			continue
 		default:
 			s.closeWithError(fmt.Errorf("invalid stream header %c", data[0]))
 			return
