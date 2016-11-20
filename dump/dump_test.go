@@ -149,3 +149,19 @@ func (s *schemaTestSuite) TestParseValue(c *C) {
 	values, err = parseValues(str)
 	c.Assert(err, NotNil)
 }
+
+func (s *schemaTestSuite) TestParseFindTable(c *C) {
+	tbl := []struct {
+		sql   string
+		table string
+	}{
+		{"INSERT INTO `note` VALUES ('title', 'here is sql: INSERT INTO `table` VALUES (\\'some value\\')');", "note"},
+		{"INSERT INTO `note` VALUES ('1', '2', '3');", "note"},
+		{"INSERT INTO `a.b` VALUES ('1');", "a.b"},
+	}
+
+	for _, t := range tbl {
+		res := valuesExp.FindAllStringSubmatch(t.sql, -1)[0][1]
+		c.Assert(res, Equals, t.table)
+	}
+}
