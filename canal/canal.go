@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -97,9 +96,10 @@ func (c *Canal) prepareDumper() error {
 
 	if c.dumper, err = dump.NewDumper(dumpPath,
 		c.cfg.Addr, c.cfg.User, c.cfg.Password); err != nil {
-		if err != exec.ErrNotFound {
-			return errors.Trace(err)
-		}
+		return errors.Trace(err)
+	}
+
+	if c.dumper == nil {
 		//no mysqldump, use binlog only
 		return nil
 	}

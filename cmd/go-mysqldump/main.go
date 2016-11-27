@@ -19,7 +19,7 @@ var output = flag.String("o", "", "dump output, empty for stdout")
 var dbs = flag.String("dbs", "", "dump databases, seperated by comma")
 var tables = flag.String("tables", "", "dump tables, seperated by comma, will overwrite dbs")
 var tableDB = flag.String("table_db", "", "database for dump tables")
-var ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be database.table format, seperated by comma")
+var ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be database.table format, separated by comma")
 
 func main() {
 	flag.Parse()
@@ -27,7 +27,7 @@ func main() {
 	d, err := dump.NewDumper(*execution, *addr, *user, *password)
 	if err != nil {
 		fmt.Printf("Create Dumper error %v\n", errors.ErrorStack(err))
-		return
+		os.Exit(1)
 	}
 
 	if len(*ignoreTables) == 0 {
@@ -53,7 +53,7 @@ func main() {
 		f, err = os.OpenFile(*output, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			fmt.Printf("Open file error %v\n", errors.ErrorStack(err))
-			return
+			os.Exit(1)
 		}
 	}
 
@@ -61,6 +61,6 @@ func main() {
 
 	if err = d.Dump(f); err != nil {
 		fmt.Printf("Dump MySQL error %v\n", errors.ErrorStack(err))
-		return
+		os.Exit(1)
 	}
 }
