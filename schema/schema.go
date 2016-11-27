@@ -162,7 +162,7 @@ func NewTable(conn mysql.Executer, schema string, name string) (*Table, error) {
 }
 
 func (ta *Table) fetchColumns(conn mysql.Executer) error {
-	r, err := conn.Execute(fmt.Sprintf("describe %s.%s", ta.Schema, ta.Name))
+	r, err := conn.Execute(fmt.Sprintf("describe `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -179,7 +179,7 @@ func (ta *Table) fetchColumns(conn mysql.Executer) error {
 }
 
 func (ta *Table) fetchIndexes(conn mysql.Executer) error {
-	r, err := conn.Execute(fmt.Sprintf("show index from %s.%s", ta.Schema, ta.Name))
+	r, err := conn.Execute(fmt.Sprintf("show index from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
 		return errors.Trace(err)
 	}

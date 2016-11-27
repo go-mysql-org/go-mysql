@@ -70,3 +70,15 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	c.Assert(ta.Columns[5].SetValues, DeepEquals, []string{"a", "b", "c"})
 	c.Assert(ta.Columns[7].Type, Equals, TYPE_FLOAT)
 }
+
+func (s *schemaTestSuite) TestQuoteSchema(c *C) {
+	str := "CREATE TABLE IF NOT EXISTS `a-b_test` (`a.b` INT) ENGINE = INNODB"
+
+	_, err := s.conn.Execute(str)
+	c.Assert(err, IsNil)
+
+	ta, err := NewTable(s.conn, "test", "a-b_test")
+	c.Assert(err, IsNil)
+
+	c.Assert(ta.Columns[0].Name, Equals, "a.b")
+}
