@@ -1,6 +1,8 @@
 package canal
 
 import (
+	"fmt"
+
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/schema"
 )
@@ -49,4 +51,9 @@ func GetPKValues(table *schema.Table, row []interface{}) ([]interface{}, error) 
 	}
 
 	return values, nil
+}
+
+// String implements fmt.Stringer interface.
+func (r *RowsEvent) String() string {
+	return fmt.Sprintf("%s %s %v", r.Action, r.Table, r.Rows)
 }

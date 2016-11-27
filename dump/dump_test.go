@@ -36,6 +36,7 @@ func (s *schemaTestSuite) SetUpSuite(c *C) {
 
 	s.d, err = NewDumper(*execution, fmt.Sprintf("%s:%d", *host, *port), "root", "")
 	c.Assert(err, IsNil)
+	c.Assert(s.d, NotNil)
 
 	s.d.SetErrOut(os.Stderr)
 
