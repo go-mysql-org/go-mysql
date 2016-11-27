@@ -29,7 +29,7 @@ var valuesExp *regexp.Regexp
 func init() {
 	binlogExp = regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
 	useExp = regexp.MustCompile("^USE `(.+)`;")
-	valuesExp = regexp.MustCompile("^INSERT INTO `(.+)` VALUES \\((.+)\\);$")
+	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
 }
 
 // Parse the dump data with Dumper generate.
