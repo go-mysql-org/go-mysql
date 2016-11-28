@@ -44,6 +44,10 @@ func (c *Canal) startSyncBinlog() error {
 
 		forceSavePos = false
 
+		// We only save position with RotateEvent and XIDEvent.
+		// For RowsEvent, we can't save the position until meeting XIDEvent
+		// which tells the whole transaction is over.
+		// TODO: If we meet any DDL query, we must save too.
 		switch e := ev.Event.(type) {
 		case *replication.RotateEvent:
 			pos.Name = string(e.NextLogName)
@@ -57,11 +61,11 @@ func (c *Canal) startSyncBinlog() error {
 				log.Errorf("handle rows event error %v", err)
 				return errors.Trace(err)
 			}
-		case *replication.TableMapEvent:
 			continue
-		case *replication.FormatDescriptionEvent:
-			continue
+		case *replication.XIDEvent:
+			// try to save the position later
 		default:
+			continue
 		}
 
 		c.master.Update(pos.Name, pos.Pos)
