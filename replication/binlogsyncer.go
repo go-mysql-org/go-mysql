@@ -160,6 +160,15 @@ func (b *BinlogSyncer) registerSlave() error {
 		}
 	}
 
+	if b.cfg.Flavor == MariaDBFlavor {
+		// Refer https://github.com/alibaba/canal/wiki/BinlogChange(MariaDB5&10)
+		// Tell the server that we understand GTIDs by setting our slave capability
+		// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
+		if _, err := b.c.Execute("SET @mariadb_slave_capability=4"); err != nil {
+			return errors.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
+		}
+	}
+
 	if err = b.writeRegisterSlaveCommand(); err != nil {
 		return errors.Trace(err)
 	}
@@ -332,12 +341,6 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 	// Copy from vitess
 
 	startPos := gset.String()
-
-	// Tell the server that we understand GTIDs by setting our slave capability
-	// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
-	if _, err := b.c.Execute("SET @mariadb_slave_capability=4"); err != nil {
-		return errors.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
-	}
 
 	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP to
 	// provide the start position in GTID form.
