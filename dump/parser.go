@@ -109,10 +109,12 @@ func parseValues(str string) ([]string, error) {
 			// read string until another single quote
 			j := i + 1
 
+			escaped := false
 			for j < len(str) {
 				if str[j] == '\\' {
 					// skip escaped character
 					j += 2
+					escaped = true
 					continue
 				} else if str[j] == '\'' {
 					break
@@ -125,7 +127,11 @@ func parseValues(str string) ([]string, error) {
 				return nil, fmt.Errorf("parse quote values error")
 			}
 
-			values = append(values, str[i:j+1])
+			value := str[i : j+1]
+			if escaped {
+				value = unescapeString(value)
+			}
+			values = append(values, value)
 			// skip ' and ,
 			i = j + 2
 		}
@@ -134,4 +140,49 @@ func parseValues(str string) ([]string, error) {
 	}
 
 	return values, nil
+}
+
+// unescapeString un-escapes the string.
+// mysqldump will escape the string when dumps,
+// Refer http://dev.mysql.com/doc/refman/5.7/en/string-literals.html
+func unescapeString(s string) string {
+	i := 0
+
+	value := make([]byte, 0, len(s))
+	for i < len(s) {
+		if s[i] == '\\' {
+			j := i + 1
+			if j == len(s) {
+				// The last char is \, remove
+				break
+			}
+
+			value = append(value, unescapeChar(s[j]))
+			i += 2
+		} else {
+			value = append(value, s[i])
+			i++
+		}
+	}
+
+	return string(value)
+}
+
+func unescapeChar(ch byte) byte {
+	// \" \' \\ \n \0 \b \Z \r \t ==> escape to one char
+	switch ch {
+	case 'n':
+		ch = '\n'
+	case '0':
+		ch = 0
+	case 'b':
+		ch = 8
+	case 'Z':
+		ch = 26
+	case 'r':
+		ch = '\r'
+	case 't':
+		ch = '\t'
+	}
+	return ch
 }
