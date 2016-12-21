@@ -29,6 +29,8 @@ var tableDB = flag.String("table_db", "test", "database for dump tables")
 var ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be database.table format, separated by comma")
 
 func main() {
+	flag.Parse()
+
 	cfg := canal.NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:%d", *host, *port)
 	cfg.User = *user

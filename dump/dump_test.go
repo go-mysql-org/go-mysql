@@ -139,7 +139,7 @@ func (s *schemaTestSuite) TestParseValue(c *C) {
 	str := `'abc\\',''`
 	values, err := parseValues(str)
 	c.Assert(err, IsNil)
-	c.Assert(values, DeepEquals, []string{`'abc\\'`, `''`})
+	c.Assert(values, DeepEquals, []string{`'abc\'`, `''`})
 
 	str = `123,'\Z#÷QÎx£. Æ‘ÇoPâÅ_\r—\\','','qn'`
 	values, err = parseValues(str)
