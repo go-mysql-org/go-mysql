@@ -121,6 +121,52 @@ func (h *testParseHandler) Data(schema string, table string, values []string) er
 	return nil
 }
 
+func (s *parserTestSuite) TestParseFindTable(c *C) {
+	tbl := []struct {
+		sql   string
+		table string
+	}{
+		{"INSERT INTO `note` VALUES ('title', 'here is sql: INSERT INTO `table` VALUES (\\'some value\\')');", "note"},
+		{"INSERT INTO `note` VALUES ('1', '2', '3');", "note"},
+		{"INSERT INTO `a.b` VALUES ('1');", "a.b"},
+	}
+
+	for _, t := range tbl {
+		res := valuesExp.FindAllStringSubmatch(t.sql, -1)[0][1]
+		c.Assert(res, Equals, t.table)
+	}
+}
+
+type parserTestSuite struct {
+}
+
+var _ = Suite(&parserTestSuite{})
+
+func (s *parserTestSuite) TestUnescape(c *C) {
+	tbl := []struct {
+		escaped  string
+		expected string
+	}{
+		{`\\n`, `\n`},
+		{`\\t`, `\t`},
+		{`\\"`, `\"`},
+		{`\\'`, `\'`},
+		{`\\0`, `\0`},
+		{`\\b`, `\b`},
+		{`\\Z`, `\Z`},
+		{`\\r`, `\r`},
+		{`abc`, `abc`},
+		{`abc\`, `abc`},
+		{`ab\c`, `abc`},
+		{`\abc`, `abc`},
+	}
+
+	for _, t := range tbl {
+		unesacped := unescapeString(t.escaped)
+		c.Assert(unesacped, Equals, t.expected)
+	}
+}
+
 func (s *schemaTestSuite) TestParse(c *C) {
 	var buf bytes.Buffer
 
@@ -135,7 +181,7 @@ func (s *schemaTestSuite) TestParse(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *schemaTestSuite) TestParseValue(c *C) {
+func (s *parserTestSuite) TestParseValue(c *C) {
 	str := `'abc\\',''`
 	values, err := parseValues(str)
 	c.Assert(err, IsNil)
@@ -149,20 +195,4 @@ func (s *schemaTestSuite) TestParseValue(c *C) {
 	str = `123,'\Z#÷QÎx£. Æ‘ÇoPâÅ_\r—\\','','qn\'`
 	values, err = parseValues(str)
 	c.Assert(err, NotNil)
-}
-
-func (s *schemaTestSuite) TestParseFindTable(c *C) {
-	tbl := []struct {
-		sql   string
-		table string
-	}{
-		{"INSERT INTO `note` VALUES ('title', 'here is sql: INSERT INTO `table` VALUES (\\'some value\\')');", "note"},
-		{"INSERT INTO `note` VALUES ('1', '2', '3');", "note"},
-		{"INSERT INTO `a.b` VALUES ('1');", "a.b"},
-	}
-
-	for _, t := range tbl {
-		res := valuesExp.FindAllStringSubmatch(t.sql, -1)[0][1]
-		c.Assert(res, Equals, t.table)
-	}
 }
