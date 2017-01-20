@@ -529,7 +529,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			log.Info("receive EOF packet, retry ReadPacket")
 			continue
 		default:
-			log.Warningf("invalid stream header %c", data[0])
+			log.Errorf("invalid stream header %c", data[0])
 			continue
 		}
 	}
