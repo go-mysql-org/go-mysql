@@ -211,6 +211,23 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		for _, query := range tbls {
 			t.testExecute(c, query)
 		}
+
+		// If MySQL supports JSON, it must supports GEOMETRY.
+		t.testExecute(c, "DROP TABLE IF EXISTS test_geo")
+
+		str = `CREATE TABLE test_geo (g GEOMETRY)`
+		_, err = t.c.Execute(str)
+		c.Assert(err, IsNil)
+
+		tbls = []string{
+			`INSERT INTO test_geo VALUES (POINT(1, 1))`,
+			`INSERT INTO test_geo VALUES (LINESTRING(POINT(0,0), POINT(1,1), POINT(2,2)))`,
+			// TODO: add more geometry tests
+		}
+
+		for _, query := range tbls {
+			t.testExecute(c, query)
+		}
 	}
 
 	t.wg.Wait()
