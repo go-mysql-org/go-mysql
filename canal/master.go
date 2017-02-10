@@ -13,6 +13,12 @@ import (
 	"github.com/siddontang/go/ioutil2"
 )
 
+// MasterInfoHandler handle master info
+type MasterInfoHandler interface {
+	// SavePos trigger save binlog pos into other position, such as save to the database
+	SavePos(binlogName string, pos uint32) error
+}
+
 type masterInfo struct {
 	Addr     string `toml:"addr"`
 	Name     string `toml:"bin_name"`
@@ -43,13 +49,13 @@ func loadMasterInfo(name string) (*masterInfo, error) {
 	return &m, err
 }
 
-func (m *masterInfo) Save(force bool) error {
+func (m *masterInfo) Save(force bool) (bool, error) {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	n := time.Now()
 	if !force && n.Sub(m.lastSaveTime) < time.Second {
-		return nil
+		return false, nil
 	}
 
 	var buf bytes.Buffer
@@ -64,7 +70,10 @@ func (m *masterInfo) Save(force bool) error {
 
 	m.lastSaveTime = n
 
-	return errors.Trace(err)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	return true, nil
 }
 
 func (m *masterInfo) Update(name string, pos uint32) {
@@ -86,4 +95,17 @@ func (m *masterInfo) Pos() mysql.Position {
 
 func (m *masterInfo) Close() {
 	m.Save(true)
+}
+
+// RegMasterInfoHandler register handle to handle masterInfo
+func (c *Canal) RegMasterInfoHandler(h MasterInfoHandler) {
+	c.masterInfoLock.Lock()
+	c.masterInfoHandler = h
+	c.masterInfoLock.Unlock()
+}
+
+func (c *Canal) getMasterInfoHandler() MasterInfoHandler {
+	c.masterInfoLock.RLock()
+	defer c.masterInfoLock.RUnlock()
+	return c.masterInfoHandler
 }
