@@ -5,7 +5,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"bytes"
 	"regexp"
 
 	"github.com/juju/errors"
@@ -15,8 +14,7 @@ import (
 )
 
 var (
-	bSchemaTableSep = []byte("`.`")
-	expAlterTable   = regexp.MustCompile("^ALTER TABLE\\s`(.*?)`\\s.*")
+	expAlterTable = regexp.MustCompile("^ALTER TABLE\\s.*?`([^`\\.]+?)`\\s.*")
 )
 
 func (c *Canal) startSyncBinlog() error {
@@ -75,9 +73,6 @@ func (c *Canal) startSyncBinlog() error {
 		case *replication.QueryEvent:
 			// handle alert table query
 			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
-				if bytes.Contains(mb[1], bSchemaTableSep) {
-					mb[1] = bytes.Split(mb[1], bSchemaTableSep)[1]
-				}
 				c.ClearTableCache(e.Schema, mb[1])
 				log.Infof("table structure changed, clear table cache: %s.%s\n", e.Schema, mb[1])
 				forceSavePos = true
