@@ -66,7 +66,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	} else if len(c.master.Addr) != 0 && c.master.Addr != c.cfg.Addr {
 		log.Infof("MySQL addr %s in old master.info, but new %s, reset", c.master.Addr, c.cfg.Addr)
 		// may use another MySQL, reset
-		c.master = &masterInfo{}
+		c.master = &masterInfo{name: c.masterInfoPath()}
 	}
 
 	c.master.Addr = c.cfg.Addr
