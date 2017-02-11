@@ -1,8 +1,10 @@
 package client
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
+	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -74,6 +76,23 @@ func (s *clientTestSuite) testConn_CreateTable(c *C) {
 func (s *clientTestSuite) TestConn_Ping(c *C) {
 	err := s.c.Ping()
 	c.Assert(err, IsNil)
+}
+
+func (s *clientTestSuite) TestConn_TLS(c *C) {
+	// Verify that the provided tls.Config is used when attempting to connect to mysql.
+	// An empty tls.Config will result in a connection error.
+	addr := fmt.Sprintf("%s:%d", *testHost, *testPort)
+	_, err := Connect(addr, *testUser, *testPassword, *testDB, func(c *Conn) {
+		c.TLSConfig = &tls.Config{}
+	})
+	if err == nil {
+		c.Fatal("expected error")
+	}
+
+	expected := "either ServerName or InsecureSkipVerify must be specified in the tls.Config"
+	if !strings.Contains(err.Error(), expected) {
+		c.Fatal("expected '%s' to contain '%s'", err.Error(), expected)
+	}
 }
 
 func (s *clientTestSuite) TestConn_Insert(c *C) {

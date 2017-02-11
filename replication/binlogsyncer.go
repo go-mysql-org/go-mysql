@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -44,6 +45,9 @@ type BinlogSyncerConfig struct {
 
 	// RawModeEanbled is for not parsing binlog event.
 	RawModeEanbled bool
+
+	// If not nil, use the provided tls.Config to connect to the database using TLS/SSL.
+	TLSConfig *tls.Config
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -129,7 +133,9 @@ func (b *BinlogSyncer) registerSlave() error {
 
 	log.Infof("register slave for master server %s:%d", b.cfg.Host, b.cfg.Port)
 	var err error
-	b.c, err = client.Connect(fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port), b.cfg.User, b.cfg.Password, "")
+	b.c, err = client.Connect(fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port), b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
+		c.TLSConfig = b.cfg.TLSConfig
+	})
 	if err != nil {
 		return errors.Trace(err)
 	}
