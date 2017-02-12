@@ -464,8 +464,8 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_STRING:
 		v, n = decodeString(data, length)
 	case MYSQL_TYPE_JSON:
-		// Refer https://github.com/shyiko/mysql-binlog-connector-java/blob/8f9132ee773317e00313204beeae8ddcaa43c1b4/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L344
-		length = int(binary.LittleEndian.Uint32(data[0:]))
+		// Refer: https://github.com/shyiko/mysql-binlog-connector-java/blob/master/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L404
+		length = int(FixedLengthInt(data[0:meta]))
 		n = length + int(meta)
 		v, err = decodeJsonBinary(data[meta:n])
 	case MYSQL_TYPE_GEOMETRY:
