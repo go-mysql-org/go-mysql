@@ -36,6 +36,9 @@ type Canal struct {
 	rsLock     sync.Mutex
 	rsHandlers []RowsEventHandler
 
+	masterInfoLock    sync.RWMutex
+	masterInfoHandler MasterInfoHandler
+
 	connLock sync.Mutex
 	conn     *client.Conn
 
@@ -66,7 +69,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	} else if len(c.master.Addr) != 0 && c.master.Addr != c.cfg.Addr {
 		log.Infof("MySQL addr %s in old master.info, but new %s, reset", c.master.Addr, c.cfg.Addr)
 		// may use another MySQL, reset
-		c.master = &masterInfo{}
+		c.master = &masterInfo{name: c.masterInfoPath()}
 	}
 
 	c.master.Addr = c.cfg.Addr
@@ -129,11 +132,17 @@ func (c *Canal) prepareDumper() error {
 	return nil
 }
 
-func (c *Canal) Start() error {
+func (c *Canal) Start() <-chan struct{} {
 	c.wg.Add(1)
-	go c.run()
+	go func() {
+		err := c.run()
+		if err != nil {
+			log.Errorf("Canal.run return error:%v\n", err)
+		}
+		c.Close()
+	}()
 
-	return nil
+	return c.quit
 }
 
 func (c *Canal) run() error {
@@ -172,8 +181,6 @@ func (c *Canal) Close() {
 
 	c.closed.Set(true)
 
-	close(c.quit)
-
 	c.connLock.Lock()
 	c.conn.Close()
 	c.conn = nil
@@ -187,6 +194,9 @@ func (c *Canal) Close() {
 	c.master.Close()
 
 	c.wg.Wait()
+
+	//
+	close(c.quit)
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
@@ -213,6 +223,14 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	c.tableLock.Unlock()
 
 	return t, nil
+}
+
+// ClearTableCache clear table cache
+func (c *Canal) ClearTableCache(db []byte, table []byte) {
+	key := fmt.Sprintf("%s.%s", db, table)
+	c.tableLock.Lock()
+	delete(c.tables, key)
+	c.tableLock.Unlock()
 }
 
 // Check MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
@@ -304,4 +322,12 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 
 func (c *Canal) SyncedPosition() mysql.Position {
 	return c.master.Pos()
+}
+
+// SetStartPosition set start sync binlog Pos
+// notice: this func must be called before Canal.Start
+func (c *Canal) SetStartPosition(binlogName string, pos uint32) error {
+	c.master.Update(binlogName, pos)
+	_, err := c.master.Save(true)
+	return err
 }

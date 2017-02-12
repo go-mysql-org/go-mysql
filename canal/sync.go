@@ -5,10 +5,21 @@ import (
 
 	"golang.org/x/net/context"
 
+	"regexp"
+
+	"sync"
+
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+)
+
+var (
+	expAlterTable = regexp.MustCompile("^ALTER TABLE\\s.*?`([^`\\.]+?)`\\s.*")
+
+	skipedSchemaLock sync.Mutex
+	skipedSchemaList []string
 )
 
 func (c *Canal) startSyncBinlog() error {
@@ -23,6 +34,7 @@ func (c *Canal) startSyncBinlog() error {
 
 	timeout := time.Second
 	forceSavePos := false
+	posSaved := false
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		ev, err := s.GetEvent(ctx)
@@ -64,15 +76,56 @@ func (c *Canal) startSyncBinlog() error {
 			continue
 		case *replication.XIDEvent:
 			// try to save the position later
+		case *replication.QueryEvent:
+			// handle alert table query
+			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
+				c.ClearTableCache(e.Schema, mb[1])
+				log.Infof("table structure changed, clear table cache: %s.%s\n", e.Schema, mb[1])
+				forceSavePos = true
+			} else {
+				// skip others
+				continue
+			}
 		default:
 			continue
 		}
 
 		c.master.Update(pos.Name, pos.Pos)
-		c.master.Save(forceSavePos)
+		posSaved, err = c.master.Save(forceSavePos)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if posSaved {
+			if h := c.getMasterInfoHandler(); h != nil {
+				h.SavePos(pos.Name, pos.Pos)
+			}
+		}
 	}
 
 	return nil
+}
+
+func (c *Canal) isSkipedSchema(schema string) bool {
+	// fixed: if db not in dump list , skip it.
+	if c.cfg.Dump.TableDB != "" && c.cfg.Dump.TableDB != schema {
+		skipedSchemaLock.Lock()
+		found := false
+		for _, v := range skipedSchemaList {
+			if v == schema {
+				found = true
+				break
+			}
+		}
+		if !found {
+			skipedSchemaList = append(skipedSchemaList, schema)
+		}
+		skipedSchemaLock.Unlock()
+		if !found {
+			log.Infof("database != config.Dump.TableDB(%s != %s), skiped...\n", schema, c.cfg.Dump.TableDB)
+		}
+		return true
+	}
+	return false
 }
 
 func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
@@ -81,6 +134,10 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	// Caveat: table may be altered at runtime.
 	schema := string(ev.Table.Schema)
 	table := string(ev.Table.Table)
+
+	if c.isSkipedSchema(schema) {
+		return nil
+	}
 
 	t, err := c.GetTable(schema, table)
 	if err != nil {
