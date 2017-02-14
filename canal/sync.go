@@ -76,7 +76,7 @@ func (c *Canal) startSyncBinlog() error {
 					mb[1] = e.Schema
 				}
 				c.ClearTableCache(mb[1], mb[2])
-				log.Infof("table structure changed, clear table cache: %s.%s %s\n", mb[1], mb[2])
+				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
 				forceSavePos = true
 			} else {
 				// skip others
