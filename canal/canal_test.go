@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -36,7 +37,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	var err error
 	s.c, err = NewCanal(cfg)
 	c.Assert(err, IsNil)
-
+	s.execute(c, "DROP TABLE IF EXISTS test.canal_test")
 	sql := `
         CREATE TABLE IF NOT EXISTS test.canal_test (
             id int AUTO_INCREMENT,
@@ -88,7 +89,28 @@ func (s *canalTestSuite) TestCanal(c *C) {
 	for i := 1; i < 10; i++ {
 		s.execute(c, "INSERT INTO test.canal_test (name) VALUES (?)", fmt.Sprintf("%d", i))
 	}
+	s.execute(c, "ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
+	s.execute(c, "INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
 
 	err := s.c.CatchMasterPos(100)
 	c.Assert(err, IsNil)
+}
+
+func TestAlterTableExp(t *testing.T) {
+	cases := []string{
+		"ALTER TABLE `mydb`.`mytable` ADD `field2` DATE  NULL  AFTER `field1`;",
+		"ALTER TABLE `mytable` ADD `field2` DATE  NULL  AFTER `field1`;",
+		"ALTER TABLE mydb.mytable ADD `field2` DATE  NULL  AFTER `field1`;",
+		"ALTER table mytable ADD `field2` DATE  NULL  AFTER `field1`;",
+		"alter TABLE mydb.mytable ADD field2 DATE  NULL  AFTER `field1`;",
+	}
+
+	table := []byte("mytable")
+	db := []byte("mydb")
+	for _, s := range cases {
+		m := expAlterTable.FindSubmatch([]byte(s))
+		if m == nil || !bytes.Equal(m[2], table) || (len(m[1]) > 0 && !bytes.Equal(m[1], db)) {
+			t.Fatalf("TestAlterTableExp: case %s failed\n", s)
+		}
+	}
 }
