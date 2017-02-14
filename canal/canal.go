@@ -215,6 +215,14 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	return t, nil
 }
 
+// ClearTableCache clear table cache
+func (c *Canal) ClearTableCache(db []byte, table []byte) {
+	key := fmt.Sprintf("%s.%s", db, table)
+	c.tableLock.Lock()
+	delete(c.tables, key)
+	c.tableLock.Unlock()
+}
+
 // Check MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
 func (c *Canal) CheckBinlogRowImage(image string) error {
 	// need to check MySQL binlog row image? full, minimal or noblob?

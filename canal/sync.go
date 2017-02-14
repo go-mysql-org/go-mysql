@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"regexp"
 	"time"
 
 	"golang.org/x/net/context"
@@ -9,6 +10,10 @@ import (
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+)
+
+var (
+	expAlterTable = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 )
 
 func (c *Canal) startSyncBinlog() error {
@@ -64,6 +69,19 @@ func (c *Canal) startSyncBinlog() error {
 			continue
 		case *replication.XIDEvent:
 			// try to save the position later
+		case *replication.QueryEvent:
+			// handle alert table query
+			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
+				if len(mb[1]) == 0 {
+					mb[1] = e.Schema
+				}
+				c.ClearTableCache(mb[1], mb[2])
+				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
+				forceSavePos = true
+			} else {
+				// skip others
+				continue
+			}
 		default:
 			continue
 		}
