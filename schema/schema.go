@@ -29,6 +29,7 @@ const (
 type TableColumn struct {
 	Name       string
 	Type       int
+	RawType    string
 	IsAuto     bool
 	EnumValues []string
 	SetValues  []string
@@ -56,6 +57,7 @@ func (ta *Table) String() string {
 func (ta *Table) AddColumn(name string, columnType string, extra string) {
 	index := len(ta.Columns)
 	ta.Columns = append(ta.Columns, TableColumn{Name: name})
+	ta.Columns[index].RawType = columnType
 
 	if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
 		ta.Columns[index].Type = TYPE_NUMBER
