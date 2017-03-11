@@ -20,7 +20,7 @@ type masterInfo struct {
 
 	name string
 
-	l sync.Mutex
+	l sync.RWMutex
 
 	lastSaveTime time.Time
 }
@@ -68,6 +68,7 @@ func (m *masterInfo) Save(force bool) error {
 }
 
 func (m *masterInfo) Update(name string, pos uint32) {
+	log.Debugf("update master position (%s, %d)", name, pos)
 	m.l.Lock()
 	m.Name = name
 	m.Position = pos
@@ -76,10 +77,10 @@ func (m *masterInfo) Update(name string, pos uint32) {
 
 func (m *masterInfo) Pos() mysql.Position {
 	var pos mysql.Position
-	m.l.Lock()
+	m.l.RLock()
 	pos.Name = m.Name
 	pos.Pos = m.Position
-	m.l.Unlock()
+	m.l.RUnlock()
 
 	return pos
 }

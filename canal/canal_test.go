@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
@@ -92,7 +93,7 @@ func (s *canalTestSuite) TestCanal(c *C) {
 	s.execute(c, "ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
 	s.execute(c, "INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
 
-	err := s.c.CatchMasterPos(100)
+	err := s.c.CatchMasterPos(10 * time.Second)
 	c.Assert(err, IsNil)
 }
 
@@ -101,8 +102,8 @@ func TestAlterTableExp(t *testing.T) {
 		"ALTER TABLE `mydb`.`mytable` ADD `field2` DATE  NULL  AFTER `field1`;",
 		"ALTER TABLE `mytable` ADD `field2` DATE  NULL  AFTER `field1`;",
 		"ALTER TABLE mydb.mytable ADD `field2` DATE  NULL  AFTER `field1`;",
-		"ALTER table mytable ADD `field2` DATE  NULL  AFTER `field1`;",
-		"alter TABLE mydb.mytable ADD field2 DATE  NULL  AFTER `field1`;",
+		"ALTER TABLE mytable ADD `field2` DATE  NULL  AFTER `field1`;",
+		"ALTER TABLE mydb.mytable ADD field2 DATE  NULL  AFTER `field1`;",
 	}
 
 	table := []byte("mytable")

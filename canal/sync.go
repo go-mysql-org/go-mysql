@@ -10,6 +10,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"github.com/siddontang/go-mysql/schema"
 )
 
 var (
@@ -62,7 +63,9 @@ func (c *Canal) startSyncBinlog() error {
 			log.Infof("rotate binlog to %v", pos)
 		case *replication.RowsEvent:
 			// we only focus row based event
-			if err = c.handleRowsEvent(ev); err != nil {
+			err = c.handleRowsEvent(ev)
+			if err != nil && errors.Cause(err) != schema.ErrTableNotExist {
+				// We can ignore table not exist error
 				log.Errorf("handle rows event error %v", err)
 				return errors.Trace(err)
 			}
@@ -119,21 +122,18 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	return c.travelRowsEventHandler(events)
 }
 
-func (c *Canal) WaitUntilPos(pos mysql.Position, timeout int) error {
-	if timeout <= 0 {
-		timeout = 60
-	}
-
-	timer := time.NewTimer(time.Duration(timeout) * time.Second)
+func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
 	for {
 		select {
 		case <-timer.C:
-			return errors.Errorf("wait position %v err", pos)
+			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
-			curpos := c.master.Pos()
-			if curpos.Compare(pos) >= 0 {
+			curPos := c.master.Pos()
+			if curPos.Compare(pos) >= 0 {
 				return nil
 			} else {
+				log.Debugf("master pos is %v, wait catching %v", curPos, pos)
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
@@ -142,7 +142,7 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout int) error {
 	return nil
 }
 
-func (c *Canal) CatchMasterPos(timeout int) error {
+func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	rr, err := c.Execute("SHOW MASTER STATUS")
 	if err != nil {
 		return errors.Trace(err)
