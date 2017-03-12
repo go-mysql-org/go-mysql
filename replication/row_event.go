@@ -600,7 +600,7 @@ func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
 	return
 }
 
-func decodeTimestamp2(data []byte, dec uint16) (string, int, error) {
+func decodeTimestamp2(data []byte, dec uint16) (interface{}, int, error) {
 	//get timestamp binary length
 	n := int(4 + (dec+1)/2)
 	sec := int64(binary.BigEndian.Uint32(data[0:4]))
@@ -619,7 +619,7 @@ func decodeTimestamp2(data []byte, dec uint16) (string, int, error) {
 	}
 
 	t := time.Unix(sec, usec*1000)
-	return t.Format(TimeFormat), n, nil
+	return t, n, nil
 }
 
 const DATETIMEF_INT_OFS int64 = 0x8000000000
