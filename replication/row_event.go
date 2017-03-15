@@ -15,6 +15,8 @@ import (
 	"github.com/siddontang/go/hack"
 )
 
+var DecodeTimestamp2AsTime bool = false
+
 type TableMapEvent struct {
 	tableIDSize int
 
@@ -396,7 +398,11 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		t := binary.LittleEndian.Uint32(data)
 		v = time.Unix(int64(t), 0)
 	case MYSQL_TYPE_TIMESTAMP2:
-		v, n, err = decodeTimestamp2(data, meta)
+		if DecodeTimestamp2AsTime {
+			v, n, err = decodeTimestamp2AsTime(data, meta)
+		} else {
+			v, n, err = decodeTimestamp2(data, meta)
+		}
 	case MYSQL_TYPE_DATETIME:
 		n = 8
 		i64 := binary.LittleEndian.Uint64(data)
@@ -620,6 +626,28 @@ func decodeTimestamp2(data []byte, dec uint16) (string, int, error) {
 
 	t := time.Unix(sec, usec*1000)
 	return t.Format(TimeFormat), n, nil
+}
+
+func decodeTimestamp2AsTime(data []byte, dec uint16) (interface{}, int, error) {
+	//get timestamp binary length
+	n := int(4 + (dec+1)/2)
+	sec := int64(binary.BigEndian.Uint32(data[0:4]))
+	usec := int64(0)
+	switch dec {
+	case 1, 2:
+		usec = int64(data[4]) * 10000
+	case 3, 4:
+		usec = int64(binary.BigEndian.Uint16(data[4:])) * 100
+	case 5, 6:
+		usec = int64(BFixedLengthInt(data[4:7]))
+	}
+
+	if sec == 0 {
+		return "0000-00-00 00:00:00", n, nil
+	}
+
+	t := time.Unix(sec, usec*1000)
+	return t, n, nil
 }
 
 const DATETIMEF_INT_OFS int64 = 0x8000000000
