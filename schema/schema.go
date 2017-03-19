@@ -146,7 +146,7 @@ func (idx *Index) FindColumn(name string) int {
 	return -1
 }
 
-func isTableExist(conn mysql.Executer, schema string, name string) (bool, error) {
+func IsTableExist(conn mysql.Executer, schema string, name string) (bool, error) {
 	query := fmt.Sprintf("SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s' and TABLE_NAME = '%s' LIMIT 1", schema, name)
 	r, err := conn.Execute(query)
 	if err != nil {
@@ -157,15 +157,6 @@ func isTableExist(conn mysql.Executer, schema string, name string) (bool, error)
 }
 
 func NewTable(conn mysql.Executer, schema string, name string) (*Table, error) {
-	ok, err := isTableExist(conn, schema, name)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	if !ok {
-		return nil, ErrTableNotExist
-	}
-
 	ta := &Table{
 		Schema:  schema,
 		Name:    name,
@@ -173,11 +164,11 @@ func NewTable(conn mysql.Executer, schema string, name string) (*Table, error) {
 		Indexes: make([]*Index, 0, 8),
 	}
 
-	if err = ta.fetchColumns(conn); err != nil {
+	if err := ta.fetchColumns(conn); err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if err = ta.fetchIndexes(conn); err != nil {
+	if err := ta.fetchIndexes(conn); err != nil {
 		return nil, errors.Trace(err)
 	}
 
