@@ -14,6 +14,7 @@ var (
 // Time is a help structure wrapping Golang Time.
 // In practice, MySQL use "0000-00-00 00:00:00" for zero time, but Golang Time can't
 // handle it, so we supply a Time instead.
+// Notice: we don't check time and frac validation here, maybe later.
 type Time struct {
 	time.Time
 
