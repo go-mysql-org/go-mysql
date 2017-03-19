@@ -48,6 +48,10 @@ type BinlogSyncerConfig struct {
 
 	// If not nil, use the provided tls.Config to connect to the database using TLS/SSL.
 	TLSConfig *tls.Config
+
+	// Use replication.Time structure for timestamp and datetime.
+	// We will use Local location for timestamp and UTC location for datatime.
+	ParseTime bool
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -79,7 +83,7 @@ func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
 	b.cfg = cfg
 	b.parser = NewBinlogParser()
 	b.parser.SetRawMode(b.cfg.RawModeEanbled)
-
+	b.parser.SetParseTime(b.cfg.ParseTime)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 
