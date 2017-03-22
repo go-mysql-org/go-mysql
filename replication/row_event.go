@@ -338,13 +338,19 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 	return pos, nil
 }
 
-func (e *RowsEvent) parseFracTime(t Time) interface{} {
-	if !e.parseTime {
-		// Don't parse time, return string directly
-		return t.String()
+func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
+	v, ok := t.(fracTime)
+	if !ok {
+		return t
 	}
 
-	return t
+	if !e.parseTime {
+		// Don't parse time, return string directly
+		return v.String()
+	}
+
+	// return Golang time directly
+	return v.Time
 }
 
 // see mysql sql/log_event.cc log_event_print_value
@@ -405,17 +411,16 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_TIMESTAMP:
 		n = 4
 		t := binary.LittleEndian.Uint32(data)
-		v = e.parseFracTime(Time{time.Unix(int64(t), 0), 0})
+		v = e.parseFracTime(fracTime{time.Unix(int64(t), 0), 0})
 	case MYSQL_TYPE_TIMESTAMP2:
-		var t Time
-		t, n, err = decodeTimestamp2(data, meta)
-		v = e.parseFracTime(t)
+		v, n, err = decodeTimestamp2(data, meta)
+		v = e.parseFracTime(v)
 	case MYSQL_TYPE_DATETIME:
 		n = 8
 		i64 := binary.LittleEndian.Uint64(data)
 		d := i64 / 1000000
 		t := i64 % 1000000
-		v = e.parseFracTime(Time{time.Date(int(d/10000),
+		v = e.parseFracTime(fracTime{time.Date(int(d/10000),
 			time.Month((d%10000)/100),
 			int(d%100),
 			int(t/10000),
@@ -424,9 +429,8 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			0,
 			time.UTC), 0})
 	case MYSQL_TYPE_DATETIME2:
-		var t Time
-		t, n, err = decodeDatetime2(data, meta)
-		v = e.parseFracTime(t)
+		v, n, err = decodeDatetime2(data, meta)
+		v = e.parseFracTime(v)
 	case MYSQL_TYPE_TIME:
 		n = 3
 		i32 := uint32(FixedLengthInt(data[0:3]))
@@ -615,7 +619,7 @@ func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
 	return
 }
 
-func decodeTimestamp2(data []byte, dec uint16) (Time, int, error) {
+func decodeTimestamp2(data []byte, dec uint16) (interface{}, int, error) {
 	//get timestamp binary length
 	n := int(4 + (dec+1)/2)
 	sec := int64(binary.BigEndian.Uint32(data[0:4]))
@@ -630,15 +634,15 @@ func decodeTimestamp2(data []byte, dec uint16) (Time, int, error) {
 	}
 
 	if sec == 0 {
-		return Time{Frac: int(dec)}, n, nil
+		return formatZeroTime(int(usec), int(dec)), n, nil
 	}
 
-	return Time{time.Unix(sec, usec*1000), int(dec)}, n, nil
+	return fracTime{time.Unix(sec, usec*1000), int(dec)}, n, nil
 }
 
 const DATETIMEF_INT_OFS int64 = 0x8000000000
 
-func decodeDatetime2(data []byte, dec uint16) (Time, int, error) {
+func decodeDatetime2(data []byte, dec uint16) (interface{}, int, error) {
 	//get datetime binary length
 	n := int(5 + (dec+1)/2)
 
@@ -655,7 +659,7 @@ func decodeDatetime2(data []byte, dec uint16) (Time, int, error) {
 	}
 
 	if intPart == 0 {
-		return Time{Frac: int(dec)}, n, nil
+		return formatZeroTime(int(frac), int(dec)), n, nil
 	}
 
 	tmp := intPart<<24 + frac
@@ -679,7 +683,7 @@ func decodeDatetime2(data []byte, dec uint16) (Time, int, error) {
 	minute := int((hms >> 6) % (1 << 6))
 	hour := int((hms >> 12))
 
-	return Time{time.Date(year, time.Month(month), day, hour, minute, second, int(frac*1000), time.UTC), int(dec)}, n, nil
+	return fracTime{time.Date(year, time.Month(month), day, hour, minute, second, int(frac*1000), time.UTC), int(dec)}, n, nil
 }
 
 const TIMEF_OFS int64 = 0x800000000000

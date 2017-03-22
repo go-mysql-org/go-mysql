@@ -28,22 +28,24 @@ func (s *testSyncerSuite) TestTime(c *C) {
 	}
 
 	for _, t := range tbls {
-		t1 := Time{time.Date(t.year, time.Month(t.month), t.day, t.hour, t.min, t.sec, t.microSec*1000, time.UTC), t.frac}
+		t1 := fracTime{time.Date(t.year, time.Month(t.month), t.day, t.hour, t.min, t.sec, t.microSec*1000, time.UTC), t.frac}
 		c.Assert(t1.String(), Equals, t.expected)
 	}
 
 	zeroTbls := []struct {
 		frac     int
+		dec      int
 		expected string
 	}{
-		{0, "0000-00-00 00:00:00"},
-		{1, "0000-00-00 00:00:00.0"},
-		{3, "0000-00-00 00:00:00.000"},
-		{6, "0000-00-00 00:00:00.000000"},
+		{0, 1, "0000-00-00 00:00:00.0"},
+		{1, 1, "0000-00-00 00:00:00.0"},
+		{123, 3, "0000-00-00 00:00:00.000"},
+		{123000, 3, "0000-00-00 00:00:00.123"},
+		{123, 6, "0000-00-00 00:00:00.000123"},
+		{123000, 6, "0000-00-00 00:00:00.123000"},
 	}
 
 	for _, t := range zeroTbls {
-		t1 := Time{Frac: t.frac}
-		c.Assert(t1.String(), Equals, t.expected)
+		c.Assert(formatZeroTime(t.frac, t.dec), Equals, t.expected)
 	}
 }
