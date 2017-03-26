@@ -205,6 +205,11 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 
 	t, err := schema.NewTable(c, db, table)
 	if err != nil {
+		// check table not exists
+		if ok, err1 := schema.IsTableExist(c, db, table); err1 == nil && !ok {
+			return nil, schema.ErrTableNotExist
+		}
+
 		return nil, errors.Trace(err)
 	}
 
