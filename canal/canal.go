@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
 	"github.com/siddontang/go/sync2"
+	"golang.org/x/net/context"
 )
 
 var errCanalClosed = errors.New("canal was closed")
@@ -33,45 +33,38 @@ type Canal struct {
 	dumpDoneCh chan struct{}
 	syncer     *replication.BinlogSyncer
 
-	rsLock     sync.Mutex
-	rsHandlers []RowsEventHandler
+	eventHandler EventHandler
 
 	connLock sync.Mutex
 	conn     *client.Conn
 
 	wg sync.WaitGroup
 
-	tableLock sync.Mutex
+	tableLock sync.RWMutex
 	tables    map[string]*schema.Table
 
-	quit   chan struct{}
 	closed sync2.AtomicBool
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
 	c.cfg = cfg
 	c.closed.Set(false)
-	c.quit = make(chan struct{})
 
-	os.MkdirAll(cfg.DataDir, 0755)
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 
 	c.dumpDoneCh = make(chan struct{})
-	c.rsHandlers = make([]RowsEventHandler, 0, 4)
+	c.eventHandler = &DummyEventHandler{}
+
 	c.tables = make(map[string]*schema.Table)
+	c.master = &masterInfo{}
 
 	var err error
-	if c.master, err = loadMasterInfo(c.masterInfoPath()); err != nil {
-		return nil, errors.Trace(err)
-	} else if len(c.master.Addr) != 0 && c.master.Addr != c.cfg.Addr {
-		log.Infof("MySQL addr %s in old master.info, but new %s, reset", c.master.Addr, c.cfg.Addr)
-		// may use another MySQL, reset
-		c.master = &masterInfo{}
-	}
 
-	c.master.Addr = c.cfg.Addr
-
-	if err := c.prepareDumper(); err != nil {
+	if err = c.prepareDumper(); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -129,11 +122,20 @@ func (c *Canal) prepareDumper() error {
 	return nil
 }
 
+// Start will first try to dump all data from MySQL master `mysqldump`,
+// then sync from the binlog position in the dump data.
 func (c *Canal) Start() error {
 	c.wg.Add(1)
 	go c.run()
 
 	return nil
+}
+
+// StartFrom will sync from the binlog position directly, ignore mysqldump.
+func (c *Canal) StartFrom(pos mysql.Position) error {
+	c.master.Update(pos)
+
+	return c.Start()
 }
 
 func (c *Canal) run() error {
@@ -166,13 +168,13 @@ func (c *Canal) Close() {
 	c.m.Lock()
 	defer c.m.Unlock()
 
+	c.cancel()
+
 	if c.isClosed() {
 		return
 	}
 
 	c.closed.Set(true)
-
-	close(c.quit)
 
 	c.connLock.Lock()
 	c.conn.Close()
@@ -184,8 +186,6 @@ func (c *Canal) Close() {
 		c.syncer = nil
 	}
 
-	c.master.Close()
-
 	c.wg.Wait()
 }
 
@@ -195,9 +195,9 @@ func (c *Canal) WaitDumpDone() <-chan struct{} {
 
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	key := fmt.Sprintf("%s.%s", db, table)
-	c.tableLock.Lock()
+	c.tableLock.RLock()
 	t, ok := c.tables[key]
-	c.tableLock.Unlock()
+	c.tableLock.RUnlock()
 
 	if ok {
 		return t, nil
@@ -283,10 +283,6 @@ func (c *Canal) prepareSyncer() error {
 	return nil
 }
 
-func (c *Canal) masterInfoPath() string {
-	return path.Join(c.cfg.DataDir, "master.info")
-}
-
 // Execute a SQL
 func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
 	c.connLock.Lock()
@@ -316,5 +312,5 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 }
 
 func (c *Canal) SyncedPosition() mysql.Position {
-	return c.master.Pos()
+	return c.master.Position()
 }

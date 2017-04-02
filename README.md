@@ -105,20 +105,21 @@ cfg.Dump.Tables = []string{"canal_test"}
 
 c, err := NewCanal(cfg)
 
-type myRowsEventHandler struct {
+type MyEventHandler struct {
+    DummyEventHandler
 }
 
-func (h *myRowsEventHandler) Do(e *RowsEvent) error {
+func (h *MyEventHandler) OnRow(ctx context.Context, e *RowsEvent) error {
     log.Infof("%s %v\n", e.Action, e.Rows)
     return nil
 }
 
-func (h *myRowsEventHandler) String() string {
-    return "myRowsEventHandler"
+func (h *MyEventHandler) String() string {
+    return "MyEventHandler"
 }
 
 // Register a handler to handle RowsEvent
-c.RegRowsEventHandler(&MyRowsEventHandler{})
+c.SetEventHandler(&MyEventHandler{})
 
 // Start canal
 c.Start()

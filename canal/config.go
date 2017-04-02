@@ -34,7 +34,6 @@ type Config struct {
 
 	ServerID uint32 `toml:"server_id"`
 	Flavor   string `toml:"flavor"`
-	DataDir  string `toml:"data_dir"`
 
 	Dump DumpConfig `toml:"dump"`
 }
@@ -71,7 +70,6 @@ func NewDefaultConfig() *Config {
 
 	c.Flavor = "mysql"
 
-	c.DataDir = "./var"
 	c.Dump.ExecutionPath = "mysqldump"
 	c.Dump.DiscardErr = true
 

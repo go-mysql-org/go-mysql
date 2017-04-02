@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
+	"golang.org/x/net/context"
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL host")
@@ -33,8 +33,6 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
 
-	os.RemoveAll(cfg.DataDir)
-
 	var err error
 	s.c, err = NewCanal(cfg)
 	c.Assert(err, IsNil)
@@ -54,7 +52,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 
 	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
 
-	s.c.RegRowsEventHandler(&testRowsEventHandler{})
+	s.c.SetEventHandler(&testEventHandler{})
 	err = s.c.Start()
 	c.Assert(err, IsNil)
 }
@@ -72,16 +70,17 @@ func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql
 	return r
 }
 
-type testRowsEventHandler struct {
+type testEventHandler struct {
+	DummyEventHandler
 }
 
-func (h *testRowsEventHandler) Do(e *RowsEvent) error {
+func (h *testEventHandler) Do(_ context.Context, e *RowsEvent) error {
 	log.Infof("%s %v\n", e.Action, e.Rows)
 	return nil
 }
 
-func (h *testRowsEventHandler) String() string {
-	return "testRowsEventHandler"
+func (h *testEventHandler) String() string {
+	return "testEventHandler"
 }
 
 func (s *canalTestSuite) TestCanal(c *C) {
