@@ -72,6 +72,9 @@ func (c *Canal) startSyncBinlog() error {
 			continue
 		case *replication.XIDEvent:
 			// try to save the position later
+			if err := c.eventHandler.OnXID(c.ctx, pos); err != nil {
+				return errors.Trace(err)
+			}
 		case *replication.QueryEvent:
 			// handle alert table query
 			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
