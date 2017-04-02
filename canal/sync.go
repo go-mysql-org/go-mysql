@@ -45,6 +45,7 @@ func (c *Canal) startSyncBinlog() error {
 
 		timeout = time.Second
 
+		curPos := pos.Pos
 		//next binlog pos
 		pos.Pos = ev.Header.LogPos
 
@@ -66,7 +67,7 @@ func (c *Canal) startSyncBinlog() error {
 			err = c.handleRowsEvent(ev)
 			if err != nil && errors.Cause(err) != schema.ErrTableNotExist {
 				// We can ignore table not exist error
-				log.Errorf("handle rows event error %v", err)
+				log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
 				return errors.Trace(err)
 			}
 			continue
