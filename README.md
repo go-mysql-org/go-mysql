@@ -109,7 +109,7 @@ type MyEventHandler struct {
     DummyEventHandler
 }
 
-func (h *MyEventHandler) OnRow(ctx context.Context, e *RowsEvent) error {
+func (h *MyEventHandler) OnRow(e *RowsEvent) error {
     log.Infof("%s %v\n", e.Action, e.Rows)
     return nil
 }
