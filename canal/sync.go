@@ -4,8 +4,6 @@ import (
 	"regexp"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
@@ -27,22 +25,12 @@ func (c *Canal) startSyncBinlog() error {
 		return errors.Errorf("start sync replication at %v error %v", pos, err)
 	}
 
-	timeout := time.Second
 	for {
-		ctx, cancel := context.WithTimeout(c.ctx, 2*time.Second)
-		ev, err := s.GetEvent(ctx)
-		cancel()
-
-		if err == context.DeadlineExceeded {
-			timeout = 2 * timeout
-			continue
-		}
+		ev, err := s.GetEvent(c.ctx)
 
 		if err != nil {
 			return errors.Trace(err)
 		}
-
-		timeout = time.Second
 
 		curPos := pos.Pos
 		//next binlog pos
@@ -58,7 +46,7 @@ func (c *Canal) startSyncBinlog() error {
 			pos.Pos = uint32(e.Position)
 			log.Infof("rotate binlog to %s", pos)
 
-			if err = c.eventHandler.OnRotate(c.ctx, e); err != nil {
+			if err = c.eventHandler.OnRotate(e); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.RowsEvent:
@@ -72,7 +60,7 @@ func (c *Canal) startSyncBinlog() error {
 			continue
 		case *replication.XIDEvent:
 			// try to save the position later
-			if err := c.eventHandler.OnXID(c.ctx, pos); err != nil {
+			if err := c.eventHandler.OnXID(pos); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
@@ -83,7 +71,7 @@ func (c *Canal) startSyncBinlog() error {
 				}
 				c.ClearTableCache(mb[1], mb[2])
 				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
-				if err = c.eventHandler.OnDDL(c.ctx, pos, e); err != nil {
+				if err = c.eventHandler.OnDDL(pos, e); err != nil {
 					return errors.Trace(err)
 				}
 			} else {
@@ -123,7 +111,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
 	events := newRowsEvent(t, action, ev.Rows)
-	return c.eventHandler.OnRow(c.ctx, events)
+	return c.eventHandler.OnRow(events)
 }
 
 func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {

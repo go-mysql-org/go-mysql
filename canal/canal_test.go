@@ -10,7 +10,6 @@ import (
 	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
-	"golang.org/x/net/context"
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL host")
@@ -74,7 +73,7 @@ type testEventHandler struct {
 	DummyEventHandler
 }
 
-func (h *testEventHandler) Do(_ context.Context, e *RowsEvent) error {
+func (h *testEventHandler) Do(e *RowsEvent) error {
 	log.Infof("%s %v\n", e.Action, e.Rows)
 	return nil
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/siddontang/go-mysql/canal"
 	"github.com/siddontang/go-mysql/mysql"
-	"golang.org/x/net/context"
 )
 
 var host = flag.String("host", "127.0.0.1", "MySQL host")
@@ -98,7 +97,7 @@ type handler struct {
 	canal.DummyEventHandler
 }
 
-func (h *handler) OnRow(_ context.Context, e *canal.RowsEvent) error {
+func (h *handler) OnRow(e *canal.RowsEvent) error {
 	fmt.Printf("%v\n", e)
 
 	return nil

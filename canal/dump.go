@@ -64,7 +64,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 	}
 
 	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs})
-	return h.c.eventHandler.OnRow(h.c.ctx, events)
+	return h.c.eventHandler.OnRow(events)
 }
 
 func (c *Canal) AddDumpDatabases(dbs ...string) {
