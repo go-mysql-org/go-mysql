@@ -24,8 +24,8 @@ func (h *dumpParseHandler) BinLog(name string, pos uint64) error {
 }
 
 func (h *dumpParseHandler) Data(db string, table string, values []string) error {
-	if h.c.isClosed() {
-		return errCanalClosed
+	if err := h.c.ctx.Err(); err != nil {
+		return err
 	}
 
 	tableInfo, err := h.c.GetTable(db, table)

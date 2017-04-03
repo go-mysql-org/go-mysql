@@ -15,11 +15,8 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 )
-
-var errCanalClosed = errors.New("canal was closed")
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
 // MySQL must open row format for binlog
@@ -43,8 +40,6 @@ type Canal struct {
 	tableLock sync.RWMutex
 	tables    map[string]*schema.Table
 
-	closed sync2.AtomicBool
-
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -52,7 +47,6 @@ type Canal struct {
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
 	c.cfg = cfg
-	c.closed.Set(false)
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
@@ -139,42 +133,34 @@ func (c *Canal) StartFrom(pos mysql.Position) error {
 }
 
 func (c *Canal) run() error {
-	defer c.wg.Done()
+	defer func() {
+		c.wg.Done()
+		c.cancel()
+	}()
 
-	if err := c.tryDump(); err != nil {
+	err := c.tryDump()
+	close(c.dumpDoneCh)
+
+	if err != nil {
 		log.Errorf("canal dump mysql err: %v", err)
 		return errors.Trace(err)
 	}
 
-	close(c.dumpDoneCh)
-
-	if err := c.startSyncBinlog(); err != nil {
-		if !c.isClosed() {
-			log.Errorf("canal start sync binlog err: %v", err)
-		}
+	if err = c.startSyncBinlog(); err != nil {
+		log.Errorf("canal start sync binlog err: %v", err)
 		return errors.Trace(err)
 	}
 
 	return nil
 }
 
-func (c *Canal) isClosed() bool {
-	return c.closed.Get()
-}
-
 func (c *Canal) Close() {
-	log.Infof("close canal")
+	log.Infof("closing canal")
 
 	c.m.Lock()
 	defer c.m.Unlock()
 
 	c.cancel()
-
-	if c.isClosed() {
-		return
-	}
-
-	c.closed.Set(true)
 
 	c.connLock.Lock()
 	c.conn.Close()
@@ -191,6 +177,10 @@ func (c *Canal) Close() {
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
 	return c.dumpDoneCh
+}
+
+func (c *Canal) Ctx() context.Context {
+	return c.ctx
 }
 
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
