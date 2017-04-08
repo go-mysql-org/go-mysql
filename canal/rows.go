@@ -53,6 +53,16 @@ func GetPKValues(table *schema.Table, row []interface{}) ([]interface{}, error) 
 	return values, nil
 }
 
+// Get term field's value
+func GetFieldValue(table *schema.Table, field string, row []interface{}) (interface{}, error) {
+	index := table.FindColumn(field)
+	if index == -1 {
+		return nil, errors.Errorf("table %s has no field name %s", table, field)
+	}
+
+	return row[index], nil
+}
+
 // String implements fmt.Stringer interface.
 func (r *RowsEvent) String() string {
 	return fmt.Sprintf("%s %s %v", r.Action, r.Table, r.Rows)
