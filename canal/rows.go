@@ -53,11 +53,11 @@ func GetPKValues(table *schema.Table, row []interface{}) ([]interface{}, error) 
 	return values, nil
 }
 
-// Get term field's value
-func GetFieldValue(table *schema.Table, field string, row []interface{}) (interface{}, error) {
-	index := table.FindColumn(field)
+// Get term column's value
+func GetColumnValue(table *schema.Table, column string, row []interface{}) (interface{}, error) {
+	index := table.FindColumn(column)
 	if index == -1 {
-		return nil, errors.Errorf("table %s has no field name %s", table, field)
+		return nil, errors.Errorf("table %s has no field name %s", table, column)
 	}
 
 	return row[index], nil
