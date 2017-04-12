@@ -43,8 +43,8 @@ type BinlogSyncerConfig struct {
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool
 
-	// RawModeEanbled is for not parsing binlog event.
-	RawModeEanbled bool
+	// RawModeEnabled is for not parsing binlog event.
+	RawModeEnabled bool
 
 	// If not nil, use the provided tls.Config to connect to the database using TLS/SSL.
 	TLSConfig *tls.Config
@@ -82,7 +82,7 @@ func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
 
 	b.cfg = cfg
 	b.parser = NewBinlogParser()
-	b.parser.SetRawMode(b.cfg.RawModeEanbled)
+	b.parser.SetRawMode(b.cfg.RawModeEnabled)
 	b.parser.SetParseTime(b.cfg.ParseTime)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
