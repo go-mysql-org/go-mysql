@@ -459,7 +459,7 @@ func (d *jsonBinaryDecoder) decodeVariableLength(data []byte) (int, int) {
 	length := uint64(0)
 	for ; pos < maxCount; pos++ {
 		v := data[pos]
-		length |= uint64(v & 0x7F) << int(7 * pos)
+		length |= uint64(v & 0x7F) << uint(7 * pos)
 
 		if v&0x80 == 0 {
 			if length > math.MaxUint32 {
