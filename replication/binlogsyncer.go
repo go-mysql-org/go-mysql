@@ -52,6 +52,8 @@ type BinlogSyncerConfig struct {
 	// Use replication.Time structure for timestamp and datetime.
 	// We will use Local location for timestamp and UTC location for datatime.
 	ParseTime bool
+
+	LogLevel string
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -76,6 +78,8 @@ type BinlogSyncer struct {
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
 func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
+	log.SetLevelByString(cfg.LogLevel)
+
 	log.Infof("create BinlogSyncer with config %v", cfg)
 
 	b := new(BinlogSyncer)
