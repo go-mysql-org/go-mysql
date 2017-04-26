@@ -78,6 +78,9 @@ type BinlogSyncer struct {
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
 func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = "info"
+	}
 	log.SetLevelByString(cfg.LogLevel)
 
 	log.Infof("create BinlogSyncer with config %v", cfg)
