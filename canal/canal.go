@@ -101,6 +101,13 @@ func (c *Canal) prepareDumper() error {
 		c.dumper.AddTables(tableDB, tables...)
 	}
 
+        charset := c.cfg.Charset
+        if len(charset) == 0 {
+            c.dumper.SetCharset(DEFAULT_CHARSET)
+        }else {
+            c.dumper.SetCharset(charset)
+        }
+
 	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
 		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
 			c.dumper.AddIgnoreTables(seps[0], seps[1])
@@ -269,6 +276,10 @@ func (c *Canal) prepareSyncer() error {
 	}
 
 	c.syncer = replication.NewBinlogSyncer(&cfg)
+
+        if len(c.cfg.Charset) != 0 {
+            c.syncer.c.setCharset(c.cfg.Charset)
+        }
 
 	return nil
 }

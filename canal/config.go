@@ -20,6 +20,8 @@ type DumpConfig struct {
 
 	Databases []string `toml:"dbs"`
 
+	//Charset string `toml:"charset"`
+ 
 	// Ignore table format is db.table
 	IgnoreTables []string `toml:"ignore_tables"`
 
@@ -32,6 +34,7 @@ type Config struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 
+	Charset string `toml:"charset"`
 	ServerID uint32 `toml:"server_id"`
 	Flavor   string `toml:"flavor"`
 
@@ -65,6 +68,7 @@ func NewDefaultConfig() *Config {
 	c.User = "root"
 	c.Password = ""
 
+	c.Charset = "utf-8"
 	rand.Seed(time.Now().Unix())
 	c.ServerID = uint32(rand.Intn(1000)) + 1001
 
