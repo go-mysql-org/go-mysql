@@ -40,6 +40,9 @@ type BinlogSyncerConfig struct {
 	// If not set, use os.Hostname() instead.
 	Localhost string
 
+	// Charset is for MySQL client character set
+	Charset string
+
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool
 
@@ -142,6 +145,9 @@ func (b *BinlogSyncer) registerSlave() error {
 	})
 	if err != nil {
 		return errors.Trace(err)
+	}
+	if len(b.cfg.Charset) != 0 {
+	    b.c.SetCharset(b.cfg.Charset)
 	}
 
 	//for mysql 5.6+, binlog has a crc32 checksum

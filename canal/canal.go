@@ -103,7 +103,7 @@ func (c *Canal) prepareDumper() error {
 
         charset := c.cfg.Charset
         if len(charset) == 0 {
-            c.dumper.SetCharset(DEFAULT_CHARSET)
+            c.dumper.SetCharset(mysql.DEFAULT_CHARSET)
         }else {
             c.dumper.SetCharset(charset)
         }
@@ -273,13 +273,14 @@ func (c *Canal) prepareSyncer() error {
 		Port:     uint16(port),
 		User:     c.cfg.User,
 		Password: c.cfg.Password,
+                Charset : c.cfg.Charset,
 	}
 
 	c.syncer = replication.NewBinlogSyncer(&cfg)
 
-        if len(c.cfg.Charset) != 0 {
-            c.syncer.c.setCharset(c.cfg.Charset)
-        }
+        //if len(c.cfg.Charset) != 0 {
+        //    c.syncer.c.setCharset(c.cfg.Charset)
+        //}
 
 	return nil
 }
