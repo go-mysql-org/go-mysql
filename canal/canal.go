@@ -273,7 +273,7 @@ func (c *Canal) prepareSyncer() error {
 		Port:     uint16(port),
 		User:     c.cfg.User,
 		Password: c.cfg.Password,
-                Charset : c.cfg.Charset,
+		Charset : c.cfg.Charset,
 	}
 
 	c.syncer = replication.NewBinlogSyncer(&cfg)
