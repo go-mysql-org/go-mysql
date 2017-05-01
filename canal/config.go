@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"time"
-
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 )
@@ -66,7 +66,7 @@ func NewDefaultConfig() *Config {
 	c.User = "root"
 	c.Password = ""
 
-	c.Charset = "utf-8"
+	c.Charset = mysql.DEFAULT_CHARSET
 	rand.Seed(time.Now().Unix())
 	c.ServerID = uint32(rand.Intn(1000)) + 1001
 
