@@ -212,10 +212,12 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte) (Event, error) {
 	return e, nil
 }
 
-// Given a binary log events raw bytes return the decoded event.
+// Given the bytes for a a binary log event: return the decoded event.
 // With the exception of the FORMAT_DESCRIPTION_EVENT event type
-// there myst have previously been passed a FORMAT_DESCRIPTION_EVENT
+// there must have previously been passed a FORMAT_DESCRIPTION_EVENT
 // into the parser for this to work properly on any given event.
+// Passing a new FORMAT_DESCRIPTION_EVENT into the parser will replace
+// an existing one.
 func (p *BinlogParser) Parse(data []byte) (*BinlogEvent, error) {
 	rawData := data
 
