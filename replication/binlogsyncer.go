@@ -563,7 +563,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		data = data[2:]
 	}
 
-	e, err := b.parser.parse(data)
+	e, err := b.parser.Parse(data)
 	if err != nil {
 		return errors.Trace(err)
 	}
