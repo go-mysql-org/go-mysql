@@ -56,11 +56,11 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 		return errors.Errorf("seek %s to %d error %v", name, offset, err)
 	}
 
-	p.Reset()
 	return p.ParseReader(f, onEvent)
 }
 
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
+	p.Reset()
 	var err error
 	var n int64
 
