@@ -278,10 +278,6 @@ func (c *Canal) prepareSyncer() error {
 
 	c.syncer = replication.NewBinlogSyncer(&cfg)
 
-        //if len(c.cfg.Charset) != 0 {
-        //    c.syncer.c.setCharset(c.cfg.Charset)
-        //}
-
 	return nil
 }
 
