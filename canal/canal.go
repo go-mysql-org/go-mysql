@@ -102,11 +102,7 @@ func (c *Canal) prepareDumper() error {
 	}
 
         charset := c.cfg.Charset
-        if len(charset) == 0 {
-            c.dumper.SetCharset(mysql.DEFAULT_CHARSET)
-        }else {
-            c.dumper.SetCharset(charset)
-        }
+        c.dumper.SetCharset(charset)
 
 	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
 		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
