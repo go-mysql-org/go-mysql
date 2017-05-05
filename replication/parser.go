@@ -59,8 +59,19 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 	return p.ParseReader(f, onEvent)
 }
 
-func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
-	p.Reset()
+func (p *BinlogParser) ParseDataFromFile(name string, offset int64, onEvent OnEventFunc) error {
+	f, err := os.Open(name)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer f.Close()
+	if _, err = f.Seek(offset, os.SEEK_SET); err != nil {
+		return errors.Errorf("seek %s to %d error %v", name, offset, err)
+	}
+	return p.ParseDataFromReader(f, onEvent)
+}
+
+func (p *BinlogParser) ParseDataFromReader(r io.Reader, onEvent OnEventFunc) error {
 	var err error
 	var n int64
 
@@ -110,6 +121,11 @@ func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 	}
 
 	return nil
+}
+
+func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
+	p.Reset()
+	return p.ParseDataFromReader(r, onEvent)
 }
 
 func (p *BinlogParser) SetRawMode(mode bool) {
