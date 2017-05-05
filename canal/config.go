@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"time"
-
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 )
@@ -19,7 +19,7 @@ type DumpConfig struct {
 	TableDB string   `toml:"table_db"`
 
 	Databases []string `toml:"dbs"`
-
+ 
 	// Ignore table format is db.table
 	IgnoreTables []string `toml:"ignore_tables"`
 
@@ -32,6 +32,7 @@ type Config struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 
+	Charset  string `toml:"charset"`
 	ServerID uint32 `toml:"server_id"`
 	Flavor   string `toml:"flavor"`
 
@@ -65,6 +66,7 @@ func NewDefaultConfig() *Config {
 	c.User = "root"
 	c.Password = ""
 
+	c.Charset = mysql.DEFAULT_CHARSET
 	rand.Seed(time.Now().Unix())
 	c.ServerID = uint32(rand.Intn(1000)) + 1001
 
