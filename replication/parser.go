@@ -56,6 +56,7 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 		return errors.Errorf("seek %s to %d error %v", name, offset, err)
 	}
 
+	p.Reset()
 	return p.ParseReader(f, onEvent)
 }
 
