@@ -101,6 +101,9 @@ func (c *Canal) prepareDumper() error {
 		c.dumper.AddTables(tableDB, tables...)
 	}
 
+        charset := c.cfg.Charset
+        c.dumper.SetCharset(charset)
+
 	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
 		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
 			c.dumper.AddIgnoreTables(seps[0], seps[1])
@@ -266,6 +269,7 @@ func (c *Canal) prepareSyncer() error {
 		Port:     uint16(port),
 		User:     c.cfg.User,
 		Password: c.cfg.Password,
+		Charset : c.cfg.Charset,
 	}
 
 	c.syncer = replication.NewBinlogSyncer(&cfg)

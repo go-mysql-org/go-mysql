@@ -38,6 +38,7 @@ func (s *schemaTestSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(s.d, NotNil)
 
+	s.d.SetCharset("utf8")
 	s.d.SetErrOut(os.Stderr)
 
 	_, err = s.conn.Execute("CREATE DATABASE IF NOT EXISTS test1")

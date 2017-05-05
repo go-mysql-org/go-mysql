@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
+	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/juju/errors"
 )
 
@@ -24,6 +24,8 @@ type Dumper struct {
 	TableDB string
 
 	Databases []string
+
+	Charset string
 
 	IgnoreTables map[string][]string
 
@@ -47,11 +49,16 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 	d.Password = password
 	d.Tables = make([]string, 0, 16)
 	d.Databases = make([]string, 0, 16)
+	d.Charset = DEFAULT_CHARSET
 	d.IgnoreTables = make(map[string][]string)
 
 	d.ErrOut = os.Stderr
 
 	return d, nil
+}
+
+func (d *Dumper) SetCharset(charset string) {
+	d.Charset = charset
 }
 
 func (d *Dumper) SetErrOut(o io.Writer) {
@@ -131,6 +138,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 		// which makes us hard to parse, so here we add it manually.
 
 		w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
+	}
+
+	if len(d.Charset) != 0 {
+		args = append(args, fmt.Sprintf("--default-character-set=%s", d.Charset))
 	}
 
 	cmd := exec.Command(d.ExecutionPath, args...)
