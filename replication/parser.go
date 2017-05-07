@@ -60,8 +60,6 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 }
 
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
-	p.Reset()
-
 	var err error
 	var n int64
 
