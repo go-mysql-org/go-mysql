@@ -291,10 +291,12 @@ type MysqlGTIDSet struct {
 
 func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 	s := new(MysqlGTIDSet)
-
+	s.Sets = make(map[string]*UUIDSet)
+	if str == "" {
+		return s, nil
+	}
+	
 	sp := strings.Split(str, ",")
-
-	s.Sets = make(map[string]*UUIDSet, len(sp))
 
 	//todo, handle redundant same uuid
 	for i := 0; i < len(sp); i++ {
