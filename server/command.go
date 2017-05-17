@@ -21,7 +21,7 @@ type Handler interface {
 	HandleStmtPrepare(query string) (params int, columns int, context interface{}, err error)
 	//handle COM_STMT_EXECUTE, context is the previous one set in prepare
 	//query is the statement prepare query, and args is the params for this statement
-	HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error)
+	HandleStmtExecute(context interface{}, query string, args ...interface{}) (*Result, error)
 	//handle COM_STMT_CLOSE, context is the previous one set in prepare
 	//this handler has no response
 	HandleStmtClose(context interface{}) error
