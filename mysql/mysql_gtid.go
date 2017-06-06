@@ -295,7 +295,7 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 	if str == "" {
 		return s, nil
 	}
-	
+
 	sp := strings.Split(str, ",")
 
 	//todo, handle redundant same uuid
@@ -336,6 +336,9 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 }
 
 func (s *MysqlGTIDSet) AddSet(set *UUIDSet) {
+	if set == nil {
+		return
+	}
 	sid := set.SID.String()
 	o, ok := s.Sets[sid]
 	if ok {
