@@ -59,7 +59,7 @@ type BinlogSyncerConfig struct {
 
 	LogLevel string
 
-	// RecvBuffer sets the size of the operating system's receive buffer associated with the connection.
+	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
 	RecvBufferSize int
 }
 
