@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -57,6 +58,9 @@ type BinlogSyncerConfig struct {
 	ParseTime bool
 
 	LogLevel string
+
+	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
+	RecvBufferSize int
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -154,7 +158,13 @@ func (b *BinlogSyncer) registerSlave() error {
 		return errors.Trace(err)
 	}
 	if len(b.cfg.Charset) != 0 {
-	    b.c.SetCharset(b.cfg.Charset)
+		b.c.SetCharset(b.cfg.Charset)
+	}
+
+	if b.cfg.RecvBufferSize > 0 {
+		if tcp, ok := b.c.Conn.Conn.(*net.TCPConn); ok {
+			tcp.SetReadBuffer(b.cfg.RecvBufferSize)
+		}
 	}
 
 	//for mysql 5.6+, binlog has a crc32 checksum
