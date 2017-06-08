@@ -50,6 +50,10 @@ func Parse(r io.Reader, h ParseHandler) error {
 
 		line = line[0 : len(line)-1]
 
+		if line[len(line)-1] == '\r' {
+			line = line[0 : len(line)-1]
+		}
+
 		if !binlogParsed {
 			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
 				name := m[0][1]
