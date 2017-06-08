@@ -60,7 +60,7 @@ type BinlogSyncerConfig struct {
 	LogLevel string
 
 	// RecvBuffer sets the size of the operating system's receive buffer associated with the connection.
-	RecvBuffer int
+	RecvBufferSize int
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -161,9 +161,9 @@ func (b *BinlogSyncer) registerSlave() error {
 		b.c.SetCharset(b.cfg.Charset)
 	}
 
-	if b.cfg.RecvBuffer > 0 {
+	if b.cfg.RecvBufferSize > 0 {
 		if tcp, ok := b.c.Conn.Conn.(*net.TCPConn); ok {
-			tcp.SetReadBuffer(b.cfg.RecvBuffer)
+			tcp.SetReadBuffer(b.cfg.RecvBufferSize)
 		}
 	}
 
