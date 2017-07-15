@@ -178,7 +178,7 @@ func (s *schemaTestSuite) TestParse(c *C) {
 	err := s.d.Dump(&buf)
 	c.Assert(err, IsNil)
 
-	err = Parse(&buf, new(testParseHandler))
+	err = Parse(&buf, new(testParseHandler), true)
 	c.Assert(err, IsNil)
 }
 
