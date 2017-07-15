@@ -4,9 +4,10 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"time"
-	"github.com/siddontang/go-mysql/mysql"
+
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 type DumpConfig struct {
@@ -19,12 +20,16 @@ type DumpConfig struct {
 	TableDB string   `toml:"table_db"`
 
 	Databases []string `toml:"dbs"`
- 
+
 	// Ignore table format is db.table
 	IgnoreTables []string `toml:"ignore_tables"`
 
 	// If true, discard error msg, else, output to stderr
 	DiscardErr bool `toml:"discard_err"`
+
+	// Set true to skip --master-data if we have no privilege to do
+	// 'FLUSH TABLES WITH READ LOCK'
+	SkipMasterData bool `toml:"skip_master_data"`
 }
 
 type Config struct {
@@ -74,6 +79,7 @@ func NewDefaultConfig() *Config {
 
 	c.Dump.ExecutionPath = "mysqldump"
 	c.Dump.DiscardErr = true
+	c.Dump.SkipMasterData = false
 
 	return c
 }

@@ -134,14 +134,23 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 	return nil
 }
 
-func (c *Canal) CatchMasterPos(timeout time.Duration) error {
+func (c *Canal) GetMasterPos() (mysql.Position, error) {
 	rr, err := c.Execute("SHOW MASTER STATUS")
 	if err != nil {
-		return errors.Trace(err)
+		return mysql.Position{"", 0}, errors.Trace(err)
 	}
 
 	name, _ := rr.GetString(0, 0)
 	pos, _ := rr.GetInt(0, 1)
 
-	return c.WaitUntilPos(mysql.Position{name, uint32(pos)}, timeout)
+	return mysql.Position{name, uint32(pos)}, nil
+}
+
+func (c *Canal) CatchMasterPos(timeout time.Duration) error {
+	pos, err := c.GetMasterPos()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return c.WaitUntilPos(pos, timeout)
 }

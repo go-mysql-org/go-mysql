@@ -6,8 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	. "github.com/siddontang/go-mysql/mysql"
+
 	"github.com/juju/errors"
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 // Unlick mysqldump, Dumper is designed for parsing and syning data easily.
@@ -30,6 +31,8 @@ type Dumper struct {
 	IgnoreTables map[string][]string
 
 	ErrOut io.Writer
+
+	masterDataSkipped bool
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
@@ -51,6 +54,7 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 	d.Databases = make([]string, 0, 16)
 	d.Charset = DEFAULT_CHARSET
 	d.IgnoreTables = make(map[string][]string)
+	d.masterDataSkipped = false
 
 	d.ErrOut = os.Stderr
 
@@ -63,6 +67,11 @@ func (d *Dumper) SetCharset(charset string) {
 
 func (d *Dumper) SetErrOut(o io.Writer) {
 	d.ErrOut = o
+}
+
+// In some cloud MySQL, we have no privilege to use `--master-data`.
+func (d *Dumper) SkipMasterData(v bool) {
+	d.masterDataSkipped = v
 }
 
 func (d *Dumper) AddDatabases(dbs ...string) {
@@ -104,7 +113,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 	args = append(args, fmt.Sprintf("--user=%s", d.User))
 	args = append(args, fmt.Sprintf("--password=%s", d.Password))
 
-	args = append(args, "--master-data")
+	if !d.masterDataSkipped {
+		args = append(args, "--master-data")
+	}
+
 	args = append(args, "--single-transaction")
 	args = append(args, "--skip-lock-tables")
 
@@ -158,7 +170,7 @@ func (d *Dumper) DumpAndParse(h ParseHandler) error {
 
 	done := make(chan error, 1)
 	go func() {
-		err := Parse(r, h)
+		err := Parse(r, h, !d.masterDataSkipped)
 		r.CloseWithError(err)
 		done <- err
 	}()
