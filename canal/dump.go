@@ -106,6 +106,16 @@ func (c *Canal) tryDump() error {
 
 	h := &dumpParseHandler{c: c}
 
+	if c.cfg.Dump.SkipMasterData {
+		pos, err := c.GetMasterPos()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Infof("skip master data, get current binlog position %v", pos)
+		h.name = pos.Name
+		h.pos = uint64(pos.Pos)
+	}
+
 	start := time.Now()
 	log.Info("try dump MySQL and parse")
 	if err := c.dumper.DumpAndParse(h); err != nil {
