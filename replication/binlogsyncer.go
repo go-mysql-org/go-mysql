@@ -538,6 +538,7 @@ func (b *BinlogSyncer) prepareSyncGTID(GTIDStr string) error {
 	if err != nil {
 		return err
 	}
+    return nil
 }
 
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
@@ -630,14 +631,14 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.nextPos.Name = string(re.NextLogName)
 		b.nextPos.Pos = uint32(re.Position)
 		log.Infof("rotate to %s", b.nextPos)
-	} else if ge, ok = e.Event.(*GTIDEvent); ok {
+    } else if  ge, ok := e.Event.(*GTIDEvent); b.useGTID && ok {
 		u, _ := uuid.FromBytes(ge.SID)
 		SID := u.String()
 		GNO := ge.GNO
-		b.nextGTIDStr = fmt.Sprintf("%s:%d", SID, GNO) 
-	} else if mge, ok = e.Event.(*MariadbGTIDEvent); ok {
+		b.nextGTIDStr = fmt.Sprintf("%s:%d", SID, GNO)
+    } else if mge, ok := e.Event.(*MariadbGTIDEvent); b.useGTID && ok {
 		GTID := mge.GTID
-		b.nextGTIDStr = GTID
+		b.nextGTIDStr = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
 	}
 	needStop := false
 	select {
