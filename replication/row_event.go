@@ -15,6 +15,8 @@ import (
 	"github.com/siddontang/go/hack"
 )
 
+type errMissingTableMapEvent error
+
 type TableMapEvent struct {
 	tableIDSize int
 
@@ -259,7 +261,11 @@ func (e *RowsEvent) Decode(data []byte) error {
 	var ok bool
 	e.Table, ok = e.tables[e.TableID]
 	if !ok {
-		return errors.Errorf("invalid table id %d, no correspond table map event", e.TableID)
+		if len(e.tables) > 0 {
+			return errors.Errorf("invalid table id %d, no corresponding table map event", e.TableID)
+		} else {
+			return errMissingTableMapEvent(errors.Errorf("invalid table id %d, no corresponding table map event", e.TableID))
+		}
 	}
 
 	var err error

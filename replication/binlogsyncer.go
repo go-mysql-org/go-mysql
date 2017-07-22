@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
 )
@@ -55,6 +57,11 @@ type BinlogSyncerConfig struct {
 	// Use replication.Time structure for timestamp and datetime.
 	// We will use Local location for timestamp and UTC location for datatime.
 	ParseTime bool
+
+	LogLevel string
+
+	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
+	RecvBufferSize int
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -71,6 +78,8 @@ type BinlogSyncer struct {
 
 	nextPos Position
 
+	nextGTIDStr string
+
 	running bool
 
 	ctx    context.Context
@@ -79,6 +88,11 @@ type BinlogSyncer struct {
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
 func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = "info"
+	}
+	log.SetLevelByString(cfg.LogLevel)
+
 	log.Infof("create BinlogSyncer with config %v", cfg)
 
 	b := new(BinlogSyncer)
@@ -147,7 +161,13 @@ func (b *BinlogSyncer) registerSlave() error {
 		return errors.Trace(err)
 	}
 	if len(b.cfg.Charset) != 0 {
-	    b.c.SetCharset(b.cfg.Charset)
+		b.c.SetCharset(b.cfg.Charset)
+	}
+
+	if b.cfg.RecvBufferSize > 0 {
+		if tcp, ok := b.c.Conn.Conn.(*net.TCPConn); ok {
+			tcp.SetReadBuffer(b.cfg.RecvBufferSize)
+		}
 	}
 
 	//for mysql 5.6+, binlog has a crc32 checksum
@@ -562,7 +582,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		data = data[2:]
 	}
 
-	e, err := b.parser.parse(data)
+	e, err := b.parser.Parse(data)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -576,8 +596,15 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.nextPos.Name = string(re.NextLogName)
 		b.nextPos.Pos = uint32(re.Position)
 		log.Infof("rotate to %s", b.nextPos)
+	} else if re, ok = e.Event.(*GTIDEvent); ok {
+		SID := uuid.FromBytes(re.SID).String()
+		GNO := re.GNO
+		b.nextGTIDStr = fmt.Sprintf(%s:%d, SID, GNO) 
+		log.Infof("gtid: %s:%d", SID, GNO)
+	} else if re, ok = e.Event.(*MariadbGTIDEvent); ok {
+		GTID := re.GTID
+		log.Infof("gtid: %s", GTID)
 	}
-
 	needStop := false
 	select {
 	case s.ch <- e:

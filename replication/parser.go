@@ -56,12 +56,10 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 		return errors.Errorf("seek %s to %d error %v", name, offset, err)
 	}
 
-	return p.parseReader(f, onEvent)
+	return p.ParseReader(f, onEvent)
 }
 
-func (p *BinlogParser) parseReader(r io.Reader, onEvent OnEventFunc) error {
-	p.Reset()
-
+func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 	var err error
 	var n int64
 
@@ -102,7 +100,10 @@ func (p *BinlogParser) parseReader(r io.Reader, onEvent OnEventFunc) error {
 		var e Event
 		e, err = p.parseEvent(h, data)
 		if err != nil {
-			break
+			if _, ok := err.(errMissingTableMapEvent); ok {
+				continue
+			}
+			return errors.Trace(err)
 		}
 
 		if err = onEvent(&BinlogEvent{rawData, h, e}); err != nil {
@@ -212,7 +213,13 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte) (Event, error) {
 	return e, nil
 }
 
-func (p *BinlogParser) parse(data []byte) (*BinlogEvent, error) {
+// Given the bytes for a a binary log event: return the decoded event.
+// With the exception of the FORMAT_DESCRIPTION_EVENT event type
+// there must have previously been passed a FORMAT_DESCRIPTION_EVENT
+// into the parser for this to work properly on any given event.
+// Passing a new FORMAT_DESCRIPTION_EVENT into the parser will replace
+// an existing one.
+func (p *BinlogParser) Parse(data []byte) (*BinlogEvent, error) {
 	rawData := data
 
 	h, err := p.parseHeader(data)
