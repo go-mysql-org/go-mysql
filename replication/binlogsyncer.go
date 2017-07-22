@@ -596,13 +596,15 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.nextPos.Name = string(re.NextLogName)
 		b.nextPos.Pos = uint32(re.Position)
 		log.Infof("rotate to %s", b.nextPos)
-	} else if re, ok = e.Event.(*GTIDEvent); ok {
-		SID := uuid.FromBytes(re.SID).String()
-		GNO := re.GNO
-		b.nextGTIDStr = fmt.Sprintf(%s:%d, SID, GNO) 
+	} else if ge, ok = e.Event.(*GTIDEvent); ok {
+		u, _ := uuid.FromBytes(ge.SID)
+		SID := u.String()
+		GNO := ge.GNO
+		b.nextGTIDStr = fmt.Sprintf("%s:%d", SID, GNO) 
 		log.Infof("gtid: %s:%d", SID, GNO)
-	} else if re, ok = e.Event.(*MariadbGTIDEvent); ok {
-		GTID := re.GTID
+	} else if mge, ok = e.Event.(*MariadbGTIDEvent); ok {
+		GTID := mge.GTID
+		b.nextGTIDStr = GTID
 		log.Infof("gtid: %s", GTID)
 	}
 	needStop := false
