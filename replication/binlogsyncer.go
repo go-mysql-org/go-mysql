@@ -78,6 +78,7 @@ type BinlogSyncer struct {
 
 	nextPos Position
 
+	useGTID bool
 	nextGTIDStr string
 
 	running bool
@@ -101,6 +102,7 @@ func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
 	b.parser = NewBinlogParser()
 	b.parser.SetRawMode(b.cfg.RawModeEnabled)
 	b.parser.SetParseTime(b.cfg.ParseTime)
+	b.useGTID = false
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 
@@ -287,6 +289,8 @@ func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 // StartSyncGTID starts syncing from the `gset` GTIDSet.
 func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 	log.Infof("begin to sync binlog from GTID %s", gset)
+
+	b.useGTID = true
 
 	b.m.Lock()
 	defer b.m.Unlock()
@@ -482,8 +486,16 @@ func (b *BinlogSyncer) retrySync() error {
 	log.Infof("begin to re-sync from %s", b.nextPos)
 
 	b.parser.Reset()
-	if err := b.prepareSyncPos(b.nextPos); err != nil {
-		return errors.Trace(err)
+
+	if b.useGTID {
+		if err := b.prepareSyncGTID(b.nextGTIDStr); err != nil {
+			return errors.Trace(err)
+		}
+
+	} else {
+		if err := b.prepareSyncPos(b.nextPos); err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	return nil
@@ -506,6 +518,28 @@ func (b *BinlogSyncer) prepareSyncPos(pos Position) error {
 	return nil
 }
 
+func (b *BinlogSyncer) prepareSyncGTID(GTIDStr string) error {
+	if err := b.prepare(); err != nil {
+	    return errors.Trace(err)
+	}
+
+	gset, err := ParseGTIDSet(b.cfg.Flavor, GTIDStr)
+	if err != nil {
+		return err
+	}
+
+	if b.cfg.Flavor != MariaDBFlavor {
+		// default use MySQL
+		err = b.writeBinlogDumpMysqlGTIDCommand(gset)
+	} else {
+		err = b.writeBinlogDumpMariadbGTIDCommand(gset)
+	}
+
+	if err != nil {
+		return err
+	}
+}
+
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	defer func() {
 		if e := recover(); e != nil {
@@ -520,8 +554,8 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			log.Error(err)
 
 			// we meet connection error, should re-connect again with
-			// last nextPos we got.
-			if len(b.nextPos.Name) == 0 {
+			// last nextPos or nextGTID we got.
+			if len(b.nextPos.Name) == 0 && len(b.nextGTIDStr) == 0 {
 				// we can't get the correct position, close.
 				s.closeWithError(err)
 				return
@@ -601,11 +635,9 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		SID := u.String()
 		GNO := ge.GNO
 		b.nextGTIDStr = fmt.Sprintf("%s:%d", SID, GNO) 
-		log.Infof("gtid: %s:%d", SID, GNO)
 	} else if mge, ok = e.Event.(*MariadbGTIDEvent); ok {
 		GTID := mge.GTID
 		b.nextGTIDStr = GTID
-		log.Infof("gtid: %s", GTID)
 	}
 	needStop := false
 	select {
