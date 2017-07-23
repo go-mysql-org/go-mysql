@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	. "github.com/siddontang/go-mysql/mysql"
+
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
