@@ -79,7 +79,8 @@ type BinlogSyncer struct {
 	nextPos Position
 
 	useGTID bool
-	nextGTIDStr string
+
+	gset *GTIDSet
 
 	running bool
 
@@ -483,16 +484,16 @@ func (b *BinlogSyncer) retrySync() error {
 	b.m.Lock()
 	defer b.m.Unlock()
 
-	log.Infof("begin to re-sync from %s", b.nextPos)
-
 	b.parser.Reset()
 
 	if b.useGTID {
-		if err := b.prepareSyncGTID(b.nextGTIDStr); err != nil {
+		log.Infof("begin to re-sync from %s", b.gset.String())
+		if err := b.prepareSyncGTID(b.gset); err != nil {
 			return errors.Trace(err)
 		}
 
 	} else {
+		log.Infof("begin to re-sync from %s", b.nextPos)
 		if err := b.prepareSyncPos(b.nextPos); err != nil {
 			return errors.Trace(err)
 		}
@@ -518,14 +519,9 @@ func (b *BinlogSyncer) prepareSyncPos(pos Position) error {
 	return nil
 }
 
-func (b *BinlogSyncer) prepareSyncGTID(GTIDStr string) error {
+func (b *BinlogSyncer) prepareSyncGTID(gset GTIDSet) error {
 	if err := b.prepare(); err != nil {
 	    return errors.Trace(err)
-	}
-
-	gset, err := ParseGTIDSet(b.cfg.Flavor, GTIDStr)
-	if err != nil {
-		return err
 	}
 
 	if b.cfg.Flavor != MariaDBFlavor {
@@ -538,7 +534,7 @@ func (b *BinlogSyncer) prepareSyncGTID(GTIDStr string) error {
 	if err != nil {
 		return err
 	}
-    return nil
+	return nil
 }
 
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
@@ -556,7 +552,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 			// we meet connection error, should re-connect again with
 			// last nextPos or nextGTID we got.
-			if len(b.nextPos.Name) == 0 && len(b.nextGTIDStr) == 0 {
+			if len(b.nextPos.Name) == 0 && b.gset == nil {
 				// we can't get the correct position, close.
 				s.closeWithError(err)
 				return
@@ -631,14 +627,23 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.nextPos.Name = string(re.NextLogName)
 		b.nextPos.Pos = uint32(re.Position)
 		log.Infof("rotate to %s", b.nextPos)
-    } else if  ge, ok := e.Event.(*GTIDEvent); b.useGTID && ok {
+	} else if  ge, ok := e.Event.(*GTIDEvent); b.useGTID && ok {
 		u, _ := uuid.FromBytes(ge.SID)
 		SID := u.String()
 		GNO := ge.GNO
-		b.nextGTIDStr = fmt.Sprintf("%s:%d", SID, GNO)
-    } else if mge, ok := e.Event.(*MariadbGTIDEvent); b.useGTID && ok {
+		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%s:%d", SID, GNO))
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Infof("update gtidset %s", b.gset.String())
+	} else if mge, ok := e.Event.(*MariadbGTIDEvent); b.useGTID && ok {
 		GTID := mge.GTID
-		b.nextGTIDStr = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
+		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
+		log.Infof("update gtidset %s", b.gset.String())
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Infof("update gtidset %s", b.gset.String())
 	}
 	needStop := false
 	select {
