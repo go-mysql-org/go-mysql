@@ -80,7 +80,7 @@ type BinlogSyncer struct {
 
 	useGTID bool
 
-	gset *GTIDSet
+	gset GTIDSet
 
 	running bool
 
@@ -292,6 +292,7 @@ func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 	log.Infof("begin to sync binlog from GTID %s", gset)
 
 	b.useGTID = true
+	b.gset = gset
 
 	b.m.Lock()
 	defer b.m.Unlock()
@@ -520,7 +521,9 @@ func (b *BinlogSyncer) prepareSyncPos(pos Position) error {
 }
 
 func (b *BinlogSyncer) prepareSyncGTID(gset GTIDSet) error {
-	if err := b.prepare(); err != nil {
+	var err error
+
+	if err = b.prepare(); err != nil {
 	    return errors.Trace(err)
 	}
 
@@ -638,12 +641,16 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		log.Infof("update gtidset %s", b.gset.String())
 	} else if mge, ok := e.Event.(*MariadbGTIDEvent); b.useGTID && ok {
 		GTID := mge.GTID
-		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
+		//b.gset, _ = ParseMariadbGTIDSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+		//log.Infof("update gtidset %s", b.gset.String())
+		
+		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
 		log.Infof("update gtidset %s", b.gset.String())
 		if err != nil {
 			return errors.Trace(err)
 		}
 		log.Infof("update gtidset %s", b.gset.String())
+		
 	}
 	needStop := false
 	select {
