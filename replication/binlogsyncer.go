@@ -632,24 +632,16 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		log.Infof("rotate to %s", b.nextPos)
 	} else if  ge, ok := e.Event.(*GTIDEvent); b.useGTID && ok {
 		u, _ := uuid.FromBytes(ge.SID)
-		SID := u.String()
-		GNO := ge.GNO
-		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%s:%d", SID, GNO))
+		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%s:%d", u.String(), ge.GNO))
 		if err != nil {
 			return errors.Trace(err)
 		}
-		log.Infof("update gtidset %s", b.gset.String())
 	} else if mge, ok := e.Event.(*MariadbGTIDEvent); b.useGTID && ok {
 		GTID := mge.GTID
-		//b.gset, _ = ParseMariadbGTIDSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
-		//log.Infof("update gtidset %s", b.gset.String())
-		
 		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
-		log.Infof("update gtidset %s", b.gset.String())
 		if err != nil {
 			return errors.Trace(err)
 		}
-		log.Infof("update gtidset %s", b.gset.String())
 		
 	}
 	needStop := false
