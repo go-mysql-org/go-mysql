@@ -625,25 +625,31 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		// Some events like FormatDescriptionEvent return 0, ignore.
 		b.nextPos.Pos = e.Header.LogPos
 	}
-
-	if re, ok := e.Event.(*RotateEvent); ok {
-		b.nextPos.Name = string(re.NextLogName)
-		b.nextPos.Pos = uint32(re.Position)
+	switch event := e.Event.(type) {
+	case *RotateEvent:
+		b.nextPos.Name = string(event.NextLogName)
+		b.nextPos.Pos = uint32(event.Position)
 		log.Infof("rotate to %s", b.nextPos)
-	} else if  ge, ok := e.Event.(*GTIDEvent); b.useGTID && ok {
-		u, _ := uuid.FromBytes(ge.SID)
-		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%s:%d", u.String(), ge.GNO))
+	case *GTIDEvent:
+		if !b.useGTID {
+		    break
+		}
+		u, _ := uuid.FromBytes(event.SID)
+		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%s:%d", u.String(), event.GNO))
 		if err != nil {
 			return errors.Trace(err)
 		}
-	} else if mge, ok := e.Event.(*MariadbGTIDEvent); b.useGTID && ok {
-		GTID := mge.GTID
+	case *MariadbGTIDEvent:
+		if !b.useGTID {
+		    break
+		}
+		GTID := event.GTID
 		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
 		if err != nil {
 			return errors.Trace(err)
 		}
-		
 	}
+
 	needStop := false
 	select {
 	case s.ch <- e:
