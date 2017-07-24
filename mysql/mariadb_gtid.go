@@ -83,10 +83,9 @@ func (gtid MariadbGTID) UpdateGTIDSet(GTIDStr string) error {
 	newGTID, err := ParseMariadbGTIDSet(GTIDStr)
 	if err != nil {
 		return err
-	} else {
-		
-		gtid = newGTID.(MariadbGTID)
 	}
+		
+	gtid = newGTID.(MariadbGTID)
 
 	return nil
 }
