@@ -348,6 +348,17 @@ func (s *MysqlGTIDSet) AddSet(set *UUIDSet) {
 	}
 }
 
+func (s *MysqlGTIDSet) Update(GTIDStr string) error {
+	uuidSet, err := ParseUUIDSet(GTIDStr)
+	if err != nil {
+		return err
+	}
+
+	s.AddSet(uuidSet)
+
+	return nil
+}
+
 func (s *MysqlGTIDSet) Contain(o GTIDSet) bool {
 	sub, ok := o.(*MysqlGTIDSet)
 	if !ok {
