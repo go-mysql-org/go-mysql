@@ -635,7 +635,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		    break
 		}
 		u, _ := uuid.FromBytes(event.SID)
-		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%s:%d", u.String(), event.GNO))
+		err := b.gset.Update(fmt.Sprintf("%s:%d", u.String(), event.GNO))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -644,7 +644,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		    break
 		}
 		GTID := event.GTID
-		err := b.gset.UpdateGTIDSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+		err := b.gset.Update(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
 		if err != nil {
 			return errors.Trace(err)
 		}

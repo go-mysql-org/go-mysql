@@ -348,7 +348,7 @@ func (s *MysqlGTIDSet) AddSet(set *UUIDSet) {
 	}
 }
 
-func (s *MysqlGTIDSet) UpdateGTIDSet(GTIDStr string) error {
+func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 	uuidSet, err := ParseUUIDSet(GTIDStr)
 	if err != nil {
 		return err
