@@ -16,10 +16,8 @@ var (
 )
 
 func getSyncer(c *Canal) (*replication.BinlogStreamer, error) {
-	pos := c.master.Position()
-	set := c.master.GTID()
-
-	if len(pos.Name) != 0 {
+	if !c.useGTID {
+		pos := c.master.Position()
 		s, err := c.syncer.StartSync(pos)
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
@@ -27,11 +25,12 @@ func getSyncer(c *Canal) (*replication.BinlogStreamer, error) {
 		log.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
-		s, err := c.syncer.StartSyncGTID(set)
+		gset := c.master.GTID()
+		s, err := c.syncer.StartSyncGTID(gset)
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at GTID %v error %v", pos, err)
 		}
-		log.Infof("start sync binlog at GTID %v", set)
+		log.Infof("start sync binlog at GTID %v", gset)
 		return s, nil
 	}
 }
