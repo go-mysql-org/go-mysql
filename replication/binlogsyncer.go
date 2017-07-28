@@ -320,7 +320,7 @@ func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 	return b.startDumpStream(), nil
 }
 
-func (b *BinlogSyncer) writeBinglogDumpCommand(p Position) error {
+func (b *BinlogSyncer) writeBinlogDumpCommand(p Position) error {
 	b.c.ResetSequence()
 
 	data := make([]byte, 4+1+4+2+4+len(p.Name))
@@ -400,7 +400,7 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 	}
 
 	// Since we use @slave_connect_state, the file and position here are ignored.
-	return b.writeBinglogDumpCommand(Position{"", 0})
+	return b.writeBinlogDumpCommand(Position{"", 0})
 }
 
 // localHostname returns the hostname that register slave would register as.
@@ -513,7 +513,7 @@ func (b *BinlogSyncer) prepareSyncPos(pos Position) error {
 		return errors.Trace(err)
 	}
 
-	if err := b.writeBinglogDumpCommand(pos); err != nil {
+	if err := b.writeBinlogDumpCommand(pos); err != nil {
 		return errors.Trace(err)
 	}
 
