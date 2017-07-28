@@ -93,7 +93,8 @@ func (c *Canal) AddDumpIgnoreTables(db string, tables ...string) {
 
 func (c *Canal) tryDump() error {
 	pos := c.master.Position()
-	if len(pos.Name) > 0 && pos.Pos > 0 {
+	gtid := c.master.GTID()
+	if (len(pos.Name) > 0 && pos.Pos > 0) || gtid != nil {
 		// we will sync with binlog name and position
 		log.Infof("skip dump, use last binlog replication pos %s", pos)
 		return nil
