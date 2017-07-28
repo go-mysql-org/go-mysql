@@ -81,6 +81,14 @@ func (c *Canal) startSyncBinlog() error {
 			if err := c.eventHandler.OnXID(pos); err != nil {
 				return errors.Trace(err)
 			}
+		case *replication.MariadbGTIDEvent:
+			// try to save the GTID later
+			gtid := e.GTID
+			c.master.UpdateGTID(gtid)
+			if err := c.eventHandler.OnGTID(gtid); err != nil {
+				return errors.Trace(err)
+			}
+		// TODO process GTIDEvent(MySQL)
 		case *replication.QueryEvent:
 			// handle alert table query
 			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
