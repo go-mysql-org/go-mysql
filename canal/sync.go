@@ -15,14 +15,31 @@ var (
 	expAlterTable = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 )
 
-func (c *Canal) startSyncBinlog() error {
+func getSyncer(c *Canal) (*replication.BinlogStreamer, error) {
 	pos := c.master.Position()
+	set := c.master.GTID()
 
-	log.Infof("start sync binlog at %v", pos)
+	if len(pos.Name) != 0 {
+		s, err := c.syncer.StartSync(pos)
+		if err != nil {
+			return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
+		}
+		log.Infof("start sync binlog at binlog file %v", pos)
+		return s, nil
+	} else {
+		s, err := c.syncer.StartSyncGTID(set)
+		if err != nil {
+			return nil, errors.Errorf("start sync replication at GTID %v error %v", pos, err)
+		}
+		log.Infof("start sync binlog at GTID %v", set)
+		return s, nil
+	}
+}
 
-	s, err := c.syncer.StartSync(pos)
-	if err != nil {
-		return errors.Errorf("start sync replication at %v error %v", pos, err)
+func (c *Canal) startSyncBinlog() error {
+
+	s, err := getSyncer(c); if err != nil {
+		return err
 	}
 
 	for {
@@ -31,6 +48,7 @@ func (c *Canal) startSyncBinlog() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		pos := c.master.Position()
 
 		curPos := pos.Pos
 		//next binlog pos

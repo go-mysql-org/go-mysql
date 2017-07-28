@@ -137,6 +137,12 @@ func (c *Canal) StartFrom(pos mysql.Position) error {
 	return c.Start()
 }
 
+func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
+	c.master.UpdateGTID(set)
+
+	return c.Start()
+}
+
 func (c *Canal) run() error {
 	defer func() {
 		c.wg.Done()
