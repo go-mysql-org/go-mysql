@@ -3,12 +3,14 @@ package canal
 import (
 	"regexp"
 	"time"
+	"fmt"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
+	"github.com/satori/go.uuid"
 )
 
 var (
@@ -28,7 +30,7 @@ func getSyncer(c *Canal) (*replication.BinlogStreamer, error) {
 		gset := c.master.GTID()
 		s, err := c.syncer.StartSyncGTID(gset)
 		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID %v error %v", pos, err)
+			return nil, errors.Errorf("start sync replication at GTID %v error %v", gset, err)
 		}
 		log.Infof("start sync binlog at GTID %v", gset)
 		return s, nil
@@ -87,7 +89,16 @@ func (c *Canal) startSyncBinlog() error {
 			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}
-		// TODO process GTIDEvent(MySQL)
+		case *replication.GTIDEvent:
+			u, _ := uuid.FromBytes(e.SID)
+			gset, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
+			if err != nil {
+				return errors.Trace(err)
+			}
+			c.master.UpdateGTID(gset)
+			if err := c.eventHandler.OnGTID(gset); err != nil {
+				return errors.Trace(err)
+			}
 		case *replication.QueryEvent:
 			// handle alert table query
 			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
