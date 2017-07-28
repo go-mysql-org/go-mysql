@@ -96,7 +96,7 @@ func (c *Canal) tryDump() error {
 	gtid := c.master.GTID()
 	if (len(pos.Name) > 0 && pos.Pos > 0) || gtid != nil {
 		// we will sync with binlog name and position
-		log.Infof("skip dump, use last binlog replication pos %s", pos)
+		log.Infof("skip dump, use last binlog replication pos %s or GTID %s", pos, gtid)
 		return nil
 	}
 
