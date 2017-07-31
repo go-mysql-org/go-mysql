@@ -1,12 +1,14 @@
 package schema
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"testing"
 
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/client"
+	_ "github.com/siddontang/go-mysql/driver"
 )
 
 // use docker mysql for test
@@ -17,7 +19,8 @@ func Test(t *testing.T) {
 }
 
 type schemaTestSuite struct {
-	conn *client.Conn
+	conn  *client.Conn
+	sqlDB *sql.DB
 }
 
 var _ = Suite(&schemaTestSuite{})
@@ -26,11 +29,18 @@ func (s *schemaTestSuite) SetUpSuite(c *C) {
 	var err error
 	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, 3306), "root", "", "test")
 	c.Assert(err, IsNil)
+
+	s.sqlDB, err = sql.Open("mysql", fmt.Sprintf("root:@%s:3306", *host))
+	c.Assert(err, IsNil)
 }
 
 func (s *schemaTestSuite) TearDownSuite(c *C) {
 	if s.conn != nil {
 		s.conn.Close()
+	}
+
+	if s.sqlDB != nil {
+		s.sqlDB.Close()
 	}
 }
 
@@ -74,6 +84,11 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	c.Assert(ta.Columns[0].IsUnsigned, IsFalse)
 	c.Assert(ta.Columns[8].IsUnsigned, IsTrue)
 	c.Assert(ta.Columns[9].IsUnsigned, IsTrue)
+
+	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, "test", "schema_test")
+	c.Assert(err, IsNil)
+
+	c.Assert(taSqlDb, DeepEquals, ta)
 }
 
 func (s *schemaTestSuite) TestQuoteSchema(c *C) {
