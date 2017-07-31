@@ -161,7 +161,7 @@ func (c *Canal) run() error {
 		return errors.Trace(err)
 	}
 
-	if err = c.startSyncBinlog(); err != nil {
+	if err = c.runSyncBinlog(); err != nil {
 		log.Errorf("canal start sync binlog err: %v", err)
 		return errors.Trace(err)
 	}

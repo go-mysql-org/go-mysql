@@ -17,7 +17,7 @@ var (
 	expAlterTable = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 )
 
-func getSyncer(c *Canal) (*replication.BinlogStreamer, error) {
+func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 	if !c.useGTID {
 		pos := c.master.Position()
 		s, err := c.syncer.StartSync(pos)
@@ -37,9 +37,9 @@ func getSyncer(c *Canal) (*replication.BinlogStreamer, error) {
 	}
 }
 
-func (c *Canal) startSyncBinlog() error {
+func (c *Canal) runSyncBinlog() error {
 
-	s, err := getSyncer(c); if err != nil {
+	s, err := c.startSyncer(); if err != nil {
 		return err
 	}
 
