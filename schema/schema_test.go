@@ -48,6 +48,8 @@ func (s *schemaTestSuite) TestSchema(c *C) {
             se SET('a', 'b', 'c'),
             f FLOAT,
             d DECIMAL(2, 1),
+            uint INT UNSIGNED,
+            zfint INT ZEROFILL,
             PRIMARY KEY(id2, id),
             UNIQUE (id1),
             INDEX name_idx (name)
@@ -60,7 +62,7 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	ta, err := NewTable(s.conn, "test", "schema_test")
 	c.Assert(err, IsNil)
 
-	c.Assert(ta.Columns, HasLen, 8)
+	c.Assert(ta.Columns, HasLen, 10)
 	c.Assert(ta.Indexes, HasLen, 3)
 	c.Assert(ta.PKColumns, DeepEquals, []int{2, 0})
 	c.Assert(ta.Indexes[0].Columns, HasLen, 2)
@@ -69,6 +71,9 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	c.Assert(ta.Columns[4].EnumValues, DeepEquals, []string{"a", "b", "c"})
 	c.Assert(ta.Columns[5].SetValues, DeepEquals, []string{"a", "b", "c"})
 	c.Assert(ta.Columns[7].Type, Equals, TYPE_FLOAT)
+	c.Assert(ta.Columns[0].IsUnsigned, IsFalse)
+	c.Assert(ta.Columns[8].IsUnsigned, IsTrue)
+	c.Assert(ta.Columns[9].IsUnsigned, IsTrue)
 }
 
 func (s *schemaTestSuite) TestQuoteSchema(c *C) {
