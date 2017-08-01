@@ -242,7 +242,7 @@ type QueryEvent struct {
 	Schema        []byte
 	Query         []byte
 
-	// in fact XIDEvent dosen't have the GTIDSet information, just for beneficial to use
+	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
 	GSet GTIDSet
 }
 
