@@ -130,6 +130,7 @@ func (c *Canal) prepareDumper() error {
 func (c *Canal) Start() error {
 	c.wg.Add(1)
 	go c.run()
+	c.wg.Wait()
 
 	return nil
 }
@@ -189,7 +190,6 @@ func (c *Canal) Close() {
 		c.syncer = nil
 	}
 
-	c.wg.Wait()
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
