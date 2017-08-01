@@ -216,6 +216,9 @@ func (e *RotateEvent) Dump(w io.Writer) {
 
 type XIDEvent struct {
 	XID uint64
+
+	// in fact XIDEvent dosen't have the GTIDSet information, just for beneficial to use
+	GSet GTIDSet
 }
 
 func (e *XIDEvent) Decode(data []byte) error {
@@ -225,6 +228,9 @@ func (e *XIDEvent) Decode(data []byte) error {
 
 func (e *XIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "XID: %d\n", e.XID)
+	if e.GSet != nil {
+	    fmt.Fprintf(w, "GTIDSet: %s\n", e.GSet.String())
+	}
 	fmt.Fprintln(w)
 }
 
