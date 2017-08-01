@@ -59,10 +59,12 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.master = &masterInfo{}
 
 	var err error
-
-	if err = c.prepareDumper(); err != nil {
-		return nil, errors.Trace(err)
-	}
+    //skip mysqldump bin, only use binlog 
+    if c.cfg.SkipMysqlDump != true {
+        if err = c.prepareDumper(); err != nil {
+            return nil, errors.Trace(err)
+        }
+    }
 
 	if err = c.prepareSyncer(); err != nil {
 		return nil, errors.Trace(err)
