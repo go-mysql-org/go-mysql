@@ -241,6 +241,9 @@ type QueryEvent struct {
 	StatusVars    []byte
 	Schema        []byte
 	Query         []byte
+
+	// in fact XIDEvent dosen't have the GTIDSet information, just for beneficial to use
+	GSet GTIDSet
 }
 
 func (e *QueryEvent) Decode(data []byte) error {
@@ -281,6 +284,9 @@ func (e *QueryEvent) Dump(w io.Writer) {
 	//fmt.Fprintf(w, "Status vars: \n%s", hex.Dump(e.StatusVars))
 	fmt.Fprintf(w, "Schema: %s\n", e.Schema)
 	fmt.Fprintf(w, "Query: %s\n", e.Query)
+	if e.GSet != nil {
+	    fmt.Fprintf(w, "GTIDSet: %s\n", e.GSet.String())
+	}
 	fmt.Fprintln(w)
 }
 
