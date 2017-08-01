@@ -10,6 +10,7 @@ type EventHandler interface {
 	OnDDL(nextPos mysql.Position, queryEvent *replication.QueryEvent) error
 	OnRow(e *RowsEvent) error
 	OnXID(nextPos mysql.Position) error
+	OnGTID(gtid mysql.GTIDSet) error
 	String() string
 }
 
@@ -22,6 +23,7 @@ func (h *DummyEventHandler) OnDDL(mysql.Position, *replication.QueryEvent) error
 }
 func (h *DummyEventHandler) OnRow(*RowsEvent) error     { return nil }
 func (h *DummyEventHandler) OnXID(mysql.Position) error { return nil }
+func (h *DummyEventHandler) OnGTID(mysql.GTIDSet) error { return nil }
 func (h *DummyEventHandler) String() string             { return "DummyEventHandler" }
 
 // `SetEventHandler` registers the sync handler, you must register your

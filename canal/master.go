@@ -11,6 +11,8 @@ type masterInfo struct {
 	sync.RWMutex
 
 	pos mysql.Position
+
+	gtid mysql.GTIDSet
 }
 
 func (m *masterInfo) Update(pos mysql.Position) {
@@ -21,9 +23,24 @@ func (m *masterInfo) Update(pos mysql.Position) {
 	m.Unlock()
 }
 
+func (m *masterInfo) UpdateGTID(gtid mysql.GTIDSet) {
+	log.Debugf("update master gtid %s", gtid.String())
+
+	m.Lock()
+	m.gtid = gtid
+	m.Unlock()
+}
+
 func (m *masterInfo) Position() mysql.Position {
 	m.RLock()
 	defer m.RUnlock()
 
 	return m.pos
+}
+
+func (m *masterInfo) GTID() mysql.GTIDSet {
+	m.RLock()
+	defer m.RUnlock()
+
+	return m.gtid
 }
