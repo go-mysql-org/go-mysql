@@ -3,26 +3,44 @@ package canal
 import (
 	"regexp"
 	"time"
+	"fmt"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
+	"github.com/satori/go.uuid"
 )
 
 var (
 	expAlterTable = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 )
 
-func (c *Canal) startSyncBinlog() error {
-	pos := c.master.Position()
+func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
+	if !c.useGTID {
+		pos := c.master.Position()
+		s, err := c.syncer.StartSync(pos)
+		if err != nil {
+			return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
+		}
+		log.Infof("start sync binlog at binlog file %v", pos)
+		return s, nil
+	} else {
+		gset := c.master.GTID()
+		s, err := c.syncer.StartSyncGTID(gset)
+		if err != nil {
+			return nil, errors.Errorf("start sync replication at GTID %v error %v", gset, err)
+		}
+		log.Infof("start sync binlog at GTID %v", gset)
+		return s, nil
+	}
+}
 
-	log.Infof("start sync binlog at %v", pos)
+func (c *Canal) runSyncBinlog() error {
 
-	s, err := c.syncer.StartSync(pos)
-	if err != nil {
-		return errors.Errorf("start sync replication at %v error %v", pos, err)
+	s, err := c.startSyncer(); if err != nil {
+		return err
 	}
 
 	for {
@@ -31,6 +49,7 @@ func (c *Canal) startSyncBinlog() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		pos := c.master.Position()
 
 		curPos := pos.Pos
 		//next binlog pos
@@ -61,6 +80,23 @@ func (c *Canal) startSyncBinlog() error {
 		case *replication.XIDEvent:
 			// try to save the position later
 			if err := c.eventHandler.OnXID(pos); err != nil {
+				return errors.Trace(err)
+			}
+		case *replication.MariadbGTIDEvent:
+			// try to save the GTID later
+			gtid := e.GTID
+			c.master.UpdateGTID(gtid)
+			if err := c.eventHandler.OnGTID(gtid); err != nil {
+				return errors.Trace(err)
+			}
+		case *replication.GTIDEvent:
+			u, _ := uuid.FromBytes(e.SID)
+			gset, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
+			if err != nil {
+				return errors.Trace(err)
+			}
+			c.master.UpdateGTID(gset)
+			if err := c.eventHandler.OnGTID(gset); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:

@@ -33,6 +33,7 @@ type TableColumn struct {
 	Type       int
 	RawType    string
 	IsAuto     bool
+	IsUnsigned bool
 	EnumValues []string
 	SetValues  []string
 }
@@ -99,6 +100,10 @@ func (ta *Table) AddColumn(name string, columnType string, extra string) {
 		ta.Columns[index].Type = TYPE_JSON
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
+	}
+
+	if strings.Contains(columnType, "unsigned") || strings.Contains(columnType, "zerofill") {
+		ta.Columns[index].IsUnsigned = true
 	}
 
 	if extra == "auto_increment" {
