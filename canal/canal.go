@@ -60,7 +60,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	var err error
 	//skip mysqldump bin, only use binlog 
-	if c.cfg.SkipMysqlDump != true {
+	if !c.cfg.SkipMysqlDump  {
 		if err = c.prepareDumper(); err != nil {
 			return nil, errors.Trace(err)
 		}
