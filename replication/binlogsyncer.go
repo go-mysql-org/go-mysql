@@ -650,6 +650,8 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		}
 	case *XIDEvent:
 		event.GSet = b.gset
+	case *QueryEvent:
+		event.GSet = b.gset
 	}
 
 	needStop := false
