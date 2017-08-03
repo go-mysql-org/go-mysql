@@ -5,6 +5,7 @@
 package schema
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -161,6 +162,25 @@ func IsTableExist(conn mysql.Executer, schema string, name string) (bool, error)
 	return r.RowNumber() == 1, nil
 }
 
+func NewTableFromSqlDB(conn *sql.DB, schema string, name string) (*Table, error) {
+	ta := &Table{
+		Schema:  schema,
+		Name:    name,
+		Columns: make([]TableColumn, 0, 16),
+		Indexes: make([]*Index, 0, 8),
+	}
+
+	if err := ta.fetchColumnsViaSqlDB(conn); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if err := ta.fetchIndexesViaSqlDB(conn); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return ta, nil
+}
+
 func NewTable(conn mysql.Executer, schema string, name string) (*Table, error) {
 	ta := &Table{
 		Schema:  schema,
@@ -197,6 +217,30 @@ func (ta *Table) fetchColumns(conn mysql.Executer) error {
 	return nil
 }
 
+func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
+	r, err := conn.Query(fmt.Sprintf("describe `%s`.`%s`", ta.Schema, ta.Name))
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	defer r.Close()
+
+	var unusedVal interface{}
+	unused := &unusedVal
+
+	for r.Next() {
+		var name, colType, extra string
+		err := r.Scan(&name, &colType, &unused, &unused, &unused, &extra)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		ta.AddColumn(name, colType, extra)
+	}
+
+	return r.Err()
+}
+
 func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("show index from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
@@ -216,6 +260,59 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 		currentIndex.AddColumn(colName, cardinality)
 	}
 
+	return ta.fetchPrimaryKeyColumns()
+
+}
+
+func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
+	r, err := conn.Query(fmt.Sprintf("show index from `%s`.`%s`", ta.Schema, ta.Name))
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	defer r.Close()
+
+	var currentIndex *Index
+	currentName := ""
+
+	var unusedVal interface{}
+	unused := &unusedVal
+
+	for r.Next() {
+		var indexName, colName string
+		var cardinality uint64
+
+		err := r.Scan(
+			&unused,
+			&unused,
+			&indexName,
+			&unused,
+			&colName,
+			&unused,
+			&cardinality,
+			&unused,
+			&unused,
+			&unused,
+			&unused,
+			&unused,
+			&unused,
+		)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		if currentName != indexName {
+			currentIndex = ta.AddIndex(indexName)
+			currentName = indexName
+		}
+
+		currentIndex.AddColumn(colName, cardinality)
+	}
+
+	return ta.fetchPrimaryKeyColumns()
+}
+
+func (ta *Table) fetchPrimaryKeyColumns() error {
 	if len(ta.Indexes) == 0 {
 		return nil
 	}
