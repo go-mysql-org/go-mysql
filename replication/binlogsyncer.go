@@ -649,23 +649,9 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 			return errors.Trace(err)
 		}
 	case *XIDEvent:
-		if !b.useGTID {
-			break
-		}
-		if b.cfg.Flavor != MariaDBFlavor {
-		    event.GSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
-		} else {
-		    event.GSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
-		}
+		event.GSet = b.GTIDSet_CP()
 	case *QueryEvent:
-		if !b.useGTID {
-			break
-		}
-		if b.cfg.Flavor != MariaDBFlavor {
-		    event.GSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
-		} else {
-		    event.GSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
-		}
+		event.GSet = b.GTIDSet_CP()
 	}
 
 	needStop := false
@@ -687,4 +673,20 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	}
 
 	return nil
+}
+
+func (b *BinlogSyncer) GTIDSet_CP() GTIDSet {
+    var gtidSet GTIDSet
+
+    if !b.useGTID {
+	return nil
+    }
+
+    if b.cfg.Flavor != MariaDBFlavor {
+	gtidSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
+    } else {
+	gtidSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
+    }
+
+    return gtidSet
 }
