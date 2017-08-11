@@ -15,6 +15,7 @@ import (
 
 var (
 	expAlterTable = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
+	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE.*TO\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}.*")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -101,19 +102,24 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.QueryEvent:
 			// handle alert table query
-			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
-				if len(mb[1]) == 0 {
-					mb[1] = e.Schema
+			var mb = [][]byte{}
+			// run alter table directly
+			if mb = expAlterTable.FindSubmatch(e.Query); mb == nil {
+				// create new table and replace origin
+				if mb = expRenameTable.FindSubmatch(e.Query); mb == nil {
+					// skip others
+					continue
 				}
-				c.ClearTableCache(mb[1], mb[2])
-				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
-				if err = c.eventHandler.OnDDL(pos, e); err != nil {
-					return errors.Trace(err)
-				}
-			} else {
-				// skip others
-				continue
 			}
+			if len(mb[1]) == 0 {
+				mb[1] = e.Schema
+			}
+			c.ClearTableCache(mb[1], mb[2])
+			log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
+			if err = c.eventHandler.OnDDL(pos, e); err != nil {
+				return errors.Trace(err)
+			}
+
 		default:
 			continue
 		}
