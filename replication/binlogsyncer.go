@@ -649,19 +649,23 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 			return errors.Trace(err)
 		}
 	case *XIDEvent:
-		event.GSet = b.gset
-		//if b.cfg.Flavor != MariaDBFlavor {
-		//    event.GSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
-		//} else {
-		//    event.GSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
-		//}
+		if !b.useGTID {
+			break
+		}
+		if b.cfg.Flavor != MariaDBFlavor {
+		    event.GSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
+		} else {
+		    event.GSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
+		}
 	case *QueryEvent:
-		event.GSet = b.gset
-		//if b.cfg.Flavor != MariaDBFlavor {
-		//    event.GSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
-		//} else {
-		//    event.GSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
-		//}
+		if !b.useGTID {
+			break
+		}
+		if b.cfg.Flavor != MariaDBFlavor {
+		    event.GSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
+		} else {
+		    event.GSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
+		}
 	}
 
 	needStop := false
