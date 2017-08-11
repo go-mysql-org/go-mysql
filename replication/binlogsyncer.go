@@ -649,9 +649,9 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 			return errors.Trace(err)
 		}
 	case *XIDEvent:
-		event.GSet = b.gtidSet_CP()
+		event.GSet = b.getGtidSet()
 	case *QueryEvent:
-		event.GSet = b.gtidSet_CP()
+		event.GSet = b.getGtidSet()
 	}
 
 	needStop := false
@@ -675,7 +675,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	return nil
 }
 
-func (b *BinlogSyncer) gtidSet_CP() GTIDSet {
+func (b *BinlogSyncer) getGtidSet() GTIDSet {
     	var gtidSet GTIDSet
 
     	if !b.useGTID {
