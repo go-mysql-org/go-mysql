@@ -101,23 +101,18 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
-			// handle alert table query
-			var mb = [][]byte{}
-			// run alter table directly
-			if mb = expAlterTable.FindSubmatch(e.Query); mb == nil {
-				// create new table and replace origin
-				if mb = expRenameTable.FindSubmatch(e.Query); mb == nil {
-					// skip others
-					continue
+			if mb := checkRenameTable(e); mb != nil {
+				if len(mb[1]) == 0 {
+					mb[1] = e.Schema
 				}
-			}
-			if len(mb[1]) == 0 {
-				mb[1] = e.Schema
-			}
-			c.ClearTableCache(mb[1], mb[2])
-			log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
-			if err = c.eventHandler.OnDDL(pos, e); err != nil {
-				return errors.Trace(err)
+				c.ClearTableCache(mb[1], mb[2])
+				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
+				if err = c.eventHandler.OnDDL(pos, e); err != nil {
+					return errors.Trace(err)
+				}
+			} else {
+				// skip others
+				continue
 			}
 
 		default:
@@ -195,4 +190,13 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
+}
+
+func checkRenameTable(e *replication.QueryEvent) [][]byte {
+	var mb = [][]byte{}
+	if mb = expAlterTable.FindSubmatch(e.Query); mb != nil {
+		return mb
+	}
+	mb = expRenameTable.FindSubmatch(e.Query)
+	return mb
 }
