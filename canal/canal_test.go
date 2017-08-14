@@ -113,3 +113,25 @@ func TestAlterTableExp(t *testing.T) {
 		}
 	}
 }
+
+func TestRenameTableExp(t *testing.T)  {
+	cases := []string{
+		"rename table `mydb`.`mytable` to `mydb`.`mytable1`",
+		"rename table `mytable` to `mytable1`",
+		"rename table mydb.mytable to mydb.mytable1",
+		"rename table mytable to mytable1",
+
+		"rename table `mydb`.`mytable1` to `mydb`.`mytable2`, `mydb`.`mytable` to `mydb`.`mytable1`",
+		"rename table `mytable1` to `mytable2`, `mytable` to `mytable1`",
+		"rename table mydb.mytable1 to mydb.mytable2, mydb.mytable to mydb.mytable1",
+		"rename table mytable1 to mytable2, mytable to mytable1",
+	}
+	table := []byte("mytable1")
+	db := []byte("mydb")
+	for _, s := range cases {
+		m := expRenameTable.FindSubmatch([]byte(s))
+		if m == nil || !bytes.Equal(m[2], table) || (len(m[1]) > 0 && !bytes.Equal(m[1], db)) {
+			t.Fatalf("TestRenameTableExp: case %s failed\n", s)
+		}
+	}
+}

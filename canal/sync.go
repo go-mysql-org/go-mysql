@@ -15,6 +15,7 @@ import (
 
 var (
 	expAlterTable = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
+	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE.*TO\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}$")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -100,8 +101,7 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
-			// handle alert table query
-			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
+			if mb := checkRenameTable(e); mb != nil {
 				if len(mb[1]) == 0 {
 					mb[1] = e.Schema
 				}
@@ -114,6 +114,7 @@ func (c *Canal) runSyncBinlog() error {
 				// skip others
 				continue
 			}
+
 		default:
 			continue
 		}
@@ -189,4 +190,13 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
+}
+
+func checkRenameTable(e *replication.QueryEvent) [][]byte {
+	var mb = [][]byte{}
+	if mb = expAlterTable.FindSubmatch(e.Query); mb != nil {
+		return mb
+	}
+	mb = expRenameTable.FindSubmatch(e.Query)
+	return mb
 }
