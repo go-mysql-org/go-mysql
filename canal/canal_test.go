@@ -118,8 +118,13 @@ func TestRenameTableExp(t *testing.T)  {
 	cases := []string{
 		"rename table `mydb`.`mytable` to `mydb`.`mytable1`",
 		"rename table `mytable` to `mytable1`",
-		"rename table mydb.mytable to mydb.mytable1`",
+		"rename table mydb.mytable to mydb.mytable1",
 		"rename table mytable to mytable1",
+
+		"rename table `mydb`.`mytable1` to `mydb`.`mytable2`, `mydb`.`mytable` to `mydb`.`mytable1`",
+		"rename table `mytable1` to `mytable2`, `mytable` to `mytable1`",
+		"rename table mydb.mytable1 to mydb.mytable2, mydb.mytable to mydb.mytable1",
+		"rename table mytable1 to mytable2, mytable to mytable1",
 	}
 	table := []byte("mytable1")
 	db := []byte("mydb")
