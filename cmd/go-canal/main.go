@@ -32,7 +32,7 @@ var startName = flag.String("bin_name", "", "start sync from binlog name")
 var startPos = flag.Uint("bin_pos", 0, "start sync from binlog position of")
 
 var heartbeatPeriod = flag.Uint("heartbeat", 60, "master heartbeat period")
-var readTimeout = flag.Uint("read_timeout", 5, "connection read timeout")
+var readTimeout = flag.Uint("read_timeout", 90, "connection read timeout")
 
 func main() {
 	flag.Parse()
