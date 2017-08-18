@@ -37,9 +37,11 @@ type Config struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 
-	Charset  string `toml:"charset"`
-	ServerID uint32 `toml:"server_id"`
-	Flavor   string `toml:"flavor"`
+	Charset         string        `toml:"charset"`
+	ServerID        uint32        `toml:"server_id"`
+	Flavor          string        `toml:"flavor"`
+	HeartbeatPeriod uint          `toml:"heartbeat_period"`
+	ReadTimeout     time.Duration `toml:"read_timeout"`
 
 	Dump DumpConfig `toml:"dump"`
 }

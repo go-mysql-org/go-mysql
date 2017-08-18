@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/siddontang/go-mysql/canal"
 	"github.com/siddontang/go-mysql/mysql"
@@ -30,6 +31,9 @@ var ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be data
 var startName = flag.String("bin_name", "", "start sync from binlog name")
 var startPos = flag.Uint("bin_pos", 0, "start sync from binlog position of")
 
+var heartbeatPeriod = flag.Uint("heartbeat", 60, "master heartbeat period")
+var readTimeout = flag.Uint("read_timeout", 5, "connection read timeout")
+
 func main() {
 	flag.Parse()
 
@@ -38,6 +42,9 @@ func main() {
 	cfg.User = *user
 	cfg.Password = *password
 	cfg.Flavor = *flavor
+
+	cfg.ReadTimeout = time.Duration(*readTimeout)
+	cfg.HeartbeatPeriod = *heartbeatPeriod
 
 	cfg.ServerID = uint32(*serverID)
 	cfg.Dump.ExecutionPath = *mysqldump
