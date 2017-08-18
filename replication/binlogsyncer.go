@@ -178,7 +178,9 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	//set read timeout
-	b.c.SetReadDeadline(time.Now().Add(time.Second * b.cfg.ReadTimeout))
+	if b.cfg.ReadTimeout > 0 {
+		b.c.SetReadDeadline(time.Now().Add(time.Second * b.cfg.ReadTimeout))
+	}
 
 	if b.cfg.RecvBufferSize > 0 {
 		if tcp, ok := b.c.Conn.Conn.(*net.TCPConn); ok {
@@ -620,7 +622,9 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 		}
 
 		//set read timeout
-		b.c.SetReadDeadline(time.Now().Add(time.Second * b.cfg.ReadTimeout))
+		if b.cfg.ReadTimeout > 0 {
+			b.c.SetReadDeadline(time.Now().Add(time.Second * b.cfg.ReadTimeout))
+		}
 
 		switch data[0] {
 		case OK_HEADER:
