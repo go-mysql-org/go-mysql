@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -65,7 +64,7 @@ type BinlogSyncerConfig struct {
 	RecvBufferSize int
 
 	// master heartbeat period
-	HeartbeatPeriod uint
+	HeartbeatPeriod time.Duration
 
 	// read timeout
 	ReadTimeout time.Duration
@@ -193,8 +192,12 @@ func (b *BinlogSyncer) registerSlave() error {
 		cmd := fmt.Sprintf("KILL %d", b.lastConnectionID)
 		if _, err := b.c.Execute(cmd); err != nil {
 			log.Errorf("b.c.Execute(%s) error(%v)", cmd, err)
-			// unknown connection id
-			if !strings.Contains(err.Error(), "ERROR 1094") {
+			var tmpStr string
+			var code int
+			// golang scanf doesn't support %*,so I used a temporary variable
+			fmt.Sscanf(err.Error(), "%s%d", &tmpStr, &code)
+			// Unknown thread id
+			if code != ER_NO_SUCH_THREAD {
 				return errors.Trace(err)
 			}
 		}
