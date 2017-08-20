@@ -32,6 +32,7 @@ const (
 type TableColumn struct {
 	Name       string
 	Type       int
+	Collation  string
 	RawType    string
 	IsAuto     bool
 	IsUnsigned bool
@@ -58,9 +59,9 @@ func (ta *Table) String() string {
 	return fmt.Sprintf("%s.%s", ta.Schema, ta.Name)
 }
 
-func (ta *Table) AddColumn(name string, columnType string, extra string) {
+func (ta *Table) AddColumn(name string, columnType string, collation string, extra string) {
 	index := len(ta.Columns)
-	ta.Columns = append(ta.Columns, TableColumn{Name: name})
+	ta.Columns = append(ta.Columns, TableColumn{Name: name, Collation: collation})
 	ta.Columns[index].RawType = columnType
 
 	if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
@@ -201,7 +202,7 @@ func NewTable(conn mysql.Executer, schema string, name string) (*Table, error) {
 }
 
 func (ta *Table) fetchColumns(conn mysql.Executer) error {
-	r, err := conn.Execute(fmt.Sprintf("describe `%s`.`%s`", ta.Schema, ta.Name))
+	r, err := conn.Execute(fmt.Sprintf("show full columns from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -209,16 +210,17 @@ func (ta *Table) fetchColumns(conn mysql.Executer) error {
 	for i := 0; i < r.RowNumber(); i++ {
 		name, _ := r.GetString(i, 0)
 		colType, _ := r.GetString(i, 1)
-		extra, _ := r.GetString(i, 5)
+		collation, _ := r.GetString(i, 2)
+		extra, _ := r.GetString(i, 6)
 
-		ta.AddColumn(name, colType, extra)
+		ta.AddColumn(name, colType, collation, extra)
 	}
 
 	return nil
 }
 
 func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
-	r, err := conn.Query(fmt.Sprintf("describe `%s`.`%s`", ta.Schema, ta.Name))
+	r, err := conn.Query(fmt.Sprintf("show full columns from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -230,12 +232,12 @@ func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
 
 	for r.Next() {
 		var name, colType, extra string
-		err := r.Scan(&name, &colType, &unused, &unused, &unused, &extra)
+		var collation sql.NullString
+		err := r.Scan(&name, &colType, &collation, &unused, &unused, &unused, &extra, &unused, &unused)
 		if err != nil {
 			return errors.Trace(err)
 		}
-
-		ta.AddColumn(name, colType, extra)
+		ta.AddColumn(name, colType, collation.String, extra)
 	}
 
 	return r.Err()
