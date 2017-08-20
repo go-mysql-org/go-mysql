@@ -59,9 +59,11 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.master = &masterInfo{}
 
 	var err error
-
-	if err = c.prepareDumper(); err != nil {
-		return nil, errors.Trace(err)
+	//skip mysqldump bin, only use binlog 
+	if !c.cfg.SkipMysqlDump  {
+		if err = c.prepareDumper(); err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 
 	if err = c.prepareSyncer(); err != nil {
@@ -128,6 +130,7 @@ func (c *Canal) prepareDumper() error {
 func (c *Canal) Start() error {
 	c.wg.Add(1)
 	go c.run()
+	c.wg.Wait()
 
 	return nil
 }
@@ -187,7 +190,6 @@ func (c *Canal) Close() {
 		c.syncer = nil
 	}
 
-	c.wg.Wait()
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {

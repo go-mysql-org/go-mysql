@@ -40,6 +40,7 @@ type Config struct {
 	Charset  string `toml:"charset"`
 	ServerID uint32 `toml:"server_id"`
 	Flavor   string `toml:"flavor"`
+	SkipMysqlDump bool `toml:mysqldump`
 
 	Dump DumpConfig `toml:"dump"`
 }
@@ -76,6 +77,7 @@ func NewDefaultConfig() *Config {
 	c.ServerID = uint32(rand.Intn(1000)) + 1001
 
 	c.Flavor = "mysql"
+	c.SkipMysqlDump = true
 
 	c.Dump.ExecutionPath = "mysqldump"
 	c.Dump.DiscardErr = true
