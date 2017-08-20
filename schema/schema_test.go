@@ -60,6 +60,8 @@ func (s *schemaTestSuite) TestSchema(c *C) {
             d DECIMAL(2, 1),
             uint INT UNSIGNED,
             zfint INT ZEROFILL,
+            name_ucs VARCHAR(256) CHARACTER SET ucs2,
+            name_utf8 VARCHAR(256) CHARACTER SET utf8,
             PRIMARY KEY(id2, id),
             UNIQUE (id1),
             INDEX name_idx (name)
@@ -72,7 +74,7 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	ta, err := NewTable(s.conn, "test", "schema_test")
 	c.Assert(err, IsNil)
 
-	c.Assert(ta.Columns, HasLen, 10)
+	c.Assert(ta.Columns, HasLen, 12)
 	c.Assert(ta.Indexes, HasLen, 3)
 	c.Assert(ta.PKColumns, DeepEquals, []int{2, 0})
 	c.Assert(ta.Indexes[0].Columns, HasLen, 2)
@@ -84,6 +86,8 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	c.Assert(ta.Columns[0].IsUnsigned, IsFalse)
 	c.Assert(ta.Columns[8].IsUnsigned, IsTrue)
 	c.Assert(ta.Columns[9].IsUnsigned, IsTrue)
+	c.Assert(ta.Columns[10].Collation, Matches, "^ucs2.*")
+	c.Assert(ta.Columns[11].Collation, Matches, "^utf8.*")
 
 	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, "test", "schema_test")
 	c.Assert(err, IsNil)
