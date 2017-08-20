@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"testing"
 	"time"
 
@@ -28,6 +31,8 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
 	cfg.User = "root"
+	cfg.HeartbeatPeriod = 2
+	cfg.ReadTimeout = 3
 	cfg.Dump.ExecutionPath = "mysqldump"
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
@@ -57,6 +62,22 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *canalTestSuite) TearDownSuite(c *C) {
+	sc := make(chan os.Signal, 1)
+	go func() {
+		// To test the heartbeat and read timeout,so need to sleep 4 seconds without data transmission
+		time.Sleep(4 * time.Second)
+		sc <- syscall.SIGTERM
+	}()
+
+	signal.Notify(sc,
+		os.Kill,
+		os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+	<-sc
+
 	if s.c != nil {
 		s.c.Close()
 		s.c = nil
@@ -114,7 +135,7 @@ func TestAlterTableExp(t *testing.T) {
 	}
 }
 
-func TestRenameTableExp(t *testing.T)  {
+func TestRenameTableExp(t *testing.T) {
 	cases := []string{
 		"rename table `mydb`.`mytable` to `mydb`.`mytable1`",
 		"rename table `mytable` to `mytable1`",
