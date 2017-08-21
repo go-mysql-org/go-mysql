@@ -191,13 +191,9 @@ func (b *BinlogSyncer) registerSlave() error {
 	if b.lastConnectionID > 0 {
 		cmd := fmt.Sprintf("KILL %d", b.lastConnectionID)
 		if _, err := b.c.Execute(cmd); err != nil {
-			log.Errorf("b.c.Execute(%s) error(%v)", cmd, err)
-			var tmpStr string
-			var code int
-			// golang scanf doesn't support %*,so I used a temporary variable
-			fmt.Sscanf(err.Error(), "%s%d", &tmpStr, &code)
+			log.Errorf("kill connection %d error %v", b.lastConnectionID, err)
 			// Unknown thread id
-			if code != ER_NO_SUCH_THREAD {
+			if code := ErrorCode(err.Error()); code != ER_NO_SUCH_THREAD {
 				return errors.Trace(err)
 			}
 		}

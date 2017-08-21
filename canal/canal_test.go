@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 	"testing"
 	"time"
 
@@ -62,21 +59,9 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *canalTestSuite) TearDownSuite(c *C) {
-	sc := make(chan os.Signal, 1)
-	go func() {
-		// To test the heartbeat and read timeout,so need to sleep 4 seconds without data transmission
-		time.Sleep(4 * time.Second)
-		sc <- syscall.SIGTERM
-	}()
-
-	signal.Notify(sc,
-		os.Kill,
-		os.Interrupt,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-	<-sc
+	// To test the heartbeat and read timeout,so need to sleep 4 seconds without data transmission
+	log.Infof("Start testing the heartbeat and read timeout")
+	time.Sleep(4 * time.Second)
 
 	if s.c != nil {
 		s.c.Close()

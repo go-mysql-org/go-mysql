@@ -151,3 +151,17 @@ func (t *mysqlTestSuite) TestMysqlParseBinaryUint64(c *check.C) {
 	u64 := ParseBinaryUint64([]byte{1, 2, 3, 4, 5, 6, 7, 128})
 	c.Assert(u64, check.Equals, 128*uint64(72057594037927936)+7*uint64(281474976710656)+6*uint64(1099511627776)+5*uint64(4294967296)+4*16777216+3*65536+2*256+1)
 }
+
+func (t *mysqlTestSuite) TestErrorCode(c *check.C) {
+	var code int
+	code = ErrorCode("ERROR 1094 (HY000): Unknown thread id: 1094")
+	c.Assert(code, check.Equals, 1094)
+	code = ErrorCode("error string")
+	c.Assert(code, check.Equals, 0)
+	code = ErrorCode("abcdefg")
+	c.Assert(code, check.Equals, 0)
+	code = ErrorCode("123455 ks094")
+	c.Assert(code, check.Equals, 0)
+	code = ErrorCode("ERROR 1046 (3D000): Unknown error 1046")
+	c.Assert(code, check.Equals, 1046)
+}
