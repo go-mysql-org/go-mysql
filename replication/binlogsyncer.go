@@ -178,7 +178,7 @@ func (b *BinlogSyncer) registerSlave() error {
 
 	//set read timeout
 	if b.cfg.ReadTimeout > 0 {
-		b.c.SetReadDeadline(time.Now().Add(time.Second * b.cfg.ReadTimeout))
+		b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
 	}
 
 	if b.cfg.RecvBufferSize > 0 {
@@ -239,10 +239,9 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	if b.cfg.HeartbeatPeriod > 0 {
-		nanosecond := b.cfg.HeartbeatPeriod * 1000000000
-		_, err = b.c.Execute(fmt.Sprintf("SET @master_heartbeat_period=%d;", nanosecond))
+		_, err = b.c.Execute(fmt.Sprintf("SET @master_heartbeat_period=%d;", b.cfg.HeartbeatPeriod))
 		if err != nil {
-			log.Error("failed to set @master_heartbeat_period=%d", nanosecond, err)
+			log.Error("failed to set @master_heartbeat_period=%d", b.cfg.HeartbeatPeriod, err)
 			return errors.Trace(err)
 		}
 	}
@@ -622,7 +621,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 		//set read timeout
 		if b.cfg.ReadTimeout > 0 {
-			b.c.SetReadDeadline(time.Now().Add(time.Second * b.cfg.ReadTimeout))
+			b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
 		}
 
 		switch data[0] {

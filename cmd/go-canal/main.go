@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/siddontang/go-mysql/canal"
 	"github.com/siddontang/go-mysql/mysql"
@@ -42,9 +43,8 @@ func main() {
 	cfg.Password = *password
 	cfg.Flavor = *flavor
 
-	cfg.ReadTimeout = *readTimeout
-	cfg.HeartbeatPeriod = *heartbeatPeriod
-
+	cfg.ReadTimeout = *readTimeout * time.Second
+	cfg.HeartbeatPeriod = *heartbeatPeriod * time.Second
 	cfg.ServerID = uint32(*serverID)
 	cfg.Dump.ExecutionPath = *mysqldump
 	cfg.Dump.DiscardErr = false

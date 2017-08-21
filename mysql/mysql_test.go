@@ -153,15 +153,17 @@ func (t *mysqlTestSuite) TestMysqlParseBinaryUint64(c *check.C) {
 }
 
 func (t *mysqlTestSuite) TestErrorCode(c *check.C) {
-	var code int
-	code = ErrorCode("ERROR 1094 (HY000): Unknown thread id: 1094")
-	c.Assert(code, check.Equals, 1094)
-	code = ErrorCode("error string")
-	c.Assert(code, check.Equals, 0)
-	code = ErrorCode("abcdefg")
-	c.Assert(code, check.Equals, 0)
-	code = ErrorCode("123455 ks094")
-	c.Assert(code, check.Equals, 0)
-	code = ErrorCode("ERROR 1046 (3D000): Unknown error 1046")
-	c.Assert(code, check.Equals, 1046)
+	tbls := []struct {
+		msg  string
+		code int
+	}{
+		{"ERROR 1094 (HY000): Unknown thread id: 1094", 1094},
+		{"error string", 0},
+		{"abcdefg", 0},
+		{"123455 ks094", 0},
+		{"ERROR 1046 (3D000): Unknown error 1046", 1046},
+	}
+	for _, v := range tbls {
+		c.Assert(ErrorCode(v.msg), check.Equals, v.code)
+	}
 }

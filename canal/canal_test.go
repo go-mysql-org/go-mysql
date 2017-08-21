@@ -28,8 +28,8 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
 	cfg.User = "root"
-	cfg.HeartbeatPeriod = 2
-	cfg.ReadTimeout = 3
+	cfg.HeartbeatPeriod = 200 * time.Millisecond
+	cfg.ReadTimeout = 300 * time.Millisecond
 	cfg.Dump.ExecutionPath = "mysqldump"
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
@@ -59,9 +59,9 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *canalTestSuite) TearDownSuite(c *C) {
-	// To test the heartbeat and read timeout,so need to sleep 4 seconds without data transmission
+	// To test the heartbeat and read timeout,so need to sleep 1 seconds without data transmission
 	log.Infof("Start testing the heartbeat and read timeout")
-	time.Sleep(4 * time.Second)
+	time.Sleep(time.Second)
 
 	if s.c != nil {
 		s.c.Close()
