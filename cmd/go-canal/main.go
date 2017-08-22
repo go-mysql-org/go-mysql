@@ -31,8 +31,8 @@ var ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be data
 var startName = flag.String("bin_name", "", "start sync from binlog name")
 var startPos = flag.Uint("bin_pos", 0, "start sync from binlog position of")
 
-var heartbeatPeriod = flag.Duration("heartbeat", 60, "master heartbeat period")
-var readTimeout = flag.Duration("read_timeout", 90, "connection read timeout")
+var heartbeatPeriod = flag.Duration("heartbeat", 60*time.Second, "master heartbeat period")
+var readTimeout = flag.Duration("read_timeout", 90*time.Second, "connection read timeout")
 
 func main() {
 	flag.Parse()
@@ -43,8 +43,8 @@ func main() {
 	cfg.Password = *password
 	cfg.Flavor = *flavor
 
-	cfg.ReadTimeout = *readTimeout * time.Second
-	cfg.HeartbeatPeriod = *heartbeatPeriod * time.Second
+	cfg.ReadTimeout = *readTimeout
+	cfg.HeartbeatPeriod = *heartbeatPeriod
 	cfg.ServerID = uint32(*serverID)
 	cfg.Dump.ExecutionPath = *mysqldump
 	cfg.Dump.DiscardErr = false
