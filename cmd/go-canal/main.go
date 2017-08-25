@@ -109,6 +109,18 @@ func (h *handler) OnRow(e *canal.RowsEvent) error {
 	return nil
 }
 
+// Note：In asynchronous way hold positions as far as possible
+// because when the data volume is larger
+// delay will cause a master-slave synchronous way
+func (h *handler) SaveMasterInfo(pos mysql.Position, force bool) error {
+	if force {
+		fmt.Printf("sync save master info %v\n", pos)
+	} else {
+		fmt.Printf("async save master info %v\n", pos)
+	}
+	return nil
+}
+
 func (h *handler) String() string {
 	return "TestHandler"
 }
