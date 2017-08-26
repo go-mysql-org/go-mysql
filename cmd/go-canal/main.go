@@ -112,7 +112,7 @@ func (h *handler) OnRow(e *canal.RowsEvent) error {
 // Note：In asynchronous way hold positions as far as possible
 // because when the data volume is larger
 // delay will cause a master-slave synchronous way
-func (h *handler) SaveMasterInfo(pos mysql.Position, force bool) error {
+func (h *handler) OnPosSynced(pos mysql.Position, force bool) error {
 	if force {
 		fmt.Printf("sync save master info %v\n", pos)
 	} else {

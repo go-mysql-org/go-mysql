@@ -128,6 +128,6 @@ func (c *Canal) tryDump() error {
 
 	pos = mysql.Position{h.name, uint32(h.pos)}
 	c.master.Update(pos)
-	c.eventHandler.SaveMasterInfo(pos, false)
+	c.eventHandler.OnPosSynced(pos, true)
 	return nil
 }

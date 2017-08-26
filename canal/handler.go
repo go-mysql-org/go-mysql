@@ -11,7 +11,7 @@ type EventHandler interface {
 	OnRow(e *RowsEvent) error
 	OnXID(nextPos mysql.Position) error
 	OnGTID(gtid mysql.GTIDSet) error
-	SaveMasterInfo(pos mysql.Position, force bool) error // Use your own way to save master info
+	OnPosSynced(pos mysql.Position, force bool) error // Use your own way to save master info
 	String() string
 }
 
@@ -22,11 +22,11 @@ func (h *DummyEventHandler) OnRotate(*replication.RotateEvent) error { return ni
 func (h *DummyEventHandler) OnDDL(mysql.Position, *replication.QueryEvent) error {
 	return nil
 }
-func (h *DummyEventHandler) OnRow(*RowsEvent) error                    { return nil }
-func (h *DummyEventHandler) OnXID(mysql.Position) error                { return nil }
-func (h *DummyEventHandler) OnGTID(mysql.GTIDSet) error                { return nil }
-func (h *DummyEventHandler) SaveMasterInfo(mysql.Position, bool) error { return nil }
-func (h *DummyEventHandler) String() string                            { return "DummyEventHandler" }
+func (h *DummyEventHandler) OnRow(*RowsEvent) error                 { return nil }
+func (h *DummyEventHandler) OnXID(mysql.Position) error             { return nil }
+func (h *DummyEventHandler) OnGTID(mysql.GTIDSet) error             { return nil }
+func (h *DummyEventHandler) OnPosSynced(mysql.Position, bool) error { return nil }
+func (h *DummyEventHandler) String() string                         { return "DummyEventHandler" }
 
 // `SetEventHandler` registers the sync handler, you must register your
 // own handler before starting Canal.

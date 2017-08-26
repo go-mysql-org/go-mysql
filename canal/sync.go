@@ -126,7 +126,7 @@ func (c *Canal) runSyncBinlog() error {
 
 		if savePos {
 			c.master.Update(pos)
-			c.eventHandler.SaveMasterInfo(pos, false)
+			c.eventHandler.OnPosSynced(pos, false)
 		}
 	}
 

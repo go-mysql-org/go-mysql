@@ -186,7 +186,7 @@ func (c *Canal) Close() {
 		c.syncer = nil
 	}
 
-	c.eventHandler.SaveMasterInfo(c.master.pos, true)
+	c.eventHandler.OnPosSynced(c.master.pos, true)
 
 	c.wg.Wait()
 }
