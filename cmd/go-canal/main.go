@@ -114,9 +114,9 @@ func (h *handler) OnRow(e *canal.RowsEvent) error {
 // delay will cause a master-slave synchronous way
 func (h *handler) OnPosSynced(pos mysql.Position, force bool) error {
 	if force {
-		fmt.Printf("sync save master info %v\n", pos)
+		fmt.Printf("sync save position %v\n", pos)
 	} else {
-		fmt.Printf("async save master info %v\n", pos)
+		fmt.Printf("async save position %v\n", pos)
 	}
 	return nil
 }
