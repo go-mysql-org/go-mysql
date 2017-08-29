@@ -46,6 +46,7 @@ func (c *Canal) runSyncBinlog() error {
 	}
 
 	savePos := false
+	force := false
 	for {
 		ev, err := s.GetEvent(c.ctx)
 
@@ -53,6 +54,7 @@ func (c *Canal) runSyncBinlog() error {
 			return errors.Trace(err)
 		}
 		savePos = false
+		force = false
 		pos := c.master.Position()
 
 		curPos := pos.Pos
@@ -69,6 +71,7 @@ func (c *Canal) runSyncBinlog() error {
 			pos.Pos = uint32(e.Position)
 			log.Infof("rotate binlog to %s", pos)
 			savePos = true
+			force = true
 			if err = c.eventHandler.OnRotate(e); err != nil {
 				return errors.Trace(err)
 			}
@@ -110,6 +113,7 @@ func (c *Canal) runSyncBinlog() error {
 					mb[1] = e.Schema
 				}
 				savePos = true
+				force = true
 				c.ClearTableCache(mb[1], mb[2])
 				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
 				if err = c.eventHandler.OnDDL(pos, e); err != nil {
@@ -126,7 +130,7 @@ func (c *Canal) runSyncBinlog() error {
 
 		if savePos {
 			c.master.Update(pos)
-			c.eventHandler.OnPosSynced(pos, false)
+			c.eventHandler.OnPosSynced(pos, force)
 		}
 	}
 

@@ -11,7 +11,8 @@ type EventHandler interface {
 	OnRow(e *RowsEvent) error
 	OnXID(nextPos mysql.Position) error
 	OnGTID(gtid mysql.GTIDSet) error
-	OnPosSynced(pos mysql.Position, force bool) error // Use your own way to sync position,When force is true,Immediate sync pos.
+	// OnPosSynced Use your own way to sync position. When force is true, sync position immediately.
+	OnPosSynced(pos mysql.Position, force bool) error
 	String() string
 }
 
