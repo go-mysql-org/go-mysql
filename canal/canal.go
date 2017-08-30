@@ -176,7 +176,6 @@ func (c *Canal) Close() {
 	defer c.m.Unlock()
 
 	c.cancel()
-
 	c.connLock.Lock()
 	c.conn.Close()
 	c.conn = nil
@@ -186,6 +185,8 @@ func (c *Canal) Close() {
 		c.syncer.Close()
 		c.syncer = nil
 	}
+
+	c.eventHandler.OnPosSynced(c.master.pos, true)
 
 	c.wg.Wait()
 }
