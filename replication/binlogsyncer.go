@@ -307,6 +307,11 @@ func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
 	return s
 }
 
+// GetNextPosition returns the next position of the syncer
+func (b *BinlogSyncer) GetNextPosition() Position {
+	return b.nextPos
+}
+
 // StartSync starts syncing from the `pos` position.
 func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 	log.Infof("begin to sync binlog from position %s", pos)
