@@ -270,8 +270,8 @@ func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
 }
 
 // GetNextPosition returns the next position of the syncer
-func (b *BinlogSyncer) GetNextPosition() *Position {
-	return &b.nextPos
+func (b *BinlogSyncer) GetNextPosition() Position {
+	return b.nextPos
 }
 
 // StartSync starts syncing from the `pos` position.
