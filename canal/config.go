@@ -30,6 +30,9 @@ type DumpConfig struct {
 	// Set true to skip --master-data if we have no privilege to do
 	// 'FLUSH TABLES WITH READ LOCK'
 	SkipMasterData bool `toml:"skip_master_data"`
+
+	// Set to change the default max_allowed_packet size
+	MaxAllowedPacketMB int
 }
 
 type Config struct {
