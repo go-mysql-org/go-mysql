@@ -32,7 +32,7 @@ type DumpConfig struct {
 	SkipMasterData bool `toml:"skip_master_data"`
 
 	// Set to change the default max_allowed_packet size
-	MaxAllowedPacketMB int
+	MaxAllowedPacketMB int `toml:"max_allowed_packet_mb"`
 }
 
 type Config struct {
