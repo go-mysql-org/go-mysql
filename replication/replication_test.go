@@ -293,7 +293,7 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 		Password: "",
 	}
 
-	t.b = NewBinlogSyncer(&cfg)
+	t.b = NewBinlogSyncer(cfg)
 }
 
 func (t *testSyncerSuite) testPositionSync(c *C) {
