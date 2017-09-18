@@ -103,7 +103,11 @@ func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
 	}
 	log.SetLevelByString(cfg.LogLevel)
 
+	// Clear the Password to avoid outputing it in log.
+	pass := cfg.Password
+	cfg.Password = ""
 	log.Infof("create BinlogSyncer with config %v", cfg)
+	cfg.Password = pass
 
 	b := new(BinlogSyncer)
 
