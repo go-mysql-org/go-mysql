@@ -287,7 +287,7 @@ func (c *Canal) prepareSyncer() error {
 		ReadTimeout:     c.cfg.ReadTimeout,
 	}
 
-	c.syncer = replication.NewBinlogSyncer(&cfg)
+	c.syncer = replication.NewBinlogSyncer(cfg)
 
 	return nil
 }

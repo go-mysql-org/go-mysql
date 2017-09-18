@@ -74,7 +74,7 @@ type BinlogSyncerConfig struct {
 type BinlogSyncer struct {
 	m sync.RWMutex
 
-	cfg *BinlogSyncerConfig
+	cfg BinlogSyncerConfig
 
 	c *client.Conn
 
@@ -97,7 +97,7 @@ type BinlogSyncer struct {
 }
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
-func NewBinlogSyncer(cfg *BinlogSyncerConfig) *BinlogSyncer {
+func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "info"
 	}
