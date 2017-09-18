@@ -33,6 +33,7 @@ type Dumper struct {
 	ErrOut io.Writer
 
 	masterDataSkipped bool
+	maxAllowedPacket  int
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
@@ -72,6 +73,10 @@ func (d *Dumper) SetErrOut(o io.Writer) {
 // In some cloud MySQL, we have no privilege to use `--master-data`.
 func (d *Dumper) SkipMasterData(v bool) {
 	d.masterDataSkipped = v
+}
+
+func (d *Dumper) SetMaxAllowedPacket(i int) {
+	d.maxAllowedPacket = i
 }
 
 func (d *Dumper) AddDatabases(dbs ...string) {
@@ -115,6 +120,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	if !d.masterDataSkipped {
 		args = append(args, "--master-data")
+	}
+
+	if d.maxAllowedPacket > 0 {
+		args = append(args, fmt.Sprintf("--max_allowed_packet=%dM", d.maxAllowedPacket))
 	}
 
 	args = append(args, "--single-transaction")

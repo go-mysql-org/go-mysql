@@ -107,6 +107,7 @@ func (c *Canal) prepareDumper() error {
 	c.dumper.SetCharset(charset)
 
 	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
+	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
 
 	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
 		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
