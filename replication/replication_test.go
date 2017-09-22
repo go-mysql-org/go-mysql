@@ -1,14 +1,13 @@
 package replication
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 
 	. "github.com/pingcap/check"
 	uuid "github.com/satori/go.uuid"

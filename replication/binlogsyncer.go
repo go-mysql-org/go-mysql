@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
@@ -8,8 +9,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
