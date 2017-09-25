@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-	"golang.org/x/net/context"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...

@@ -4,11 +4,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
-
-	"golang.org/x/net/context"
 
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
