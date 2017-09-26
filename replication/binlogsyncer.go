@@ -57,8 +57,6 @@ type BinlogSyncerConfig struct {
 	// We will use Local location for timestamp and UTC location for datatime.
 	ParseTime bool
 
-	LogLevel string
-
 	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
 	RecvBufferSize int
 
@@ -97,11 +95,6 @@ type BinlogSyncer struct {
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
 func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
-	if cfg.LogLevel == "" {
-		cfg.LogLevel = "info"
-	}
-	log.SetLevelByString(cfg.LogLevel)
-
 	// Clear the Password to avoid outputing it in log.
 	pass := cfg.Password
 	cfg.Password = ""
