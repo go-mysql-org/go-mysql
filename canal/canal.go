@@ -181,11 +181,7 @@ func (c *Canal) Close() {
 	c.conn.Close()
 	c.conn = nil
 	c.connLock.Unlock()
-
-	if c.syncer != nil {
-		c.syncer.Close()
-		c.syncer = nil
-	}
+	c.syncer.Close()
 
 	c.eventHandler.OnPosSynced(c.master.pos, true)
 
