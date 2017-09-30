@@ -183,7 +183,7 @@ func (c *Canal) Close() {
 	c.connLock.Unlock()
 	c.syncer.Close()
 
-	c.eventHandler.OnPosSynced(c.master.pos, true)
+	c.eventHandler.OnPosSynced(c.master.Position(), true)
 
 	c.wg.Wait()
 }
