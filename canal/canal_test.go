@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -53,14 +52,14 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 
 	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
 
-	s.c.SetEventHandler(&testEventHandler{})
+	s.c.SetEventHandler(&testEventHandler{c: c})
 	err = s.c.Start()
 	c.Assert(err, IsNil)
 }
 
 func (s *canalTestSuite) TearDownSuite(c *C) {
 	// To test the heartbeat and read timeout,so need to sleep 1 seconds without data transmission
-	log.Infof("Start testing the heartbeat and read timeout")
+	c.Logf("Start testing the heartbeat and read timeout")
 	time.Sleep(time.Second)
 
 	if s.c != nil {
@@ -77,10 +76,12 @@ func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql
 
 type testEventHandler struct {
 	DummyEventHandler
+
+	c *C
 }
 
 func (h *testEventHandler) Do(e *RowsEvent) error {
-	log.Infof("%s %v\n", e.Action, e.Rows)
+	h.c.Logf("%s %v\n", e.Action, e.Rows)
 	return nil
 }
 
