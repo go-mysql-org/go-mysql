@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	log "github.com/sirupsen/logrus"
 )
 
 var (

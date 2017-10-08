@@ -22,12 +22,8 @@ update_vendor:
 	which glide-vc || go get -v -u github.com/sgotti/glide-vc
 	rm -r vendor && mv _vendor/vendor vendor || true
 	rm -rf _vendor
-ifdef PKG
-	glide get --strip-vendor --skip-test ${PKG}
-else
-	glide update --strip-vendor --skip-test
-endif
+	glide update
 	@echo "removing test files"
-	glide vc --only-code --no-tests
+	glide-vc --only-code --no-tests --use-lock-file
 	mkdir -p _vendor
 	mv vendor _vendor/vendor
