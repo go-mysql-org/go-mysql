@@ -22,7 +22,7 @@ update_vendor:
 	which glide-vc || go get -v -u github.com/sgotti/glide-vc
 	rm -r vendor && mv _vendor/vendor vendor || true
 	rm -rf _vendor
-	glide update
+	glide update --strip-vendor
 	@echo "removing test files"
 	glide-vc --only-code --no-tests --use-lock-file
 	mkdir -p _vendor

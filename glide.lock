@@ -1,14 +1,14 @@
 hash: 33f057f5788a6f09af106d6835d64ae76da6f3ca303f36808572d6af33466386
-updated: 2017-10-08T11:08:30.527694886+08:00
+updated: 2017-10-08T12:00:13.698638061+08:00
 imports:
 - name: github.com/BurntSushi/toml
   version: b26d9c308763d68093482582cea63d69be07a0f0
 - name: github.com/juju/errors
-  version: 6f54ff6318409d31ff16261533ce2c8381a4fd5d
+  version: c7d06af17c68cd34c835053720b21f6549d9b0ee
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/siddontang/go
-  version: 354e14e6c093c661abb29fd28403b3c19cff5514
+  version: cb568a3e5cc06256f91a2da5a87455f717eb33f4
   subpackages:
   - hack
   - sync2
@@ -31,4 +31,4 @@ testImports:
   subpackages:
   - reflectx
 - name: github.com/pingcap/check
-  version: ce8a2f822ab1e245a4eefcef2996531c79c943f1
+  version: 4c65d06b828d91184c8b6bd94d700143b0be3588
