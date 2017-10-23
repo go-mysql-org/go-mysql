@@ -309,8 +309,8 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		}
 
 		switch cardinality := cardinality.(type) {
-		case uint64:
-			currentIndex.AddColumn(colName, cardinality)
+		case int:
+			currentIndex.AddColumn(colName, uint64(cardinality))
 		}
 	}
 
