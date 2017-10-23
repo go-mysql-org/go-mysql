@@ -282,7 +282,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 
 	for r.Next() {
 		var indexName, colName string
-		var cardinality uint64
+		var cardinality interface{}
 
 		err := r.Scan(
 			&unused,
@@ -308,7 +308,10 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			currentName = indexName
 		}
 
-		currentIndex.AddColumn(colName, cardinality)
+		switch cardinality := cardinality.(type) {
+		case uint64:
+			currentIndex.AddColumn(colName, cardinality)
+		}
 	}
 
 	return ta.fetchPrimaryKeyColumns()
