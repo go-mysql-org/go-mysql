@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -28,6 +27,8 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
 	cfg.User = "root"
+	cfg.HeartbeatPeriod = 200 * time.Millisecond
+	cfg.ReadTimeout = 300 * time.Millisecond
 	cfg.Dump.ExecutionPath = "mysqldump"
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
@@ -51,12 +52,16 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 
 	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
 
-	s.c.SetEventHandler(&testEventHandler{})
+	s.c.SetEventHandler(&testEventHandler{c: c})
 	err = s.c.Start()
 	c.Assert(err, IsNil)
 }
 
 func (s *canalTestSuite) TearDownSuite(c *C) {
+	// To test the heartbeat and read timeout,so need to sleep 1 seconds without data transmission
+	c.Logf("Start testing the heartbeat and read timeout")
+	time.Sleep(time.Second)
+
 	if s.c != nil {
 		s.c.Close()
 		s.c = nil
@@ -71,10 +76,12 @@ func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql
 
 type testEventHandler struct {
 	DummyEventHandler
+
+	c *C
 }
 
 func (h *testEventHandler) Do(e *RowsEvent) error {
-	log.Infof("%s %v\n", e.Action, e.Rows)
+	h.c.Logf("%s %v\n", e.Action, e.Rows)
 	return nil
 }
 
@@ -110,6 +117,28 @@ func TestAlterTableExp(t *testing.T) {
 		m := expAlterTable.FindSubmatch([]byte(s))
 		if m == nil || !bytes.Equal(m[2], table) || (len(m[1]) > 0 && !bytes.Equal(m[1], db)) {
 			t.Fatalf("TestAlterTableExp: case %s failed\n", s)
+		}
+	}
+}
+
+func TestRenameTableExp(t *testing.T) {
+	cases := []string{
+		"rename table `mydb`.`mytable` to `mydb`.`mytable1`",
+		"rename table `mytable` to `mytable1`",
+		"rename table mydb.mytable to mydb.mytable1",
+		"rename table mytable to mytable1",
+
+		"rename table `mydb`.`mytable1` to `mydb`.`mytable2`, `mydb`.`mytable` to `mydb`.`mytable1`",
+		"rename table `mytable1` to `mytable2`, `mytable` to `mytable1`",
+		"rename table mydb.mytable1 to mydb.mytable2, mydb.mytable to mydb.mytable1",
+		"rename table mytable1 to mytable2, mytable to mytable1",
+	}
+	table := []byte("mytable1")
+	db := []byte("mydb")
+	for _, s := range cases {
+		m := expRenameTable.FindSubmatch([]byte(s))
+		if m == nil || !bytes.Equal(m[2], table) || (len(m[1]) > 0 && !bytes.Equal(m[1], db)) {
+			t.Fatalf("TestRenameTableExp: case %s failed\n", s)
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -9,13 +10,12 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-	"golang.org/x/net/context"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
@@ -107,6 +107,7 @@ func (c *Canal) prepareDumper() error {
 	c.dumper.SetCharset(charset)
 
 	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
+	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
 
 	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
 		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
@@ -176,16 +177,13 @@ func (c *Canal) Close() {
 	defer c.m.Unlock()
 
 	c.cancel()
-
 	c.connLock.Lock()
 	c.conn.Close()
 	c.conn = nil
 	c.connLock.Unlock()
+	c.syncer.Close()
 
-	if c.syncer != nil {
-		c.syncer.Close()
-		c.syncer = nil
-	}
+	c.eventHandler.OnPosSynced(c.master.Position(), true)
 
 	c.wg.Wait()
 }
@@ -275,16 +273,18 @@ func (c *Canal) prepareSyncer() error {
 	}
 
 	cfg := replication.BinlogSyncerConfig{
-		ServerID: c.cfg.ServerID,
-		Flavor:   c.cfg.Flavor,
-		Host:     seps[0],
-		Port:     uint16(port),
-		User:     c.cfg.User,
-		Password: c.cfg.Password,
-		Charset:  c.cfg.Charset,
+		ServerID:        c.cfg.ServerID,
+		Flavor:          c.cfg.Flavor,
+		Host:            seps[0],
+		Port:            uint16(port),
+		User:            c.cfg.User,
+		Password:        c.cfg.Password,
+		Charset:         c.cfg.Charset,
+		HeartbeatPeriod: c.cfg.HeartbeatPeriod,
+		ReadTimeout:     c.cfg.ReadTimeout,
 	}
 
-	c.syncer = replication.NewBinlogSyncer(&cfg)
+	c.syncer = replication.NewBinlogSyncer(cfg)
 
 	return nil
 }

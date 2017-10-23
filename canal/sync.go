@@ -1,20 +1,21 @@
 package canal
 
 import (
+	"fmt"
 	"regexp"
 	"time"
-	"fmt"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	log "github.com/sirupsen/logrus"
+	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-	"github.com/satori/go.uuid"
 )
 
 var (
-	expAlterTable = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
+	expAlterTable  = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
+	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE.*TO\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}$")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -39,16 +40,21 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 
 func (c *Canal) runSyncBinlog() error {
 
-	s, err := c.startSyncer(); if err != nil {
+	s, err := c.startSyncer()
+	if err != nil {
 		return err
 	}
 
+	savePos := false
+	force := false
 	for {
 		ev, err := s.GetEvent(c.ctx)
 
 		if err != nil {
 			return errors.Trace(err)
 		}
+		savePos = false
+		force = false
 		pos := c.master.Position()
 
 		curPos := pos.Pos
@@ -64,7 +70,8 @@ func (c *Canal) runSyncBinlog() error {
 			pos.Name = string(e.NextLogName)
 			pos.Pos = uint32(e.Position)
 			log.Infof("rotate binlog to %s", pos)
-
+			savePos = true
+			force = true
 			if err = c.eventHandler.OnRotate(e); err != nil {
 				return errors.Trace(err)
 			}
@@ -78,6 +85,7 @@ func (c *Canal) runSyncBinlog() error {
 			}
 			continue
 		case *replication.XIDEvent:
+			savePos = true
 			// try to save the position later
 			if err := c.eventHandler.OnXID(pos); err != nil {
 				return errors.Trace(err)
@@ -100,11 +108,12 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
-			// handle alert table query
-			if mb := expAlterTable.FindSubmatch(e.Query); mb != nil {
+			if mb := checkRenameTable(e); mb != nil {
 				if len(mb[1]) == 0 {
 					mb[1] = e.Schema
 				}
+				savePos = true
+				force = true
 				c.ClearTableCache(mb[1], mb[2])
 				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
 				if err = c.eventHandler.OnDDL(pos, e); err != nil {
@@ -114,11 +123,15 @@ func (c *Canal) runSyncBinlog() error {
 				// skip others
 				continue
 			}
+
 		default:
 			continue
 		}
 
-		c.master.Update(pos)
+		if savePos {
+			c.master.Update(pos)
+			c.eventHandler.OnPosSynced(pos, force)
+		}
 	}
 
 	return nil
@@ -189,4 +202,13 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
+}
+
+func checkRenameTable(e *replication.QueryEvent) [][]byte {
+	var mb = [][]byte{}
+	if mb = expAlterTable.FindSubmatch(e.Query); mb != nil {
+		return mb
+	}
+	mb = expRenameTable.FindSubmatch(e.Query)
+	return mb
 }

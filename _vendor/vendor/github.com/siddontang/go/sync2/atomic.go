@@ -121,7 +121,7 @@ func (s *AtomicString) Get() string {
 	return str
 }
 
-func (s *AtomicString) CompareAndSwap(oldval, newval string) (swqpped bool) {
+func (s *AtomicString) CompareAndSwap(oldval, newval string) (swapped bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.str == oldval {

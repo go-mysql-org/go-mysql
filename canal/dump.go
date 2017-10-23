@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/schema"
@@ -126,6 +126,8 @@ func (c *Canal) tryDump() error {
 	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at (%s, %d)",
 		time.Now().Sub(start).Seconds(), h.name, h.pos)
 
-	c.master.Update(mysql.Position{h.name, uint32(h.pos)})
+	pos = mysql.Position{h.name, uint32(h.pos)}
+	c.master.Update(pos)
+	c.eventHandler.OnPosSynced(pos, true)
 	return nil
 }

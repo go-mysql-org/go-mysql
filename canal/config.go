@@ -30,6 +30,9 @@ type DumpConfig struct {
 	// Set true to skip --master-data if we have no privilege to do
 	// 'FLUSH TABLES WITH READ LOCK'
 	SkipMasterData bool `toml:"skip_master_data"`
+
+	// Set to change the default max_allowed_packet size
+	MaxAllowedPacketMB int `toml:"max_allowed_packet_mb"`
 }
 
 type Config struct {
@@ -37,9 +40,11 @@ type Config struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 
-	Charset  string `toml:"charset"`
-	ServerID uint32 `toml:"server_id"`
-	Flavor   string `toml:"flavor"`
+	Charset         string        `toml:"charset"`
+	ServerID        uint32        `toml:"server_id"`
+	Flavor          string        `toml:"flavor"`
+	HeartbeatPeriod time.Duration `toml:"heartbeat_period"`
+	ReadTimeout     time.Duration `toml:"read_timeout"`
 
 	Dump DumpConfig `toml:"dump"`
 }
