@@ -311,6 +311,8 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		c, ok := cardinality.(int)
 		if ok {
 			currentIndex.AddColumn(colName, uint64(c))
+		} else {
+			currentIndex.AddColumn(colName, 0)
 		}
 	}
 
