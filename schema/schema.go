@@ -309,7 +309,23 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		}
 		
 		switch c := cardinality.(type) {
-		case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64:
+		case int:
+			currentIndex.AddColumn(colName, uint64(c))
+		case int8:
+			currentIndex.AddColumn(colName, uint64(c))
+		case int16:
+			currentIndex.AddColumn(colName, uint64(c))
+		case int32:
+			currentIndex.AddColumn(colName, uint64(c))
+		case int64:
+			currentIndex.AddColumn(colName, uint64(c))
+		case uint8:
+			currentIndex.AddColumn(colName, uint64(c))
+		case uint16:
+			currentIndex.AddColumn(colName, uint64(c))
+		case uint32:
+			currentIndex.AddColumn(colName, uint64(c))
+		case uint64:
 			currentIndex.AddColumn(colName, uint64(c))
 		} 
 	}
