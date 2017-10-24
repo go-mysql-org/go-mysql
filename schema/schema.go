@@ -319,6 +319,8 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			currentIndex.AddColumn(colName, uint64(c))
 		case int64:
 			currentIndex.AddColumn(colName, uint64(c))
+		case uint:
+			currentIndex.AddColumn(colName, uint64(c))
 		case uint8:
 			currentIndex.AddColumn(colName, uint64(c))
 		case uint16:
