@@ -307,7 +307,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			currentIndex = ta.AddIndex(indexName)
 			currentName = indexName
 		}
-		
+
 		switch c := cardinality.(type) {
 		case int:
 			currentIndex.AddColumn(colName, uint64(c))
@@ -327,7 +327,9 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			currentIndex.AddColumn(colName, uint64(c))
 		case uint64:
 			currentIndex.AddColumn(colName, uint64(c))
-		} 
+		default:
+			currentIndex.AddColumn(colName, 0)
+		}
 	}
 
 	return ta.fetchPrimaryKeyColumns()
