@@ -308,31 +308,39 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			currentName = indexName
 		}
 
-		switch c := cardinality.(type) {
-		case int:
-			currentIndex.AddColumn(colName, uint64(c))
-		case int8:
-			currentIndex.AddColumn(colName, uint64(c))
-		case int16:
-			currentIndex.AddColumn(colName, uint64(c))
-		case int32:
-			currentIndex.AddColumn(colName, uint64(c))
-		case int64:
-			currentIndex.AddColumn(colName, uint64(c))
-		case uint8:
-			currentIndex.AddColumn(colName, uint64(c))
-		case uint16:
-			currentIndex.AddColumn(colName, uint64(c))
-		case uint32:
-			currentIndex.AddColumn(colName, uint64(c))
-		case uint64:
-			currentIndex.AddColumn(colName, uint64(c))
-		default:
-			currentIndex.AddColumn(colName, 0)
-		}
+		c := toUint64(cardinality)
+		currentIndex.AddColumn(colName, c)
+
 	}
 
 	return ta.fetchPrimaryKeyColumns()
+}
+
+func toUint64(i interface{}) uint64 {
+	switch i := i.(type) {
+	case int:
+		return uint64(i)
+	case int8:
+		return uint64(i)
+	case int16:
+		return uint64(i)
+	case int32:
+		return uint64(i)
+	case int64:
+		return uint64(i)
+	case uint:
+		return uint64(i)
+	case uint8:
+		return uint64(i)
+	case uint16:
+		return uint64(i)
+	case uint32:
+		return uint64(i)
+	case uint64:
+		return uint64(i)
+	}
+
+	return 0
 }
 
 func (ta *Table) fetchPrimaryKeyColumns() error {
