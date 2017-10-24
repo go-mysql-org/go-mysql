@@ -310,7 +310,6 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 
 		c := toUint64(cardinality)
 		currentIndex.AddColumn(colName, c)
-
 	}
 
 	return ta.fetchPrimaryKeyColumns()
