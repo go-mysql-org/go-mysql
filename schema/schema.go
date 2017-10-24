@@ -307,10 +307,10 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			currentIndex = ta.AddIndex(indexName)
 			currentName = indexName
 		}
-
-		c, ok := cardinality.(uint64)
-		if ok {
-			currentIndex.AddColumn(colName, c)
+		
+		switch cardinality := cardinality.(type) {
+		case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64:
+			currentIndex.AddColumn(colName, uint64(cardinality))
 		} 
 	}
 
