@@ -308,12 +308,10 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			currentName = indexName
 		}
 
-		c, ok := cardinality.(int)
+		c, ok := cardinality.(uint64)
 		if ok {
-			currentIndex.AddColumn(colName, uint64(c))
-		} else {
-			currentIndex.AddColumn(colName, 0)
-		}
+			currentIndex.AddColumn(colName, c)
+		} 
 	}
 
 	return ta.fetchPrimaryKeyColumns()
