@@ -15,7 +15,10 @@ import (
 )
 
 const (
-	EventHeaderSize = 19
+	EventHeaderSize            = 19
+	SidLength                  = 16
+	LogicalTimestampTypeCode   = 2
+	PartLogicalTimestampLength = 8
 )
 
 type BinlogEvent struct {
@@ -289,19 +292,15 @@ func (e *GTIDEvent) Decode(data []byte) error {
 	pos := 0
 	e.CommitFlag = uint8(data[pos])
 	pos++
-
-	sidLength := 16
-	e.SID = data[pos : pos+sidLength]
-	pos += sidLength
-
+	e.SID = data[pos : pos+SidLength]
+	pos += SidLength
 	e.GNO = int64(binary.LittleEndian.Uint64(data[pos:]))
 	pos += 8
-
 	if len(data) >= 42 {
-		if uint8(data[pos]) == 2 {
+		if uint8(data[pos]) == LogicalTimestampTypeCode {
 			pos++
 			e.LastCommitted = int64(binary.LittleEndian.Uint64(data[pos:]))
-			pos += 8
+			pos += PartLogicalTimestampLength
 			e.SequenceNumber = int64(binary.LittleEndian.Uint64(data[pos:]))
 		}
 	}
