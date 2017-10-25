@@ -232,7 +232,7 @@ func (e *XIDEvent) Decode(data []byte) error {
 func (e *XIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "XID: %d\n", e.XID)
 	if e.GSet != nil {
-	    fmt.Fprintf(w, "GTIDSet: %s\n", e.GSet.String())
+		fmt.Fprintf(w, "GTIDSet: %s\n", e.GSet.String())
 	}
 	fmt.Fprintln(w)
 }
@@ -288,7 +288,7 @@ func (e *QueryEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Schema: %s\n", e.Schema)
 	fmt.Fprintf(w, "Query: %s\n", e.Query)
 	if e.GSet != nil {
-	    fmt.Fprintf(w, "GTIDSet: %s\n", e.GSet.String())
+		fmt.Fprintf(w, "GTIDSet: %s\n", e.GSet.String())
 	}
 	fmt.Fprintln(w)
 }
