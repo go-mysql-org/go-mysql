@@ -299,7 +299,6 @@ func (e *GTIDEvent) Decode(data []byte) error {
 
 	if len(data) >= 42 {
 		if uint8(data[pos]) == 2 {
-			fmt.Printf("group-seq : %d - %d\n", int64(binary.LittleEndian.Uint64(data[26:34])), int64(binary.LittleEndian.Uint64(data[34:42])))
 			pos++
 			e.LastCommitted = int64(binary.LittleEndian.Uint64(data[pos:]))
 			pos += 8
