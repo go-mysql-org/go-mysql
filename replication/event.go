@@ -278,17 +278,34 @@ func (e *QueryEvent) Dump(w io.Writer) {
 }
 
 type GTIDEvent struct {
-	CommitFlag uint8
-	SID        []byte
-	GNO        int64
+	CommitFlag     uint8
+	SID            []byte
+	GNO            int64
+	LastCommitted  int64
+	SequenceNumber int64
 }
 
 func (e *GTIDEvent) Decode(data []byte) error {
-	e.CommitFlag = uint8(data[0])
+	pos := 0
+	e.CommitFlag = uint8(data[pos])
+	pos++
 
-	e.SID = data[1:17]
+	sidLength := 16
+	e.SID = data[pos : pos+sidLength]
+	pos += sidLength
 
-	e.GNO = int64(binary.LittleEndian.Uint64(data[17:]))
+	e.GNO = int64(binary.LittleEndian.Uint64(data[pos:]))
+	pos += 8
+
+	if len(data) >= 42 {
+		if uint8(data[pos]) == 2 {
+			fmt.Printf("group-seq : %d - %d\n", int64(binary.LittleEndian.Uint64(data[26:34])), int64(binary.LittleEndian.Uint64(data[34:42])))
+			pos++
+			e.LastCommitted = int64(binary.LittleEndian.Uint64(data[pos:]))
+			pos += 8
+			e.SequenceNumber = int64(binary.LittleEndian.Uint64(data[pos:]))
+		}
+	}
 	return nil
 }
 
@@ -296,6 +313,8 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Commit flag: %d\n", e.CommitFlag)
 	u, _ := uuid.FromBytes(e.SID)
 	fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
+	fmt.Fprintf(w, "LAST_COMMITTED: %d\n", e.LastCommitted)
+	fmt.Fprintf(w, "SEQUENCE_NUMBER: %d\n", e.SequenceNumber)
 	fmt.Fprintln(w)
 }
 
@@ -312,7 +331,7 @@ func (e *BeginLoadQueryEvent) Decode(data []byte) error {
 
 	e.BlockData = data[pos:]
 
-    return nil
+	return nil
 }
 
 func (e *BeginLoadQueryEvent) Dump(w io.Writer) {
@@ -362,7 +381,7 @@ func (e *ExecuteLoadQueryEvent) Decode(data []byte) error {
 
 	e.DupHandlingFlags = uint8(data[pos])
 
-    return nil
+	return nil
 }
 
 func (e *ExecuteLoadQueryEvent) Dump(w io.Writer) {
