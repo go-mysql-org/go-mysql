@@ -307,10 +307,8 @@ func (e *GTIDEvent) Decode(data []byte) error {
 	pos++
 	e.SID = data[pos : pos+SidLength]
 	pos += SidLength
-
 	e.GNO = int64(binary.LittleEndian.Uint64(data[pos:]))
 	pos += 8
-
 	if len(data) >= 42 {
 		if uint8(data[pos]) == LogicalTimestampTypeCode {
 			pos++
