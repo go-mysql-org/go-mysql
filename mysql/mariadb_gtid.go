@@ -67,7 +67,7 @@ func (gtid *MariadbGTID) Equal(o GTIDSet) bool {
 		return false
 	}
 
-	return gtid.DomainID == other.DomainID && gtid.ServerID == other.ServerID && gtid.SequenceNumber == other.SequenceNumber
+	return *gtid == *other
 }
 
 func (gtid *MariadbGTID) Contain(o GTIDSet) bool {
