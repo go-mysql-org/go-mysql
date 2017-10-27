@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/pingcap/check"
@@ -15,11 +16,11 @@ type mysqlTestSuite struct {
 
 var _ = check.Suite(&mysqlTestSuite{})
 
-func (s *mysqlTestSuite) SetUpSuite(c *check.C) {
+func (t *mysqlTestSuite) SetUpSuite(c *check.C) {
 
 }
 
-func (s *mysqlTestSuite) TearDownSuite(c *check.C) {
+func (t *mysqlTestSuite) TearDownSuite(c *check.C) {
 
 }
 
@@ -89,6 +90,15 @@ func (t *mysqlTestSuite) TestMysqlGTIDCodec(c *check.C) {
 	o, err := DecodeMysqlGTIDSet(buf)
 	c.Assert(err, check.IsNil)
 	c.Assert(gs, check.DeepEquals, o)
+}
+
+func (t *mysqlTestSuite) TestMysqlUpdate(c *check.C) {
+	g1, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57")
+	c.Assert(err, check.IsNil)
+
+	g1.Update("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58")
+
+	c.Assert(strings.ToUpper(g1.String()), check.Equals, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58")
 }
 
 func (t *mysqlTestSuite) TestMysqlGTIDContain(c *check.C) {

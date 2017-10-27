@@ -92,7 +92,7 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.MariadbGTIDEvent:
 			// try to save the GTID later
-			gtid := e.GTID
+			gtid := &e.GTID
 			c.master.UpdateGTID(gtid)
 			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
