@@ -9,11 +9,11 @@ type mariaDBTestSuite struct {
 
 var _ = check.Suite(&mariaDBTestSuite{})
 
-func (s *mariaDBTestSuite) SetUpSuite(c *check.C) {
+func (t *mariaDBTestSuite) SetUpSuite(c *check.C) {
 
 }
 
-func (s *mariaDBTestSuite) TearDownSuite(c *check.C) {
+func (t *mariaDBTestSuite) TearDownSuite(c *check.C) {
 
 }
 
@@ -34,8 +34,8 @@ func (t *mariaDBTestSuite) TestMariaDBEqual(c *check.C) {
 	g3, err := ParseMariadbGTIDSet("0-1-2")
 	c.Assert(err, check.IsNil)
 
-	c.Assert(g1.Equal(g2), check.Equals, true)
-	c.Assert(g1.Equal(g3), check.Equals, false)
+	c.Assert(g1.Equal(g2), check.IsTrue)
+	c.Assert(g1.Equal(g3), check.IsFalse)
 }
 
 func (t *mariaDBTestSuite) TestMariaDBUpdate(c *check.C) {

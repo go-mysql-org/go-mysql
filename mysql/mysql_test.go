@@ -16,11 +16,11 @@ type mysqlTestSuite struct {
 
 var _ = check.Suite(&mysqlTestSuite{})
 
-func (s *mysqlTestSuite) SetUpSuite(c *check.C) {
+func (t *mysqlTestSuite) SetUpSuite(c *check.C) {
 
 }
 
-func (s *mysqlTestSuite) TearDownSuite(c *check.C) {
+func (t *mysqlTestSuite) TearDownSuite(c *check.C) {
 
 }
 
