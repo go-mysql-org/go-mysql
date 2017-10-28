@@ -514,10 +514,7 @@ func (b *BinlogSyncer) replySemiSyncACK(p Position) error {
 		return errors.Trace(err)
 	}
 
-	_, err = b.c.ReadOKPacket()
-	if err != nil {
-	}
-	return errors.Trace(err)
+	return nil
 }
 
 func (b *BinlogSyncer) retrySync() error {
