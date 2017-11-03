@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -77,10 +77,16 @@ func (c *Canal) runSyncBinlog() error {
 		case *replication.RowsEvent:
 			// we only focus row based event
 			err = c.handleRowsEvent(ev)
-			if err != nil && errors.Cause(err) != schema.ErrTableNotExist {
-				// We can ignore table not exist error
-				log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
-				return errors.Trace(err)
+			if err != nil {
+				realErr := errors.Cause(err)
+				// if error is about get table meta, skip this event
+				if realErr == schema.LastGetTableInfoErr || realErr == schema.ErrTableNotExist {
+					continue
+				} else {
+					// not get table meta error, stop canal
+					log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+					return errors.Trace(err)
+				}
 			}
 			continue
 		case *replication.XIDEvent:
@@ -140,12 +146,12 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	ev := e.Event.(*replication.RowsEvent)
 
 	// Caveat: table may be altered at runtime.
-	schema := string(ev.Table.Schema)
+	sch := string(ev.Table.Schema)
 	table := string(ev.Table.Table)
 
-	t, err := c.GetTable(schema, table)
+	t, err := c.GetTable(sch, table)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	var action string
 	switch e.Header.EventType {

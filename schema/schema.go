@@ -14,6 +14,8 @@ import (
 )
 
 var ErrTableNotExist = errors.New("table is not exist")
+var LastGetTableInfoErr = errors.New("get last table error")
+var HAHealthCheckSchema = "mysql.ha_health_check"
 
 const (
 	TYPE_NUMBER    = iota + 1 // tinyint, smallint, mediumint, int, bigint, year
@@ -56,7 +58,7 @@ type Table struct {
 }
 
 func (ta *Table) String() string {
-	return fmt.Sprintf("%s.%s", ta.Schema, ta.Name)
+	return ta.Schema + "." + ta.Name
 }
 
 func (ta *Table) AddColumn(name string, columnType string, collation string, extra string) {
