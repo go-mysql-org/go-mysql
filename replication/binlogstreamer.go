@@ -2,6 +2,7 @@ package replication
 
 import (
 	"context"
+	"runtime"
 
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -44,7 +45,14 @@ func (s *BinlogStreamer) closeWithError(err error) {
 	if err == nil {
 		err = ErrSyncClosed
 	}
-	log.Errorf("close sync with err: %v", err)
+	if err == ErrSyncClosed {
+		log.Infof("close sync with err: %v", err)
+	} else {
+		buf := make([]byte, 1024)
+		n := runtime.Stack(buf, false)
+		log.Errorf("close sync with err: %v, stack : %s", err, string(buf[0:n]))
+	}
+
 	select {
 	case s.ech <- err:
 	default:
