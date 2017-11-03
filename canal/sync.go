@@ -39,7 +39,6 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 }
 
 func (c *Canal) runSyncBinlog() error {
-
 	s, err := c.startSyncer()
 	if err != nil {
 		return err
