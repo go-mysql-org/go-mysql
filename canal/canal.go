@@ -10,12 +10,12 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
+	log "github.com/sirupsen/logrus"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
@@ -36,8 +36,6 @@ type Canal struct {
 
 	connLock sync.Mutex
 	conn     *client.Conn
-
-	wg sync.WaitGroup
 
 	tableLock sync.RWMutex
 	tables    map[string]*schema.Table
@@ -124,33 +122,30 @@ func (c *Canal) prepareDumper() error {
 	return nil
 }
 
-// Start will first try to dump all data from MySQL master `mysqldump`,
+// Run will first try to dump all data from MySQL master `mysqldump`,
 // then sync from the binlog position in the dump data.
-func (c *Canal) Start() error {
-	c.wg.Add(1)
-	go c.run()
-
-	return nil
+// It will run forever until meeting an error or Canal closed.
+func (c *Canal) Run() error {
+	return c.run()
 }
 
-// StartFrom will sync from the binlog position directly, ignore mysqldump.
-func (c *Canal) StartFrom(pos mysql.Position) error {
+// RunFrom will sync from the binlog position directly, ignore mysqldump.
+func (c *Canal) RunFrom(pos mysql.Position) error {
 	c.useGTID = false
 	c.master.Update(pos)
 
-	return c.Start()
+	return c.Run()
 }
 
 func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
 	c.useGTID = true
 	c.master.UpdateGTID(set)
 
-	return c.Start()
+	return c.Run()
 }
 
 func (c *Canal) run() error {
 	defer func() {
-		c.wg.Done()
 		c.cancel()
 	}()
 
@@ -184,8 +179,6 @@ func (c *Canal) Close() {
 	c.syncer.Close()
 
 	c.eventHandler.OnPosSynced(c.master.Position(), true)
-
-	c.wg.Wait()
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {

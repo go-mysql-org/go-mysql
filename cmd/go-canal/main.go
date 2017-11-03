@@ -75,15 +75,16 @@ func main() {
 	c.SetEventHandler(&handler{})
 
 	startPos := mysql.Position{
-		*startName,
-		uint32(*startPos),
+		Name: *startName,
+		Pos:  uint32(*startPos),
 	}
 
-	err = c.StartFrom(startPos)
-	if err != nil {
-		fmt.Printf("start canal err %V", err)
-		os.Exit(1)
-	}
+	go func() {
+		err = c.RunFrom(startPos)
+		if err != nil {
+			fmt.Printf("start canal err %v", err)
+		}
+	}()
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
