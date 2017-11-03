@@ -2,20 +2,20 @@ package canal
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
+	log "github.com/sirupsen/logrus"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
@@ -39,12 +39,16 @@ type Canal struct {
 
 	wg sync.WaitGroup
 
-	tableLock sync.RWMutex
-	tables    map[string]*schema.Table
+	tableLock          sync.RWMutex
+	tables             map[string]*schema.Table
+	errorTablesGetTime map[string]time.Time
+	lastRunError       error
 
 	ctx    context.Context
 	cancel context.CancelFunc
 }
+
+var UnknowTableUpdateTime = time.Second * time.Duration(10)
 
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
@@ -56,6 +60,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.eventHandler = &DummyEventHandler{}
 
 	c.tables = make(map[string]*schema.Table)
+	c.errorTablesGetTime = make(map[string]time.Time)
 	c.master = &masterInfo{}
 
 	var err error
@@ -148,22 +153,38 @@ func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
 	return c.Start()
 }
 
+func (c *Canal) GetLastError() error {
+	c.tableLock.Lock()
+	err := c.lastRunError
+	c.tableLock.Unlock()
+	return err
+}
+
 func (c *Canal) run() error {
 	defer func() {
 		c.wg.Done()
 		c.cancel()
 	}()
-
+	c.tableLock.Lock()
+	c.lastRunError = nil
+	c.tableLock.Unlock()
 	err := c.tryDump()
 	close(c.dumpDoneCh)
 
 	if err != nil {
 		log.Errorf("canal dump mysql err: %v", err)
+
+		c.tableLock.Lock()
+		c.lastRunError = err
+		c.tableLock.Unlock()
 		return errors.Trace(err)
 	}
 
 	if err = c.runSyncBinlog(); err != nil {
 		log.Errorf("canal start sync binlog err: %v", err)
+		c.tableLock.Lock()
+		c.lastRunError = err
+		c.tableLock.Unlock()
 		return errors.Trace(err)
 	}
 
@@ -197,7 +218,7 @@ func (c *Canal) Ctx() context.Context {
 }
 
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
-	key := fmt.Sprintf("%s.%s", db, table)
+	key := db + "." + table
 	c.tableLock.RLock()
 	t, ok := c.tables[key]
 	c.tableLock.RUnlock()
@@ -206,18 +227,48 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 		return t, nil
 	}
 
+	c.tableLock.RLock()
+	lastTime, ok := c.errorTablesGetTime[key]
+	c.tableLock.RUnlock()
+
+	if ok && time.Now().Sub(lastTime) < UnknowTableUpdateTime {
+		return nil, schema.LastGetTableInfoErr
+	}
+
 	t, err := schema.NewTable(c, db, table)
 	if err != nil {
+		// work around : RDSHeartBeat
+		if key == "mysql.ha_health_check" {
+			// mock ha_health_check meta
+			ta := &schema.Table{
+				Schema:  db,
+				Name:    table,
+				Columns: make([]schema.TableColumn, 0, 16),
+				Indexes: make([]*schema.Index, 0, 8),
+			}
+			ta.AddColumn("id", "bigint(20)", "", "")
+			ta.AddColumn("type", "char(1)", "", "")
+			c.tableLock.RLock()
+			c.tables[key] = ta
+			c.tableLock.RUnlock()
+			return ta, nil
+		}
+		c.tableLock.RLock()
+		c.errorTablesGetTime[key] = time.Now()
+		c.tableLock.RUnlock()
 		// check table not exists
 		if ok, err1 := schema.IsTableExist(c, db, table); err1 == nil && !ok {
 			return nil, schema.ErrTableNotExist
 		}
-
 		return nil, errors.Trace(err)
 	}
 
 	c.tableLock.Lock()
 	c.tables[key] = t
+	// if get table info success, delete this key from errorTablesGetTime
+	if ok {
+		delete(c.errorTablesGetTime, key)
+	}
 	c.tableLock.Unlock()
 
 	return t, nil
@@ -225,9 +276,10 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 
 // ClearTableCache clear table cache
 func (c *Canal) ClearTableCache(db []byte, table []byte) {
-	key := fmt.Sprintf("%s.%s", db, table)
+	key := string(db) + "." + string(table)
 	c.tableLock.Lock()
 	delete(c.tables, key)
+	delete(c.errorTablesGetTime, key)
 	c.tableLock.Unlock()
 }
 
