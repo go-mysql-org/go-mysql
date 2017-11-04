@@ -79,11 +79,11 @@ func (c *Canal) runSyncBinlog() error {
 			err = c.handleRowsEvent(ev)
 			if err != nil {
 				realErr := errors.Cause(err)
-				// if error is about get table meta, skip this event
-				if realErr == schema.LastGetTableInfoErr || realErr == schema.ErrTableNotExist {
+				// if error is ErrTableNotExist or LastGetTableInfoErr, skip this event
+				if realErr == schema.ErrTableNotExist || (c.cfg.DiscardNoMetaRowEvent && realErr == schema.LastGetTableInfoErr) {
 					continue
 				} else {
-					// not get table meta error, stop canal
+					// stop canal
 					log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
 					return errors.Trace(err)
 				}

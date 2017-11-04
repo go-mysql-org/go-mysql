@@ -58,7 +58,7 @@ type Table struct {
 }
 
 func (ta *Table) String() string {
-	return ta.Schema + "." + ta.Name
+	return fmt.Sprintf("%s.%s", ta.Schema, ta.Name)
 }
 
 func (ta *Table) AddColumn(name string, columnType string, collation string, extra string) {

@@ -2,6 +2,7 @@ package canal
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -58,7 +59,9 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.eventHandler = &DummyEventHandler{}
 
 	c.tables = make(map[string]*schema.Table)
-	c.errorTablesGetTime = make(map[string]time.Time)
+	if c.cfg.DiscardNoMetaRowEvent {
+		c.errorTablesGetTime = make(map[string]time.Time)
+	}
 	c.master = &masterInfo{}
 
 	var err error
@@ -195,7 +198,7 @@ func (c *Canal) Ctx() context.Context {
 }
 
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
-	key := db + "." + table
+	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.RLock()
 	t, ok := c.tables[key]
 	c.tableLock.RUnlock()
@@ -204,12 +207,13 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 		return t, nil
 	}
 
-	c.tableLock.RLock()
-	lastTime, ok := c.errorTablesGetTime[key]
-	c.tableLock.RUnlock()
-
-	if ok && time.Now().Sub(lastTime) < UnknowTableRetryIntervalSec {
-		return nil, schema.LastGetTableInfoErr
+	if c.cfg.DiscardNoMetaRowEvent {
+		c.tableLock.RLock()
+		lastTime, ok := c.errorTablesGetTime[key]
+		c.tableLock.RUnlock()
+		if ok && time.Now().Sub(lastTime) < UnknowTableRetryIntervalSec {
+			return nil, schema.LastGetTableInfoErr
+		}
 	}
 
 	t, err := schema.NewTable(c, db, table)
@@ -235,18 +239,23 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 			c.tableLock.Unlock()
 			return ta, nil
 		}
-		c.tableLock.Lock()
-		c.errorTablesGetTime[key] = time.Now()
-		c.tableLock.Unlock()
-		// log error and return LastGetTableInfoErr
-		log.Errorf("GetTable info error %v", errors.Trace(err))
-		return nil, schema.LastGetTableInfoErr
+		// if DiscardNoMetaRowEvent is true, we just log this error
+		if c.cfg.DiscardNoMetaRowEvent {
+			c.tableLock.Lock()
+			c.errorTablesGetTime[key] = time.Now()
+			c.tableLock.Unlock()
+			// log error and return LastGetTableInfoErr
+			log.Errorf("GetTable info error %v", errors.Trace(err))
+			return nil, schema.LastGetTableInfoErr
+		} else {
+			return nil, err
+		}
 	}
 
 	c.tableLock.Lock()
 	c.tables[key] = t
-	// if get table info success, delete this key from errorTablesGetTime
-	if ok {
+	if c.cfg.DiscardNoMetaRowEvent {
+		// if get table info success, delete this key from errorTablesGetTime
 		delete(c.errorTablesGetTime, key)
 	}
 	c.tableLock.Unlock()
@@ -256,10 +265,12 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 
 // ClearTableCache clear table cache
 func (c *Canal) ClearTableCache(db []byte, table []byte) {
-	key := string(db) + "." + string(table)
+	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
 	delete(c.tables, key)
-	delete(c.errorTablesGetTime, key)
+	if c.cfg.DiscardNoMetaRowEvent {
+		delete(c.errorTablesGetTime, key)
+	}
 	c.tableLock.Unlock()
 }
 
