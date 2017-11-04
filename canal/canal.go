@@ -46,8 +46,8 @@ type Canal struct {
 	cancel context.CancelFunc
 }
 
-// unknow table will retry aflter UnknowTableRetryIntervalSec
-var UnknowTableRetryIntervalSec = time.Second * time.Duration(10)
+// canal will retry fetching unknown table's meta after UnknownTableRetryIntervalSec
+var UnknownTableRetryIntervalSec = time.Second * time.Duration(10)
 
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
@@ -211,8 +211,8 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 		c.tableLock.RLock()
 		lastTime, ok := c.errorTablesGetTime[key]
 		c.tableLock.RUnlock()
-		if ok && time.Now().Sub(lastTime) < UnknowTableRetryIntervalSec {
-			return nil, schema.LastGetTableInfoErr
+		if ok && time.Now().Sub(lastTime) < UnknownTableRetryIntervalSec {
+			return nil, schema.ErrMissingTableMeta
 		}
 	}
 
@@ -244,12 +244,11 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 			c.tableLock.Lock()
 			c.errorTablesGetTime[key] = time.Now()
 			c.tableLock.Unlock()
-			// log error and return LastGetTableInfoErr
-			log.Errorf("GetTable info error %v", errors.Trace(err))
-			return nil, schema.LastGetTableInfoErr
-		} else {
-			return nil, err
+			// log error and return ErrMissingTableMeta
+			log.Errorf("canal get table meta err: %v", errors.Trace(err))
+			return nil, schema.ErrMissingTableMeta
 		}
+		return nil, err
 	}
 
 	c.tableLock.Lock()

@@ -79,8 +79,8 @@ func (c *Canal) runSyncBinlog() error {
 			err = c.handleRowsEvent(ev)
 			if err != nil {
 				realErr := errors.Cause(err)
-				// if error is ErrTableNotExist or LastGetTableInfoErr, skip this event
-				if realErr == schema.ErrTableNotExist || (c.cfg.DiscardNoMetaRowEvent && realErr == schema.LastGetTableInfoErr) {
+				// if error is ErrTableNotExist or ErrMissingTableMeta, skip this event
+				if realErr == schema.ErrTableNotExist || (c.cfg.DiscardNoMetaRowEvent && realErr == schema.ErrMissingTableMeta) {
 					continue
 				} else {
 					// stop canal
@@ -146,10 +146,10 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	ev := e.Event.(*replication.RowsEvent)
 
 	// Caveat: table may be altered at runtime.
-	sch := string(ev.Table.Schema)
+	schema := string(ev.Table.Schema)
 	table := string(ev.Table.Table)
 
-	t, err := c.GetTable(sch, table)
+	t, err := c.GetTable(schema, table)
 	if err != nil {
 		return err
 	}

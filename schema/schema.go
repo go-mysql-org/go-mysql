@@ -14,7 +14,7 @@ import (
 )
 
 var ErrTableNotExist = errors.New("table is not exist")
-var LastGetTableInfoErr = errors.New("get last table error")
+var ErrMissingTableMeta = errors.New("missing table meta")
 var HAHealthCheckSchema = "mysql.ha_health_check"
 
 const (
