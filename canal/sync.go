@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -77,8 +77,8 @@ func (c *Canal) runSyncBinlog() error {
 		case *replication.RowsEvent:
 			// we only focus row based event
 			err = c.handleRowsEvent(ev)
-			if err != nil && errors.Cause(err) != schema.ErrTableNotExist {
-				// We can ignore table not exist error
+			if err != nil && (errors.Cause(err) != schema.ErrTableNotExist && errors.Cause(err) != schema.ErrMissingTableMeta) {
+				// if error is not ErrTableNotExist or ErrMissingTableMeta, stop canal
 				log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
 				return errors.Trace(err)
 			}
@@ -145,7 +145,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 
 	t, err := c.GetTable(schema, table)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	var action string
 	switch e.Header.EventType {

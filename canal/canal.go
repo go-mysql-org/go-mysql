@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/client"
@@ -37,12 +38,16 @@ type Canal struct {
 	connLock sync.Mutex
 	conn     *client.Conn
 
-	tableLock sync.RWMutex
-	tables    map[string]*schema.Table
+	tableLock          sync.RWMutex
+	tables             map[string]*schema.Table
+	errorTablesGetTime map[string]time.Time
 
 	ctx    context.Context
 	cancel context.CancelFunc
 }
+
+// canal will retry fetching unknown table's meta after UnknownTableRetryPeriod
+var UnknownTableRetryPeriod = time.Second * time.Duration(10)
 
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
@@ -54,6 +59,9 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.eventHandler = &DummyEventHandler{}
 
 	c.tables = make(map[string]*schema.Table)
+	if c.cfg.DiscardNoMetaRowEvent {
+		c.errorTablesGetTime = make(map[string]time.Time)
+	}
 	c.master = &masterInfo{}
 
 	var err error
@@ -199,18 +207,59 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 		return t, nil
 	}
 
+	if c.cfg.DiscardNoMetaRowEvent {
+		c.tableLock.RLock()
+		lastTime, ok := c.errorTablesGetTime[key]
+		c.tableLock.RUnlock()
+		if ok && time.Now().Sub(lastTime) < UnknownTableRetryPeriod {
+			return nil, schema.ErrMissingTableMeta
+		}
+	}
+
 	t, err := schema.NewTable(c, db, table)
 	if err != nil {
 		// check table not exists
 		if ok, err1 := schema.IsTableExist(c, db, table); err1 == nil && !ok {
 			return nil, schema.ErrTableNotExist
 		}
-
-		return nil, errors.Trace(err)
+		// work around : RDS HAHeartBeat
+		// ref : https://github.com/alibaba/canal/blob/master/parse/src/main/java/com/alibaba/otter/canal/parse/inbound/mysql/dbsync/LogEventConvert.java#L385
+		// issue : https://github.com/alibaba/canal/issues/222
+		// This is a common error in RDS that canal can't get HAHealthCheckSchema's meta, so we mock a table meta.
+		// If canal just skip and log error, as RDS HA heartbeat interval is very short, so too many HAHeartBeat errors will be logged.
+		if key == schema.HAHealthCheckSchema {
+			// mock ha_health_check meta
+			ta := &schema.Table{
+				Schema:  db,
+				Name:    table,
+				Columns: make([]schema.TableColumn, 0, 2),
+				Indexes: make([]*schema.Index, 0),
+			}
+			ta.AddColumn("id", "bigint(20)", "", "")
+			ta.AddColumn("type", "char(1)", "", "")
+			c.tableLock.Lock()
+			c.tables[key] = ta
+			c.tableLock.Unlock()
+			return ta, nil
+		}
+		// if DiscardNoMetaRowEvent is true, we just log this error
+		if c.cfg.DiscardNoMetaRowEvent {
+			c.tableLock.Lock()
+			c.errorTablesGetTime[key] = time.Now()
+			c.tableLock.Unlock()
+			// log error and return ErrMissingTableMeta
+			log.Errorf("canal get table meta err: %v", errors.Trace(err))
+			return nil, schema.ErrMissingTableMeta
+		}
+		return nil, err
 	}
 
 	c.tableLock.Lock()
 	c.tables[key] = t
+	if c.cfg.DiscardNoMetaRowEvent {
+		// if get table info success, delete this key from errorTablesGetTime
+		delete(c.errorTablesGetTime, key)
+	}
 	c.tableLock.Unlock()
 
 	return t, nil
@@ -221,6 +270,9 @@ func (c *Canal) ClearTableCache(db []byte, table []byte) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
 	delete(c.tables, key)
+	if c.cfg.DiscardNoMetaRowEvent {
+		delete(c.errorTablesGetTime, key)
+	}
 	c.tableLock.Unlock()
 }
 

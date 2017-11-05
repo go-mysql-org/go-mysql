@@ -46,6 +46,9 @@ type Config struct {
 	HeartbeatPeriod time.Duration `toml:"heartbeat_period"`
 	ReadTimeout     time.Duration `toml:"read_timeout"`
 
+	// discard row event without table meta
+	DiscardNoMetaRowEvent bool `toml:"discard_no_meta_row_event"`
+
 	Dump DumpConfig `toml:"dump"`
 }
 
