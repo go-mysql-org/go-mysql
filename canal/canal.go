@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,12 +43,17 @@ type Canal struct {
 	tables             map[string]*schema.Table
 	errorTablesGetTime map[string]time.Time
 
+	tableMatchCache   map[string]bool
+	includeTableRegex *regexp.Regexp
+	excludeTableRegex *regexp.Regexp
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
 // canal will retry fetching unknown table's meta after UnknownTableRetryPeriod
 var UnknownTableRetryPeriod = time.Second * time.Duration(10)
+var ErrExcludedTable = errors.New("excluded table meta")
 
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
@@ -76,6 +82,21 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	if err := c.checkBinlogRowFormat(); err != nil {
 		return nil, errors.Trace(err)
+	}
+
+	// init table filter
+	if len(cfg.IncludeTableRegex) > 0 {
+		if c.includeTableRegex, err = regexp.Compile(cfg.IncludeTableRegex); err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+	if len(cfg.ExcludeTableRegex) > 0 {
+		if c.excludeTableRegex, err = regexp.Compile(cfg.ExcludeTableRegex); err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+	if c.includeTableRegex != nil || c.excludeTableRegex != nil {
+		c.tableMatchCache = make(map[string]bool)
 	}
 
 	return c, nil
@@ -197,8 +218,40 @@ func (c *Canal) Ctx() context.Context {
 	return c.ctx
 }
 
+func (c *Canal) checkTableMatch(key string) bool {
+	// no filter, return true
+	if c.tableMatchCache == nil {
+		return true
+	}
+	// cache hit
+	if rst, ok := c.tableMatchCache[key]; ok {
+		return rst
+	}
+	// check include
+	if c.includeTableRegex != nil {
+		if !c.includeTableRegex.MatchString(key) {
+			c.tableMatchCache[key] = false
+			return false
+		}
+	}
+	// check exclude
+	if c.excludeTableRegex != nil {
+		if c.excludeTableRegex.MatchString(key) {
+			c.tableMatchCache[key] = false
+			return false
+		}
+	}
+
+	c.tableMatchCache[key] = true
+	return true
+}
+
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	key := fmt.Sprintf("%s.%s", db, table)
+	// if table is excluded, return error and skip parsing event or dump
+	if !c.checkTableMatch(key) {
+		return nil, ErrExcludedTable
+	}
 	c.tableLock.RLock()
 	t, ok := c.tables[key]
 	c.tableLock.RUnlock()
