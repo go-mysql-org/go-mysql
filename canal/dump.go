@@ -30,7 +30,10 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 
 	tableInfo, err := h.c.GetTable(db, table)
 	if err != nil {
-		if errors.Trace(err) == ErrExcludedTable || errors.Trace(err) == schema.ErrTableNotExist || errors.Trace(err) == schema.ErrMissingTableMeta {
+		e := errors.Cause(err)
+		if e == ErrExcludedTable ||
+			e == schema.ErrTableNotExist ||
+			e == schema.ErrMissingTableMeta {
 			return nil
 		}
 		log.Errorf("get %s.%s information err: %v", db, table, err)

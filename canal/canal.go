@@ -44,8 +44,8 @@ type Canal struct {
 	errorTablesGetTime map[string]time.Time
 
 	tableMatchCache   map[string]bool
-	includeTableRegex *regexp.Regexp
-	excludeTableRegex *regexp.Regexp
+	includeTableRegex []*regexp.Regexp
+	excludeTableRegex []*regexp.Regexp
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -85,16 +85,28 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	}
 
 	// init table filter
-	if len(cfg.IncludeTableRegex) > 0 {
-		if c.includeTableRegex, err = regexp.Compile(cfg.IncludeTableRegex); err != nil {
-			return nil, errors.Trace(err)
+	if c.cfg.IncludeTableRegex != nil && len(c.cfg.IncludeTableRegex) > 0 {
+		c.includeTableRegex = make([]*regexp.Regexp, len(c.cfg.IncludeTableRegex), len(c.cfg.IncludeTableRegex))
+		for i, val := range c.cfg.IncludeTableRegex {
+			reg, err := regexp.Compile(val)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			c.includeTableRegex[i] = reg
 		}
 	}
-	if len(cfg.ExcludeTableRegex) > 0 {
-		if c.excludeTableRegex, err = regexp.Compile(cfg.ExcludeTableRegex); err != nil {
-			return nil, errors.Trace(err)
+
+	if c.cfg.ExcludeTableRegex != nil && len(c.cfg.ExcludeTableRegex) > 0 {
+		c.excludeTableRegex = make([]*regexp.Regexp, len(c.cfg.ExcludeTableRegex), len(c.cfg.ExcludeTableRegex))
+		for i, val := range c.cfg.ExcludeTableRegex {
+			reg, err := regexp.Compile(val)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			c.excludeTableRegex[i] = reg
 		}
 	}
+
 	if c.includeTableRegex != nil || c.excludeTableRegex != nil {
 		c.tableMatchCache = make(map[string]bool)
 	}
@@ -223,22 +235,34 @@ func (c *Canal) checkTableMatch(key string) bool {
 	if c.tableMatchCache == nil {
 		return true
 	}
-	// cache hit
+
+	c.tableLock.Lock()
+	defer c.tableLock.Unlock()
 	if rst, ok := c.tableMatchCache[key]; ok {
+		// cache hit
 		return rst
 	}
 	// check include
 	if c.includeTableRegex != nil {
-		if !c.includeTableRegex.MatchString(key) {
+		matchFlag := false
+		for _, reg := range c.includeTableRegex {
+			if reg.MatchString(key) {
+				matchFlag = true
+				break
+			}
+		}
+		if !matchFlag {
 			c.tableMatchCache[key] = false
 			return false
 		}
 	}
 	// check exclude
 	if c.excludeTableRegex != nil {
-		if c.excludeTableRegex.MatchString(key) {
-			c.tableMatchCache[key] = false
-			return false
+		for _, reg := range c.excludeTableRegex {
+			if reg.MatchString(key) {
+				c.tableMatchCache[key] = false
+				return false
+			}
 		}
 	}
 
