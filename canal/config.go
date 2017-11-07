@@ -47,11 +47,9 @@ type Config struct {
 	ReadTimeout     time.Duration `toml:"read_timeout"`
 
 	// IncludeTableRegex or ExcludeTableRegex should contain database name
-	// Only a table match IncludeTableRegex and dismatch ExcludeTableRegex will be processed
+	// Only a table which matches IncludeTableRegex and dismatches ExcludeTableRegex will be processed
 	// eg, IncludeTableRegex : [".*\\.canal"], ExcludeTableRegex : ["mysql\\..*"]
 	//     this will include all database's 'canal' table, except database 'mysql'
-	// If IncludeTableRegex is empty, canal will not check IncludeTableRegex
-	// If ExcludeTableRegex is empty, canal will not check ExcludeTableRegex
 	// Default IncludeTableRegex and ExcludeTableRegex are empty, this will include all tables
 	IncludeTableRegex []string `toml:include_table_regex`
 	ExcludeTableRegex []string `toml:exclude_table_regex`
