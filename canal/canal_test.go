@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juju/errors"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -32,6 +33,13 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg.Dump.ExecutionPath = "mysqldump"
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
+
+	// include & exclude config
+	cfg.IncludeTableRegex = make([]string, 1)
+	cfg.IncludeTableRegex[0] = ".*\\.canal_test"
+	cfg.ExcludeTableRegex = make([]string, 2)
+	cfg.ExcludeTableRegex[0] = "mysql\\..*"
+	cfg.ExcludeTableRegex[1] = ".*\\..*_inner"
 
 	var err error
 	s.c, err = NewCanal(cfg)
@@ -102,6 +110,25 @@ func (s *canalTestSuite) TestCanal(c *C) {
 
 	err := s.c.CatchMasterPos(10 * time.Second)
 	c.Assert(err, IsNil)
+}
+
+func (s *canalTestSuite) TestCanalFilter(c *C) {
+	// included
+	sch, err := s.c.GetTable("test", "canal_test")
+	c.Assert(err, IsNil)
+	c.Assert(sch, NotNil)
+	_, err = s.c.GetTable("not_exist_db", "canal_test")
+	c.Assert(errors.Trace(err), Not(Equals), ErrExcludedTable)
+	// excluded
+	sch, err = s.c.GetTable("test", "canal_test_inner")
+	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
+	c.Assert(sch, IsNil)
+	sch, err = s.c.GetTable("mysql", "canal_test")
+	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
+	c.Assert(sch, IsNil)
+	sch, err = s.c.GetTable("not_exist_db", "not_canal_test")
+	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
+	c.Assert(sch, IsNil)
 }
 
 func TestAlterTableExp(t *testing.T) {

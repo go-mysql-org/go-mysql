@@ -85,8 +85,8 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	}
 
 	// init table filter
-	if len(c.cfg.IncludeTableRegex) > 0 {
-		c.includeTableRegex = make([]*regexp.Regexp, len(c.cfg.IncludeTableRegex), len(c.cfg.IncludeTableRegex))
+	if n := len(c.cfg.IncludeTableRegex); n > 0 {
+		c.includeTableRegex = make([]*regexp.Regexp, n)
 		for i, val := range c.cfg.IncludeTableRegex {
 			reg, err := regexp.Compile(val)
 			if err != nil {
@@ -96,8 +96,8 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		}
 	}
 
-	if len(c.cfg.ExcludeTableRegex) > 0 {
-		c.excludeTableRegex = make([]*regexp.Regexp, len(c.cfg.ExcludeTableRegex), len(c.cfg.ExcludeTableRegex))
+	if n := len(c.cfg.ExcludeTableRegex); n > 0 {
+		c.excludeTableRegex = make([]*regexp.Regexp, n)
 		for i, val := range c.cfg.ExcludeTableRegex {
 			reg, err := regexp.Compile(val)
 			if err != nil {
@@ -237,12 +237,12 @@ func (c *Canal) checkTableMatch(key string) bool {
 	}
 
 	c.tableLock.RLock()
-	if rst, ok := c.tableMatchCache[key]; ok {
+	rst, ok := c.tableMatchCache[key]
+	c.tableLock.RUnlock()
+	if ok {
 		// cache hit
-		c.tableLock.RUnlock()
 		return rst
 	}
-	c.tableLock.RUnlock()
 	// check include
 	if c.includeTableRegex != nil {
 		matchFlag := false
