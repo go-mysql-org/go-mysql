@@ -243,37 +243,29 @@ func (c *Canal) checkTableMatch(key string) bool {
 		// cache hit
 		return rst
 	}
+	matchFlag := false
 	// check include
 	if c.includeTableRegex != nil {
-		matchFlag := false
 		for _, reg := range c.includeTableRegex {
 			if reg.MatchString(key) {
 				matchFlag = true
 				break
 			}
 		}
-		if !matchFlag {
-			c.tableLock.Lock()
-			c.tableMatchCache[key] = false
-			c.tableLock.Unlock()
-			return false
-		}
 	}
 	// check exclude
-	if c.excludeTableRegex != nil {
+	if matchFlag && c.excludeTableRegex != nil {
 		for _, reg := range c.excludeTableRegex {
 			if reg.MatchString(key) {
-				c.tableLock.Lock()
-				c.tableMatchCache[key] = false
-				c.tableLock.Unlock()
-				return false
+				matchFlag = false
+				break
 			}
 		}
 	}
 	c.tableLock.Lock()
-	c.tableMatchCache[key] = true
+	c.tableMatchCache[key] = matchFlag
 	c.tableLock.Unlock()
-	return true
+	return matchFlag
 }
 
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
