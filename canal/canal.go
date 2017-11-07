@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,12 +43,17 @@ type Canal struct {
 	tables             map[string]*schema.Table
 	errorTablesGetTime map[string]time.Time
 
+	tableMatchCache   map[string]bool
+	includeTableRegex []*regexp.Regexp
+	excludeTableRegex []*regexp.Regexp
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
 // canal will retry fetching unknown table's meta after UnknownTableRetryPeriod
 var UnknownTableRetryPeriod = time.Second * time.Duration(10)
+var ErrExcludedTable = errors.New("excluded table meta")
 
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
@@ -76,6 +82,33 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	if err := c.checkBinlogRowFormat(); err != nil {
 		return nil, errors.Trace(err)
+	}
+
+	// init table filter
+	if n := len(c.cfg.IncludeTableRegex); n > 0 {
+		c.includeTableRegex = make([]*regexp.Regexp, n)
+		for i, val := range c.cfg.IncludeTableRegex {
+			reg, err := regexp.Compile(val)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			c.includeTableRegex[i] = reg
+		}
+	}
+
+	if n := len(c.cfg.ExcludeTableRegex); n > 0 {
+		c.excludeTableRegex = make([]*regexp.Regexp, n)
+		for i, val := range c.cfg.ExcludeTableRegex {
+			reg, err := regexp.Compile(val)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			c.excludeTableRegex[i] = reg
+		}
+	}
+
+	if c.includeTableRegex != nil || c.excludeTableRegex != nil {
+		c.tableMatchCache = make(map[string]bool)
 	}
 
 	return c, nil
@@ -197,8 +230,50 @@ func (c *Canal) Ctx() context.Context {
 	return c.ctx
 }
 
+func (c *Canal) checkTableMatch(key string) bool {
+	// no filter, return true
+	if c.tableMatchCache == nil {
+		return true
+	}
+
+	c.tableLock.RLock()
+	rst, ok := c.tableMatchCache[key]
+	c.tableLock.RUnlock()
+	if ok {
+		// cache hit
+		return rst
+	}
+	matchFlag := false
+	// check include
+	if c.includeTableRegex != nil {
+		for _, reg := range c.includeTableRegex {
+			if reg.MatchString(key) {
+				matchFlag = true
+				break
+			}
+		}
+	}
+	// check exclude
+	if matchFlag && c.excludeTableRegex != nil {
+		for _, reg := range c.excludeTableRegex {
+			if reg.MatchString(key) {
+				matchFlag = false
+				break
+			}
+		}
+	}
+	c.tableLock.Lock()
+	c.tableMatchCache[key] = matchFlag
+	c.tableLock.Unlock()
+	return matchFlag
+}
+
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	key := fmt.Sprintf("%s.%s", db, table)
+	// if table is excluded, return error and skip parsing event or dump
+	if !c.checkTableMatch(key) {
+		return nil, ErrExcludedTable
+	}
 	c.tableLock.RLock()
 	t, ok := c.tables[key]
 	c.tableLock.RUnlock()

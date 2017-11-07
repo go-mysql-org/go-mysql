@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/schema"
+	log "github.com/sirupsen/logrus"
 )
 
 type dumpParseHandler struct {
@@ -30,6 +30,12 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 
 	tableInfo, err := h.c.GetTable(db, table)
 	if err != nil {
+		e := errors.Cause(err)
+		if e == ErrExcludedTable ||
+			e == schema.ErrTableNotExist ||
+			e == schema.ErrMissingTableMeta {
+			return nil
+		}
 		log.Errorf("get %s.%s information err: %v", db, table, err)
 		return errors.Trace(err)
 	}

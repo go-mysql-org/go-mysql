@@ -77,10 +77,15 @@ func (c *Canal) runSyncBinlog() error {
 		case *replication.RowsEvent:
 			// we only focus row based event
 			err = c.handleRowsEvent(ev)
-			if err != nil && (errors.Cause(err) != schema.ErrTableNotExist && errors.Cause(err) != schema.ErrMissingTableMeta) {
-				// if error is not ErrTableNotExist or ErrMissingTableMeta, stop canal
-				log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
-				return errors.Trace(err)
+			if err != nil {
+				e := errors.Cause(err)
+				// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
+				if e != ErrExcludedTable &&
+					e != schema.ErrTableNotExist &&
+					e != schema.ErrMissingTableMeta {
+					log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+					return errors.Trace(err)
+				}
 			}
 			continue
 		case *replication.XIDEvent:
