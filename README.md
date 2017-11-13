@@ -206,10 +206,12 @@ Although there are many companies use MySQL 5.0 - 5.5, I think upgrade MySQL to 
 Driver is the package that you can use go-mysql with go database/sql like other drivers. A simple example:
 
 ```
+package main
+
 import (
     "database/sql"
 
-    - "github.com/siddontang/go-mysql/driver"
+    _ "github.com/siddontang/go-mysql/driver"
 )
 
 func main() {
