@@ -411,16 +411,16 @@ func (e *ExecuteLoadQueryEvent) Dump(w io.Writer) {
 // case MARIADB_ANNOTATE_ROWS_EVENT:
 // 	return "MariadbAnnotateRowsEvent"
 
-type MariadbAnnotaeRowsEvent struct {
+type MariadbAnnotateRowsEvent struct {
 	Query []byte
 }
 
-func (e *MariadbAnnotaeRowsEvent) Decode(data []byte) error {
+func (e *MariadbAnnotateRowsEvent) Decode(data []byte) error {
 	e.Query = data
 	return nil
 }
 
-func (e *MariadbAnnotaeRowsEvent) Dump(w io.Writer) {
+func (e *MariadbAnnotateRowsEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Query: %s\n", e.Query)
 	fmt.Fprintln(w)
 }
