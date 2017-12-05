@@ -178,7 +178,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte) (Event, error) {
 			case EXECUTE_LOAD_QUERY_EVENT:
 				e = &ExecuteLoadQueryEvent{}
 			case MARIADB_ANNOTATE_ROWS_EVENT:
-				e = &MariadbAnnotaeRowsEvent{}
+				e = &MariadbAnnotateRowsEvent{}
 			case MARIADB_BINLOG_CHECKPOINT_EVENT:
 				e = &MariadbBinlogCheckPointEvent{}
 			case MARIADB_GTID_LIST_EVENT:
