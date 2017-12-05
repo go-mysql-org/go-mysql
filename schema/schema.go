@@ -66,9 +66,7 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 	ta.Columns = append(ta.Columns, TableColumn{Name: name, Collation: collation})
 	ta.Columns[index].RawType = columnType
 
-	if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
-		ta.Columns[index].Type = TYPE_NUMBER
-	} else if strings.HasPrefix(columnType, "float") ||
+	if strings.HasPrefix(columnType, "float") ||
 		strings.HasPrefix(columnType, "double") ||
 		strings.HasPrefix(columnType, "decimal") {
 		ta.Columns[index].Type = TYPE_FLOAT
@@ -102,6 +100,8 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].Type = TYPE_BIT
 	} else if strings.HasPrefix(columnType, "json") {
 		ta.Columns[index].Type = TYPE_JSON
+	} else if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
+		ta.Columns[index].Type = TYPE_NUMBER
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
 	}

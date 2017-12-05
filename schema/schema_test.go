@@ -54,7 +54,7 @@ func (s *schemaTestSuite) TestSchema(c *C) {
             id1 INT,
             id2 INT,
             name VARCHAR(256),
-            e ENUM("a", "b", "c"),
+            status ENUM('appointing','serving','abnormal','stop','noaftermarket','finish','financial_audit'),
             se SET('a', 'b', 'c'),
             f FLOAT,
             d DECIMAL(2, 1),
@@ -80,7 +80,7 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	c.Assert(ta.Indexes[0].Columns, HasLen, 2)
 	c.Assert(ta.Indexes[0].Name, Equals, "PRIMARY")
 	c.Assert(ta.Indexes[2].Name, Equals, "name_idx")
-	c.Assert(ta.Columns[4].EnumValues, DeepEquals, []string{"a", "b", "c"})
+	c.Assert(ta.Columns[4].EnumValues, DeepEquals, []string{"appointing", "serving", "abnormal", "stop", "noaftermarket", "finish", "financial_audit"})
 	c.Assert(ta.Columns[5].SetValues, DeepEquals, []string{"a", "b", "c"})
 	c.Assert(ta.Columns[7].Type, Equals, TYPE_FLOAT)
 	c.Assert(ta.Columns[0].IsUnsigned, IsFalse)
