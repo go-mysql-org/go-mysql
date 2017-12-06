@@ -57,6 +57,20 @@ type BinlogSyncerConfig struct {
 	// We will use Local location for timestamp and UTC location for datatime.
 	ParseTime bool
 
+	// If ParseTime is false, convert TIMESTAMP into this specified timezone. If
+	// ParseTime is true, this option will have no effect and TIMESTAMP data will
+	// be parsed into the local timezone and a full time.Time struct will be
+	// returned.
+	//
+	// Note that MySQL TIMESTAMP columns are offset from the machine local
+	// timezone while DATETIME columns are offset from UTC. This is consistent
+	// with documented MySQL behaviour as it return TIMESTAMP in local timezone
+	// and DATETIME in UTC.
+	//
+	// Setting this to UTC effectively equalizes the TIMESTAMP and DATETIME time
+	// strings obtained from MySQL.
+	TimestampStringLocation *time.Location
+
 	// Use decimal.Decimal structure for decimals.
 	UseDecimal bool
 
@@ -124,6 +138,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser = NewBinlogParser()
 	b.parser.SetRawMode(b.cfg.RawModeEnabled)
 	b.parser.SetParseTime(b.cfg.ParseTime)
+	b.parser.SetTimestampStringLocation(b.cfg.TimestampStringLocation)
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
 	b.running = false

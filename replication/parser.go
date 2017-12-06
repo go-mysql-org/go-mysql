@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"sync/atomic"
+	"time"
 
 	"github.com/juju/errors"
 )
@@ -25,7 +26,8 @@ type BinlogParser struct {
 	// for rawMode, we only parse FormatDescriptionEvent and RotateEvent
 	rawMode bool
 
-	parseTime bool
+	parseTime               bool
+	timestampStringLocation *time.Location
 
 	// used to start/stop processing
 	stopProcessing uint32
@@ -181,6 +183,10 @@ func (p *BinlogParser) SetRawMode(mode bool) {
 
 func (p *BinlogParser) SetParseTime(parseTime bool) {
 	p.parseTime = parseTime
+}
+
+func (p *BinlogParser) SetTimestampStringLocation(timestampStringLocation *time.Location) {
+	p.timestampStringLocation = timestampStringLocation
 }
 
 func (p *BinlogParser) SetUseDecimal(useDecimal bool) {
@@ -347,6 +353,7 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 	e.needBitmap2 = false
 	e.tables = p.tables
 	e.parseTime = p.parseTime
+	e.timestampStringLocation = p.timestampStringLocation
 	e.useDecimal = p.useDecimal
 
 	switch h.EventType {
