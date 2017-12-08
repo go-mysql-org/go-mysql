@@ -228,7 +228,10 @@ func checkRenameTable(e *replication.QueryEvent) [][]byte {
 	if mb = expAlterTable.FindSubmatch(e.Query); mb != nil {
 		return mb
 	}
-	mb = expRenameTable.FindSubmatch(e.Query)
+	if mb = expRenameTable.FindSubmatch(e.Query); mb != nil {
+		return mb
+	}
+	mb = expDropTable.FindSubmatch(e.Query)
 	return mb
 }
 
