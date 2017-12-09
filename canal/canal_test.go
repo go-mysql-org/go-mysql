@@ -187,7 +187,7 @@ func TestDropTableExp(t *testing.T) {
 	for _, s := range cases {
 		m := expDropTable.FindSubmatch([]byte(s))
 		if m == nil || !bytes.Equal(m[2], table) {
-			t.Fatalf("TestRenameTableExp: case %s failed\n", s)
+			t.Fatalf("TestDropTableExp: case %s failed\n", s)
 		}
 	}
 }
