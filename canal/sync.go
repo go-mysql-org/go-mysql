@@ -235,7 +235,6 @@ func checkRenameTable(e *replication.QueryEvent) [][]byte {
 }
 
 func checkDropTable(e *replication.QueryEvent) [][]byte  {
-	log.Debug(string(e.Query))
 	mb := expDropTable.FindSubmatch(e.Query)
 	return mb
 }
