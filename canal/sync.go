@@ -15,7 +15,8 @@ import (
 
 var (
 	expAlterTable  = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
-	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE.*TO\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}$")
+	//rename should clear old table cache
+	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}TO\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}$")
 	expDropTable   = regexp.MustCompile("(?i)^DROP\\sTABLE\\s.*?`{0,1}(.*?)`\\s.*?")
 )
 
@@ -228,7 +229,13 @@ func checkRenameTable(e *replication.QueryEvent) [][]byte {
 	if mb = expAlterTable.FindSubmatch(e.Query); mb != nil {
 		return mb
 	}
-	mb = expRenameTable.FindSubmatch(e.Query);
+	//rename should clear old table cache
+	mb = expRenameTable.FindSubmatch(e.Query)
+	if mb == nil {
+		return nil
+	}
+	mb[2] = mb[1]
+	mb[1] = e.Schema
 	return mb
 }
 
