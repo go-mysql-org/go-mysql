@@ -253,7 +253,7 @@ func (b *BinlogSyncer) registerSlave() error {
 	return nil
 }
 
-func (b *BinlogSyncer) enalbeSemiSync() error {
+func (b *BinlogSyncer) enableSemiSync() error {
 	if !b.cfg.SemiSyncEnabled {
 		return nil
 	}
@@ -286,7 +286,7 @@ func (b *BinlogSyncer) prepare() error {
 		return errors.Trace(err)
 	}
 
-	if err := b.enalbeSemiSync(); err != nil {
+	if err := b.enableSemiSync(); err != nil {
 		return errors.Trace(err)
 	}
 
