@@ -15,7 +15,9 @@ import (
 
 var (
 	expAlterTable  = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
-	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE.*TO\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}$")
+	//rename should clear old table cache
+	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s{1,}TO\\s.*?")
+	expDropTable   = regexp.MustCompile("(?i)^DROP\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}($|\\s)")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -112,20 +114,34 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
+			trigger := false
+			var (
+				schema []byte
+				table []byte
+			)
 			if mb := checkRenameTable(e); mb != nil {
 				if len(mb[1]) == 0 {
 					mb[1] = e.Schema
 				}
-				savePos = true
-				force = true
-				c.ClearTableCache(mb[1], mb[2])
-				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
-				if err = c.eventHandler.OnDDL(pos, e); err != nil {
-					return errors.Trace(err)
-				}
-			} else {
-				// skip others
+				schema = mb[1]
+				table = mb[2]
+				trigger = true
+			} else if mb = checkDropTable(e); mb != nil {
+				schema = e.Schema
+				table = mb[2]
+				trigger = true
+			}
+
+			if !trigger {
 				continue
+			}
+			// trigger ddl event
+			savePos = true
+			force = true
+			c.ClearTableCache(schema, table)
+			log.Infof("table structure changed, clear table cache: %s.%s\n", schema, table)
+			if err = c.eventHandler.OnDDL(pos, e); err != nil {
+				return errors.Trace(err)
 			}
 
 		default:
@@ -213,6 +229,12 @@ func checkRenameTable(e *replication.QueryEvent) [][]byte {
 	if mb = expAlterTable.FindSubmatch(e.Query); mb != nil {
 		return mb
 	}
+	//rename should clear old table cache
 	mb = expRenameTable.FindSubmatch(e.Query)
+	return mb
+}
+
+func checkDropTable(e *replication.QueryEvent) [][]byte  {
+	mb := expDropTable.FindSubmatch(e.Query)
 	return mb
 }
