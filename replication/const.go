@@ -39,6 +39,7 @@ const (
 )
 
 type EventType byte
+const MaxEventTypeCount = 256
 
 const (
 	UNKNOWN_EVENT EventType = iota
@@ -87,7 +88,153 @@ const (
 	MARIADB_GTID_LIST_EVENT
 )
 
+var eventTypeStrings [MaxEventTypeCount]string
+
+func initEventTypeBranchTable() {
+
+	type eventTypeBranchTableEntry struct {
+		String string
+	}
+
+	var eventTypeBranchTable = map[EventType]eventTypeBranchTableEntry {
+		UNKNOWN_EVENT: {
+			"UnknownEvent",
+		},
+		START_EVENT_V3: {
+			"StartEventV3",
+		},
+		QUERY_EVENT: {
+			"QueryEvent",
+		},
+		STOP_EVENT: {
+			"StopEvent",
+		},
+		ROTATE_EVENT: {
+			"RotateEvent",
+		},
+		INTVAR_EVENT: {
+			"IntVarEvent",
+		},
+		LOAD_EVENT: {
+			"LoadEvent",
+		},
+		SLAVE_EVENT: {
+			"SlaveEvent",
+		},
+		CREATE_FILE_EVENT: {
+			"CreateFileEvent",
+		},
+		APPEND_BLOCK_EVENT: {
+			"AppendBlockEvent",
+		},
+		EXEC_LOAD_EVENT: {
+			"ExecLoadEvent",
+		},
+		DELETE_FILE_EVENT: {
+			"DeleteFileEvent",
+		},
+		NEW_LOAD_EVENT: {
+			"NewLoadEvent",
+		},
+		RAND_EVENT: {
+			"RandEvent",
+		},
+		USER_VAR_EVENT: {
+			"UserVarEvent",
+		},
+		FORMAT_DESCRIPTION_EVENT: {
+			"FormatDescriptionEvent",
+		},
+		XID_EVENT: {
+			"XIDEvent",
+		},
+		BEGIN_LOAD_QUERY_EVENT: {
+			"BeginLoadQueryEvent",
+		},
+		EXECUTE_LOAD_QUERY_EVENT: {
+			"ExectueLoadQueryEvent",
+		},
+		TABLE_MAP_EVENT: {
+			"TableMapEvent",
+		},
+		WRITE_ROWS_EVENTv0: {
+			"WriteRowsEventV0",
+		},
+		UPDATE_ROWS_EVENTv0: {
+			"UpdateRowsEventV0",
+		},
+		DELETE_ROWS_EVENTv0: {
+			"DeleteRowsEventV0",
+		},
+		WRITE_ROWS_EVENTv1: {
+			"WriteRowsEventV1",
+		},
+		UPDATE_ROWS_EVENTv1: {
+			"UpdateRowsEventV1",
+		},
+		DELETE_ROWS_EVENTv1: {
+			"DeleteRowsEventV1",
+		},
+		INCIDENT_EVENT: {
+			"IncidentEvent",
+		},
+		HEARTBEAT_EVENT: {
+			"HeartbeatEvent",
+		},
+		IGNORABLE_EVENT: {
+			"IgnorableEvent",
+		},
+		ROWS_QUERY_EVENT: {
+			"RowsQueryEvent",
+		},
+		WRITE_ROWS_EVENTv2: {
+			"WriteRowsEventV2",
+		},
+		UPDATE_ROWS_EVENTv2: {
+			"UpdateRowsEventV2",
+		},
+		DELETE_ROWS_EVENTv2: {
+			"DeleteRowsEventV2",
+		},
+		GTID_EVENT: {
+			"GTIDEvent",
+		},
+		ANONYMOUS_GTID_EVENT: {
+			"AnonymousGTIDEvent",
+		},
+		PREVIOUS_GTIDS_EVENT: {
+			"PreviousGTIDsEvent",
+		},
+		MARIADB_ANNOTATE_ROWS_EVENT: {
+			"MariadbAnnotateRowsEvent",
+		},
+		MARIADB_BINLOG_CHECKPOINT_EVENT: {
+			"MariadbBinLogCheckPointEvent",
+		},
+		MARIADB_GTID_EVENT: {
+			"MariadbGTIDEvent",
+		},
+		MARIADB_GTID_LIST_EVENT: {
+			"MariadbGTIDListEvent",
+		},
+	}
+
+	unknownEventEntry := eventTypeBranchTable[UNKNOWN_EVENT]
+
+	for i:=0; i<MaxEventTypeCount; i++ {
+		if entry, ok := eventTypeBranchTable[EventType(i)]; ok {
+			eventTypeStrings[i] = entry.String
+		} else {
+			eventTypeStrings[i] = unknownEventEntry.String
+		}
+	}
+}
+
 func (e EventType) String() string {
+	return eventTypeStrings[e]
+}
+
+func (e EventType) stringForTest() string {
 	switch e {
 	case UNKNOWN_EVENT:
 		return "UnknownEvent"
@@ -183,3 +330,7 @@ const (
 	BINLOG_CHECKSUM_ALG_UNDEF byte = 255 // special value to tag undetermined yet checksum
 	// or events from checksum-unaware servers
 )
+
+func init() {
+	initEventTypeBranchTable()
+}
