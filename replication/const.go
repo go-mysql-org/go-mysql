@@ -89,11 +89,14 @@ const (
 )
 
 var eventTypeStrings [MaxEventTypeCount]string
+// TODO: type EventParserFunc func(...) (Event, error)
+// TODO: var defaultEventParserFuncs [MaxEventTypeCount]EventParserFunc
 
 func initEventTypeBranchTable() {
 
 	type eventTypeBranchTableEntry struct {
 		String string
+		// TODO: DefaultEventParserFunc EventParserFunc
 	}
 
 	var eventTypeBranchTable = map[EventType]eventTypeBranchTableEntry {
