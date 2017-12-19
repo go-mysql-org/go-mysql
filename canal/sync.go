@@ -16,7 +16,7 @@ import (
 var (
 	expAlterTable  = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s{1,}TO\\s.*?")
-    expDropTable   = regexp.MustCompile("(?i)^DROP(\\s){1,}TABLE((\\s){1,}IF(\\s){1,}EXISTS){0,1}(\\s){1,}`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}($|\\s)")
+	expDropTable   = regexp.MustCompile("(?i)^DROP(\\s){1,}TABLE((\\s){1,}IF(\\s){1,}EXISTS){0,1}(\\s){1,}`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}($|\\s)")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
