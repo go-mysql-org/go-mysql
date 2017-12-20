@@ -173,7 +173,6 @@ func TestRenameTableExp(t *testing.T) {
 }
 
 func TestDropTableExp(t *testing.T) {
-	//add if exists support
 	cases := []string{
 		"drop table test1",
 		"DROP TABLE test1",
