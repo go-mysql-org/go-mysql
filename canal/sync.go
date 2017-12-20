@@ -15,9 +15,8 @@ import (
 
 var (
 	expAlterTable  = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
-	//rename should clear old table cache
 	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s{1,}TO\\s.*?")
-	expDropTable   = regexp.MustCompile("(?i)^DROP\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}($|\\s)")
+	expDropTable   = regexp.MustCompile("(?i)^DROP\\sTABLE(\\sIF\\sEXISTS){0,1}\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}($|\\s)")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -128,7 +127,7 @@ func (c *Canal) runSyncBinlog() error {
 				trigger = true
 			} else if mb = checkDropTable(e); mb != nil {
 				schema = e.Schema
-				table = mb[2]
+				table = mb[3]
 				trigger = true
 			}
 
