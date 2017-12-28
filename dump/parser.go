@@ -48,7 +48,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 			break
 		}
 
-		line = line[0 : len(line)-1]
+		line = strings.SplitAfter(line, ";")
 
 		if parseBinlogPos && !binlogParsed {
 			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
