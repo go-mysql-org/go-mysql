@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"strconv"
 
 	"github.com/juju/errors"
@@ -48,7 +49,10 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 			break
 		}
 
-		line = line[0 : len(line)-1]
+		// on windows someone end with '\r\n'
+		// on linus end with '\n'
+		// we not want '\n' or '\r\n'
+		line = strings.SplitAfter(line, ";")[0]
 
 		if parseBinlogPos && !binlogParsed {
 			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
