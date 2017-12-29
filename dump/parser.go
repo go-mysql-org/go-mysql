@@ -49,9 +49,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 			break
 		}
 
-		// on windows someone end with '\r\n'
-		// on linus end with '\n'
-		// we not want '\n' or '\r\n'
+		// Ignore '\n' on Linux or '\r\n' on Windows
 		line = strings.SplitAfter(line, ";")[0]
 
 		if parseBinlogPos && !binlogParsed {
