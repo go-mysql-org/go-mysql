@@ -123,7 +123,8 @@ func (d *Dumper) Dump(w io.Writer) error {
 	}
 
 	if d.maxAllowedPacket > 0 {
-		args = append(args, fmt.Sprintf("--max_allowed_packet=%dM", d.maxAllowedPacket))
+		// mysqldump param should be --max-allowed-packet=%dM not be --max_allowed_packet=%dM
+		args = append(args, fmt.Sprintf("--max-allowed-packet=%dM", d.maxAllowedPacket))
 	}
 
 	args = append(args, "--single-transaction")
