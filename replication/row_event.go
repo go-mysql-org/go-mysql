@@ -6,13 +6,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"strconv"
 	"time"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/shopspring/decimal"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
+	log "github.com/sirupsen/logrus"
 )
 
 type errMissingTableMapEvent error
@@ -536,7 +536,7 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 	return
 }
 
-func decodeDecimal(data []byte, precision int, decimals int) (float64, int, error) {
+func decodeDecimal(data []byte, precision int, decimals int) (decimal.Decimal, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
 	integral := (precision - decimals)
 	uncompIntegral := int(integral / digitsPerInteger)
@@ -589,7 +589,7 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 		pos += size
 	}
 
-	f, err := strconv.ParseFloat(hack.String(res.Bytes()), 64)
+	f, err := decimal.NewFromString(hack.String(res.Bytes()))
 	return f, pos, err
 }
 
