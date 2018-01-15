@@ -51,6 +51,7 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 	if offset < 4 {
 		offset = 4
 	} else if offset > 4 {
+		//  FORMAT_DESCRIPTION event should be read by default always (despite that fact passed offset may be higher than 4)
 		if _, err = f.Seek(4, os.SEEK_SET); err != nil {
 			return errors.Errorf("seek %s to %d error %v", name, offset, err)
 		}
@@ -68,13 +69,13 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 
 
 func (p *BinlogParser) getFormatDescriptionEvent(r io.Reader, onEvent OnEventFunc) error {
-	_, err := p.parseReaderSingleEvent(&r, onEvent)
+	_, err := p.parseSingleEvent(&r, onEvent)
 	return err
 }
 
 
 
-func (p *BinlogParser) parseReaderSingleEvent(r *io.Reader, onEvent OnEventFunc) (bool, error) {
+func (p *BinlogParser) parseSingleEvent(r *io.Reader, onEvent OnEventFunc) (bool, error) {
 	var err error
 	var n int64
 
@@ -131,7 +132,7 @@ func (p *BinlogParser) parseReaderSingleEvent(r *io.Reader, onEvent OnEventFunc)
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 
 	for {
-		done, err := p.parseReaderSingleEvent(&r, onEvent); 
+		done, err := p.parseSingleEvent(&r, onEvent); 
 		if err != nil {
 			if _, ok := err.(errMissingTableMapEvent); ok {
 				continue
