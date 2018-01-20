@@ -18,7 +18,7 @@ type BinlogParser struct {
 	rawMode bool
 
 	parseTime bool
-	
+
 	// flag used to exit from ParseFile
 	exit bool
 }
@@ -142,9 +142,9 @@ func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 
 	for {
 		if p.exit {
-			p.exit = false
 			break
 		}
+
 		done, err := p.parseSingleEvent(&r, onEvent); 
 		if err != nil {
 			if _, ok := err.(errMissingTableMapEvent); ok {
