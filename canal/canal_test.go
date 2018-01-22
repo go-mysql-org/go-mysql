@@ -131,6 +131,24 @@ func (s *canalTestSuite) TestCanalFilter(c *C) {
 	c.Assert(sch, IsNil)
 }
 
+func TestCreateTableExp(t *testing.T) {
+	cases := []string{
+		"CREATE TABLE `mydb.mytable` (`id` int(10)) ENGINE=InnoDB",
+		"CREATE TABLE `mytable` (`id` int(10)) ENGINE=InnoDB",
+		"CREATE TABLE IF NOT EXISTS `mytable` (`id` int(10)) ENGINE=InnoDB",
+		"CREATE TABLE IF NOT EXISTS mytable (`id` int(10)) ENGINE=InnoDB",
+	}
+	table := []byte("mytable")
+	db := []byte("mydb")
+	for _, s := range cases {
+		m := expCreateTable.FindSubmatch([]byte(s))
+		mLen := len(m)
+		if m == nil || !bytes.Equal(m[mLen-1], table) || (len(m[mLen-2]) > 0 && !bytes.Equal(m[mLen-2], db)) {
+			t.Fatalf("TestCreateTableExp: case %s failed\n", s)
+		}
+	}
+}
+
 func TestAlterTableExp(t *testing.T) {
 	cases := []string{
 		"ALTER TABLE `mydb`.`mytable` ADD `field2` DATE  NULL  AFTER `field1`;",
@@ -144,7 +162,8 @@ func TestAlterTableExp(t *testing.T) {
 	db := []byte("mydb")
 	for _, s := range cases {
 		m := expAlterTable.FindSubmatch([]byte(s))
-		if m == nil || !bytes.Equal(m[2], table) || (len(m[1]) > 0 && !bytes.Equal(m[1], db)) {
+		mLen := len(m)
+		if m == nil || !bytes.Equal(m[mLen-1], table) || (len(m[mLen-2]) > 0 && !bytes.Equal(m[mLen-2], db)) {
 			t.Fatalf("TestAlterTableExp: case %s failed\n", s)
 		}
 	}
@@ -166,7 +185,8 @@ func TestRenameTableExp(t *testing.T) {
 	db := []byte("mydb")
 	for _, s := range cases {
 		m := expRenameTable.FindSubmatch([]byte(s))
-		if m == nil || !bytes.Equal(m[2], table) || (len(m[1]) > 0 && !bytes.Equal(m[1], db)) {
+		mLen := len(m)
+		if m == nil || !bytes.Equal(m[mLen-1], table) || (len(m[mLen-2]) > 0 && !bytes.Equal(m[mLen-2], db)) {
 			t.Fatalf("TestRenameTableExp: case %s failed\n", s)
 		}
 	}
@@ -194,15 +214,16 @@ func TestDropTableExp(t *testing.T) {
 	table := []byte("test1")
 	for _, s := range cases {
 		m := expDropTable.FindSubmatch([]byte(s))
+		mLen := len(m)
 		if m == nil {
 			t.Fatalf("TestDropTableExp: case %s failed\n", s)
 			return
 		}
-		if len(m) < 4 {
+		if mLen < 4 {
 			t.Fatalf("TestDropTableExp: case %s failed\n", s)
 			return
 		}
-		if !bytes.Equal(m[3], table) {
+		if !bytes.Equal(m[mLen-2], table) {
 			t.Fatalf("TestDropTableExp: case %s failed\n", s)
 		}
 	}

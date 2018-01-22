@@ -14,6 +14,7 @@ import (
 )
 
 var (
+	expCreateTable  = regexp.MustCompile("(?i)^CREATE\\sTABLE(\\sIF\\sNOT\\sEXISTS)?\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 	expAlterTable  = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s{1,}TO\\s.*?")
 	expDropTable   = regexp.MustCompile("(?i)^DROP\\sTABLE(\\sIF\\sEXISTS){0,1}\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}($|\\s)")
@@ -113,28 +114,31 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
-			trigger := false
 			var (
+				mb [][]byte
 				schema []byte
 				table []byte
 			)
-			if mb := checkRenameTable(e); mb != nil {
-				if len(mb[1]) == 0 {
-					mb[1] = e.Schema
+			regexps := []regexp.Regexp{*expCreateTable, *expAlterTable, *expRenameTable, *expDropTable}
+			for _, reg := range regexps {
+				mb = reg.FindSubmatch(e.Query)
+				if len(mb) != 0 {
+					break
 				}
-				schema = mb[1]
-				table = mb[2]
-				trigger = true
-			} else if mb = checkDropTable(e); mb != nil {
-				schema = e.Schema
-				table = mb[3]
-				trigger = true
 			}
-
-			if !trigger {
+			mbLen := len(mb)
+			if mbLen == 0 {
 				continue
 			}
-			// trigger ddl event
+
+			// the first last is table name, the second last is database name(if exists)
+			if len(mb[mbLen-2]) == 0 {
+				schema = e.Schema
+			} else {
+				schema = mb[mbLen-2]
+			}
+			table = mb[mbLen-1]
+
 			savePos = true
 			force = true
 			c.ClearTableCache(schema, table)
@@ -221,19 +225,4 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
-}
-
-func checkRenameTable(e *replication.QueryEvent) [][]byte {
-	var mb = [][]byte{}
-	if mb = expAlterTable.FindSubmatch(e.Query); mb != nil {
-		return mb
-	}
-	//rename should clear old table cache
-	mb = expRenameTable.FindSubmatch(e.Query)
-	return mb
-}
-
-func checkDropTable(e *replication.QueryEvent) [][]byte  {
-	mb := expDropTable.FindSubmatch(e.Query)
-	return mb
 }
