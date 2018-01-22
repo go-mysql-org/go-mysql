@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"context"
 
 	"github.com/juju/errors"
 )
@@ -19,8 +20,8 @@ type BinlogParser struct {
 
 	parseTime bool
 
-	// flag used to exit from ParseFile
-	exit bool
+	// context used to cancel processing
+	ctx context.Context
 }
 
 func NewBinlogParser() *BinlogParser {
@@ -32,8 +33,8 @@ func NewBinlogParser() *BinlogParser {
 }
 
 
-func (p *BinlogParser)SetExit(exit bool){
-	p.exit = exit
+func (p *BinlogParser)SetContext(ctx context.Context){
+	p.ctx = ctx
 }
 
 
@@ -141,8 +142,11 @@ func (p *BinlogParser) parseSingleEvent(r *io.Reader, onEvent OnEventFunc) (bool
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 
 	for {
-		if p.exit {
-			break
+		select {
+			case <-p.ctx.Done():
+				return p.ctx.Err()
+			default:
+				break
 		}
 
 		done, err := p.parseSingleEvent(&r, onEvent); 
