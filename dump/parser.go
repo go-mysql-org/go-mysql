@@ -50,7 +50,9 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 		}
 
 		// Ignore '\n' on Linux or '\r\n' on Windows
-		line = strings.SplitAfter(line, ";")[0]
+        line = strings.TrimFunc(line, func(c rune) bool {
+            return c == '\r' || c == '\n'
+        })
 
 		if parseBinlogPos && !binlogParsed {
 			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
