@@ -206,7 +206,7 @@ func (s *parserTestSuite) TestParseLine(c *C) {
 		return c == '\r' || c == '\n'
 	}
 
-	l := strings.TrimFunc(line, f)
+	l := strings.TrimRightFunc(line, f)
 
 	m := valuesExp.FindAllStringSubmatch(l, -1)
 
