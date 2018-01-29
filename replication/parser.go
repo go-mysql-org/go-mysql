@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"context"
+	"sync/atomic"
 
 	"github.com/juju/errors"
 )
@@ -20,21 +20,27 @@ type BinlogParser struct {
 
 	parseTime bool
 
-	// context used to cancel processing
-	ctx context.Context
+	// used to start/stop processing
+	stopProcessing uint32
 }
 
 func NewBinlogParser() *BinlogParser {
 	p := new(BinlogParser)
 
 	p.tables = make(map[uint64]*TableMapEvent)
+	// p.stop = make(uint32)
 
 	return p
 }
 
 
-func (p *BinlogParser)SetContext(ctx context.Context){
-	p.ctx = ctx
+func (p *BinlogParser)Stop(){
+	atomic.StoreUint32(&p.stopProcessing, 1)
+}
+
+
+func (p *BinlogParser)Resume(){
+	atomic.StoreUint32(&p.stopProcessing, 0)
 }
 
 
@@ -142,11 +148,8 @@ func (p *BinlogParser) parseSingleEvent(r *io.Reader, onEvent OnEventFunc) (bool
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 
 	for {
-		select {
-			case <-p.ctx.Done():
-				return p.ctx.Err()
-			default:
-				break
+		if atomic.LoadUint32(&p.stopProcessing) == 1 {
+			break
 		}
 
 		done, err := p.parseSingleEvent(&r, onEvent); 
