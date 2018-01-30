@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync/atomic"
 
 	"github.com/juju/errors"
 )
@@ -18,15 +19,30 @@ type BinlogParser struct {
 	rawMode bool
 
 	parseTime bool
+
+	// used to start/stop processing
+	stopProcessing uint32
 }
 
 func NewBinlogParser() *BinlogParser {
 	p := new(BinlogParser)
 
 	p.tables = make(map[uint64]*TableMapEvent)
+	// p.stop = make(uint32)
 
 	return p
 }
+
+
+func (p *BinlogParser)Stop(){
+	atomic.StoreUint32(&p.stopProcessing, 1)
+}
+
+
+func (p *BinlogParser)Resume(){
+	atomic.StoreUint32(&p.stopProcessing, 0)
+}
+
 
 func (p *BinlogParser) Reset() {
 	p.format = nil
@@ -132,6 +148,10 @@ func (p *BinlogParser) parseSingleEvent(r *io.Reader, onEvent OnEventFunc) (bool
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 
 	for {
+		if atomic.LoadUint32(&p.stopProcessing) == 1 {
+			break
+		}
+
 		done, err := p.parseSingleEvent(&r, onEvent); 
 		if err != nil {
 			if _, ok := err.(errMissingTableMapEvent); ok {
