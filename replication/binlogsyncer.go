@@ -735,3 +735,8 @@ func (b *BinlogSyncer) getGtidSet() GTIDSet {
 
 	return gtidSet
 }
+
+// LastConnectionID returns last connectionID.
+func (b *BinlogSyncer) LastConnectionID() uint32 {
+	return b.lastConnectionID
+}

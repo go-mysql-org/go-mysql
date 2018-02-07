@@ -97,7 +97,11 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 			n = append(n, s[i])
 			continue
 		} else {
-			n[len(n)-1] = Interval{last.Start, s[i].Stop}
+			stop := s[i].Stop
+			if last.Stop > stop {
+				stop = last.Stop
+			}
+			n[len(n)-1] = Interval{last.Start, stop}
 		}
 	}
 
