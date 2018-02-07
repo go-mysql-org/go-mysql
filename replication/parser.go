@@ -17,7 +17,8 @@ type BinlogParser struct {
 	// for rawMode, we only parse FormatDescriptionEvent and RotateEvent
 	rawMode bool
 
-	parseTime bool
+	parseTime  bool
+	useDecimal bool
 }
 
 func NewBinlogParser() *BinlogParser {
@@ -120,6 +121,10 @@ func (p *BinlogParser) SetRawMode(mode bool) {
 
 func (p *BinlogParser) SetParseTime(parseTime bool) {
 	p.parseTime = parseTime
+}
+
+func (p *BinlogParser) SetUseDecimal(useDecimal bool) {
+	p.useDecimal = useDecimal
 }
 
 func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
@@ -254,6 +259,7 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 	e.needBitmap2 = false
 	e.tables = p.tables
 	e.parseTime = p.parseTime
+	e.useDecimal = p.useDecimal
 
 	switch h.EventType {
 	case WRITE_ROWS_EVENTv0:

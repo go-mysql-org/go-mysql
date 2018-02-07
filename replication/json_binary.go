@@ -70,8 +70,8 @@ func jsonbGetValueEntrySize(isSmall bool) int {
 
 // decodeJsonBinary decodes the JSON binary encoding data and returns
 // the common JSON encoding data.
-func decodeJsonBinary(data []byte) ([]byte, error) {
-	d := new(jsonBinaryDecoder)
+func (e *RowsEvent) decodeJsonBinary(data []byte) ([]byte, error) {
+	d := jsonBinaryDecoder{useDecimal: e.useDecimal}
 
 	if d.isDataShort(data, 1) {
 		return nil, d.err
@@ -86,7 +86,8 @@ func decodeJsonBinary(data []byte) ([]byte, error) {
 }
 
 type jsonBinaryDecoder struct {
-	err error
+	useDecimal bool
+	err        error
 }
 
 func (d *jsonBinaryDecoder) decodeValue(tp byte, data []byte) interface{} {
@@ -382,7 +383,7 @@ func (d *jsonBinaryDecoder) decodeDecimal(data []byte) interface{} {
 	precision := int(data[0])
 	scale := int(data[1])
 
-	v, _, err := decodeDecimal(data[2:], precision, scale)
+	v, _, err := decodeDecimal(data[2:], precision, scale, d.useDecimal)
 	d.err = err
 
 	return v
@@ -459,7 +460,7 @@ func (d *jsonBinaryDecoder) decodeVariableLength(data []byte) (int, int) {
 	length := uint64(0)
 	for ; pos < maxCount; pos++ {
 		v := data[pos]
-		length |= uint64(v & 0x7F) << uint(7 * pos)
+		length |= uint64(v&0x7F) << uint(7*pos)
 
 		if v&0x80 == 0 {
 			if length > math.MaxUint32 {
