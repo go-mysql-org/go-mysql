@@ -58,6 +58,8 @@ type Config struct {
 	DiscardNoMetaRowEvent bool `toml:"discard_no_meta_row_event"`
 
 	Dump DumpConfig `toml:"dump"`
+
+	UseDecimal bool `toml:"use_decimal"`
 }
 
 func NewConfigWithFile(name string) (*Config, error) {

@@ -57,7 +57,7 @@ type BinlogSyncerConfig struct {
 	// We will use Local location for timestamp and UTC location for datatime.
 	ParseTime bool
 
-	// Use replication.Time structure for decimals.
+	// Use decimal.Decimal structure for decimals.
 	UseDecimal bool
 
 	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
