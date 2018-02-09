@@ -57,6 +57,9 @@ type BinlogSyncerConfig struct {
 	// We will use Local location for timestamp and UTC location for datatime.
 	ParseTime bool
 
+	// Use decimal.Decimal structure for decimals.
+	UseDecimal bool
+
 	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
 	RecvBufferSize int
 
@@ -107,6 +110,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser = NewBinlogParser()
 	b.parser.SetRawMode(b.cfg.RawModeEnabled)
 	b.parser.SetParseTime(b.cfg.ParseTime)
+	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.useGTID = false
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())

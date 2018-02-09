@@ -10,9 +10,10 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/shopspring/decimal"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
+	log "github.com/sirupsen/logrus"
 )
 
 type errMissingTableMapEvent error
@@ -226,7 +227,8 @@ type RowsEvent struct {
 	//rows: invalid: int64, float64, bool, []byte, string
 	Rows [][]interface{}
 
-	parseTime bool
+	parseTime  bool
+	useDecimal bool
 }
 
 func (e *RowsEvent) Decode(data []byte) error {
@@ -401,7 +403,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
-		v, n, err = decodeDecimal(data, int(prec), int(scale))
+		v, n, err = decodeDecimal(data, int(prec), int(scale), e.useDecimal)
 	case MYSQL_TYPE_FLOAT:
 		n = 4
 		v = ParseBinaryFloat32(data)
@@ -492,7 +494,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		// Refer: https://github.com/shyiko/mysql-binlog-connector-java/blob/master/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L404
 		length = int(FixedLengthInt(data[0:meta]))
 		n = length + int(meta)
-		v, err = decodeJsonBinary(data[meta:n])
+		v, err = e.decodeJsonBinary(data[meta:n])
 	case MYSQL_TYPE_GEOMETRY:
 		// MySQL saves Geometry as Blob in binlog
 		// Seem that the binary format is SRID (4 bytes) + WKB, outer can use
@@ -536,7 +538,7 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 	return
 }
 
-func decodeDecimal(data []byte, precision int, decimals int) (float64, int, error) {
+func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (interface{}, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
 	integral := (precision - decimals)
 	uncompIntegral := int(integral / digitsPerInteger)
@@ -587,6 +589,11 @@ func decodeDecimal(data []byte, precision int, decimals int) (float64, int, erro
 	if size, value := decodeDecimalDecompressValue(compFractional, data[pos:], uint8(mask)); size > 0 {
 		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
 		pos += size
+	}
+
+	if useDecimal {
+		f, err := decimal.NewFromString(hack.String(res.Bytes()))
+		return f, pos, err
 	}
 
 	f, err := strconv.ParseFloat(hack.String(res.Bytes()), 64)
