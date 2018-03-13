@@ -68,6 +68,9 @@ type BinlogSyncerConfig struct {
 
 	// read timeout
 	ReadTimeout time.Duration
+
+	// maximum number of attempts to re-establish a broken connection
+	MaxReconnectAttempts int
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -94,6 +97,8 @@ type BinlogSyncer struct {
 	cancel context.CancelFunc
 
 	lastConnectionID uint32
+
+	retryCount int
 }
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
@@ -601,14 +606,20 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 				return
 			}
 
-			// TODO: add a max retry count.
 			for {
 				select {
 				case <-b.ctx.Done():
 					s.close()
 					return
 				case <-time.After(time.Second):
+					b.retryCount++
 					if err = b.retrySync(); err != nil {
+						if b.cfg.MaxReconnectAttempts > 0 && b.retryCount >= b.cfg.MaxReconnectAttempts {
+							log.Errorf("retry sync err: %v, exceeded max retries (%d)", err, b.cfg.MaxReconnectAttempts)
+							s.closeWithError(err)
+							return
+						}
+
 						log.Errorf("retry sync err: %v, wait 1s and retry again", err)
 						continue
 					}
@@ -625,6 +636,9 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 		if b.cfg.ReadTimeout > 0 {
 			b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
 		}
+
+		// Reset retry count on successful packet receieve
+		b.retryCount = 0
 
 		switch data[0] {
 		case OK_HEADER:
