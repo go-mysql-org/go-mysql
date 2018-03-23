@@ -170,6 +170,10 @@ func SkipLengthEnodedString(b []byte) (int, error) {
 }
 
 func PutLengthEncodedString(b []byte) []byte {
+	// for avoid transforming null values to empty string
+	if b == nil {
+		return []byte{0xfb}
+	}
 	data := make([]byte, 0, len(b)+9)
 	data = append(data, PutLengthEncodedInt(uint64(len(b)))...)
 	data = append(data, b...)
