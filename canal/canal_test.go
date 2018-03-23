@@ -223,7 +223,7 @@ func TestDropTableExp(t *testing.T) {
 			t.Fatalf("TestDropTableExp: case %s failed\n", s)
 			return
 		}
-		if !bytes.Equal(m[mLen-2], table) {
+		if !bytes.Equal(m[mLen-1], table) {
 			t.Fatalf("TestDropTableExp: case %s failed\n", s)
 		}
 	}
