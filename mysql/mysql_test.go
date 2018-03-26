@@ -189,7 +189,7 @@ func (t *mysqlTestSuite) TestMysqlNullEncode(c *check.C) {
 
 	c.Assert(null, check.NotNil)
 	c.Assert(len(null), check.Equals, 1)
-	c.Assert(null[0], check.Equals, 0xfb)
+	c.Assert(null[0], check.Equals, uint8(0xfb))
 }
 
 func (t *mysqlTestSuite) TestMysqlNullDecode(c *check.C) {
