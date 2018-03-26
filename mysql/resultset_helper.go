@@ -75,8 +75,6 @@ func formatBinaryValue(value interface{}) ([]byte, error) {
 		return v, nil
 	case string:
 		return hack.Slice(v), nil
-	case nil:
-		return []byte{0xfb}, nil
 	default:
 		return nil, errors.Errorf("invalid type %T", value)
 	}
