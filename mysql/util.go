@@ -170,7 +170,7 @@ func SkipLengthEnodedString(b []byte) (int, error) {
 }
 
 func PutLengthEncodedString(b []byte) []byte {
-	// for avoid transforming null values to empty string
+	// NULL value is encoded as 0xfb (251) here
 	if b == nil {
 		return []byte{0xfb}
 	}
