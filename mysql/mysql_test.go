@@ -183,3 +183,18 @@ func (t *mysqlTestSuite) TestErrorCode(c *check.C) {
 		c.Assert(ErrorCode(v.msg), check.Equals, v.code)
 	}
 }
+
+func (t *mysqlTestSuite) TestMysqlNullEncode(c *check.C) {
+	null := PutLengthEncodedString(nil)
+
+	c.Assert(null, check.NotNil)
+	c.Assert(len(null), check.Equals, 1)
+	c.Assert(null[0], check.Equals, uint8(0xfb))
+}
+
+func (t *mysqlTestSuite) TestMysqlNullDecode(c *check.C) {
+	_, isNull, n := LengthEncodedInt([]byte{0xfb})
+
+	c.Assert(isNull, check.IsTrue)
+	c.Assert(n, check.Equals, 1)
+}

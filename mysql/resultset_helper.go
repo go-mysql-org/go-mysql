@@ -38,6 +38,8 @@ func formatTextValue(value interface{}) ([]byte, error) {
 		return v, nil
 	case string:
 		return hack.Slice(v), nil
+	case nil:
+		return nil, nil
 	default:
 		return nil, errors.Errorf("invalid type %T", value)
 	}
@@ -94,6 +96,9 @@ func formatField(field *Field, value interface{}) error {
 	case string, []byte:
 		field.Charset = 33
 		field.Type = MYSQL_TYPE_VAR_STRING
+	case nil:
+		field.Charset = 33
+		field.Type = MYSQL_TYPE_NULL
 	default:
 		return errors.Errorf("unsupport type %T for resultset", value)
 	}
