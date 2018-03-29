@@ -116,6 +116,10 @@ func (h *testHandler) HandleStmtExecute(ctx interface{}, query string, args []in
 	return h.handleQuery(query, true)
 }
 
+func (h *testHandler) HandleOtherCommand(cmd byte, data []byte) error {
+	return mysql.NewError(mysql.ER_UNKNOWN_ERROR, fmt.Sprintf("command %d is not supported now", cmd))
+}
+
 func (s *serverTestSuite) SetUpSuite(c *C) {
 	var err error
 

@@ -25,6 +25,9 @@ type Handler interface {
 	//handle COM_STMT_CLOSE, context is the previous one set in prepare
 	//this handler has no response
 	HandleStmtClose(context interface{}) error
+	//handle any other command that is not currently handled by the library,
+	//default implementation for this method will return an ER_UNKNOWN_ERROR
+	HandleOtherCommand(cmd byte, data []byte) error
 }
 
 func (c *Conn) HandleCommand() error {
@@ -119,8 +122,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			return r
 		}
 	default:
-		msg := fmt.Sprintf("command %d is not supported now", cmd)
-		return NewError(ER_UNKNOWN_ERROR, msg)
+		return c.h.HandleOtherCommand(cmd, data)
 	}
 
 	return fmt.Errorf("command %d is not handled correctly", cmd)
@@ -148,4 +150,11 @@ func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args 
 
 func (h EmptyHandler) HandleStmtClose(context interface{}) error {
 	return nil
+}
+
+func (h EmptyHandler) HandleOtherCommand(cmd byte, data []byte) error {
+	return NewError(
+		ER_UNKNOWN_ERROR,
+		fmt.Sprintf("command %d is not supported now", cmd),
+	)
 }
