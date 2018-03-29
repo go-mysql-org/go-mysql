@@ -26,8 +26,7 @@ type Handler interface {
 	//this handler has no response
 	HandleStmtClose(context interface{}) error
 	//handle any other command that is not currently handled by the library,
-	//default implementation for this method should be:
-	//  return mysql.NewError(mysql.ER_UNKNOWN_ERROR, fmt.Sprintf("command %d is not supported now", cmd))
+	//default implementation for this method will return an ER_UNKNOWN_ERROR
 	HandleOtherCommand(cmd byte, data []byte) error
 }
 
