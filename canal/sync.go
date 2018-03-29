@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	expCreateTable  = regexp.MustCompile("(?i)^CREATE\\sTABLE(\\sIF\\sNOT\\sEXISTS)?\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
+	expCreateTable = regexp.MustCompile("(?i)^CREATE\\sTABLE(\\sIF\\sNOT\\sEXISTS)?\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 	expAlterTable  = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s{1,}TO\\s.*?")
 	expDropTable   = regexp.MustCompile("(?i)^DROP\\sTABLE(\\sIF\\sEXISTS){0,1}\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}(?:$|\\s)")
@@ -115,9 +115,9 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.QueryEvent:
 			var (
-				mb [][]byte
+				mb     [][]byte
 				schema []byte
-				table []byte
+				table  []byte
 			)
 			regexps := []regexp.Regexp{*expCreateTable, *expAlterTable, *expRenameTable, *expDropTable}
 			for _, reg := range regexps {
@@ -143,10 +143,14 @@ func (c *Canal) runSyncBinlog() error {
 			force = true
 			c.ClearTableCache(schema, table)
 			log.Infof("table structure changed, clear table cache: %s.%s\n", schema, table)
-			if err = c.eventHandler.OnDDL(pos, e); err != nil {
+			if err = c.eventHandler.OnTableChanged(string(schema), string(table)); err != nil {
 				return errors.Trace(err)
 			}
 
+			// Now we only handle Table Changed DDL, maybe we will support more later.
+			if err = c.eventHandler.OnDDL(pos, e); err != nil {
+				return errors.Trace(err)
+			}
 		default:
 			continue
 		}
