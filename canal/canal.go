@@ -185,6 +185,12 @@ func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
 	return c.Run()
 }
 
+// Dump all data from MySQL master `mysqldump`, ignore sync binlog.
+func (c *Canal) Dump() error {
+	defer close(c.dumpDoneCh)
+	return c.dump()
+}
+
 func (c *Canal) run() error {
 	defer func() {
 		c.cancel()
