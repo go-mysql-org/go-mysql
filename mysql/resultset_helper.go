@@ -135,7 +135,12 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 				return nil, errors.Trace(err)
 			}
 
-			row = append(row, PutLengthEncodedString(b)...)
+			if b == nil {
+				// NULL value is encoded as 0xfb here (without additional info about length)
+				row = append(row, 0xfb)
+			} else {
+				row = append(row, PutLengthEncodedString(b)...)
+			}
 		}
 
 		r.RowDatas = append(r.RowDatas, row)
