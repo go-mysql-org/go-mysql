@@ -108,6 +108,7 @@ func (d *Dumper) Reset() {
 	d.TableDB = ""
 	d.IgnoreTables = make(map[string][]string)
 	d.Databases = d.Databases[0:0]
+	d.Where = ""
 }
 
 func (d *Dumper) Dump(w io.Writer) error {
