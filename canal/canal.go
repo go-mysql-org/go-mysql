@@ -146,6 +146,7 @@ func (c *Canal) prepareDumper() error {
 	charset := c.cfg.Charset
 	c.dumper.SetCharset(charset)
 
+	c.dumper.SetWhere(c.cfg.Dump.Where)
 	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
 	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
 
