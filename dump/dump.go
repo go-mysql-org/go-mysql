@@ -26,6 +26,7 @@ type Dumper struct {
 
 	Databases []string
 
+	Where   string
 	Charset string
 
 	IgnoreTables map[string][]string
@@ -66,6 +67,10 @@ func (d *Dumper) SetCharset(charset string) {
 	d.Charset = charset
 }
 
+func (d *Dumper) SetWhere(where string) {
+	d.Where = where
+}
+
 func (d *Dumper) SetErrOut(o io.Writer) {
 	d.ErrOut = o
 }
@@ -103,6 +108,7 @@ func (d *Dumper) Reset() {
 	d.TableDB = ""
 	d.IgnoreTables = make(map[string][]string)
 	d.Databases = d.Databases[0:0]
+	d.Where = ""
 }
 
 func (d *Dumper) Dump(w io.Writer) error {
@@ -164,6 +170,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	if len(d.Charset) != 0 {
 		args = append(args, fmt.Sprintf("--default-character-set=%s", d.Charset))
+	}
+
+	if len(d.Where) != 0 {
+		args = append(args, fmt.Sprintf("--where=%s", d.Where))
 	}
 
 	cmd := exec.Command(d.ExecutionPath, args...)

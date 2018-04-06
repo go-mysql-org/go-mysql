@@ -24,6 +24,9 @@ type DumpConfig struct {
 	// Ignore table format is db.table
 	IgnoreTables []string `toml:"ignore_tables"`
 
+	// Dump only selected records. Quotes are mandatory
+	Where string `toml:"where"`
+
 	// If true, discard error msg, else, output to stderr
 	DiscardErr bool `toml:"discard_err"`
 
