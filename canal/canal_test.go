@@ -33,6 +33,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg.Dump.ExecutionPath = "mysqldump"
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
+	cfg.Dump.Where = "id>0"
 
 	// include & exclude config
 	cfg.IncludeTableRegex = make([]string, 1)
