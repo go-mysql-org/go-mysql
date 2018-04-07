@@ -31,6 +31,7 @@ type Canal struct {
 
 	master     *masterInfo
 	dumper     *dump.Dumper
+	dumped     bool
 	dumpDoneCh chan struct{}
 	syncer     *replication.BinlogSyncer
 
@@ -186,20 +187,34 @@ func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
 	return c.Run()
 }
 
+// Dump all data from MySQL master `mysqldump`, ignore sync binlog.
+func (c *Canal) Dump() error {
+	if c.dumped {
+		return errors.New("the method Dump can't be called twice")
+	}
+	c.dumped = true
+	defer close(c.dumpDoneCh)
+	return c.dump()
+}
+
 func (c *Canal) run() error {
 	defer func() {
 		c.cancel()
 	}()
 
-	err := c.tryDump()
-	close(c.dumpDoneCh)
+	if !c.dumped {
+		c.dumped = true
 
-	if err != nil {
-		log.Errorf("canal dump mysql err: %v", err)
-		return errors.Trace(err)
+		err := c.tryDump()
+		close(c.dumpDoneCh)
+
+		if err != nil {
+			log.Errorf("canal dump mysql err: %v", err)
+			return errors.Trace(err)
+		}
 	}
 
-	if err = c.runSyncBinlog(); err != nil {
+	if err := c.runSyncBinlog(); err != nil {
 		log.Errorf("canal start sync binlog err: %v", err)
 		return errors.Trace(err)
 	}
