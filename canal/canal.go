@@ -419,6 +419,7 @@ func (c *Canal) prepareSyncer() error {
 		HeartbeatPeriod: c.cfg.HeartbeatPeriod,
 		ReadTimeout:     c.cfg.ReadTimeout,
 		UseDecimal:      c.cfg.UseDecimal,
+		TLSConfig:       c.cfg.TLSConfig,
 	}
 
 	c.syncer = replication.NewBinlogSyncer(cfg)
