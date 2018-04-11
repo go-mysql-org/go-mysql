@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bburket/go-mysql/client"
 	"github.com/juju/errors"
 	"github.com/satori/go.uuid"
-	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
 	log "github.com/sirupsen/logrus"
 )

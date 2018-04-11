@@ -10,6 +10,7 @@ import (
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
+	log "github.com/sirupsen/logrus"
 )
 
 type Conn struct {
@@ -63,6 +64,10 @@ func Connect(addr string, user string, password string, dbName string, options .
 	// Apply configuration functions.
 	for i := range options {
 		options[i](c)
+	}
+
+	if c.TLSConfig != nil {
+		log.Info("TLS configuration specified")
 	}
 
 	if err = c.handshake(); err != nil {
