@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"time"
-
+	"crypto/tls"
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
@@ -44,6 +44,7 @@ type Config struct {
 	Password string `toml:"password"`
 	
 	// If not nil, use the provided tls.Config to connect to the database using TLS/SSL.
+	// For now this must be programmatically configured. No toml support
 	TLSConfig *tls.Config
 
 	Charset         string        `toml:"charset"`

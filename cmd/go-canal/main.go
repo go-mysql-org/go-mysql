@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/siddontang/go-mysql/canal"
+	"github.com/bburket/go-mysql/canal"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
