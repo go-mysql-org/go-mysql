@@ -70,6 +70,8 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 	}
 
 	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs})
+	nextPos := h.c.syncer.GetNextPosition()
+	events.NextPos = nextPos
 	return h.c.eventHandler.OnRow(events)
 }
 
