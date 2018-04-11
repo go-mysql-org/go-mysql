@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bburket/go-mysql/replication"
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
 	log "github.com/sirupsen/logrus"
 )
