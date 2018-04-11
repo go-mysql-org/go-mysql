@@ -68,6 +68,8 @@ func Connect(addr string, user string, password string, dbName string, options .
 
 	if c.TLSConfig != nil {
 		log.Info("TLS configuration specified")
+	} else {
+		log.Info("No TLS configuration specified")
 	}
 
 	if err = c.handshake(); err != nil {
