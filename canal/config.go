@@ -42,6 +42,9 @@ type Config struct {
 	Addr     string `toml:"addr"`
 	User     string `toml:"user"`
 	Password string `toml:"password"`
+	
+	// If not nil, use the provided tls.Config to connect to the database using TLS/SSL.
+	TLSConfig *tls.Config
 
 	Charset         string        `toml:"charset"`
 	ServerID        uint32        `toml:"server_id"`
@@ -63,6 +66,8 @@ type Config struct {
 	Dump DumpConfig `toml:"dump"`
 
 	UseDecimal bool `toml:"use_decimal"`
+
+
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
