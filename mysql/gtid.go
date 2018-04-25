@@ -13,6 +13,8 @@ type GTIDSet interface {
 	Contain(o GTIDSet) bool
 
 	Update(GTIDStr string) error
+
+	Clone() GTIDSet
 }
 
 func ParseGTIDSet(flavor string, s string) (GTIDSet, error) {
