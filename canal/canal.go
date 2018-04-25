@@ -27,8 +27,6 @@ type Canal struct {
 
 	cfg *Config
 
-	useGTID bool
-
 	master     *masterInfo
 	dumper     *dump.Dumper
 	dumped     bool
@@ -174,14 +172,12 @@ func (c *Canal) Run() error {
 
 // RunFrom will sync from the binlog position directly, ignore mysqldump.
 func (c *Canal) RunFrom(pos mysql.Position) error {
-	c.useGTID = false
 	c.master.Update(pos)
 
 	return c.Run()
 }
 
 func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
-	c.useGTID = true
 	c.master.UpdateGTID(set)
 
 	return c.Run()
@@ -456,4 +452,8 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 
 func (c *Canal) SyncedPosition() mysql.Position {
 	return c.master.Position()
+}
+
+func (c *Canal) SyncedGTID() mysql.GTIDSet {
+	return c.master.GTID()
 }

@@ -21,7 +21,8 @@ var (
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
-	if !c.useGTID {
+	gtid := c.master.GTID()
+	if gtid == nil || gtid.String() == "" {
 		pos := c.master.Position()
 		s, err := c.syncer.StartSync(pos)
 		if err != nil {
@@ -30,12 +31,11 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		log.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
-		gset := c.master.GTID()
-		s, err := c.syncer.StartSyncGTID(gset)
+		s, err := c.syncer.StartSyncGTID(gtid)
 		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID %v error %v", gset, err)
+			return nil, errors.Errorf("start sync replication at GTID %v error %v", gtid, err)
 		}
-		log.Infof("start sync binlog at GTID %v", gset)
+		log.Infof("start sync binlog at GTID %v", gtid)
 		return s, nil
 	}
 }
@@ -105,12 +105,12 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.GTIDEvent:
 			u, _ := uuid.FromBytes(e.SID)
-			gset, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
+			gtid, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
 			if err != nil {
 				return errors.Trace(err)
 			}
-			c.master.UpdateGTID(gset)
-			if err := c.eventHandler.OnGTID(gset); err != nil {
+			c.master.UpdateGTID(gtid)
+			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
