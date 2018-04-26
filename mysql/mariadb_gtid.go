@@ -89,3 +89,9 @@ func (gtid *MariadbGTID) Update(GTIDStr string) error {
 
 	return nil
 }
+
+func (gtid *MariadbGTID) Clone() GTIDSet {
+	clone := new(MariadbGTID)
+	*clone = *gtid
+	return clone
+}
