@@ -427,3 +427,9 @@ func (s *MysqlGTIDSet) Encode() []byte {
 
 	return buf.Bytes()
 }
+
+func (gtid *MysqlGTIDSet) Clone() GTIDSet {
+	clone := new(MysqlGTIDSet)
+	*clone = *gtid
+	return clone
+}
