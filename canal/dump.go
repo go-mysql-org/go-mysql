@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -15,11 +16,17 @@ type dumpParseHandler struct {
 	c    *Canal
 	name string
 	pos  uint64
+	gset string
 }
 
 func (h *dumpParseHandler) BinLog(name string, pos uint64) error {
 	h.name = name
 	h.pos = pos
+	return nil
+}
+
+func (h *dumpParseHandler) GTIDSet(gset string) error {
+	h.gset = gset
 	return nil
 }
 
@@ -120,22 +127,32 @@ func (c *Canal) dump() error {
 		return errors.Trace(err)
 	}
 
-	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at (%s, %d)",
-		time.Now().Sub(start).Seconds(), h.name, h.pos)
-
-	pos := mysql.Position{h.name, uint32(h.pos)}
-	c.master.Update(pos)
-	c.eventHandler.OnPosSynced(pos, true)
+	var startPos fmt.Stringer
+	if h.gset != "" {
+		gset, err := mysql.ParseGTIDSet(c.cfg.Flavor, h.gset)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		startPos = gset
+		c.master.UpdateGTIDSet(gset)
+	} else {
+		pos := mysql.Position{h.name, uint32(h.pos)}
+		startPos = pos
+		c.master.Update(pos)
+		c.eventHandler.OnPosSynced(pos, true)
+	}
+	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
+		time.Now().Sub(start).Seconds(), startPos)
 	return nil
 }
 
 func (c *Canal) tryDump() error {
 	pos := c.master.Position()
-	gtid := c.master.GTID()
+	gset := c.master.GTIDSet()
 	if (len(pos.Name) > 0 && pos.Pos > 0) ||
-		(gtid != nil && gtid.String() != "") {
+		(gset != nil && gset.String() != "") {
 		// we will sync with binlog name and position
-		log.Infof("skip dump, use last binlog replication pos %s or GTID %s", pos, gtid)
+		log.Infof("skip dump, use last binlog replication pos %s or GTID set %s", pos, gset)
 		return nil
 	}
 

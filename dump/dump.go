@@ -147,9 +147,6 @@ func (d *Dumper) Dump(w io.Writer) error {
 	// Multi row is easy for us to parse the data
 	args = append(args, "--skip-extended-insert")
 
-	// Disable gtid purge
-	args = append(args, "--set-gtid-purged=OFF")
-
 	for db, tables := range d.IgnoreTables {
 		for _, table := range tables {
 			args = append(args, fmt.Sprintf("--ignore-table=%s.%s", db, table))
