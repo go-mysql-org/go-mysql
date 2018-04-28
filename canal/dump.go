@@ -129,15 +129,13 @@ func (c *Canal) dump() error {
 		return errors.Trace(err)
 	}
 
-	var startPos fmt.Stringer
+	pos := mysql.Position{h.name, uint32(h.pos)}
+	c.master.Update(pos)
+	c.eventHandler.OnPosSynced(pos, true)
+	var startPos fmt.Stringer = pos
 	if h.gset != nil {
-		startPos = h.gset
 		c.master.UpdateGTIDSet(h.gset)
-	} else {
-		pos := mysql.Position{h.name, uint32(h.pos)}
-		startPos = pos
-		c.master.Update(pos)
-		c.eventHandler.OnPosSynced(pos, true)
+		startPos = h.gset
 	}
 	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
 		time.Now().Sub(start).Seconds(), startPos)
