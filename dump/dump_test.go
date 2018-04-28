@@ -119,10 +119,6 @@ func (h *testParseHandler) BinLog(name string, pos uint64) error {
 	return nil
 }
 
-func (h *testParseHandler) GTIDSet(gset string) error {
-	return nil
-}
-
 func (h *testParseHandler) Data(schema string, table string, values []string) error {
 	return nil
 }
@@ -139,28 +135,6 @@ func (s *parserTestSuite) TestParseFindTable(c *C) {
 
 	for _, t := range tbl {
 		res := valuesExp.FindAllStringSubmatch(t.sql, -1)[0][1]
-		c.Assert(res, Equals, t.table)
-	}
-}
-
-func (s *parserTestSuite) TestParseGTIDPurge(c *C) {
-	tbl := []struct {
-		sql   string
-		table string
-	}{
-		{
-			// percona
-			"SET @@GLOBAL.GTID_PURGED='a4d0994c-4830-11e8-90a0-0242ac120005:1-3915';",
-			"a4d0994c-4830-11e8-90a0-0242ac120005:1-3915",
-		}, {
-			// mysql
-			"SET @@GLOBAL.GTID_PURGED=/*!80000 '+'*/ '8ab82362-9c37-11e7-a858-000c29c1025c:1-507455';",
-			"8ab82362-9c37-11e7-a858-000c29c1025c:1-507455",
-		},
-	}
-
-	for _, t := range tbl {
-		res := gtidExp.FindAllStringSubmatch(t.sql, -1)[0][1]
 		c.Assert(res, Equals, t.table)
 	}
 }

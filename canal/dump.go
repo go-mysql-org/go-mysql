@@ -16,17 +16,12 @@ type dumpParseHandler struct {
 	c    *Canal
 	name string
 	pos  uint64
-	gset string
+	gset mysql.GTIDSet
 }
 
 func (h *dumpParseHandler) BinLog(name string, pos uint64) error {
 	h.name = name
 	h.pos = pos
-	return nil
-}
-
-func (h *dumpParseHandler) GTIDSet(gset string) error {
-	h.gset = gset
 	return nil
 }
 
@@ -106,10 +101,17 @@ func (c *Canal) AddDumpIgnoreTables(db string, tables ...string) {
 
 func (c *Canal) dump() error {
 	if c.dumper == nil {
-		return errors.New("mysqldump is not exist")
+		return errors.New("mysqldump does not exist")
 	}
 
 	h := &dumpParseHandler{c: c}
+	if c.master.GTIDSet() != nil {
+		gset, err := c.GetMasterGTIDSet()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		h.gset = gset
+	}
 
 	if c.cfg.Dump.SkipMasterData {
 		pos, err := c.GetMasterPos()
@@ -128,13 +130,9 @@ func (c *Canal) dump() error {
 	}
 
 	var startPos fmt.Stringer
-	if h.gset != "" {
-		gset, err := mysql.ParseGTIDSet(c.cfg.Flavor, h.gset)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		startPos = gset
-		c.master.UpdateGTIDSet(gset)
+	if h.gset != nil {
+		startPos = h.gset
+		c.master.UpdateGTIDSet(h.gset)
 	} else {
 		pos := mysql.Position{h.name, uint32(h.pos)}
 		startPos = pos

@@ -226,6 +226,22 @@ func (c *Canal) GetMasterPos() (mysql.Position, error) {
 	return mysql.Position{name, uint32(pos)}, nil
 }
 
+func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
+	rr, err := c.Execute("SELECT @@GLOBAL.GTID_EXECUTED")
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	gx, err := rr.GetString(0, 0)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	gset, err := mysql.ParseGTIDSet(c.cfg.Flavor, gx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return gset, nil
+}
+
 func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	pos, err := c.GetMasterPos()
 	if err != nil {

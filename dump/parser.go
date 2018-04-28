@@ -19,20 +19,16 @@ var (
 type ParseHandler interface {
 	// Parse CHANGE MASTER TO MASTER_LOG_FILE=name, MASTER_LOG_POS=pos;
 	BinLog(name string, pos uint64) error
-	// Parse @@global.gtid_purged;
-	GTIDSet(gset string) error
 
 	Data(schema string, table string, values []string) error
 }
 
 var binlogExp *regexp.Regexp
-var gtidExp *regexp.Regexp
 var useExp *regexp.Regexp
 var valuesExp *regexp.Regexp
 
 func init() {
 	binlogExp = regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
-	gtidExp = regexp.MustCompile("^SET @@GLOBAL\\.GTID_PURGED=.*'(.+)';")
 	useExp = regexp.MustCompile("^USE `(.+)`;")
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
 }
@@ -71,12 +67,6 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 				}
 
 				binlogParsed = true
-			}
-		}
-
-		if m := gtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-			if err = h.GTIDSet(m[0][1]); err != nil && err != ErrSkip {
-				return errors.Trace(err)
 			}
 		}
 
