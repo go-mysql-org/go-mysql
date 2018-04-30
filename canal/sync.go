@@ -194,6 +194,14 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	return c.eventHandler.OnRow(events)
 }
 
+func (c *Canal) FlushBinlog() error {
+	_, err := c.Execute("FLUSH BINARY LOGS")
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
 func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
 	for {
@@ -201,6 +209,10 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 		case <-timer.C:
 			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
+			err := c.FlushBinlog()
+			if err != nil {
+				return errors.Trace(err)
+			}
 			curPos := c.master.Position()
 			if curPos.Compare(pos) >= 0 {
 				return nil
