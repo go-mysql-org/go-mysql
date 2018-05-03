@@ -27,7 +27,7 @@ cfg := replication.BinlogSyncerConfig {
 }
 syncer := replication.NewBinlogSyncer(cfg)
 
-// Start sync with sepcified binlog file and position
+// Start sync with specified binlog file and position
 streamer, _ := syncer.StartSync(mysql.Position{binlogFile, binlogPos})
 
 // or you can start a gtid replication like
