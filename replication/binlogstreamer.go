@@ -36,6 +36,16 @@ func (s *BinlogStreamer) GetEvent(ctx context.Context) (*BinlogEvent, error) {
 	}
 }
 
+// DumpEvents dumps all left events
+func (s *BinlogStreamer) DumpEvents() []*BinlogEvent {
+	count := len(s.ch)
+	events := make([]*BinlogEvent, 0, count)
+	for c := range s.ch {
+		events = append(events, c)
+	}
+	return events
+}
+
 func (s *BinlogStreamer) close() {
 	s.closeWithError(ErrSyncClosed)
 }
