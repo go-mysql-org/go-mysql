@@ -522,3 +522,43 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 		c.Assert(rows.Rows[0][1], SimpleDecimalEqualsChecker, decimal.NewFromFloat(101))
 	}
 }
+
+func (_ *testDecodeSuite) TestJsonNull(c *C) {
+	// Table:
+	// desc hj_order_preview
+	// +------------------+------------+------+-----+-------------------+----------------+
+	// | Field            | Type       | Null | Key | Default           | Extra          |
+	// +------------------+------------+------+-----+-------------------+----------------+
+	// | id               | int(13)    | NO   | PRI | <null>            | auto_increment |
+	// | buyer_id         | bigint(13) | NO   |     | <null>            |                |
+	// | order_sn         | bigint(13) | NO   |     | <null>            |                |
+	// | order_detail     | json       | NO   |     | <null>            |                |
+	// | is_del           | tinyint(1) | NO   |     | 0                 |                |
+	// | add_time         | int(13)    | NO   |     | <null>            |                |
+	// | last_update_time | timestamp  | NO   |     | CURRENT_TIMESTAMP |                |
+	// +------------------+------------+------+-----+-------------------+----------------+
+	// insert into hj_order_preview
+	// (id, buyer_id, order_sn, is_del, add_time, last_update_time)
+	// values (1, 95891865464386, 13376222192996417, 0, 1479983995, 1479983995)
+
+	tableMapEventData := []byte("r\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x10hj_order_preview\x00\a\x03\b\b\xf5\x01\x03\x11\x02\x04\x00\x00")
+
+	tableMapEvent := new(TableMapEvent)
+	tableMapEvent.tableIDSize = 6
+	err := tableMapEvent.Decode(tableMapEventData)
+	c.Assert(err, IsNil)
+
+	rows := new(RowsEvent)
+	rows.tableIDSize = 6
+	rows.tables = make(map[uint64]*TableMapEvent)
+	rows.tables[tableMapEvent.TableID] = tableMapEvent
+	rows.Version = 2
+
+	data :=
+		[]byte("r\x00\x00\x00\x00\x00\x01\x00\x02\x00\a\xff\x80\x01\x00\x00\x00B\ue4d06W\x00\x00A\x10@l\x9a\x85/\x00\x00\x00\x00\x00\x00{\xc36X\x00\x00\x00\x00")
+
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[0][3], HasLen, 0)
+}

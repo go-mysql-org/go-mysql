@@ -64,6 +64,11 @@ func main() {
 		for {
 			e, err := s.GetEvent(context.Background())
 			if err != nil {
+				// Try to output all left events
+				events := s.DumpEvents()
+				for _, e := range events {
+					e.Dump(os.Stdout)
+				}
 				fmt.Printf("Get event error: %v\n", errors.ErrorStack(err))
 				return
 			}
