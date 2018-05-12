@@ -53,7 +53,7 @@ type EventError struct {
 }
 
 func (e *EventError) Error() string {
-	return e.Err
+	return fmt.Sprintf("Header %#v, Data %q, Err: %v", e.Header, e.Data, e.Err)
 }
 
 type EventHeader struct {
