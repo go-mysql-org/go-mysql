@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/juju/errors"
+	"gopkg.in/birkirb/loggers.v1/log"
 )
 
 var (
@@ -13,10 +14,9 @@ var (
 
 // BinlogStreamer gets the streaming event.
 type BinlogStreamer struct {
-	ch     chan *BinlogEvent
-	ech    chan error
-	err    error
-	logger Logger
+	ch  chan *BinlogEvent
+	ech chan error
+	err error
 }
 
 // GetEvent gets the binlog event one by one, it will block until Syncer receives any events from MySQL
@@ -44,19 +44,18 @@ func (s *BinlogStreamer) closeWithError(err error) {
 	if err == nil {
 		err = ErrSyncClosed
 	}
-	s.logger.Errorf("close sync with err: %v", err)
+	log.Errorf("close sync with err: %v", err)
 	select {
 	case s.ech <- err:
 	default:
 	}
 }
 
-func newBinlogStreamer(logger Logger) *BinlogStreamer {
+func newBinlogStreamer() *BinlogStreamer {
 	s := new(BinlogStreamer)
 
 	s.ch = make(chan *BinlogEvent, 10240)
 	s.ech = make(chan error, 4)
-	s.logger = logger
 
 	return s
 }
