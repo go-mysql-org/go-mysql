@@ -1,4 +1,0 @@
-golib
-=====
-
-my golang lib
