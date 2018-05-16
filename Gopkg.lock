@@ -11,15 +11,16 @@
   name = "github.com/go-sql-driver/mysql"
   packages = ["."]
   revision = "a0583e0143b1624142adab07e0e97fe106d99561"
-  version = "v1.3"
+  version = "v1.3.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/jmoiron/sqlx"
   packages = [
     ".",
     "reflectx"
   ]
-  revision = "d9bd385d68c068f1fabb5057e3dedcbcbb039d0f"
+  revision = "2aeb6a910c2b94f2d5eb53d9895d80e27264ec41"
 
 [[projects]]
   branch = "master"
@@ -28,21 +29,22 @@
   revision = "c7d06af17c68cd34c835053720b21f6549d9b0ee"
 
 [[projects]]
+  branch = "master"
   name = "github.com/pingcap/check"
   packages = ["."]
-  revision = "4c65d06b828d91184c8b6bd94d700143b0be3588"
+  revision = "1c287c953996ab3a0bf535dba9d53d809d3dc0b6"
 
 [[projects]]
   name = "github.com/satori/go.uuid"
   packages = ["."]
-  revision = "879c5887cd475cd7864858769793b2ceb0d44feb"
-  version = "v1.1.0"
+  revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
+  version = "v1.2.0"
 
 [[projects]]
   name = "github.com/shopspring/decimal"
   packages = ["."]
-  revision = "9ca7f51822d222ae4e246f070f9aad863599bd1a"
-  version = "1.0.0"
+  revision = "69b3a8ad1f5f2c8bd855cb6506d18593064a346b"
+  version = "1.0.1"
 
 [[projects]]
   branch = "master"
@@ -51,30 +53,22 @@
     "hack",
     "sync2"
   ]
-  revision = "cb568a3e5cc06256f91a2da5a87455f717eb33f4"
+  revision = "2b7082d296ba89ae7ead0f977816bddefb65df9d"
 
 [[projects]]
-  name = "github.com/sirupsen/logrus"
-  packages = ["."]
-  revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
-  version = "v1.0.4"
-
-[[projects]]
-  name = "golang.org/x/crypto"
-  packages = ["ssh/terminal"]
-  revision = "9419663f5a44be8b34ca85f08abc5fe1be11f8a3"
-
-[[projects]]
-  name = "golang.org/x/sys"
+  name = "gopkg.in/birkirb/loggers.v1"
   packages = [
-    "unix",
-    "windows"
+    ".",
+    "log",
+    "mappers",
+    "mappers/stdlib"
   ]
-  revision = "ebfc5b4631820b793c9010c87fd8fef0f39eb082"
+  revision = "a4f518ce71c53e85d2aa18266812604a267f013b"
+  version = "v1.0.3"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8e7ef9a32667e549ef1901c5774417296d3ab13ca6c1b3bfa6c962d6572a6c55"
+  inputs-digest = "4b4fa1994f6c716995f6109caf513a1ffa0431370037b87a7a0d718fd9e178b7"
   solver-name = "gps-cdcl"
   solver-version = 1

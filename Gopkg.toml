@@ -50,9 +50,11 @@
   name = "github.com/siddontang/go"
 
 [[constraint]]
-  name = "github.com/sirupsen/logrus"
+  name = "gopkg.in/birkirb/loggers.v1"
   version = "1.0.3"
 
 [prune]
   go-tests = true
   unused-packages = true
+  non-go = true
+
