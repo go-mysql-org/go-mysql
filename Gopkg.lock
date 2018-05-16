@@ -56,6 +56,7 @@
   revision = "2b7082d296ba89ae7ead0f977816bddefb65df9d"
 
 [[projects]]
+  branch = "master"
   name = "gopkg.in/birkirb/loggers.v1"
   packages = [
     ".",
@@ -63,12 +64,12 @@
     "mappers",
     "mappers/stdlib"
   ]
-  revision = "a4f518ce71c53e85d2aa18266812604a267f013b"
-  version = "v1.0.3"
+  revision = "fa51471f8169216876525e7b6c9fbd0c8789b57a"
+  source = "https://github.com/siddontang/loggers.git"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4b4fa1994f6c716995f6109caf513a1ffa0431370037b87a7a0d718fd9e178b7"
+  inputs-digest = "219cbf381a410b6ce45f18380441e604972a101900a002ab6d589d3cd61311c0"
   solver-name = "gps-cdcl"
   solver-version = 1

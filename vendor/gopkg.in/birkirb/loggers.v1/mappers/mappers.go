@@ -1,6 +1,10 @@
 package mappers
 
-import "gopkg.in/birkirb/loggers.v1"
+import (
+	"strings"
+
+	"gopkg.in/birkirb/loggers.v1"
+)
 
 type (
 	// Level indicates a specific log level.
@@ -18,6 +22,11 @@ type (
 		LevelMapper
 		WithField(key string, value interface{}) loggers.Advanced
 		WithFields(fields ...interface{}) loggers.Advanced
+	}
+
+	// LevelSetter changes the level
+	LevelSetter interface {
+		SetLevel(l Level)
 	}
 )
 
@@ -52,5 +61,25 @@ func (l Level) String() string {
 		return "PANIC "
 	default:
 		panic("Missing case statement in Level String.")
+	}
+}
+
+// ParseLevel parses the level from string. Return default Info Level if error.
+func ParseLevel(s string) Level {
+	switch strings.ToLower(s) {
+	case "debug":
+		return LevelDebug
+	case "info":
+		return LevelInfo
+	case "warn", "warning":
+		return LevelWarn
+	case "error":
+		return LevelError
+	case "fatal":
+		return LevelFatal
+	case "panic":
+		return LevelPanic
+	default:
+		return LevelInfo
 	}
 }

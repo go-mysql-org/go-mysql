@@ -14,12 +14,14 @@ import (
 // However it mostly ignores any level info.
 type goLog struct {
 	logger *log.Logger
+	level  mappers.Level
 }
 
 // NewDefaultLogger returns a Contextual logger using a log.Logger with stderr output.
 func NewDefaultLogger() loggers.Contextual {
 	var g goLog
 	g.logger = log.New(os.Stderr, "", log.Ldate|log.Ltime)
+	g.level = mappers.LevelInfo
 
 	a := mappers.NewContextualMap(&g)
 	a.Debug("Now using Go's stdlib log package (via loggers/mappers/stdlib).")
@@ -38,8 +40,17 @@ func NewLogger(l *log.Logger) loggers.Contextual {
 	return a
 }
 
+// SetLevel implements LevelSetter interface
+func (l *goLog) SetLevel(level mappers.Level) {
+	l.level = level
+}
+
 // LevelPrint is a Mapper method
 func (l *goLog) LevelPrint(lev mappers.Level, i ...interface{}) {
+	if l.level > lev {
+		return
+	}
+
 	v := []interface{}{lev}
 	v = append(v, i...)
 	l.logger.Print(v...)
@@ -47,6 +58,10 @@ func (l *goLog) LevelPrint(lev mappers.Level, i ...interface{}) {
 
 // LevelPrintf is a Mapper method
 func (l *goLog) LevelPrintf(lev mappers.Level, format string, i ...interface{}) {
+	if l.level > lev {
+		return
+	}
+
 	f := "%s" + format
 	v := []interface{}{lev}
 	v = append(v, i...)
@@ -55,6 +70,10 @@ func (l *goLog) LevelPrintf(lev mappers.Level, format string, i ...interface{}) 
 
 // LevelPrintln is a Mapper method
 func (l *goLog) LevelPrintln(lev mappers.Level, i ...interface{}) {
+	if l.level > lev {
+		return
+	}
+
 	v := []interface{}{lev}
 	v = append(v, i...)
 	l.logger.Println(v...)
@@ -74,7 +93,7 @@ func (l *goLog) WithFields(fields ...interface{}) loggers.Advanced {
 		s = append(s, fmt.Sprint(key, "=", value))
 	}
 
-	r := gologPostfixLogger{l, "["+strings.Join(s, ", ")+"]"}
+	r := gologPostfixLogger{l, "[" + strings.Join(s, ", ") + "]"}
 	return mappers.NewAdvancedMap(&r)
 }
 
