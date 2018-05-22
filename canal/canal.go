@@ -17,7 +17,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-	log "github.com/sirupsen/logrus"
+	"gopkg.in/birkirb/loggers.v1/log"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
@@ -27,10 +27,9 @@ type Canal struct {
 
 	cfg *Config
 
-	useGTID bool
-
 	master     *masterInfo
 	dumper     *dump.Dumper
+	dumped     bool
 	dumpDoneCh chan struct{}
 	syncer     *replication.BinlogSyncer
 
@@ -145,6 +144,7 @@ func (c *Canal) prepareDumper() error {
 	charset := c.cfg.Charset
 	c.dumper.SetCharset(charset)
 
+	c.dumper.SetWhere(c.cfg.Dump.Where)
 	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
 	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
 
@@ -172,17 +172,25 @@ func (c *Canal) Run() error {
 
 // RunFrom will sync from the binlog position directly, ignore mysqldump.
 func (c *Canal) RunFrom(pos mysql.Position) error {
-	c.useGTID = false
 	c.master.Update(pos)
 
 	return c.Run()
 }
 
 func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
-	c.useGTID = true
 	c.master.UpdateGTID(set)
 
 	return c.Run()
+}
+
+// Dump all data from MySQL master `mysqldump`, ignore sync binlog.
+func (c *Canal) Dump() error {
+	if c.dumped {
+		return errors.New("the method Dump can't be called twice")
+	}
+	c.dumped = true
+	defer close(c.dumpDoneCh)
+	return c.dump()
 }
 
 func (c *Canal) run() error {
@@ -190,15 +198,19 @@ func (c *Canal) run() error {
 		c.cancel()
 	}()
 
-	err := c.tryDump()
-	close(c.dumpDoneCh)
+	if !c.dumped {
+		c.dumped = true
 
-	if err != nil {
-		log.Errorf("canal dump mysql err: %v", err)
-		return errors.Trace(err)
+		err := c.tryDump()
+		close(c.dumpDoneCh)
+
+		if err != nil {
+			log.Errorf("canal dump mysql err: %v", err)
+			return errors.Trace(err)
+		}
 	}
 
-	if err = c.runSyncBinlog(); err != nil {
+	if err := c.runSyncBinlog(); err != nil {
 		log.Errorf("canal start sync binlog err: %v", err)
 		return errors.Trace(err)
 	}
@@ -402,6 +414,7 @@ func (c *Canal) prepareSyncer() error {
 		Charset:         c.cfg.Charset,
 		HeartbeatPeriod: c.cfg.HeartbeatPeriod,
 		ReadTimeout:     c.cfg.ReadTimeout,
+		UseDecimal:      c.cfg.UseDecimal,
 	}
 
 	c.syncer = replication.NewBinlogSyncer(cfg)
@@ -439,4 +452,8 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 
 func (c *Canal) SyncedPosition() mysql.Position {
 	return c.master.Position()
+}
+
+func (c *Canal) SyncedGTID() mysql.GTIDSet {
+	return c.master.GTID()
 }

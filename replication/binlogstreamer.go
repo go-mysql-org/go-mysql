@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
+	"gopkg.in/birkirb/loggers.v1/log"
 )
 
 var (
@@ -34,6 +34,16 @@ func (s *BinlogStreamer) GetEvent(ctx context.Context) (*BinlogEvent, error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// DumpEvents dumps all left events
+func (s *BinlogStreamer) DumpEvents() []*BinlogEvent {
+	count := len(s.ch)
+	events := make([]*BinlogEvent, 0, count)
+	for i := 0; i < count; i++ {
+		events = append(events, <-s.ch)
+	}
+	return events
 }
 
 func (s *BinlogStreamer) close() {

@@ -60,6 +60,12 @@ func (t *mysqlTestSuite) TestMysqlGTIDIntervalSlice(c *check.C) {
 	n = i.Normalize()
 	c.Assert(n, check.DeepEquals, IntervalSlice{Interval{1, 3}, Interval{4, 5}})
 
+	i = IntervalSlice{Interval{1, 4}, Interval{2, 3}}
+	i.Sort()
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{1, 4}, Interval{2, 3}})
+	n = i.Normalize()
+	c.Assert(n, check.DeepEquals, IntervalSlice{Interval{1, 4}})
+
 	n1 := IntervalSlice{Interval{1, 3}, Interval{4, 5}}
 	n2 := IntervalSlice{Interval{1, 2}}
 
@@ -176,4 +182,11 @@ func (t *mysqlTestSuite) TestErrorCode(c *check.C) {
 	for _, v := range tbls {
 		c.Assert(ErrorCode(v.msg), check.Equals, v.code)
 	}
+}
+
+func (t *mysqlTestSuite) TestMysqlNullDecode(c *check.C) {
+	_, isNull, n := LengthEncodedInt([]byte{0xfb})
+
+	c.Assert(isNull, check.IsTrue)
+	c.Assert(n, check.Equals, 1)
 }

@@ -10,16 +10,19 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-	log "github.com/sirupsen/logrus"
+	"gopkg.in/birkirb/loggers.v1/log"
 )
 
 var (
+	expCreateTable = regexp.MustCompile("(?i)^CREATE\\sTABLE(\\sIF\\sNOT\\sEXISTS)?\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
 	expAlterTable  = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
-	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE.*TO\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}$")
+	expRenameTable = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s{1,}TO\\s.*?")
+	expDropTable   = regexp.MustCompile("(?i)^DROP\\sTABLE(\\sIF\\sEXISTS){0,1}\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}(?:$|\\s)")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
-	if !c.useGTID {
+	gtid := c.master.GTID()
+	if gtid == nil || gtid.String() == "" {
 		pos := c.master.Position()
 		s, err := c.syncer.StartSync(pos)
 		if err != nil {
@@ -28,12 +31,11 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		log.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
-		gset := c.master.GTID()
-		s, err := c.syncer.StartSyncGTID(gset)
+		s, err := c.syncer.StartSyncGTID(gtid)
 		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID %v error %v", gset, err)
+			return nil, errors.Errorf("start sync replication at GTID %v error %v", gtid, err)
 		}
-		log.Infof("start sync binlog at GTID %v", gset)
+		log.Infof("start sync binlog at GTID %v", gtid)
 		return s, nil
 	}
 }
@@ -103,31 +105,52 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.GTIDEvent:
 			u, _ := uuid.FromBytes(e.SID)
-			gset, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
+			gtid, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
 			if err != nil {
 				return errors.Trace(err)
 			}
-			c.master.UpdateGTID(gset)
-			if err := c.eventHandler.OnGTID(gset); err != nil {
+			c.master.UpdateGTID(gtid)
+			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
-			if mb := checkRenameTable(e); mb != nil {
-				if len(mb[1]) == 0 {
-					mb[1] = e.Schema
+			var (
+				mb     [][]byte
+				schema []byte
+				table  []byte
+			)
+			regexps := []regexp.Regexp{*expCreateTable, *expAlterTable, *expRenameTable, *expDropTable}
+			for _, reg := range regexps {
+				mb = reg.FindSubmatch(e.Query)
+				if len(mb) != 0 {
+					break
 				}
-				savePos = true
-				force = true
-				c.ClearTableCache(mb[1], mb[2])
-				log.Infof("table structure changed, clear table cache: %s.%s\n", mb[1], mb[2])
-				if err = c.eventHandler.OnDDL(pos, e); err != nil {
-					return errors.Trace(err)
-				}
-			} else {
-				// skip others
+			}
+			mbLen := len(mb)
+			if mbLen == 0 {
 				continue
 			}
 
+			// the first last is table name, the second last is database name(if exists)
+			if len(mb[mbLen-2]) == 0 {
+				schema = e.Schema
+			} else {
+				schema = mb[mbLen-2]
+			}
+			table = mb[mbLen-1]
+
+			savePos = true
+			force = true
+			c.ClearTableCache(schema, table)
+			log.Infof("table structure changed, clear table cache: %s.%s\n", schema, table)
+			if err = c.eventHandler.OnTableChanged(string(schema), string(table)); err != nil {
+				return errors.Trace(err)
+			}
+
+			// Now we only handle Table Changed DDL, maybe we will support more later.
+			if err = c.eventHandler.OnDDL(pos, e); err != nil {
+				return errors.Trace(err)
+			}
 		default:
 			continue
 		}
@@ -206,13 +229,4 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
-}
-
-func checkRenameTable(e *replication.QueryEvent) [][]byte {
-	var mb = [][]byte{}
-	if mb = expAlterTable.FindSubmatch(e.Query); mb != nil {
-		return mb
-	}
-	mb = expRenameTable.FindSubmatch(e.Query)
-	return mb
 }

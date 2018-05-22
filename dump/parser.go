@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
@@ -48,7 +49,10 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 			break
 		}
 
-		line = line[0 : len(line)-1]
+		// Ignore '\n' on Linux or '\r\n' on Windows
+		line = strings.TrimRightFunc(line, func(c rune) bool {
+			return c == '\r' || c == '\n'
+		})
 
 		if parseBinlogPos && !binlogParsed {
 			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {

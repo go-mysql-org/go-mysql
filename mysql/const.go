@@ -8,7 +8,7 @@ const (
 
 var (
 	// maybe you can change for your specified name
-	ServerVersion string = "go-mysql-0.1"
+	ServerVersion string = "5.7.0"
 )
 
 const (

@@ -8,7 +8,7 @@ import (
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/schema"
-	log "github.com/sirupsen/logrus"
+	"gopkg.in/birkirb/loggers.v1/log"
 )
 
 type dumpParseHandler struct {
@@ -97,18 +97,9 @@ func (c *Canal) AddDumpIgnoreTables(db string, tables ...string) {
 	c.dumper.AddIgnoreTables(db, tables...)
 }
 
-func (c *Canal) tryDump() error {
-	pos := c.master.Position()
-	gtid := c.master.GTID()
-	if (len(pos.Name) > 0 && pos.Pos > 0) || gtid != nil {
-		// we will sync with binlog name and position
-		log.Infof("skip dump, use last binlog replication pos %s or GTID %s", pos, gtid)
-		return nil
-	}
-
+func (c *Canal) dump() error {
 	if c.dumper == nil {
-		log.Info("skip dump, no mysqldump")
-		return nil
+		return errors.New("mysqldump is not exist")
 	}
 
 	h := &dumpParseHandler{c: c}
@@ -132,8 +123,26 @@ func (c *Canal) tryDump() error {
 	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at (%s, %d)",
 		time.Now().Sub(start).Seconds(), h.name, h.pos)
 
-	pos = mysql.Position{h.name, uint32(h.pos)}
+	pos := mysql.Position{h.name, uint32(h.pos)}
 	c.master.Update(pos)
 	c.eventHandler.OnPosSynced(pos, true)
 	return nil
+}
+
+func (c *Canal) tryDump() error {
+	pos := c.master.Position()
+	gtid := c.master.GTID()
+	if (len(pos.Name) > 0 && pos.Pos > 0) ||
+		(gtid != nil && gtid.String() != "") {
+		// we will sync with binlog name and position
+		log.Infof("skip dump, use last binlog replication pos %s or GTID %s", pos, gtid)
+		return nil
+	}
+
+	if c.dumper == nil {
+		log.Info("skip dump, no mysqldump")
+		return nil
+	}
+
+	return c.dump()
 }

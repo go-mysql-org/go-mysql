@@ -53,7 +53,7 @@ type EventError struct {
 }
 
 func (e *EventError) Error() string {
-	return e.Err
+	return fmt.Sprintf("Header %#v, Data %q, Err: %v", e.Header, e.Data, e.Err)
 }
 
 type EventHeader struct {
@@ -453,7 +453,7 @@ func (e *MariadbGTIDEvent) Decode(data []byte) error {
 }
 
 func (e *MariadbGTIDEvent) Dump(w io.Writer) {
-	fmt.Fprintf(w, "GTID: %s\n", e.GTID)
+	fmt.Fprintf(w, "GTID: %v\n", e.GTID)
 	fmt.Fprintln(w)
 }
 

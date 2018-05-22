@@ -7,6 +7,10 @@ import (
 
 type EventHandler interface {
 	OnRotate(roateEvent *replication.RotateEvent) error
+	// OnTableChanged is called when the table is created, altered, renamed or dropped.
+	// You need to clear the associated data like cache with the table.
+	// It will be called before OnDDL.
+	OnTableChanged(schema string, table string) error
 	OnDDL(nextPos mysql.Position, queryEvent *replication.QueryEvent) error
 	OnRow(e *RowsEvent) error
 	OnXID(nextPos mysql.Position) error
@@ -19,8 +23,9 @@ type EventHandler interface {
 type DummyEventHandler struct {
 }
 
-func (h *DummyEventHandler) OnRotate(*replication.RotateEvent) error { return nil }
-func (h *DummyEventHandler) OnDDL(mysql.Position, *replication.QueryEvent) error {
+func (h *DummyEventHandler) OnRotate(*replication.RotateEvent) error          { return nil }
+func (h *DummyEventHandler) OnTableChanged(schema string, table string) error { return nil }
+func (h *DummyEventHandler) OnDDL(nextPos mysql.Position, queryEvent *replication.QueryEvent) error {
 	return nil
 }
 func (h *DummyEventHandler) OnRow(*RowsEvent) error                 { return nil }

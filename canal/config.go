@@ -24,6 +24,9 @@ type DumpConfig struct {
 	// Ignore table format is db.table
 	IgnoreTables []string `toml:"ignore_tables"`
 
+	// Dump only selected records. Quotes are mandatory
+	Where string `toml:"where"`
+
 	// If true, discard error msg, else, output to stderr
 	DiscardErr bool `toml:"discard_err"`
 
@@ -58,6 +61,8 @@ type Config struct {
 	DiscardNoMetaRowEvent bool `toml:"discard_no_meta_row_event"`
 
 	Dump DumpConfig `toml:"dump"`
+
+	UseDecimal bool `toml:"use_decimal"`
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
