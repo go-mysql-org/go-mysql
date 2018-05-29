@@ -62,11 +62,7 @@ func (gtid *MariadbGTID) String() string {
 
 // Contain return whether one mariadb gtid covers another mariadb gtid
 func (gtid *MariadbGTID) Contain(other *MariadbGTID) bool {
-	if gtid.DomainID != other.DomainID {
-		return false
-	}
-
-	return gtid.SequenceNumber >= other.SequenceNumber
+	return gtid.DomainID == other.DomainID && gtid.SequenceNumber >= other.SequenceNumber
 }
 
 // Clone clones a mariadb gtid
