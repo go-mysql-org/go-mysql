@@ -13,7 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
-	log "github.com/sirupsen/logrus"
+	"gopkg.in/birkirb/loggers.v1/log"
 )
 
 type errMissingTableMapEvent error

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
+	"gopkg.in/birkirb/loggers.v1/log"
 )
 
 var (
