@@ -102,12 +102,8 @@ func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 
 	//todo, handle redundant same uuid
 	for i := 0; i < len(sp); i++ {
-		set, err := ParseMariadbGTID(sp[i])
+		err := s.Update(sp[i])
 		if err != nil {
-			return nil, errors.Trace(err)
-		}
-
-		if err = s.AddSet(set); err != nil {
 			return nil, errors.Trace(err)
 		}
 	}
@@ -177,6 +173,10 @@ func (s *MariadbGTIDSet) Clone() GTIDSet {
 func (s *MariadbGTIDSet) Equal(o GTIDSet) bool {
 	other, ok := o.(*MariadbGTIDSet)
 	if !ok {
+		return false
+	}
+	
+	if len(other.Sets) != len(s.Sets) {
 		return false
 	}
 
