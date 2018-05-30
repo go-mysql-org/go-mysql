@@ -81,6 +81,7 @@ func (gtid *MariadbGTID) forward(newer *MariadbGTID) error  {
 		return errors.Errorf("out of order binlog appears with gtid %s vs current position gtid %s", newer, gtid)
 	}
 
+	gtid.ServerID = newer.ServerID
 	gtid.SequenceNumber = newer.SequenceNumber
 	return nil
 }
