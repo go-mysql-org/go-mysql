@@ -130,8 +130,9 @@ func (t *mariaDBTestSuite) TestParseMariaDBGTIDSet(c *check.C) {
 
 			// check String() function
 			inExpectedResult := false
+			actualStr := mariadbGTIDSet.String()
 			for _, str := range cs.expectedStr {
-				if str == mariadbGTIDSet.String() {
+				if str == actualStr {
 					inExpectedResult = true
 					break
 				}
