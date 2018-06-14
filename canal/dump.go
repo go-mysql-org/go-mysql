@@ -69,7 +69,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		}
 	}
 
-	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs})
+	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs}, nil)
 	return h.c.eventHandler.OnRow(events)
 }
 
