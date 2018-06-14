@@ -19,7 +19,7 @@ func (t *mariaDBTestSuite) TearDownSuite(c *check.C) {
 
 func (t *mariaDBTestSuite) TestParseMariaDBGTID(c *check.C) {
 	cases := []struct {
-		gtidStr  string
+		gtidStr   string
 		hashError bool
 	}{
 		{"0-1-1", false},
@@ -43,7 +43,7 @@ func (t *mariaDBTestSuite) TestParseMariaDBGTID(c *check.C) {
 func (t *mariaDBTestSuite) TestMariaDBGTIDConatin(c *check.C) {
 	cases := []struct {
 		originGTIDStr, otherGTIDStr string
-		contain bool
+		contain                     bool
 	}{
 		{"0-1-1", "0-1-2", false},
 		{"0-1-1", "", true},
@@ -73,7 +73,7 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDClone(c *check.C) {
 func (t *mariaDBTestSuite) TestMariaDBForward(c *check.C) {
 	cases := []struct {
 		currentGTIDStr, newerGTIDStr string
-		hashError bool
+		hashError                    bool
 	}{
 		{"0-1-1", "0-1-2", false},
 		{"0-1-1", "", true},
@@ -101,14 +101,14 @@ func (t *mariaDBTestSuite) TestMariaDBForward(c *check.C) {
 
 func (t *mariaDBTestSuite) TestParseMariaDBGTIDSet(c *check.C) {
 	cases := []struct {
-		gtidStr string
-		subGTIDs map[uint32]string //domain ID => gtid string
-		expectedStr []string // test String()
-		hasError bool
-	} {
-		{"0-1-1", map[uint32]string{0:"0-1-1"}, []string{"0-1-1"}, false},
+		gtidStr     string
+		subGTIDs    map[uint32]string //domain ID => gtid string
+		expectedStr []string          // test String()
+		hasError    bool
+	}{
+		{"0-1-1", map[uint32]string{0: "0-1-1"}, []string{"0-1-1"}, false},
 		{"", nil, []string{""}, false},
-		{"0-1-1,1-2-3", map[uint32]string{0:"0-1-1", 1:"1-2-3"}, []string{"0-1-1,1-2-3", "1-2-3,0-1-1"}, false},
+		{"0-1-1,1-2-3", map[uint32]string{0: "0-1-1", 1: "1-2-3"}, []string{"0-1-1,1-2-3", "1-2-3,0-1-1"}, false},
 		{"0-1--1", nil, nil, true},
 	}
 
@@ -130,8 +130,9 @@ func (t *mariaDBTestSuite) TestParseMariaDBGTIDSet(c *check.C) {
 
 			// check String() function
 			inExpectedResult := false
+			actualStr := mariadbGTIDSet.String()
 			for _, str := range cs.expectedStr {
-				if str == mariadbGTIDSet.String() {
+				if str == actualStr {
 					inExpectedResult = true
 					break
 				}
@@ -144,14 +145,14 @@ func (t *mariaDBTestSuite) TestParseMariaDBGTIDSet(c *check.C) {
 func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
 	cases := []struct {
 		isNilGTID bool
-		gtidStr string
-		subGTIDs map[uint32]string
-		hasError bool
+		gtidStr   string
+		subGTIDs  map[uint32]string
+		hasError  bool
 	}{
-		{true, "", map[uint32]string{1:"1-1-1", 2:"2-2-2"}, false},
-		{false, "1-2-2", map[uint32]string{1:"1-2-2", 2:"2-2-2"}, false},
-		{false, "1-2-1", map[uint32]string{1:"1-1-1", 2:"2-2-2"}, true},
-		{false, "3-2-1", map[uint32]string{1:"1-1-1", 2:"2-2-2", 3:"3-2-1"}, false},
+		{true, "", map[uint32]string{1: "1-1-1", 2: "2-2-2"}, false},
+		{false, "1-2-2", map[uint32]string{1: "1-2-2", 2: "2-2-2"}, false},
+		{false, "1-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2"}, true},
+		{false, "3-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1"}, false},
 	}
 
 	for _, cs := range cases {
@@ -162,7 +163,7 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
 
 		if cs.isNilGTID {
 			c.Assert(mariadbGTIDSet.AddSet(nil), check.IsNil)
-		} else  {
+		} else {
 			err := gtidSet.Update(cs.gtidStr)
 			c.Assert(err != nil, check.Equals, cs.hasError)
 		}
@@ -178,8 +179,8 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
 func (t *mariaDBTestSuite) TestMariaDBGTIDSetEqual(c *check.C) {
 	cases := []struct {
 		originGTIDStr, otherGTIDStr string
-		equals bool
-	} {
+		equals                      bool
+	}{
 		{"", "", true},
 		{"1-1-1", "1-1-1,2-2-2", false},
 		{"1-1-1,2-2-2", "1-1-1", false},
@@ -201,8 +202,8 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetEqual(c *check.C) {
 func (t *mariaDBTestSuite) TestMariaDBGTIDSetContain(c *check.C) {
 	cases := []struct {
 		originGTIDStr, otherGTIDStr string
-		contain bool
-	} {
+		contain                     bool
+	}{
 		{"", "", true},
 		{"1-1-1", "1-1-1,2-2-2", false},
 		{"1-1-1,2-2-2", "1-1-1", true},
@@ -223,7 +224,7 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetContain(c *check.C) {
 }
 
 func (t *mariaDBTestSuite) TestMariaDBGTIDSetClone(c *check.C) {
-	cases := []string {"", "1-1-1", "1-1-1,2-2-2"}
+	cases := []string{"", "1-1-1", "1-1-1,2-2-2"}
 
 	for _, str := range cases {
 		gtidSet, err := ParseMariadbGTIDSet(str)
