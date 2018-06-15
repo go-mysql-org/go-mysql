@@ -24,6 +24,9 @@ type DumpConfig struct {
 	// Ignore table format is db.table
 	IgnoreTables []string `toml:"ignore_tables"`
 
+	// Dump only selected records. Quotes are mandatory
+	Where string `toml:"where"`
+
 	// If true, discard error msg, else, output to stderr
 	DiscardErr bool `toml:"discard_err"`
 
@@ -60,6 +63,9 @@ type Config struct {
 	Dump DumpConfig `toml:"dump"`
 
 	UseDecimal bool `toml:"use_decimal"`
+
+	// SemiSyncEnabled enables semi-sync or not.
+	SemiSyncEnabled bool `toml:"semi_sync_enabled"`
 }
 
 func NewConfigWithFile(name string) (*Config, error) {

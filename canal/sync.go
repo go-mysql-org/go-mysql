@@ -10,7 +10,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-	log "github.com/sirupsen/logrus"
+	"gopkg.in/birkirb/loggers.v1/log"
 )
 
 var (
@@ -21,7 +21,8 @@ var (
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
-	if !c.useGTID {
+	gtid := c.master.GTID()
+	if gtid == nil || gtid.String() == "" {
 		pos := c.master.Position()
 		s, err := c.syncer.StartSync(pos)
 		if err != nil {
@@ -30,12 +31,11 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		log.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
-		gset := c.master.GTID()
-		s, err := c.syncer.StartSyncGTID(gset)
+		s, err := c.syncer.StartSyncGTID(gtid)
 		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID %v error %v", gset, err)
+			return nil, errors.Errorf("start sync replication at GTID %v error %v", gtid, err)
 		}
-		log.Infof("start sync binlog at GTID %v", gset)
+		log.Infof("start sync binlog at GTID %v", gtid)
 		return s, nil
 	}
 }
@@ -98,19 +98,23 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.MariadbGTIDEvent:
 			// try to save the GTID later
-			gtid := &e.GTID
+			gtid, err := mysql.ParseMariadbGTIDSet(e.GTID.String())
+			if err != nil {
+				return errors.Trace(err)
+			}
+
 			c.master.UpdateGTID(gtid)
 			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.GTIDEvent:
 			u, _ := uuid.FromBytes(e.SID)
-			gset, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
+			gtid, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
 			if err != nil {
 				return errors.Trace(err)
 			}
-			c.master.UpdateGTID(gset)
-			if err := c.eventHandler.OnGTID(gset); err != nil {
+			c.master.UpdateGTID(gtid)
+			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
@@ -186,7 +190,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	default:
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
-	events := newRowsEvent(t, action, ev.Rows)
+	events := newRowsEvent(t, action, ev.Rows, e.Header)
 	return c.eventHandler.OnRow(events)
 }
 

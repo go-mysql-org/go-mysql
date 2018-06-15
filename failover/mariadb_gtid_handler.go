@@ -46,12 +46,12 @@ func (h *MariadbGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error)
 		if len(str) == 0 {
 			seq = 0
 		} else {
-			g, err := ParseMariadbGTIDSet(str)
+			g, err := ParseMariadbGTID(str)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
 
-			seq = g.(*MariadbGTID).SequenceNumber
+			seq = g.SequenceNumber
 		}
 
 		ps[i] = seq

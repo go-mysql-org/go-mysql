@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
+	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
 )
 
@@ -22,14 +23,17 @@ type RowsEvent struct {
 	// Two rows for one event, format is [before update row, after update row]
 	// for update v0, only one row for a event, and we don't support this version.
 	Rows [][]interface{}
+	// Header can be used to inspect the event
+	Header *replication.EventHeader
 }
 
-func newRowsEvent(table *schema.Table, action string, rows [][]interface{}) *RowsEvent {
+func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, header *replication.EventHeader) *RowsEvent {
 	e := new(RowsEvent)
 
 	e.Table = table
 	e.Action = action
 	e.Rows = rows
+	e.Header = header
 
 	return e
 }
