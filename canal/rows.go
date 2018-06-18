@@ -3,17 +3,18 @@ package canal
 import (
 	"fmt"
 
-	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
 )
 
+// The action name for sync.
 const (
 	UpdateAction = "update"
 	InsertAction = "insert"
 	DeleteAction = "delete"
 )
 
+// RowsEvent is the event for row replication.
 type RowsEvent struct {
 	Table  *schema.Table
 	Action string
@@ -35,36 +36,37 @@ func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, head
 	e.Rows = rows
 	e.Header = header
 
+	e.handleUnsigned()
+
 	return e
 }
 
-// Get primary keys in one row for a table, a table may use multi fields as the PK
-func GetPKValues(table *schema.Table, row []interface{}) ([]interface{}, error) {
-	indexes := table.PKColumns
-	if len(indexes) == 0 {
-		return nil, errors.Errorf("table %s has no PK", table)
-	} else if len(table.Columns) != len(row) {
-		return nil, errors.Errorf("table %s has %d columns, but row data %v len is %d", table,
-			len(table.Columns), row, len(row))
+func (r *RowsEvent) handleUnsigned() {
+	// Handle Unsigned Columns here, for binlog replication, we can't know the integer is unsigned or not,
+	// so we use int type but this may cause overflow outside sometimes, so we must convert to the really .
+	// unsigned type
+	if len(r.Table.UnsignedColumns) == 0 {
+		return
 	}
 
-	values := make([]interface{}, 0, len(indexes))
-
-	for _, index := range indexes {
-		values = append(values, row[index])
+	for i := 0; i < len(r.Rows); i++ {
+		for _, index := range r.Table.UnsignedColumns {
+			switch t := r.Rows[i][index].(type) {
+			case int8:
+				r.Rows[i][index] = uint8(t)
+			case int16:
+				r.Rows[i][index] = uint16(t)
+			case int32:
+				r.Rows[i][index] = uint32(t)
+			case int64:
+				r.Rows[i][index] = uint64(t)
+			case int:
+				r.Rows[i][index] = uint(t)
+			default:
+				// nothing to do
+			}
+		}
 	}
-
-	return values, nil
-}
-
-// Get term column's value
-func GetColumnValue(table *schema.Table, column string, row []interface{}) (interface{}, error) {
-	index := table.FindColumn(column)
-	if index == -1 {
-		return nil, errors.Errorf("table %s has no column name %s", table, column)
-	}
-
-	return row[index], nil
 }
 
 // String implements fmt.Stringer interface.

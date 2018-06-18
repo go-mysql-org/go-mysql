@@ -55,6 +55,8 @@ type Table struct {
 	Columns   []TableColumn
 	Indexes   []*Index
 	PKColumns []int
+
+	UnsignedColumns []int
 }
 
 func (ta *Table) String() string {
@@ -108,6 +110,7 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 
 	if strings.Contains(columnType, "unsigned") || strings.Contains(columnType, "zerofill") {
 		ta.Columns[index].IsUnsigned = true
+		ta.UnsignedColumns = append(ta.UnsignedColumns, index)
 	}
 
 	if extra == "auto_increment" {
@@ -360,4 +363,33 @@ func (ta *Table) fetchPrimaryKeyColumns() error {
 	}
 
 	return nil
+}
+
+// Get primary keys in one row for a table, a table may use multi fields as the PK
+func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
+	indexes := ta.PKColumns
+	if len(indexes) == 0 {
+		return nil, errors.Errorf("table %s has no PK", ta)
+	} else if len(ta.Columns) != len(row) {
+		return nil, errors.Errorf("table %s has %d columns, but row data %v len is %d", ta,
+			len(ta.Columns), row, len(row))
+	}
+
+	values := make([]interface{}, 0, len(indexes))
+
+	for _, index := range indexes {
+		values = append(values, row[index])
+	}
+
+	return values, nil
+}
+
+// Get term column's value
+func (ta *Table) GetColumnValue(column string, row []interface{}) (interface{}, error) {
+	index := ta.FindColumn(column)
+	if index == -1 {
+		return nil, errors.Errorf("table %s has no column name %s", ta, column)
+	}
+
+	return row[index], nil
 }
