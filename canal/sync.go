@@ -201,10 +201,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 
 func (c *Canal) FlushBinlog() error {
 	_, err := c.Execute("FLUSH BINARY LOGS")
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return nil
+	return errors.Trace(err)
 }
 
 func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
