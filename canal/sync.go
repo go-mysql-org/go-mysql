@@ -241,7 +241,14 @@ func (c *Canal) GetMasterPos() (mysql.Position, error) {
 }
 
 func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
-	rr, err := c.Execute("SELECT @@GLOBAL.GTID_EXECUTED")
+	query := ""
+	switch c.cfg.Flavor {
+	case mysql.MariaDBFlavor:
+		query = "SELECT @@GLOBAL.gtid_current_pos"
+	default:
+		query = "SELECT @@GLOBAL.GTID_EXECUTED"
+	}
+	rr, err := c.Execute(query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
