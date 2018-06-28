@@ -101,7 +101,12 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.MariadbGTIDEvent:
 			// try to save the GTID later
-			gtid := &e.GTID
+			gtid, err := mysql.ParseMariadbGTIDSet(e.GTID.String())
+			if err != nil {
+				return errors.Trace(err)
+			}
+
+			c.master.UpdateGTIDSet(gtid)
 			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}
@@ -190,7 +195,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	default:
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
-	events := newRowsEvent(t, action, ev.Rows)
+	events := newRowsEvent(t, action, ev.Rows, e.Header)
 	return c.eventHandler.OnRow(events)
 }
 

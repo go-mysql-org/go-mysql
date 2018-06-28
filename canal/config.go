@@ -63,6 +63,9 @@ type Config struct {
 	Dump DumpConfig `toml:"dump"`
 
 	UseDecimal bool `toml:"use_decimal"`
+
+	// SemiSyncEnabled enables semi-sync or not.
+	SemiSyncEnabled bool `toml:"semi_sync_enabled"`
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
