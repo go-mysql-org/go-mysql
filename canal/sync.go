@@ -105,8 +105,6 @@ func (c *Canal) runSyncBinlog() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
-
-			c.master.UpdateGTIDSet(gtid)
 			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}

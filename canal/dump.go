@@ -105,6 +105,10 @@ func (c *Canal) dump() error {
 	}
 
 	h := &dumpParseHandler{c: c}
+	// If users call StartFromGTID with empty position to start dumping with gtid,
+	// we record the current gtid position before dump starts.
+	//
+	// See tryDump() to see when dump is skipped.
 	if c.master.GTIDSet() != nil {
 		gset, err := c.GetMasterGTIDSet()
 		if err != nil {
