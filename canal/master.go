@@ -12,7 +12,7 @@ type masterInfo struct {
 
 	pos mysql.Position
 
-	gtid mysql.GTIDSet
+	gset mysql.GTIDSet
 }
 
 func (m *masterInfo) Update(pos mysql.Position) {
@@ -23,11 +23,11 @@ func (m *masterInfo) Update(pos mysql.Position) {
 	m.Unlock()
 }
 
-func (m *masterInfo) UpdateGTID(gtid mysql.GTIDSet) {
-	log.Debugf("update master gtid %s", gtid.String())
+func (m *masterInfo) UpdateGTIDSet(gset mysql.GTIDSet) {
+	log.Debugf("update master gtid set %s", gset)
 
 	m.Lock()
-	m.gtid = gtid
+	m.gset = gset
 	m.Unlock()
 }
 
@@ -38,9 +38,9 @@ func (m *masterInfo) Position() mysql.Position {
 	return m.pos
 }
 
-func (m *masterInfo) GTID() mysql.GTIDSet {
+func (m *masterInfo) GTIDSet() mysql.GTIDSet {
 	m.RLock()
 	defer m.RUnlock()
 
-	return m.gtid
+	return m.gset
 }

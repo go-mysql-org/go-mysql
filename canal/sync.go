@@ -21,8 +21,8 @@ var (
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
-	gtid := c.master.GTID()
-	if gtid == nil || gtid.String() == "" {
+	gset := c.master.GTIDSet()
+	if gset == nil {
 		pos := c.master.Position()
 		s, err := c.syncer.StartSync(pos)
 		if err != nil {
@@ -31,11 +31,11 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		log.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
-		s, err := c.syncer.StartSyncGTID(gtid)
+		s, err := c.syncer.StartSyncGTID(gset)
 		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID %v error %v", gtid, err)
+			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
 		}
-		log.Infof("start sync binlog at GTID %v", gtid)
+		log.Infof("start sync binlog at GTID set %v", gset)
 		return s, nil
 	}
 }
@@ -91,6 +91,9 @@ func (c *Canal) runSyncBinlog() error {
 			}
 			continue
 		case *replication.XIDEvent:
+			if e.GSet != nil {
+				c.master.UpdateGTIDSet(e.GSet)
+			}
 			savePos = true
 			// try to save the position later
 			if err := c.eventHandler.OnXID(pos); err != nil {
@@ -102,8 +105,6 @@ func (c *Canal) runSyncBinlog() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
-
-			c.master.UpdateGTID(gtid)
 			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}
@@ -113,11 +114,13 @@ func (c *Canal) runSyncBinlog() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			c.master.UpdateGTID(gtid)
 			if err := c.eventHandler.OnGTID(gtid); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
+			if e.GSet != nil {
+				c.master.UpdateGTIDSet(e.GSet)
+			}
 			var (
 				mb     [][]byte
 				schema []byte
@@ -194,6 +197,11 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	return c.eventHandler.OnRow(events)
 }
 
+func (c *Canal) FlushBinlog() error {
+	_, err := c.Execute("FLUSH BINARY LOGS")
+	return errors.Trace(err)
+}
+
 func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
 	for {
@@ -201,6 +209,10 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 		case <-timer.C:
 			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
+			err := c.FlushBinlog()
+			if err != nil {
+				return errors.Trace(err)
+			}
 			curPos := c.master.Position()
 			if curPos.Compare(pos) >= 0 {
 				return nil
@@ -224,6 +236,29 @@ func (c *Canal) GetMasterPos() (mysql.Position, error) {
 	pos, _ := rr.GetInt(0, 1)
 
 	return mysql.Position{name, uint32(pos)}, nil
+}
+
+func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
+	query := ""
+	switch c.cfg.Flavor {
+	case mysql.MariaDBFlavor:
+		query = "SELECT @@GLOBAL.gtid_current_pos"
+	default:
+		query = "SELECT @@GLOBAL.GTID_EXECUTED"
+	}
+	rr, err := c.Execute(query)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	gx, err := rr.GetString(0, 0)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	gset, err := mysql.ParseGTIDSet(c.cfg.Flavor, gx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return gset, nil
 }
 
 func (c *Canal) CatchMasterPos(timeout time.Duration) error {
