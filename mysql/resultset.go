@@ -115,7 +115,8 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			} else {
 				data[i] = ParseBinaryInt24(p[pos : pos+3])
 			}
-			pos += 4
+			//3 byte
+			pos += 3
 			continue
 
 		case MYSQL_TYPE_LONG:
