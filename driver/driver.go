@@ -22,7 +22,6 @@ type driver struct {
 func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	lastIndex := strings.LastIndex(dsn, "@")
 	seps := []string{dsn[:lastIndex], dsn[lastIndex+1:]}
-	//seps := strings.Split(dsn, "@")
 	if len(seps) != 2 {
 		return nil, errors.Errorf("invalid dsn, must user:password@addr[?db]")
 	}

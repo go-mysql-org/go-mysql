@@ -115,6 +115,7 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			} else {
 				data[i] = ParseBinaryInt24(p[pos : pos+3])
 			}
+			//3 byte
 			pos += 3
 			continue
 
