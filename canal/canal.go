@@ -178,7 +178,7 @@ func (c *Canal) RunFrom(pos mysql.Position) error {
 }
 
 func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
-	c.master.UpdateGTID(set)
+	c.master.UpdateGTIDSet(set)
 
 	return c.Run()
 }
@@ -455,6 +455,6 @@ func (c *Canal) SyncedPosition() mysql.Position {
 	return c.master.Position()
 }
 
-func (c *Canal) SyncedGTID() mysql.GTIDSet {
-	return c.master.GTID()
+func (c *Canal) SyncedGTIDSet() mysql.GTIDSet {
+	return c.master.GTIDSet()
 }
