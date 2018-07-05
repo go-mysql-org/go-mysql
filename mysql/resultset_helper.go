@@ -189,7 +189,6 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 	r.Fields = make([]*Field, len(names))
 
 	var b []byte
-	var err error
 
 	bitmapLen := ((len(names) + 7 + 2) >> 3)
 
@@ -205,8 +204,12 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 		row = append(row, nullBitmap...)
 
 		for j, value := range vs {
+			typ, err := fieldType(value)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
 			if i == 0 {
-				field := &Field{}
+				field := &Field{Type: typ}
 				r.Fields[j] = field
 				field.Name = hack.Slice(names[j])
 
