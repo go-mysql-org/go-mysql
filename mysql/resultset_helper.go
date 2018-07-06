@@ -152,15 +152,11 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 				// the case, when old value was null, and the new one isn't null, so we can update
 				// type info for fields.
 				oldIsNull, newIsNull := r.Fields[j].Type == MYSQL_TYPE_NULL, typ == MYSQL_TYPE_NULL
-				if oldIsNull {
-					if !newIsNull { // old is null, new isn't, update type info.
-						r.Fields[j].Type = typ
-						formatField(r.Fields[j], value)
-					} // otherwise both are null, ok.
-				} else {
-					if !newIsNull { // different non-null types, that's an error.
-						return nil, errors.Errorf("row types aren't consistent")
-					} // otherwise old wasn't null, but the new is, ok.
+				if oldIsNull && !newIsNull { // old is null, new isn't, update type info.
+					r.Fields[j].Type = typ
+					formatField(r.Fields[j], value)
+				} else if !oldIsNull && !newIsNull { // different non-null types, that's an error.
+					return nil, errors.Errorf("row types aren't consistent")
 				}
 			}
 			b, err = formatTextValue(value)
