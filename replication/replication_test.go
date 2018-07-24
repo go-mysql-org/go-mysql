@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"sync"
 	"testing"
 	"time"
@@ -394,9 +395,11 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 		t.testSync(c, nil)
 	}()
 
-	os.RemoveAll("./var")
+	binlogDir := "./var"
 
-	err := t.b.StartBackup("./var", mysql.Position{"", uint32(0)}, 2*time.Second)
+	os.RemoveAll(binlogDir)
+
+	err := t.b.StartBackup(binlogDir, mysql.Position{"", uint32(0)}, 2*time.Second)
 	c.Assert(err, IsNil)
 
 	p := NewBinlogParser()
@@ -409,9 +412,14 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 		return nil
 	}
 
-	err = p.ParseFile("./var/mysql.000001", 0, f)
+	dir, err := os.Open(binlogDir)
 	c.Assert(err, IsNil)
 
-	err = p.ParseFile("./var/mysql.000002", 0, f)
+	files, err := dir.Readdirnames(-1)
 	c.Assert(err, IsNil)
+
+	for _, file := range files {
+		err = p.ParseFile(path.Join(binlogDir, file), 0, f)
+		c.Assert(err, IsNil)
+	}
 }
