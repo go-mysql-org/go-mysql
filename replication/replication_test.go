@@ -414,6 +414,7 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 
 	dir, err := os.Open(binlogDir)
 	c.Assert(err, IsNil)
+	defer dir.Close()
 
 	files, err := dir.Readdirnames(-1)
 	c.Assert(err, IsNil)
