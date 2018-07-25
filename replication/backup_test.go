@@ -30,7 +30,7 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 	}()
 	
 	os.RemoveAll("./var")
-	timeout := 50 * time.Millisecond
+	timeout := 2 * time.Second
 	
 	done := make(chan bool)
 	
