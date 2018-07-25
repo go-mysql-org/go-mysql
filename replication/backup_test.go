@@ -10,7 +10,7 @@ import (
 	"github.com/juju/errors"
 )
 
-func (t *testSyncerSuite) TestBackupTimeout(c *C) {
+func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 	t.setupTest(c, mysql.MySQLFlavor)
 	
 	t.testExecute(c, "RESET MASTER")
