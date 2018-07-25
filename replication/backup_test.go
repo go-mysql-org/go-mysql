@@ -30,7 +30,7 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 	}()
 	
 	os.RemoveAll("./var")
-	timeout := 2*time.Second
+	timeout := 50 * time.Millisecond
 	
 	done := make(chan bool)
 	
@@ -39,12 +39,12 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 		c.Assert(err, IsNil)
 		done <- true
 	}()
-	failTimeout := timeout + 1 * time.Second
+	failTimeout := 2 * timeout
 	ctx, _ := context.WithTimeout(context.Background(), failTimeout)
 	select {
-		case <- done:
-			return
-		case <- ctx.Done():
-			c.Assert(errors.New("time out error"), IsNil)
+	case <-done:
+		return
+	case <-ctx.Done():
+		c.Assert(errors.New("time out error"), IsNil)
 	}
 }
