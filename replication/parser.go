@@ -71,7 +71,9 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 			return errors.Errorf("seek %s to %d error %v", name, offset, err)
 		}
 
-		p.getFormatDescriptionEvent(f, onEvent)
+		if err = p.parseFormatDescriptionEvent(f, onEvent); err != nil {
+			return errors.Annotatef(err, "parse FormatDescriptionEvent")
+		}
 	}
 
 	if _, err = f.Seek(offset, os.SEEK_SET); err != nil {
@@ -81,18 +83,23 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 	return p.ParseReader(f, onEvent)
 }
 
-func (p *BinlogParser) getFormatDescriptionEvent(r io.Reader, onEvent OnEventFunc) error {
-	_, err := p.parseSingleEvent(&r, onEvent)
+func (p *BinlogParser) parseFormatDescriptionEvent(r io.Reader, onEvent OnEventFunc) error {
+	_, err := p.parseSingleEvent(r, onEvent)
 	return err
 }
 
-func (p *BinlogParser) parseSingleEvent(r *io.Reader, onEvent OnEventFunc) (bool, error) {
+// ParseSingleEvent parses single binlog event and passes the event to onEvent function.
+func (p *BinlogParser) ParseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool, error) {
+	return p.parseSingleEvent(r, onEvent)
+}
+
+func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool, error) {
 	var err error
 	var n int64
 
 	headBuf := make([]byte, EventHeaderSize)
 
-	if _, err = io.ReadFull(*r, headBuf); err == io.EOF {
+	if _, err = io.ReadFull(r, headBuf); err == io.EOF {
 		return true, nil
 	} else if err != nil {
 		return false, errors.Trace(err)
@@ -109,7 +116,7 @@ func (p *BinlogParser) parseSingleEvent(r *io.Reader, onEvent OnEventFunc) (bool
 	}
 
 	var buf bytes.Buffer
-	if n, err = io.CopyN(&buf, *r, int64(h.EventSize)-int64(EventHeaderSize)); err != nil {
+	if n, err = io.CopyN(&buf, r, int64(h.EventSize)-int64(EventHeaderSize)); err != nil {
 		return false, errors.Errorf("get event body err %v, need %d - %d, but got %d", err, h.EventSize, EventHeaderSize, n)
 	}
 
@@ -145,7 +152,7 @@ func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 			break
 		}
 
-		done, err := p.parseSingleEvent(&r, onEvent)
+		done, err := p.parseSingleEvent(r, onEvent)
 		if err != nil {
 			if _, ok := err.(errMissingTableMapEvent); ok {
 				continue
