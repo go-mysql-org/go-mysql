@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	"gopkg.in/birkirb/loggers.v1/log"
+	"github.com/siddontang/go-log/log"
 )
 
 var (
