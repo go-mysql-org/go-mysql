@@ -101,6 +101,10 @@ type BinlogSyncer struct {
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
 func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
+	if cfg.ServerID == 0 {
+		log.Fatal("can't use 0 as the server ID")
+	}
+
 	// Clear the Password to avoid outputing it in log.
 	pass := cfg.Password
 	cfg.Password = ""
