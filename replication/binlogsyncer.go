@@ -72,6 +72,11 @@ type BinlogSyncerConfig struct {
 	// maximum number of attempts to re-establish a broken connection
 	MaxReconnectAttempts int
 
+	// Only works when MySQL/MariaDB variable binlog_checksum=CRC32.
+	// For MySQL, binlog_checksum was introduced since 5.6.2, but CRC32 was set as default value since 5.6.6 .
+	// https://dev.mysql.com/doc/refman/5.6/en/replication-options-binary-log.html#option_mysqld_binlog-checksum
+	// For MariaDB, binlog_checksum was introduced since MariaDB 5.3, but CRC32 was set as default value since MariaDB 10.2.1 .
+	// https://mariadb.com/kb/en/library/replication-and-binary-log-server-system-variables/#binlog_checksum
 	VerifyChecksum bool
 }
 
