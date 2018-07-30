@@ -40,7 +40,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 	}()
 
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		e, err := s.GetEvent(ctx)
 		cancel()
 
