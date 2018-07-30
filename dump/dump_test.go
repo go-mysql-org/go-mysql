@@ -200,18 +200,27 @@ func (s *parserTestSuite) TestParseValue(c *C) {
 }
 
 func (s *parserTestSuite) TestParseLine(c *C) {
-	line := "INSERT INTO `test` VALUES (1, 'first', 'hello mysql; 2', 'e1', 'a,b');"
+	lines := []struct {
+		line     string
+		expected string
+	}{
+		{line: "INSERT INTO `test` VALUES (1, 'first', 'hello mysql; 2', 'e1', 'a,b');",
+			expected: "1, 'first', 'hello mysql; 2', 'e1', 'a,b'"},
+		{line: "INSERT INTO `test` VALUES (0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b');",
+			expected: "0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b'"},
+	}
 
 	f := func(c rune) bool {
 		return c == '\r' || c == '\n'
 	}
 
-	l := strings.TrimRightFunc(line, f)
+	for _, t := range lines {
+		l := strings.TrimRightFunc(t.line, f)
 
-	m := valuesExp.FindAllStringSubmatch(l, -1)
+		m := valuesExp.FindAllStringSubmatch(l, -1)
 
-	c.Assert(m, HasLen, 1)
-	c.Assert(m[0][1], Matches, "test")
-	c.Assert(m[0][2], Matches, "1, 'first', 'hello mysql; 2', 'e1', 'a,b'")
-
+		c.Assert(m, HasLen, 1)
+		c.Assert(m[0][1], Matches, "test")
+		c.Assert(m[0][2], Matches, t.expected)
+	}
 }

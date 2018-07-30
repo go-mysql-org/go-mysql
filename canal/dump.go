@@ -1,8 +1,10 @@
 package canal
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/juju/errors"
@@ -62,6 +64,13 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 					return dump.ErrSkip
 				}
 				vs[i] = f
+			} else if strings.HasPrefix(v, "0x") {
+				buf, err := hex.DecodeString(v[2:])
+				if err != nil {
+					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
+					return dump.ErrSkip
+				}
+				vs[i] = string(buf)
 			} else {
 				log.Errorf("parse row %v error, invalid type at %d, skip", values, i)
 				return dump.ErrSkip

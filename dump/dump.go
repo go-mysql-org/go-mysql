@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
+	"github.com/siddontang/go-log/log"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -35,6 +36,7 @@ type Dumper struct {
 
 	masterDataSkipped bool
 	maxAllowedPacket  int
+	hexBlob           bool
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
@@ -82,6 +84,10 @@ func (d *Dumper) SkipMasterData(v bool) {
 
 func (d *Dumper) SetMaxAllowedPacket(i int) {
 	d.maxAllowedPacket = i
+}
+
+func (d *Dumper) SetHexBlob(v bool) {
+	d.hexBlob = v
 }
 
 func (d *Dumper) AddDatabases(dbs ...string) {
@@ -147,10 +153,23 @@ func (d *Dumper) Dump(w io.Writer) error {
 	// Multi row is easy for us to parse the data
 	args = append(args, "--skip-extended-insert")
 
+	if d.hexBlob {
+		// Use hex for the binary type
+		args = append(args, "--hex-blob")
+	}
+
 	for db, tables := range d.IgnoreTables {
 		for _, table := range tables {
 			args = append(args, fmt.Sprintf("--ignore-table=%s.%s", db, table))
 		}
+	}
+
+	if len(d.Charset) != 0 {
+		args = append(args, fmt.Sprintf("--default-character-set=%s", d.Charset))
+	}
+
+	if len(d.Where) != 0 {
+		args = append(args, fmt.Sprintf("--where=%s", d.Where))
 	}
 
 	if len(d.Tables) == 0 && len(d.Databases) == 0 {
@@ -168,14 +187,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 		w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
 	}
 
-	if len(d.Charset) != 0 {
-		args = append(args, fmt.Sprintf("--default-character-set=%s", d.Charset))
-	}
-
-	if len(d.Where) != 0 {
-		args = append(args, fmt.Sprintf("--where=%s", d.Where))
-	}
-
+	log.Infof("exec mysqldump with %v", args)
 	cmd := exec.Command(d.ExecutionPath, args...)
 
 	cmd.Stderr = d.ErrOut
