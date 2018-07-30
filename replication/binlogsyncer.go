@@ -71,6 +71,8 @@ type BinlogSyncerConfig struct {
 
 	// maximum number of attempts to re-establish a broken connection
 	MaxReconnectAttempts int
+
+	VerifyChecksum bool
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -118,6 +120,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetRawMode(b.cfg.RawModeEnabled)
 	b.parser.SetParseTime(b.cfg.ParseTime)
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
+	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 

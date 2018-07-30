@@ -2,7 +2,6 @@ package replication
 
 import (
 	"encoding/binary"
-	//"encoding/hex"
 	"fmt"
 	"io"
 	"strconv"
@@ -20,6 +19,7 @@ const (
 	SidLength                  = 16
 	LogicalTimestampTypeCode   = 2
 	PartLogicalTimestampLength = 8
+	BinlogChecksumLength       = 4
 )
 
 type BinlogEvent struct {
