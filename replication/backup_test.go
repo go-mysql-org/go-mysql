@@ -39,7 +39,7 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 		c.Assert(err, IsNil)
 		done <- true
 	}()
-	failTimeout := 2 * timeout
+	failTimeout := 5 * timeout
 	ctx, _ := context.WithTimeout(context.Background(), failTimeout)
 	select {
 	case <-done:
