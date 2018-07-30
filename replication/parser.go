@@ -324,6 +324,9 @@ func (p *BinlogParser) verifyCrc32Checksum(rawData []byte) error {
 	calculatedPart := rawData[0 : len(rawData)-BinlogChecksumLength]
 	expectedChecksum := rawData[len(rawData)-BinlogChecksumLength:]
 
+	// mysql use zlib's CRC32 implementation, which uses polynomial 0xedb88320UL.
+	// reference: https://github.com/madler/zlib/blob/master/crc32.c
+	// https://github.com/madler/zlib/blob/master/doc/rfc1952.txt#L419
 	checksum := crc32.ChecksumIEEE(calculatedPart)
 	computed := make([]byte, BinlogChecksumLength)
 	binary.LittleEndian.PutUint32(computed, checksum)
