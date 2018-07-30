@@ -9,6 +9,7 @@ import (
 
 	"github.com/juju/errors"
 	. "github.com/pingcap/check"
+	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -48,7 +49,8 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	s.execute(c, "DROP TABLE IF EXISTS test.canal_test")
 	sql := `
         CREATE TABLE IF NOT EXISTS test.canal_test (
-            id int AUTO_INCREMENT,
+			id int AUTO_INCREMENT,
+			content blob DEFAULT NULL,
             name varchar(100),
             PRIMARY KEY(id)
             )ENGINE=innodb;
@@ -57,7 +59,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	s.execute(c, sql)
 
 	s.execute(c, "DELETE FROM test.canal_test")
-	s.execute(c, "INSERT INTO test.canal_test (name) VALUES (?), (?), (?)", "a", "b", "c")
+	s.execute(c, "INSERT INTO test.canal_test (content, name) VALUES (?, ?), (?, ?), (?, ?)", "1", "a", `\0\ndsfasdf`, "b", "", "c")
 
 	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
 
@@ -91,8 +93,8 @@ type testEventHandler struct {
 	c *C
 }
 
-func (h *testEventHandler) Do(e *RowsEvent) error {
-	h.c.Logf("%s %v\n", e.Action, e.Rows)
+func (h *testEventHandler) OnRow(e *RowsEvent) error {
+	log.Infof("OnRow %s %v\n", e.Action, e.Rows)
 	return nil
 }
 
