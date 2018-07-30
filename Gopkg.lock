@@ -57,19 +57,16 @@
 
 [[projects]]
   branch = "master"
-  name = "gopkg.in/birkirb/loggers.v1"
+  name = "github.com/siddontang/go-log"
   packages = [
-    ".",
     "log",
-    "mappers",
-    "mappers/stdlib"
+    "loggers"
   ]
-  revision = "fa51471f8169216876525e7b6c9fbd0c8789b57a"
-  source = "https://github.com/siddontang/loggers.git"
+  revision = "a4d157e46fa3e08b7e7ff329af341fa3ff86c02c"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "219cbf381a410b6ce45f18380441e604972a101900a002ab6d589d3cd61311c0"
+  inputs-digest = "3a6f74dc90e82303c48131160fe66213a85d53581b2a0e0c7b36a8df0463fdd0"
   solver-name = "gps-cdcl"
   solver-version = 1
