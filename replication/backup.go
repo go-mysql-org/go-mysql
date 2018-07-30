@@ -14,6 +14,13 @@ import (
 // Like mysqlbinlog remote raw backup
 // Backup remote binlog from position (filename, offset) and write in backupDir
 func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Duration) error {
+	var cancel context.CancelFunc
+	defer func() {
+		if cancel != nil {
+			cancel()
+		}
+	}()
+	
 	if timeout == 0 {
 		// a very long timeout here
 		timeout = 30 * 3600 * 24 * time.Second
@@ -38,12 +45,10 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			f.Close()
 		}
 	}()
-
+	
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		e, err := s.GetEvent(ctx)
-		cancel()
-
 		if err == context.DeadlineExceeded {
 			return nil
 		}
@@ -91,6 +96,4 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			return errors.Trace(io.ErrShortWrite)
 		}
 	}
-
-	return nil
 }
