@@ -19,15 +19,38 @@ func ParseBinaryUint16(data []byte) uint16 {
 	return binary.LittleEndian.Uint16(data)
 }
 
-func ParseBinaryInt24(data []byte) int32 {
+type Int24 int32
+
+func (v Int24) ToInt32() int32 {
+	return int32(v)
+}
+func (v Int24) ToUint24() Uint24 {
+	data := make([]byte, 4)
+	binary.LittleEndian.PutUint32(data, uint32(v.ToInt32()))
+	return Uint24(data[0]) | Uint24(data[1])<<8 | Uint24(data[2])<<16
+}
+
+type Uint24 uint32
+
+func (v Uint24) ToUint32() uint32 {
+	return uint32(v)
+}
+func (v Uint24) ToInt24() Int24 {
+	if v&0x00800000 != 0 {
+		v |= 0xFF000000
+	}
+	return Int24(v)
+}
+
+func ParseBinaryInt24(data []byte) Int24 {
 	u32 := uint32(ParseBinaryUint24(data))
 	if u32&0x00800000 != 0 {
 		u32 |= 0xFF000000
 	}
-	return int32(u32)
+	return Int24(u32)
 }
-func ParseBinaryUint24(data []byte) uint32 {
-	return uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16
+func ParseBinaryUint24(data []byte) Uint24 {
+	return Uint24(data[0]) | Uint24(data[1])<<8 | Uint24(data[2])<<16
 }
 
 func ParseBinaryInt32(data []byte) int32 {

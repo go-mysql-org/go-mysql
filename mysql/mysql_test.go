@@ -139,13 +139,13 @@ func (t *mysqlTestSuite) TestMysqlParseBinaryUint16(c *check.C) {
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt24(c *check.C) {
-	i32 := ParseBinaryInt24([]byte{1, 2, 128})
-	c.Assert(i32, check.Equals, int32(-128*65536+2*256+1))
+	i24 := ParseBinaryInt24([]byte{1, 2, 128})
+	c.Assert(i24, check.Equals, Int24(-128*65536+2*256+1))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryUint24(c *check.C) {
-	u32 := ParseBinaryUint24([]byte{1, 2, 128})
-	c.Assert(u32, check.Equals, uint32(128*65536+2*256+1))
+	u24 := ParseBinaryUint24([]byte{1, 2, 128})
+	c.Assert(u24, check.Equals, Uint24(128*65536+2*256+1))
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt32(c *check.C) {
