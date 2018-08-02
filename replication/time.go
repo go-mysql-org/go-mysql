@@ -16,10 +16,16 @@ type fracTime struct {
 
 	// Dec must in [0, 6]
 	Dec int
+
+	timestampStringLocation *time.Location
 }
 
 func (t fracTime) String() string {
-	return t.Format(fracTimeFormat[t.Dec])
+	tt := t.Time
+	if t.timestampStringLocation != nil {
+		tt = tt.In(t.timestampStringLocation)
+	}
+	return tt.Format(fracTimeFormat[t.Dec])
 }
 
 func formatZeroTime(frac int, dec int) string {
