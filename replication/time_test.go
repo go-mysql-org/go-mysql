@@ -10,7 +10,7 @@ type testTimeSuite struct{}
 
 var _ = Suite(&testTimeSuite{})
 
-func (s *testSyncerSuite) TestTime(c *C) {
+func (s *testTimeSuite) TestTime(c *C) {
 	tbls := []struct {
 		year     int
 		month    int
@@ -28,7 +28,7 @@ func (s *testSyncerSuite) TestTime(c *C) {
 	}
 
 	for _, t := range tbls {
-		t1 := fracTime{time.Date(t.year, time.Month(t.month), t.day, t.hour, t.min, t.sec, t.microSec*1000, time.UTC), t.frac}
+		t1 := fracTime{time.Date(t.year, time.Month(t.month), t.day, t.hour, t.min, t.sec, t.microSec*1000, time.UTC), t.frac, nil}
 		c.Assert(t1.String(), Equals, t.expected)
 	}
 
@@ -49,3 +49,22 @@ func (s *testSyncerSuite) TestTime(c *C) {
 		c.Assert(formatZeroTime(t.frac, t.dec), Equals, t.expected)
 	}
 }
+
+func (s *testTimeSuite) TestTimeStringLocation(c *C) {
+	t := fracTime{
+		time.Date(2018, time.Month(7), 30, 10, 0, 0, 0, time.FixedZone("EST", -5*3600)),
+		0,
+		nil,
+	}
+
+	c.Assert(t.String(), Equals, "2018-07-30 10:00:00")
+
+	t = fracTime{
+		time.Date(2018, time.Month(7), 30, 10, 0, 0, 0, time.FixedZone("EST", -5*3600)),
+		0,
+		time.UTC,
+	}
+	c.Assert(t.String(), Equals, "2018-07-30 15:00:00")
+}
+
+var _ = Suite(&testTimeSuite{})
