@@ -106,16 +106,15 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 	var err error
 	var n int64
 
-	headBuf := make([]byte, EventHeaderSize)
-
-	if _, err = io.ReadFull(r, headBuf); err == io.EOF {
+	var buf bytes.Buffer
+	if n, err = io.CopyN(&buf, r, EventHeaderSize); err == io.EOF {
 		return true, nil
 	} else if err != nil {
-		return false, errors.Trace(err)
+		return false, errors.Errorf("get event header err %v, need %d but got %d", err, EventHeaderSize, n)
 	}
 
 	var h *EventHeader
-	h, err = p.parseHeader(headBuf)
+	h, err = p.parseHeader(buf.Bytes())
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -123,31 +122,30 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 	if h.EventSize <= uint32(EventHeaderSize) {
 		return false, errors.Errorf("invalid event header, event size is %d, too small", h.EventSize)
 	}
-
-	var buf bytes.Buffer
-	if n, err = io.CopyN(&buf, r, int64(h.EventSize)-int64(EventHeaderSize)); err != nil {
-		return false, errors.Errorf("get event body err %v, need %d - %d, but got %d", err, h.EventSize, EventHeaderSize, n)
+	if n, err = io.CopyN(&buf, r, int64(h.EventSize-EventHeaderSize)); err != nil {
+		return false, errors.Errorf("get event err %v, need %d but got %d", err, h.EventSize, n)
+	}
+	if buf.Len() != int(h.EventSize) {
+		return false, errors.Errorf("invalid raw data size in event %s, need %d but got %d", h.EventType, h.EventSize, buf.Len())
 	}
 
-	data := buf.Bytes()
-	rawData := data
-
-	eventLen := int(h.EventSize) - EventHeaderSize
-
-	if len(data) != eventLen {
-		return false, errors.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
+	rawData := buf.Bytes()
+	bodyLen := int(h.EventSize) - EventHeaderSize
+	body := rawData[EventHeaderSize:]
+	if len(body) != bodyLen {
+		return false, errors.Errorf("invalid body data size in event %s, need %d but got %d", h.EventType, bodyLen, len(body))
 	}
 
 	var e Event
-	e, err = p.parseEvent(h, data, rawData)
+	e, err = p.parseEvent(h, body, rawData)
 	if err != nil {
-		if _, ok := err.(errMissingTableMapEvent); ok {
+		if err == errMissingTableMapEvent {
 			return false, nil
 		}
 		return false, errors.Trace(err)
 	}
 
-	if err = onEvent(&BinlogEvent{rawData, h, e}); err != nil {
+	if err = onEvent(&BinlogEvent{RawData: rawData, Header: h, Event: e}); err != nil {
 		return false, errors.Trace(err)
 	}
 
@@ -163,7 +161,7 @@ func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 
 		done, err := p.parseSingleEvent(r, onEvent)
 		if err != nil {
-			if _, ok := err.(errMissingTableMapEvent); ok {
+			if err == errMissingTableMapEvent {
 				continue
 			}
 			return errors.Trace(err)
@@ -319,7 +317,7 @@ func (p *BinlogParser) Parse(data []byte) (*BinlogEvent, error) {
 		return nil, err
 	}
 
-	return &BinlogEvent{rawData, h, e}, nil
+	return &BinlogEvent{RawData: rawData, Header: h, Event: e}, nil
 }
 
 func (p *BinlogParser) verifyCrc32Checksum(rawData []byte) error {
