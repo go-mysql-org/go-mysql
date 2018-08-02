@@ -23,7 +23,7 @@ const (
 )
 
 type BinlogEvent struct {
-	// raw binlog data, including crc32 checksum if exists
+	// raw binlog data which contains all data, including binlog header and event body, and including crc32 checksum if exists
 	RawData []byte
 
 	Header *EventHeader

@@ -145,7 +145,7 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 		return false, errors.Trace(err)
 	}
 
-	if err = onEvent(&BinlogEvent{rawData, h, e}); err != nil {
+	if err = onEvent(&BinlogEvent{RawData: rawData, Header: h, Event: e}); err != nil {
 		return false, errors.Trace(err)
 	}
 
@@ -317,7 +317,7 @@ func (p *BinlogParser) Parse(data []byte) (*BinlogEvent, error) {
 		return nil, err
 	}
 
-	return &BinlogEvent{rawData, h, e}, nil
+	return &BinlogEvent{RawData: rawData, Header: h, Event: e}, nil
 }
 
 func (p *BinlogParser) verifyCrc32Checksum(rawData []byte) error {
