@@ -139,7 +139,7 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 	var e Event
 	e, err = p.parseEvent(h, data, rawData)
 	if err != nil {
-		if _, ok := err.(errMissingTableMapEvent); ok {
+		if err == errMissingTableMapEvent {
 			return false, nil
 		}
 		return false, errors.Trace(err)
@@ -161,7 +161,7 @@ func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 
 		done, err := p.parseSingleEvent(r, onEvent)
 		if err != nil {
-			if _, ok := err.(errMissingTableMapEvent); ok {
+			if err == errMissingTableMapEvent {
 				continue
 			}
 			return errors.Trace(err)
