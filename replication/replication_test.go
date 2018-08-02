@@ -403,6 +403,7 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 	c.Assert(err, IsNil)
 
 	p := NewBinlogParser()
+	p.SetVerifyChecksum(true)
 
 	f := func(e *BinlogEvent) error {
 		if *testOutputLogs {
