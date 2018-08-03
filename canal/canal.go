@@ -417,6 +417,7 @@ func (c *Canal) prepareSyncer() error {
 		HeartbeatPeriod: c.cfg.HeartbeatPeriod,
 		ReadTimeout:     c.cfg.ReadTimeout,
 		UseDecimal:      c.cfg.UseDecimal,
+		ParseTime:       c.cfg.ParseTime,
 		SemiSyncEnabled: c.cfg.SemiSyncEnabled,
 	}
 

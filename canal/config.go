@@ -63,6 +63,7 @@ type Config struct {
 	Dump DumpConfig `toml:"dump"`
 
 	UseDecimal bool `toml:"use_decimal"`
+	ParseTime bool  `toml:"parse_time"`
 
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool `toml:"semi_sync_enabled"`
