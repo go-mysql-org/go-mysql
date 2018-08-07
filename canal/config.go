@@ -54,8 +54,8 @@ type Config struct {
 	// eg, IncludeTableRegex : [".*\\.canal"], ExcludeTableRegex : ["mysql\\..*"]
 	//     this will include all database's 'canal' table, except database 'mysql'
 	// Default IncludeTableRegex and ExcludeTableRegex are empty, this will include all tables
-	IncludeTableRegex []string `toml:include_table_regex`
-	ExcludeTableRegex []string `toml:exclude_table_regex`
+	IncludeTableRegex []string `toml:"include_table_regex"`
+	ExcludeTableRegex []string `toml:"exclude_table_regex"`
 
 	// discard row event without table meta
 	DiscardNoMetaRowEvent bool `toml:"discard_no_meta_row_event"`
