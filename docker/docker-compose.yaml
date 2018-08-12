@@ -1,0 +1,40 @@
+version: '3'
+services:
+
+    mysql-default:
+        image: "mysql:5.7.22"
+        container_name: "mysql-server-default"
+        ports:
+            - "3306:3306"
+        environment:
+            - MYSQL_ALLOW_EMPTY_PASSWORD=true
+            - bind-address=0.0.0.0
+
+    mysql-5.7.22:
+        image: "mysql:5.7.22"
+        container_name: "mysql-server-5.7.22"
+        ports:
+            - "5722:3306"
+        environment:
+            - MYSQL_ALLOW_EMPTY_PASSWORD=true
+            - bind-address=0.0.0.0
+
+    mysql-8.0.3:
+        image: "mysql:8.0.3"
+        container_name: "mysql-server-8.0.3"
+        ports:
+            - "8003:3306"
+        environment:
+            - MYSQL_ALLOW_EMPTY_PASSWORD=true
+            - bind-address=0.0.0.0
+
+    mysql-8.0.12:
+        image: "mysql:8.0.12"
+        container_name: "mysql-server-8.0.12"
+        ports:
+            - "8012:3306"
+        environment:
+            - MYSQL_ALLOW_EMPTY_PASSWORD=true
+            - bind-address=0.0.0.0
+
+

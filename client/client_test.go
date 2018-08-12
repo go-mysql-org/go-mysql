@@ -13,28 +13,42 @@ import (
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL server host")
-var testPort = flag.Int("port", 3306, "MySQL server port")
+// starting from MySQL 8.0.4, a new auth plugin is introduced, causing plain password auth to fail with error:
+// ERROR 1251 (08004): Client does not support authentication protocol requested by server; consider upgrading MySQL client
+var testPort = flag.String("port", "3306,5722,8003,8012", "MySQL server port")
 var testUser = flag.String("user", "root", "MySQL user")
 var testPassword = flag.String("pass", "", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
 func Test(t *testing.T) {
+	segs := strings.Split(*testPort, ",")
+	fmt.Println(segs)
+	for _, seg := range segs{
+		Suite(&clientTestSuite{port: seg})
+	}
 	TestingT(t)
 }
 
 type clientTestSuite struct {
 	c *Conn
+	port string
 }
 
-var _ = Suite(&clientTestSuite{})
+
 
 func (s *clientTestSuite) SetUpSuite(c *C) {
 	var err error
-	addr := fmt.Sprintf("%s:%d", *testHost, *testPort)
-	s.c, err = Connect(addr, *testUser, *testPassword, *testDB)
+	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
+	s.c, err = Connect(addr, *testUser, *testPassword, "")
 	if err != nil {
 		c.Fatal(err)
 	}
+
+	 _, err = s.c.Execute("CREATE DATABASE IF NOT EXISTS "+ *testDB)
+	c.Assert(err, IsNil)
+
+	_, err = s.c.Execute("USE "+ *testDB)
+	c.Assert(err, IsNil)
 
 	s.testConn_CreateTable(c)
 	s.testStmt_CreateTable(c)
@@ -81,7 +95,7 @@ func (s *clientTestSuite) TestConn_Ping(c *C) {
 func (s *clientTestSuite) TestConn_TLS(c *C) {
 	// Verify that the provided tls.Config is used when attempting to connect to mysql.
 	// An empty tls.Config will result in a connection error.
-	addr := fmt.Sprintf("%s:%d", *testHost, *testPort)
+	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
 	_, err := Connect(addr, *testUser, *testPassword, *testDB, func(c *Conn) {
 		c.TLSConfig = &tls.Config{}
 	})
