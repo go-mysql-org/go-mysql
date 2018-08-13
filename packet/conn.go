@@ -37,42 +37,6 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 	} else {
 		return buf.Bytes(), nil
 	}
-
-	// header := []byte{0, 0, 0, 0}
-
-	// if _, err := io.ReadFull(c.br, header); err != nil {
-	// 	return nil, ErrBadConn
-	// }
-
-	// length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
-	// if length < 1 {
-	// 	return nil, fmt.Errorf("invalid payload length %d", length)
-	// }
-
-	// sequence := uint8(header[3])
-
-	// if sequence != c.Sequence {
-	// 	return nil, fmt.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
-	// }
-
-	// c.Sequence++
-
-	// data := make([]byte, length)
-	// if _, err := io.ReadFull(c.br, data); err != nil {
-	// 	return nil, ErrBadConn
-	// } else {
-	// 	if length < MaxPayloadLen {
-	// 		return data, nil
-	// 	}
-
-	// 	var buf []byte
-	// 	buf, err = c.ReadPacket()
-	// 	if err != nil {
-	// 		return nil, ErrBadConn
-	// 	} else {
-	// 		return append(data, buf...), nil
-	// 	}
-	// }
 }
 
 func (c *Conn) ReadPacketTo(w io.Writer) error {
