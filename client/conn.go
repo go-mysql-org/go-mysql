@@ -19,6 +19,7 @@ type Conn struct {
 	password  string
 	db        string
 	TLSConfig *tls.Config
+	proto     string
 
 	capability uint32
 
@@ -27,6 +28,7 @@ type Conn struct {
 	charset string
 
 	salt []byte
+	authPluginName string
 
 	connectionID uint32
 }
@@ -56,6 +58,7 @@ func Connect(addr string, user string, password string, dbName string, options .
 	c.user = user
 	c.password = password
 	c.db = dbName
+	c.proto = proto
 
 	//use default charset here, utf-8
 	c.charset = DEFAULT_CHARSET
@@ -85,7 +88,7 @@ func (c *Conn) handshake() error {
 		return errors.Trace(err)
 	}
 
-	if _, err := c.readOK(); err != nil {
+	if err := c.handleAuthResult(); err != nil {
 		c.Close()
 		return errors.Trace(err)
 	}

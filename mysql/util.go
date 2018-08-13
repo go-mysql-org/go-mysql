@@ -11,6 +11,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/siddontang/go/hack"
+	"crypto/sha256"
 )
 
 func Pstack() string {
@@ -46,6 +47,28 @@ func CalcPassword(scramble, password []byte) []byte {
 		scramble[i] ^= stage1[i]
 	}
 	return scramble
+}
+
+// password hashing method since 8.0.4
+func CaclCachingSha2Password(salt, password []byte) []byte {
+	if len(password) == 0 {
+		return nil
+	}
+	// XOR(SHA256(password), SHA256(SHA256(SHA256(password)), scramble))
+	crypt := sha256.New()
+	crypt.Write(password)
+	message1 := crypt.Sum(nil)
+	crypt.Reset()
+	crypt.Write(message1)
+	message1Hash := crypt.Sum(nil)
+	crypt.Reset()
+	crypt.Write(message1Hash)
+	crypt.Write(salt)
+	message2 := crypt.Sum(nil)
+	for i := range message1 {
+		message1[i] ^= message2[i]
+	}
+	return message1
 }
 
 func RandomBuf(size int) ([]byte, error) {

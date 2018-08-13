@@ -1,5 +1,6 @@
 package packet
 
+import "C"
 import (
 	"bufio"
 	"bytes"
@@ -8,6 +9,11 @@ import (
 
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
+	"encoding/pem"
+	"crypto/x509"
+	"crypto/sha1"
+	"crypto/rsa"
+	"crypto/rand"
 )
 
 /*
@@ -113,6 +119,53 @@ func (c *Conn) WritePacket(data []byte) error {
 		return nil
 	}
 }
+
+//  Client clear text authentication packet
+// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
+func (c *Conn) WriteClearAuthPacket(password string) error {
+	// Calculate the packet length and add a tailing 0
+	pktLen := len(password) + 1
+	data := make([]byte, 4 + pktLen)
+
+	// Add the clear password [null terminated string]
+	copy(data[4:], password)
+	data[4+pktLen-1] = 0x00
+
+	return c.WritePacket(data)
+}
+
+//  Caching sha2 authentication. Public key request and send encrypted password
+// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
+func (c *Conn) WritePublicKeyAuthPacket(password string, cipher []byte) error {
+	// request public key
+	data := make([]byte, 4 + 1)
+	data[4] = 2 // cachingSha2PasswordRequestPublicKey
+	c.WritePacket(data)
+
+	data, err := c.ReadPacket()
+	if err != nil {
+		return err
+	}
+
+	block, _ := pem.Decode(data[1:])
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return err
+	}
+
+	plain := make([]byte, len(password)+1)
+	copy(plain, password)
+	for i := range plain {
+		j := i % len(cipher)
+		plain[i] ^= cipher[j]
+	}
+	sha1v := sha1.New()
+	enc, _ := rsa.EncryptOAEP(sha1v, rand.Reader, pub.(*rsa.PublicKey), plain, nil)
+	data = make([]byte, 4 + len(enc))
+	copy(data[4:], enc)
+	return c.WritePacket(data)
+}
+
 
 func (c *Conn) ResetSequence() {
 	c.Sequence = 0

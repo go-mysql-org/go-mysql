@@ -6,7 +6,9 @@ import (
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
-)
+	"fmt"
+	"bytes"
+	)
 
 func (c *Conn) readUntilEOF() (err error) {
 	var data []byte
@@ -32,7 +34,7 @@ func (c *Conn) isEOFPacket(data []byte) bool {
 
 func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 	var n int
-	var pos int = 1
+	var pos = 1
 
 	r := new(Result)
 
@@ -64,7 +66,7 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 func (c *Conn) handleErrorPacket(data []byte) error {
 	e := new(MyError)
 
-	var pos int = 1
+	var pos = 1
 
 	e.Code = binary.LittleEndian.Uint16(data[pos:])
 	pos += 2
@@ -80,6 +82,51 @@ func (c *Conn) handleErrorPacket(data []byte) error {
 
 	return e
 }
+
+func (c *Conn) handleAuthResult() error {
+	// handle caching_sha2_password
+	if c.authPluginName == "caching_sha2_password1" {
+		fmt.Println("handleAuthResult: caching_sha2_password")
+		auth, err := c.readCachingSha2PasswordAuthResult()
+		if err != nil {
+			return err
+		}
+		if auth == 4 {
+			// need full authentication
+			if c.TLSConfig != nil || c.proto == "unix" {
+				if err = c.WriteClearAuthPacket(c.password); err != nil {
+					return err
+				}
+			} else {
+				if err = c.WritePublicKeyAuthPacket(c.password, c.salt); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if _, err := c.readOK(); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+	// retry auth with native passwords
+
+}
+
+func (c *Conn) readCachingSha2PasswordAuthResult() (int, error) {
+	data, err := c.ReadPacket()
+	if err == nil {
+		if data[0] != 1 {
+			var buf bytes.Buffer
+			binary.Write(&buf, binary.LittleEndian, data)
+			fmt.Println(buf.Bytes())
+			fmt.Printf("%d %x", len(data), data)
+			fmt.Println(string(data))
+			return 0, errors.New("invalid packet")
+		}
+	}
+	return int(data[1]), err
+}
+
 
 func (c *Conn) readOK() (*Result, error) {
 	data, err := c.ReadPacket()

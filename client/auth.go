@@ -8,8 +8,10 @@ import (
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
+	"fmt"
 )
 
+// See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
 func (c *Conn) readInitialHandshake() error {
 	data, err := c.ReadPacket()
 	if err != nil {
@@ -64,47 +66,56 @@ func (c *Conn) readInitialHandshake() error {
 		// mysql-proxy also use 12
 		// which is not documented but seems to work.
 		c.salt = append(c.salt, data[pos:pos+12]...)
+
+		// auth plugin
+		pos += 13
+		c.authPluginName = string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
 	}
 
 	return nil
 }
 
+// See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
 func (c *Conn) writeAuthHandshake() error {
+	if c.authPluginName != "mysql_native_password" && c.authPluginName != "caching_sha2_password" {
+		return fmt.Errorf("unknow auth plugin name '%s'", c.authPluginName)
+	}
+
 	// Adjust client capability flags based on server support
 	capability := CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION |
-		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_LONG_FLAG
+		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_LOCAL_FILES |
+		CLIENT_PLUGIN_AUTH | CLIENT_LONG_FLAG
 
 	// To enable TLS / SSL
 	if c.TLSConfig != nil {
-		capability |= CLIENT_PLUGIN_AUTH
 		capability |= CLIENT_SSL
 	}
 
 	capability &= c.capability
 
+	// password hashing
+	var auth []byte
+	switch c.authPluginName {
+	case "mysql_native_password":
+		auth = CalcPassword(c.salt, []byte(c.password))
+	case "caching_sha2_password":
+		auth = CaclCachingSha2Password(c.salt, []byte(c.password))
+	}
+
 	//packet length
-	//capbility 4
+	//capability 4
 	//max-packet size 4
 	//charset 1
 	//reserved all[0] 23
-	length := 4 + 4 + 1 + 23
-
 	//username
-	length += len(c.user) + 1
-
-	//we only support secure connection
-	auth := CalcPassword(c.salt, []byte(c.password))
-
-	length += 1 + len(auth)
-
+	//auth
+	//mysql_native_password + null-terminated
+	length := 4 + 4 + 1 + 23 + len(c.user) + 1 + 1 + len(auth) + 21 + 1
+	// db name
 	if len(c.db) > 0 {
 		capability |= CLIENT_CONNECT_WITH_DB
-
 		length += len(c.db) + 1
 	}
-
-	// mysql_native_password + null-terminated
-	length += 21 + 1
 
 	c.capability = capability
 
@@ -117,10 +128,10 @@ func (c *Conn) writeAuthHandshake() error {
 	data[7] = byte(capability >> 24)
 
 	//MaxPacketSize [32 bit] (none)
-	//data[8] = 0x00
-	//data[9] = 0x00
-	//data[10] = 0x00
-	//data[11] = 0x00
+	data[8] = 0x00
+	data[9] = 0x00
+	data[10] = 0x00
+	data[11] = 0x00
 
 	//Charset [1 byte]
 	//use default collation id 33 here, is utf-8
@@ -146,7 +157,10 @@ func (c *Conn) writeAuthHandshake() error {
 	}
 
 	//Filler [23 bytes] (all 0x00)
-	pos := 13 + 23
+	pos := 13
+	for ; pos < 13+23; pos++ {
+		data[pos] = 0
+	}
 
 	//User [null terminated string]
 	if len(c.user) > 0 {
@@ -167,8 +181,10 @@ func (c *Conn) writeAuthHandshake() error {
 	}
 
 	// Assume native client during response
-	pos += copy(data[pos:], "mysql_native_password")
+	pos += copy(data[pos:], c.authPluginName)
 	data[pos] = 0x00
+
+	fmt.Println(string(data))
 
 	return c.WritePacket(data)
 }
