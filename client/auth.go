@@ -42,7 +42,13 @@ func (c *Conn) readInitialHandshake() error {
 
 	//capability lower 2 bytes
 	c.capability = uint32(binary.LittleEndian.Uint16(data[pos : pos+2]))
-
+	// check protocol
+	if c.capability&CLIENT_PROTOCOL_41 == 0 {
+		return errors.New("the MySQL server can not support protocol 41 and above required by the client")
+	}
+	if c.capability&CLIENT_SSL == 0 && c.TLSConfig != nil {
+		return errors.New("the MySQL Server does not support TLS required by the client")
+	}
 	pos += 2
 
 	if len(data) > pos {
@@ -52,9 +58,8 @@ func (c *Conn) readInitialHandshake() error {
 
 		c.status = binary.LittleEndian.Uint16(data[pos : pos+2])
 		pos += 2
-
+		//capability flags (upper 2 bytes)
 		c.capability = uint32(binary.LittleEndian.Uint16(data[pos:pos+2]))<<16 | c.capability
-
 		pos += 2
 
 		//skip auth data len or [00]
@@ -65,11 +70,18 @@ func (c *Conn) readInitialHandshake() error {
 		// The official Python library uses the fixed length 12
 		// mysql-proxy also use 12
 		// which is not documented but seems to work.
-		c.salt = append(c.salt, data[pos:pos+12]...)
-
+		if c.capability&CLIENT_SECURE_CONNECTION != 0 {
+			c.salt = append(c.salt, data[pos:pos+12]...)
+			pos += 13
+		}
 		// auth plugin
-		pos += 13
-		c.authPluginName = string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
+		if c.capability&CLIENT_PLUGIN_AUTH != 0 {
+			if end := bytes.IndexByte(data[pos:], 0x00); end != -1 {
+				c.authPluginName = string(data[pos : pos+end])
+			} else {
+				c.authPluginName = string(data[pos:])
+			}
+		}
 	}
 
 	return nil
@@ -77,21 +89,18 @@ func (c *Conn) readInitialHandshake() error {
 
 // See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
 func (c *Conn) writeAuthHandshake() error {
-	if c.authPluginName != "mysql_native_password" && c.authPluginName != "caching_sha2_password" {
+	if c.authPluginName != "mysql_native_password" && c.authPluginName != "caching_sha2_password" && c.authPluginName != "sha256_password" {
 		return fmt.Errorf("unknow auth plugin name '%s'", c.authPluginName)
 	}
 
 	// Adjust client capability flags based on server support
 	capability := CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION |
-		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_LOCAL_FILES |
-		CLIENT_PLUGIN_AUTH | CLIENT_LONG_FLAG
+		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH | (c.capability&CLIENT_LONG_FLAG)
 
 	// To enable TLS / SSL
 	if c.TLSConfig != nil {
 		capability |= CLIENT_SSL
 	}
-
-	capability &= c.capability
 
 	// password hashing
 	var auth []byte
@@ -100,6 +109,18 @@ func (c *Conn) writeAuthHandshake() error {
 		auth = CalcPassword(c.salt, []byte(c.password))
 	case "caching_sha2_password":
 		auth = CaclCachingSha2Password(c.salt, []byte(c.password))
+	case "sha256_password":
+		if len(c.password) == 0 {
+			auth = nil
+		}
+		if c.TLSConfig != nil || c.proto == "unix" {
+			// write cleartext auth packet
+			auth = []byte(c.password)
+		} else {
+			// request public key from server
+			// see: https://dev.mysql.com/doc/internals/en/public-key-retrieval.html
+			auth = []byte{1}
+		}
 	}
 
 	//packet length
@@ -116,8 +137,6 @@ func (c *Conn) writeAuthHandshake() error {
 		capability |= CLIENT_CONNECT_WITH_DB
 		length += len(c.db) + 1
 	}
-
-	c.capability = capability
 
 	data := make([]byte, length+4)
 
@@ -170,9 +189,13 @@ func (c *Conn) writeAuthHandshake() error {
 	pos++
 
 	// auth [length encoded integer]
-	data[pos] = byte(len(auth))
-	pos += 1 + copy(data[pos+1:], auth)
-
+	if auth == nil {
+		data[pos] = 0x00
+		pos++
+	}else {
+		data[pos] = byte(len(auth))
+		pos += 1 + copy(data[pos+1:], auth)
+	}
 	// db [null terminated string]
 	if len(c.db) > 0 {
 		pos += copy(data[pos:], c.db)

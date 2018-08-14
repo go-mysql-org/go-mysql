@@ -15,7 +15,7 @@ import (
 var testHost = flag.String("host", "127.0.0.1", "MySQL server host")
 // starting from MySQL 8.0.4, a new auth plugin is introduced, causing plain password auth to fail with error:
 // ERROR 1251 (08004): Client does not support authentication protocol requested by server; consider upgrading MySQL client
-var testPort = flag.String("port", "8012", "MySQL server port") //3306,5722,8003,
+var testPort = flag.String("port", "8013", "MySQL server port") //3306,5722,8003,8012
 var testUser = flag.String("user", "root", "MySQL user")
 var testPassword = flag.String("pass", "", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")

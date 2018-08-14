@@ -12,6 +12,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/siddontang/go/hack"
 	"crypto/sha256"
+	"crypto/rsa"
 )
 
 func Pstack() string {
@@ -69,6 +70,17 @@ func CaclCachingSha2Password(salt, password []byte) []byte {
 		message1[i] ^= message2[i]
 	}
 	return message1
+}
+
+func EncryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, error) {
+	plain := make([]byte, len(password)+1)
+	copy(plain, password)
+	for i := range plain {
+		j := i % len(seed)
+		plain[i] ^= seed[j]
+	}
+	sha1v := sha1.New()
+	return rsa.EncryptOAEP(sha1v, rand.Reader, pub, plain, nil)
 }
 
 func RandomBuf(size int) ([]byte, error) {

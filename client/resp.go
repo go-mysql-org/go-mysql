@@ -1,5 +1,6 @@
 package client
 
+import "C"
 import (
 	"encoding/binary"
 
@@ -8,7 +9,10 @@ import (
 	"github.com/siddontang/go/hack"
 	"fmt"
 	"bytes"
-	)
+	"encoding/pem"
+	"crypto/x509"
+	"crypto/rsa"
+)
 
 func (c *Conn) readUntilEOF() (err error) {
 	var data []byte
@@ -84,14 +88,26 @@ func (c *Conn) handleErrorPacket(data []byte) error {
 }
 
 func (c *Conn) handleAuthResult() error {
+	data, swithToPlugin, err := c.readAuthResult()
+	if err != nil {
+		return err
+	}
+	// this should not happen since we only allow 'mysql_native_password', 'sha256_password', and 'caching_sha2_password'
+	// in the initial handshake
+	if swithToPlugin != "" {
+		return fmt.Errorf("the MySQL server wants to switch auth method to a unsupported method '%s'", swithToPlugin)
+	}
+
 	// handle caching_sha2_password
-	if c.authPluginName == "caching_sha2_password1" {
-		fmt.Println("handleAuthResult: caching_sha2_password")
-		auth, err := c.readCachingSha2PasswordAuthResult()
-		if err != nil {
-			return err
+	if c.authPluginName == "caching_sha2_password" {
+		if data == nil {
+			return nil // auth already succeeded
 		}
-		if auth == 4 {
+		if data[0] == CACHE_SHA2_FAST_AUTH {
+			if _, err = c.readOK(); err == nil {
+				return nil // auth successful
+			}
+		} else if data[0] == CACHE_SHA2_FULL_AUTH {
 			// need full authentication
 			if c.TLSConfig != nil || c.proto == "unix" {
 				if err = c.WriteClearAuthPacket(c.password); err != nil {
@@ -102,29 +118,64 @@ func (c *Conn) handleAuthResult() error {
 					return err
 				}
 			}
+		} else {
+			errors.Errorf("invalid packet")
 		}
-	}
-	if _, err := c.readOK(); err != nil {
-		return errors.Trace(err)
+	} else if c.authPluginName == "sha256_password" {
+		if data == nil {
+			return nil // auth already succeeded
+		}
+		block, _ := pem.Decode(data)
+		pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			return err
+		}
+
+		// send encrypted password
+		err = c.WriteEncryptedPassword(c.password, c.salt, pub.(*rsa.PublicKey))
+		if err != nil {
+			return err
+		}
+		_, err = c.readOK()
+		return err
 	}
 	return nil
-	// retry auth with native passwords
-
 }
 
-func (c *Conn) readCachingSha2PasswordAuthResult() (int, error) {
+func (c *Conn) readAuthResult() ([]byte, string, error) {
 	data, err := c.ReadPacket()
-	if err == nil {
-		if data[0] != 1 {
-			var buf bytes.Buffer
-			binary.Write(&buf, binary.LittleEndian, data)
-			fmt.Println(buf.Bytes())
-			fmt.Printf("%d %x", len(data), data)
-			fmt.Println(string(data))
-			return 0, errors.New("invalid packet")
-		}
+	if err != nil {
+		return nil, "", err
 	}
-	return int(data[1]), err
+
+	// see: https://insidemysql.com/preparing-your-community-connector-for-mysql-8-part-2-sha256/
+	// packet indicator
+	switch data[0] {
+
+	case OK_HEADER:
+		_, err := c.handleOKPacket(data)
+		return nil, "", err
+
+	case MORE_DATE_HEADER:
+		return data[1:], "", err
+
+	case EOF_HEADER:
+		// server wants to switch auth
+		if len(data) < 1 {
+			// https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::OldAuthSwitchRequest
+			return nil, "mysql_old_password", nil
+		}
+		pluginEndIndex := bytes.IndexByte(data, 0x00)
+		if pluginEndIndex < 0 {
+			return nil, "", errors.New("invalid packet")
+		}
+		plugin := string(data[1:pluginEndIndex])
+		authData := data[pluginEndIndex+1:]
+		return authData, plugin, nil
+
+	default: // Error otherwise
+		return nil, "", c.handleErrorPacket(data)
+	}
 }
 
 

@@ -34,7 +34,20 @@ services:
         ports:
             - "8012:3306"
         environment:
+            #- MYSQL_ROOT_PASSWORD=abc123
             - MYSQL_ALLOW_EMPTY_PASSWORD=true
             - bind-address=0.0.0.0
+
+    mysql-8.0.12-sha256:
+        image: "mysql:8.0.12"
+        container_name: "mysql-server-8.0.12-sha256"
+        ports:
+            - "8013:3306"
+        entrypoint: ['/entrypoint.sh', '--default-authentication-plugin=sha256_password']
+        environment:
+            #- MYSQL_ROOT_PASSWORD=abc123
+            - MYSQL_ALLOW_EMPTY_PASSWORD=true
+            - bind-address=0.0.0.0
+            #- default-authentication-plugin=sha256_password
 
 

@@ -166,6 +166,30 @@ func (c *Conn) WritePublicKeyAuthPacket(password string, cipher []byte) error {
 	return c.WritePacket(data)
 }
 
+func (c *Conn) WriteEncryptedPassword(password string, seed []byte, pub *rsa.PublicKey) error {
+	enc, err := EncryptPassword(password, seed, pub)
+	if err != nil {
+		return err
+	}
+	return c.WriteAuthSwitchPacket(enc, false)
+}
+
+// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
+func (c *Conn) WriteAuthSwitchPacket(authData []byte, addNUL bool) error {
+	pktLen := 4 + len(authData)
+	if addNUL {
+		pktLen++
+	}
+	data := make([]byte, pktLen)
+
+	// Add the auth data [EOF]
+	copy(data[4:], authData)
+	if addNUL {
+		data[pktLen-1] = 0x00
+	}
+
+	return c.WritePacket(data)
+}
 
 func (c *Conn) ResetSequence() {
 	c.Sequence = 0

@@ -13,9 +13,13 @@ var (
 
 const (
 	OK_HEADER          byte = 0x00
+	MORE_DATE_HEADER   byte = 0x01
 	ERR_HEADER         byte = 0xff
 	EOF_HEADER         byte = 0xfe
 	LocalInFile_HEADER byte = 0xfb
+
+	CACHE_SHA2_FAST_AUTH byte = 0x03
+	CACHE_SHA2_FULL_AUTH byte = 0x04
 )
 
 const (
