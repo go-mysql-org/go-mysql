@@ -1,6 +1,34 @@
 version: '3'
 services:
 
+    mysql-5.5.61:
+        image: "mysql:5.5.61"
+        container_name: "mysql-server-5.5.61"
+        ports:
+        - "5561:3306"
+        command: --ssl=TRUE --ssl-ca=/usr/local/mysql/ca.pem --ssl-cert=/usr/local/mysql/server-cert.pem --ssl-key=/usr/local/mysql/server-key.pem
+        volumes:
+            - ./resources/ca.pem:/usr/local/mysql/ca.pem
+            - ./resources/server-cert.pem:/usr/local/mysql/server-cert.pem
+            - ./resources/server-key.pem:/usr/local/mysql/server-key.pem
+        environment:
+            - MYSQL_ALLOW_EMPTY_PASSWORD=true
+            - bind-address=0.0.0.0
+
+    mysql-5.6.41:
+        image: "mysql:5.6.41"
+        container_name: "mysql-server-5.6.41"
+        ports:
+        - "5641:3306"
+        command: --ssl=TRUE --ssl-ca=/usr/local/mysql/ca.pem --ssl-cert=/usr/local/mysql/server-cert.pem --ssl-key=/usr/local/mysql/server-key.pem
+        volumes:
+        - ./resources/ca.pem:/usr/local/mysql/ca.pem
+        - ./resources/server-cert.pem:/usr/local/mysql/server-cert.pem
+        - ./resources/server-key.pem:/usr/local/mysql/server-key.pem
+        environment:
+            - MYSQL_ALLOW_EMPTY_PASSWORD=true
+            - bind-address=0.0.0.0
+
     mysql-default:
         image: "mysql:5.7.22"
         container_name: "mysql-server-default"

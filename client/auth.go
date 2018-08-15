@@ -9,7 +9,7 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
 	"fmt"
-)
+	)
 
 // See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
 func (c *Conn) readInitialHandshake() error {
@@ -87,6 +87,32 @@ func (c *Conn) readInitialHandshake() error {
 	return nil
 }
 
+// generate auth response data according to auth plugin
+func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
+	// password hashing
+	switch c.authPluginName {
+	case "mysql_native_password":
+		return CalcPassword(authData, []byte(c.password)), false, nil
+	case "caching_sha2_password":
+		return CaclCachingSha2Password(authData, []byte(c.password)), false, nil
+	case "sha256_password":
+		if len(c.password) == 0 {
+			return nil, true, nil
+		}
+		if c.TLSConfig != nil || c.proto == "unix" {
+			// write cleartext auth packet
+			return []byte(c.password), true, nil
+		} else {
+			// request public key from server
+			// see: https://dev.mysql.com/doc/internals/en/public-key-retrieval.html
+			return []byte{1}, false, nil
+		}
+	default:
+		// not reachable
+		return nil, false, fmt.Errorf("auth plugin '%s' is not supported", c.authPluginName)
+	}
+}
+
 // See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
 func (c *Conn) writeAuthHandshake() error {
 	if c.authPluginName != "mysql_native_password" && c.authPluginName != "caching_sha2_password" && c.authPluginName != "sha256_password" {
@@ -102,26 +128,20 @@ func (c *Conn) writeAuthHandshake() error {
 		capability |= CLIENT_SSL
 	}
 
-	// password hashing
-	var auth []byte
-	switch c.authPluginName {
-	case "mysql_native_password":
-		auth = CalcPassword(c.salt, []byte(c.password))
-	case "caching_sha2_password":
-		auth = CaclCachingSha2Password(c.salt, []byte(c.password))
-	case "sha256_password":
-		if len(c.password) == 0 {
-			auth = nil
-		}
-		if c.TLSConfig != nil || c.proto == "unix" {
-			// write cleartext auth packet
-			auth = []byte(c.password)
-		} else {
-			// request public key from server
-			// see: https://dev.mysql.com/doc/internals/en/public-key-retrieval.html
-			auth = []byte{1}
-		}
+	auth, addNull, err := c.genAuthResponse(c.salt)
+	if err != nil {
+		return err
 	}
+
+	// encode length of the auth plugin data
+	var authRespLEIBuf [9]byte
+	authRespLEI := AppendLengthEncodedInteger(authRespLEIBuf[:0], uint64(len(auth)))
+	if len(authRespLEI) > 1 {
+		// if the length can not be written in 1 byte, it must be written as a
+		// length encoded integer
+		capability |= CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
+	}
+
 
 	//packet length
 	//capability 4
@@ -131,7 +151,10 @@ func (c *Conn) writeAuthHandshake() error {
 	//username
 	//auth
 	//mysql_native_password + null-terminated
-	length := 4 + 4 + 1 + 23 + len(c.user) + 1 + 1 + len(auth) + 21 + 1
+	length := 4 + 4 + 1 + 23 + len(c.user) + 1 + len(authRespLEI) + len(auth) + 21 + 1
+	if addNull {
+		length++
+	}
 	// db name
 	if len(c.db) > 0 {
 		capability |= CLIENT_CONNECT_WITH_DB
@@ -189,13 +212,13 @@ func (c *Conn) writeAuthHandshake() error {
 	pos++
 
 	// auth [length encoded integer]
-	if auth == nil {
+	pos += copy(data[pos:], authRespLEI)
+	pos += copy(data[pos:], auth)
+	if addNull {
 		data[pos] = 0x00
 		pos++
-	}else {
-		data[pos] = byte(len(auth))
-		pos += 1 + copy(data[pos+1:], auth)
 	}
+
 	// db [null terminated string]
 	if len(c.db) > 0 {
 		pos += copy(data[pos:], c.db)
@@ -206,8 +229,6 @@ func (c *Conn) writeAuthHandshake() error {
 	// Assume native client during response
 	pos += copy(data[pos:], c.authPluginName)
 	data[pos] = 0x00
-
-	fmt.Println(string(data))
 
 	return c.WritePacket(data)
 }

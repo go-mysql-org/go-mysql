@@ -13,9 +13,11 @@ import (
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL server host")
+// We cover the whole range of MySQL server versions using docker-compose to bind them to different ports for testing.
+// MySQL is constantly updating auth plugin to make it secure:
 // starting from MySQL 8.0.4, a new auth plugin is introduced, causing plain password auth to fail with error:
 // ERROR 1251 (08004): Client does not support authentication protocol requested by server; consider upgrading MySQL client
-var testPort = flag.String("port", "8013", "MySQL server port") //3306,5722,8003,8012
+var testPort = flag.String("port", "5561,5641,3306,5722,8003,8012,8013", "MySQL server port") //5561,5641,3306,5722,8003,8012
 var testUser = flag.String("user", "root", "MySQL user")
 var testPassword = flag.String("pass", "", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
@@ -92,6 +94,9 @@ func (s *clientTestSuite) TestConn_Ping(c *C) {
 	c.Assert(err, IsNil)
 }
 
+// NOTE for MySQL 5.5 and 5.6, server side has to config SSL to pass the TLS test, otherwise, it will throw error that
+//      MySQL server does not support TLS required by the client. However, for MySQL 5.7 and above, auto generated certificates
+//      are used by default so that manual config is no longer necessary.
 func (s *clientTestSuite) TestConn_TLS(c *C) {
 	// Verify that the provided tls.Config is used when attempting to connect to mysql.
 	// An empty tls.Config will result in a connection error.

@@ -7,12 +7,11 @@ import (
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
-	"fmt"
-	"bytes"
+		"bytes"
 	"encoding/pem"
 	"crypto/x509"
 	"crypto/rsa"
-)
+	)
 
 func (c *Conn) readUntilEOF() (err error) {
 	var data []byte
@@ -88,14 +87,32 @@ func (c *Conn) handleErrorPacket(data []byte) error {
 }
 
 func (c *Conn) handleAuthResult() error {
-	data, swithToPlugin, err := c.readAuthResult()
+	data, switchToPlugin, err := c.readAuthResult()
 	if err != nil {
 		return err
 	}
-	// this should not happen since we only allow 'mysql_native_password', 'sha256_password', and 'caching_sha2_password'
-	// in the initial handshake
-	if swithToPlugin != "" {
-		return fmt.Errorf("the MySQL server wants to switch auth method to a unsupported method '%s'", swithToPlugin)
+	// handle auth switch, only support 'sha256_password', and 'caching_sha2_password'
+	if switchToPlugin != "" {
+		//fmt.Printf("now switching auth plugin to '%s'\n", switchToPlugin)
+		if data == nil {
+			data = c.salt
+		}
+		c.authPluginName = switchToPlugin
+		auth, addNull, err := c.genAuthResponse(data)
+		if err = c.WriteAuthSwitchPacket(auth, addNull); err != nil {
+			return err
+		}
+
+		// Read Result Packet
+		data, switchToPlugin, err = c.readAuthResult()
+		if err != nil {
+			return err
+		}
+
+		// Do not allow to change the auth plugin more than once
+		if switchToPlugin != "" {
+			return errors.Errorf("can not switch auth plugin more than once")
+		}
 	}
 
 	// handle caching_sha2_password
