@@ -49,11 +49,11 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 		//for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
 			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
-				[]interface{}{mysql.MaxPayloadLen},
+				{mysql.MaxPayloadLen},
 			}, binary)
 		} else {
 			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]interface{}{
-				[]interface{}{1, "hello world"},
+				{1, "hello world"},
 			}, binary)
 		}
 
