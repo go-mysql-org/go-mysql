@@ -7,15 +7,18 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
 	"github.com/siddontang/go/sync2"
-)
+	)
 
 /*
    Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
 */
 type Conn struct {
 	*packet.Conn
+	serverConf *Server
 
 	capability uint32
+
+	authPluginName string
 
 	connectionID uint32
 
@@ -23,7 +26,7 @@ type Conn struct {
 
 	user string
 
-	salt []byte
+	salt []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
 
 	h Handler
 
@@ -35,21 +38,47 @@ type Conn struct {
 
 var baseConnID uint32 = 10000
 
+// create connection with default server settings
 func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
 	c := new(Conn)
+	c.serverConf = defaultServer
 
 	c.h = h
-
 	c.user = user
 	c.Conn = packet.NewConn(conn)
-
 	c.connectionID = atomic.AddUint32(&baseConnID, 1)
-
 	c.stmts = make(map[uint32]*Stmt)
-
 	c.salt, _ = RandomBuf(20)
-
 	c.closed.Set(false)
+
+	if c.serverConf.tlsConfig != nil {
+		c.serverConf.capability |= CLIENT_SSL
+	}
+
+	if err := c.handshake(password); err != nil {
+		c.Close()
+		return nil, err
+	}
+
+	return c, nil
+}
+
+// create connection with customized server settings
+func NewCustomizedConn(conn net.Conn, serverConf *Server, user string, password string, h Handler) (*Conn, error) {
+	c := new(Conn)
+	c.serverConf = serverConf
+
+	c.h = h
+	c.user = user
+	c.Conn = packet.NewConn(conn)
+	c.connectionID = atomic.AddUint32(&baseConnID, 1)
+	c.stmts = make(map[uint32]*Stmt)
+	c.salt, _ = RandomBuf(20)
+	c.closed.Set(false)
+
+	if c.serverConf.tlsConfig != nil {
+		c.serverConf.capability |= CLIENT_SSL
+	}
 
 	if err := c.handshake(password); err != nil {
 		c.Close()
@@ -66,12 +95,23 @@ func (c *Conn) handshake(password string) error {
 
 	if err := c.readHandshakeResponse(password); err != nil {
 		c.writeError(err)
-
 		return err
 	}
 
-	if err := c.writeOK(nil); err != nil {
-		return err
+	if c.authPluginName == CACHING_SHA2_PASSWORD {
+		// Write OK in MoreData packet. Most clients should also accept a normal OK packet as a indicator of auth ok.
+		// MySQL doc says there are four possible responses from the server when is comes to CACHING_SHA2_PASSWORD auth
+		// See: https://insidemysql.com/preparing-your-community-connector-for-mysql-8-part-2-sha256/
+		if err := c.writeMoreDataOK(); err != nil {
+			return err
+		}
+		if err := c.writeOK(nil); err != nil {
+			return err
+		}
+	} else {
+		if err := c.writeOK(nil); err != nil {
+			return err
+		}
 	}
 
 	c.ResetSequence()

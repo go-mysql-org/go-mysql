@@ -9,7 +9,9 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
 	"fmt"
-	)
+)
+
+const defaultAuthPluginName = "mysql_native_password"
 
 // See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
 func (c *Conn) readInitialHandshake() error {
@@ -70,18 +72,19 @@ func (c *Conn) readInitialHandshake() error {
 		// The official Python library uses the fixed length 12
 		// mysql-proxy also use 12
 		// which is not documented but seems to work.
-		if c.capability&CLIENT_SECURE_CONNECTION != 0 {
-			c.salt = append(c.salt, data[pos:pos+12]...)
-			pos += 13
-		}
+		c.salt = append(c.salt, data[pos:pos+12]...)
+		pos += 13
 		// auth plugin
-		if c.capability&CLIENT_PLUGIN_AUTH != 0 {
-			if end := bytes.IndexByte(data[pos:], 0x00); end != -1 {
-				c.authPluginName = string(data[pos : pos+end])
-			} else {
-				c.authPluginName = string(data[pos:])
-			}
+		if end := bytes.IndexByte(data[pos:], 0x00); end != -1 {
+			c.authPluginName = string(data[pos : pos+end])
+		} else {
+			c.authPluginName = string(data[pos:])
 		}
+	}
+
+	// if server gives no default auth plugin name, use a client default
+	if c.authPluginName == "" {
+		c.authPluginName = defaultAuthPluginName
 	}
 
 	return nil
@@ -94,7 +97,7 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 	case "mysql_native_password":
 		return CalcPassword(authData, []byte(c.password)), false, nil
 	case "caching_sha2_password":
-		return CaclCachingSha2Password(authData, []byte(c.password)), false, nil
+		return CalcCachingSha2Password(authData, c.password), false, nil
 	case "sha256_password":
 		if len(c.password) == 0 {
 			return nil, true, nil
@@ -121,7 +124,7 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Adjust client capability flags based on server support
 	capability := CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION |
-		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH | (c.capability&CLIENT_LONG_FLAG)
+		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH | c.capability & CLIENT_LONG_FLAG
 
 	// To enable TLS / SSL
 	if c.TLSConfig != nil {
@@ -141,7 +144,6 @@ func (c *Conn) writeAuthHandshake() error {
 		// length encoded integer
 		capability |= CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
 	}
-
 
 	//packet length
 	//capability 4

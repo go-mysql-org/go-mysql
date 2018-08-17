@@ -270,7 +270,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 				return ErrMalformPacket
 			}
 
-			v, isNull, n, err = LengthEnodedString(paramValues[pos:])
+			v, isNull, n, err = LengthEncodedString(paramValues[pos:])
 			pos += n
 			if err != nil {
 				return errors.Trace(err)
