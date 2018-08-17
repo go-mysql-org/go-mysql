@@ -101,11 +101,17 @@ func (c *Conn) readAuthSwitchRequestResponse() ([]byte, error) {
 	return data, nil
 }
 
-func (c *Conn) writeAuthMoreData() error {
+func (c *Conn) writeAuthMoreDataPubkey() error {
 	data := make([]byte, 4)
 	data = append(data, 0x01)
 	data = append(data, c.serverConf.pubKey...)
-	data = append(data, 0x09)
+	return c.WritePacket(data)
+}
+
+func (c *Conn) writeAuthMoreDataFullAuth() error {
+	data := make([]byte, 4)
+	data = append(data, 0x01)
+	data = append(data, 0x4)
 	return c.WritePacket(data)
 }
 

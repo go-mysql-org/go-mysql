@@ -4,7 +4,8 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 	"fmt"
 	"crypto/tls"
-		)
+	"sync"
+)
 
 // supported auth methods
 const (
@@ -39,6 +40,7 @@ type Server struct {
 	allowedAuthMethods []string // 'mysql_native_password', 'caching_sha2_password', and 'sha256_password'
 	pubKey             []byte
 	tlsConfig          *tls.Config
+	cacheShaPassword   *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
 }
 
 // new mysql server with default settings
@@ -56,6 +58,7 @@ func NewDefaultServer() *Server {
 		allowedAuthMethods: []string{MYSQL_NATIVE_PASSWORD, CACHING_SHA2_PASSWORD, SHA256_PASSWORD},
 		pubKey:             getPublicKeyFromCert(certPem),
 		tlsConfig:          tlsConf,
+		cacheShaPassword:   new(sync.Map),
 	}
 }
 
@@ -83,6 +86,7 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 		allowedAuthMethods: allowedAuthMethods,
 		pubKey:             pubKey,
 		tlsConfig:          tlsConfig,
+		cacheShaPassword:   new(sync.Map),
 	}
 }
 

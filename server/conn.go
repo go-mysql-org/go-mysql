@@ -24,7 +24,9 @@ type Conn struct {
 
 	status uint16
 
+	credentialProvider CredentialProvider
 	user string
+	password string
 
 	salt []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
 
@@ -44,7 +46,9 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	c.serverConf = defaultServer
 
 	c.h = h
-	c.user = user
+	p := new(InMemoryProvider)
+	p.AddUser(user, password)
+	c.credentialProvider = p
 	c.Conn = packet.NewConn(conn)
 	c.connectionID = atomic.AddUint32(&baseConnID, 1)
 	c.stmts = make(map[uint32]*Stmt)
@@ -55,7 +59,7 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 		c.serverConf.capability |= CLIENT_SSL
 	}
 
-	if err := c.handshake(password); err != nil {
+	if err := c.handshake(); err != nil {
 		c.Close()
 		return nil, err
 	}
@@ -64,12 +68,12 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 }
 
 // create connection with customized server settings
-func NewCustomizedConn(conn net.Conn, serverConf *Server, user string, password string, h Handler) (*Conn, error) {
+func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
 	c := new(Conn)
 	c.serverConf = serverConf
 
 	c.h = h
-	c.user = user
+	c.credentialProvider = p
 	c.Conn = packet.NewConn(conn)
 	c.connectionID = atomic.AddUint32(&baseConnID, 1)
 	c.stmts = make(map[uint32]*Stmt)
@@ -80,7 +84,7 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, user string, password 
 		c.serverConf.capability |= CLIENT_SSL
 	}
 
-	if err := c.handshake(password); err != nil {
+	if err := c.handshake(); err != nil {
 		c.Close()
 		return nil, err
 	}
@@ -88,12 +92,12 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, user string, password 
 	return c, nil
 }
 
-func (c *Conn) handshake(password string) error {
+func (c *Conn) handshake() error {
 	if err := c.writeInitialHandshake(); err != nil {
 		return err
 	}
 
-	if err := c.readHandshakeResponse(password); err != nil {
+	if err := c.readHandshakeResponse(); err != nil {
 		c.writeError(err)
 		return err
 	}

@@ -20,7 +20,7 @@ var serverConf *Server
 
 var testAddr = flag.String("addr", "127.0.0.1:4000", "MySQL proxy server address")
 var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "1111", "MySQL password")
+var testPassword = flag.String("pass", "111", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
 var publicKey = []byte(`-----BEGIN CERTIFICATE-----
@@ -99,10 +99,10 @@ func Test(t *testing.T) {
 	//caCert, _ := pem.Decode(ca)
 	//serverConf = NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{SHA256_PASSWORD},
 	//	publicKey, newTLSConfig(caCert.Bytes, privKey.Bytes))
-	//serverConf = NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{SHA256_PASSWORD}, defaultServer.pubKey, defaultServer.tlsConfig)
+	serverConf = NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{SHA256_PASSWORD}, defaultServer.pubKey, defaultServer.tlsConfig)
 	//serverConf = NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, defaultServer.pubKey, defaultServer.tlsConfig)
 	//serverConf = NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, defaultServer.pubKey, defaultServer.tlsConfig)
-	serverConf = NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{MYSQL_NATIVE_PASSWORD, SHA256_PASSWORD}, defaultServer.pubKey, defaultServer.tlsConfig)
+	//serverConf = NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{MYSQL_NATIVE_PASSWORD, SHA256_PASSWORD}, defaultServer.pubKey, defaultServer.tlsConfig)
 	log.SetLevel(log.LevelDebug)
 	TestingT(t)
 }
@@ -242,7 +242,9 @@ func (s *serverTestSuite) onAccept(c *C) {
 
 func (s *serverTestSuite) onConn(conn net.Conn, c *C) {
 	//co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
-	co, err := NewCustomizedConn(conn, serverConf, *testUser, *testPassword, &testHandler{s})
+	p := new(InMemoryProvider)
+	p.AddUser(*testUser, *testPassword)
+	co, err := NewCustomizedConn(conn, serverConf, p, &testHandler{s})
 	c.Assert(err, IsNil)
 	// set SSL if defined
 	for {
