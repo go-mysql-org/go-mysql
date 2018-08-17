@@ -6,11 +6,6 @@ const (
 	TimeFormat         string = "2006-01-02 15:04:05"
 )
 
-var (
-	// maybe you can change for your specified name
-	ServerVersion string = "5.7.0"
-)
-
 const (
 	OK_HEADER          byte = 0x00
 	MORE_DATE_HEADER   byte = 0x01
@@ -155,7 +150,6 @@ const (
 )
 
 const (
-	AUTH_NAME                     = "mysql_native_password"
 	DEFAULT_CHARSET               = "utf8"
 	DEFAULT_COLLATION_ID   uint8  = 33
 	DEFAULT_COLLATION_NAME string = "utf8_general_ci"

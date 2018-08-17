@@ -28,13 +28,6 @@ func (c *Conn) writeOK(r *Result) error {
 	return c.WritePacket(data)
 }
 
-func (c *Conn) writeMoreDataOK() error {
-	data := make([]byte, 4)
-	data = append(data, MORE_DATE_HEADER)
-	data = append(data, 0x03)
-	return c.WritePacket(data)
-}
-
 func (c *Conn) writeError(e error) error {
 	var m *MyError
 	var ok bool
@@ -72,7 +65,7 @@ func (c *Conn) writeEOF() error {
 // see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_auth_switch_request.html
 func (c *Conn) writeAuthSwitchRequest(newAuthPluginName string) error {
 	data := make([]byte, 4)
-	data = append(data, 0xFE)
+	data = append(data, EOF_HEADER)
 	data = append(data, []byte(newAuthPluginName)...)
 	data = append(data, 0x00)
 	rnd, err := RandomBuf(20)
@@ -92,7 +85,7 @@ func (c *Conn) readAuthSwitchRequestResponse() ([]byte, error) {
 		return nil, err
 	}
 	if len(data) == 0 {
-		return nil, NewDefaultError(ER_ACCESS_DENIED_ERROR, c.RemoteAddr().String(), c.user, "Yes")
+		return nil, ErrAccessDenied
 	}
 	if data[0] == 0x00 {
 		// \NUL
@@ -103,15 +96,22 @@ func (c *Conn) readAuthSwitchRequestResponse() ([]byte, error) {
 
 func (c *Conn) writeAuthMoreDataPubkey() error {
 	data := make([]byte, 4)
-	data = append(data, 0x01)
+	data = append(data, MORE_DATE_HEADER)
 	data = append(data, c.serverConf.pubKey...)
 	return c.WritePacket(data)
 }
 
 func (c *Conn) writeAuthMoreDataFullAuth() error {
 	data := make([]byte, 4)
-	data = append(data, 0x01)
-	data = append(data, 0x4)
+	data = append(data, MORE_DATE_HEADER)
+	data = append(data, CACHE_SHA2_FULL_AUTH)
+	return c.WritePacket(data)
+}
+
+func (c *Conn) writeAuthMoreDataFastAuth() error {
+	data := make([]byte, 4)
+	data = append(data, MORE_DATE_HEADER)
+	data = append(data, CACHE_SHA2_FAST_AUTH)
 	return c.WritePacket(data)
 }
 

@@ -7,28 +7,25 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
 	"github.com/siddontang/go/sync2"
-	)
+)
 
 /*
    Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
 */
 type Conn struct {
 	*packet.Conn
-	serverConf *Server
 
-	capability uint32
-
+	serverConf     *Server
+	capability     uint32
 	authPluginName string
+	connectionID   uint32
+	status         uint16
+	salt           []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
 
-	connectionID uint32
-
-	status uint16
-
-	credentialProvider CredentialProvider
-	user string
-	password string
-
-	salt []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
+	credentialProvider  CredentialProvider
+	user                string
+	password            string
+	cachingSha2FullAuth bool
 
 	h Handler
 
@@ -98,24 +95,15 @@ func (c *Conn) handshake() error {
 	}
 
 	if err := c.readHandshakeResponse(); err != nil {
+		if err == ErrAccessDenied {
+			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.LocalAddr().String(), c.user, "Yes")
+		}
 		c.writeError(err)
 		return err
 	}
 
-	if c.authPluginName == CACHING_SHA2_PASSWORD {
-		// Write OK in MoreData packet. Most clients should also accept a normal OK packet as a indicator of auth ok.
-		// MySQL doc says there are four possible responses from the server when is comes to CACHING_SHA2_PASSWORD auth
-		// See: https://insidemysql.com/preparing-your-community-connector-for-mysql-8-part-2-sha256/
-		if err := c.writeMoreDataOK(); err != nil {
-			return err
-		}
-		if err := c.writeOK(nil); err != nil {
-			return err
-		}
-	} else {
-		if err := c.writeOK(nil); err != nil {
-			return err
-		}
+	if err := c.writeOK(nil); err != nil {
+		return err
 	}
 
 	c.ResetSequence()

@@ -2,12 +2,13 @@ package server
 
 import (
 	"bytes"
+	"crypto/tls"
+	"encoding/binary"
 	"fmt"
+
+	"github.com/juju/errors"
 	"github.com/siddontang/go-log/log"
 	. "github.com/siddontang/go-mysql/mysql"
-	"encoding/binary"
-	"github.com/juju/errors"
-	"crypto/tls"
 )
 
 func (c *Conn) readHandshakeResponse() error {
@@ -49,15 +50,10 @@ func (c *Conn) readHandshakeResponse() error {
 
 	// try to authenticate the client
 	log.Debugf("readHandshakeResponse: auth method to compare: %s", c.authPluginName)
-	switched, err := c.compareAuthData(c.authPluginName, authData)
-	if err != nil {
+	if err = c.compareAuthData(c.authPluginName, authData); err != nil {
 		return err
 	}
-	if switched {
-		return c.handleAuthSwitchResponse(true)
-	}
-
-	return nil
+	return c.handleAuthSwitchResponse()
 }
 
 func (c *Conn) readFirstPart() ([]byte, int, error) {
@@ -185,7 +181,7 @@ func (c *Conn) handlePublicKeyRetrieval(authData []byte, pos int) (bool, error) 
 			return false, err
 		}
 		c.authPluginName = SHA256_PASSWORD
-		return false, c.handleAuthSwitchResponse(false)
+		return false, c.handleAuthSwitchResponse()
 	}
 	return true, nil
 }
@@ -204,7 +200,7 @@ func (c *Conn) handleAuthMatch(authData []byte, pos int, password string) (bool,
 		}
 		c.authPluginName = c.serverConf.defaultAuthMethod
 		// handle AuthSwitchResponse
-		return false, c.handleAuthSwitchResponse(false)
+		return false, c.handleAuthSwitchResponse()
 	}
 	return true, nil
 }

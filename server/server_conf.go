@@ -102,3 +102,7 @@ func isAuthMethodAllowedByServer(authMethod string, allowedAuthMethods []string)
 	}
 	return false
 }
+
+func (s * Server) InvalidateCache(username string, host string)  {
+	s.cacheShaPassword.Delete(fmt.Sprintf("%s@%s", username, host))
+}
