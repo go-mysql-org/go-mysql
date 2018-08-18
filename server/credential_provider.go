@@ -14,6 +14,11 @@ type CredentialProvider interface {
 	GetCredential(username string) (password string, found bool, err error)
 }
 
+func NewInMemoryProvider() *InMemoryProvider {
+	return &InMemoryProvider{
+		userPool: sync.Map{},
+	}
+}
 // implements a in memory credential provider
 type InMemoryProvider struct {
 	userPool sync.Map // username -> password

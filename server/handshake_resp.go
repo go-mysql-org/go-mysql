@@ -23,13 +23,6 @@ func (c *Conn) readHandshakeResponse() error {
 	if err != nil {
 		return err
 	}
-	cont, err := c.handlePublicKeyRetrieval(authData, pos)
-	if err != nil {
-		return err
-	}
-	if !cont {
-		return nil
-	}
 
 	pos += authLen
 
@@ -39,7 +32,8 @@ func (c *Conn) readHandshakeResponse() error {
 
 	pos = c.readPluginName(data, pos)
 
-	if cont, err = c.handleAuthMatch(authData, pos, c.password); err != nil {
+	cont, err := c.handleAuthMatch(authData, pos)
+	if err != nil {
 		return err
 	}
 	if !cont {
@@ -50,10 +44,7 @@ func (c *Conn) readHandshakeResponse() error {
 
 	// try to authenticate the client
 	log.Debugf("readHandshakeResponse: auth method to compare: %s", c.authPluginName)
-	if err = c.compareAuthData(c.authPluginName, authData); err != nil {
-		return err
-	}
-	return c.handleAuthSwitchResponse()
+	return c.compareAuthData(c.authPluginName, authData)
 }
 
 func (c *Conn) readFirstPart() ([]byte, int, error) {
@@ -169,10 +160,10 @@ func (c *Conn) readAuthData(data []byte, pos int) ([]byte, int, int, error) {
 
 // Public Key Retrieval
 // See: https://dev.mysql.com/doc/internals/en/public-key-retrieval.html
-func (c *Conn) handlePublicKeyRetrieval(authData []byte, pos int) (bool, error) {
+func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 	// if the client use 'sha256_password' auth method, and request for a public key
 	// we send back a keyfile with Protocol::AuthMoreData
-	if len(authData) == 1 && authData[0] == 0x01 {
+	if c.authPluginName == SHA256_PASSWORD && len(authData) == 1 && authData[0] == 0x01 {
 		if c.serverConf.capability&CLIENT_SSL == 0 {
 			return false, errors.New("server does not support SSL: CLIENT_SSL not enabled")
 		}
@@ -180,25 +171,29 @@ func (c *Conn) handlePublicKeyRetrieval(authData []byte, pos int) (bool, error) 
 		if err := c.writeAuthMoreDataPubkey(); err != nil {
 			return false, err
 		}
-		c.authPluginName = SHA256_PASSWORD
+
 		return false, c.handleAuthSwitchResponse()
 	}
 	return true, nil
 }
 
-func (c *Conn) handleAuthMatch(authData []byte, pos int, password string) (bool, error) {
+func (c *Conn) handleAuthMatch(authData []byte, pos int) (bool, error) {
 	// since our proxy server does not lock the auth method as MySQL server does by setting user-level auth method
 	// to override the global default auth method, we can try to meet client's auth method request in Handshake Response Packet
 	// if our server also support the requested auth method. When it can not be met, like client wants 'mysql_old_password',
 	// we issue a AuthSwitchRequest to the client with a server supported auth method.
 	fmt.Println(c.authPluginName, c.serverConf.allowedAuthMethods)
 	if !isAuthMethodAllowedByServer(c.authPluginName, c.serverConf.allowedAuthMethods) {
-		log.Debugf("readHandshakeResponse: auth switch to: %s", c.serverConf.defaultAuthMethod)
-		// this time, force the client to use the default auth method
-		if err := c.writeAuthSwitchRequest(c.serverConf.defaultAuthMethod); err != nil {
+		// force the client to switch to an allowed method
+		switchToMethod := c.serverConf.defaultAuthMethod
+		if !isAuthMethodAllowedByServer(c.serverConf.defaultAuthMethod, c.serverConf.allowedAuthMethods) {
+			switchToMethod = c.serverConf.allowedAuthMethods[0]
+		}
+		log.Debugf("readHandshakeResponse: auth switch to: %s", switchToMethod)
+		if err := c.writeAuthSwitchRequest(switchToMethod); err != nil {
 			return false, err
 		}
-		c.authPluginName = c.serverConf.defaultAuthMethod
+		c.authPluginName = switchToMethod
 		// handle AuthSwitchResponse
 		return false, c.handleAuthSwitchResponse()
 	}

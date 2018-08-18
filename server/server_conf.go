@@ -73,9 +73,9 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 			panic(fmt.Sprintf("server authentication method '%s' is not supported", allowed))
 		}
 	}
-	if !isAuthMethodAllowedByServer(defaultAuthMethod, allowedAuthMethods) {
-		panic(fmt.Sprintf("default auth method is not one of the allowed auth methods"))
-	}
+	//if !isAuthMethodAllowedByServer(defaultAuthMethod, allowedAuthMethods) {
+	//	panic(fmt.Sprintf("default auth method is not one of the allowed auth methods"))
+	//}
 	return &Server{
 		serverVersion:   serverVersion,
 		protocolVersion: 10,

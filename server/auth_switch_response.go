@@ -20,7 +20,7 @@ func (c *Conn) handleAuthSwitchResponse() error {
 		return err
 	}
 
-	log.Debugf("handleAuthSwitchResponse: auth switch response: %s", string(authData))
+	log.Debugf("handleAuthSwitchResponse: auth switch response (len=%d): %s", len(authData), string(authData))
 	switch c.authPluginName {
 	case MYSQL_NATIVE_PASSWORD:
 		if err := c.acquirePassword(); err != nil {
@@ -33,21 +33,34 @@ func (c *Conn) handleAuthSwitchResponse() error {
 
 	case CACHING_SHA2_PASSWORD:
 		if !c.cachingSha2FullAuth {
+			log.Debugf("handleAuthSwitchResponse: CACHING_SHA2_PASSWORD: Switched auth method but no MoreData packet send yet")
 			// Switched auth method but no MoreData packet send yet
 			if err := c.compareCacheSha2PasswordAuthData(authData); err != nil {
 				return err
 			} else {
-				return c.handleAuthSwitchResponse()
+				if c.cachingSha2FullAuth {
+					return c.handleAuthSwitchResponse()
+				}
+				return nil
 			}
 		}
 		// AuthMoreData packet already sent, do full auth
+		log.Debugf("handleAuthSwitchResponse: AuthMoreData packet already sent, do full auth")
 		if err := c.handleCachingSha2PasswordFullAuth(authData); err != nil {
 			return err
 		}
+		log.Debugf("handleAuthSwitchResponse: now write caching_sha2_password cache")
 		c.writeCachingSha2Cache()
 		return nil
 
 	case SHA256_PASSWORD:
+		cont, err := c.handlePublicKeyRetrieval(authData)
+		if err != nil {
+			return err
+		}
+		if !cont {
+			return nil
+		}
 		if err := c.acquirePassword(); err != nil {
 			return err
 		}
@@ -73,22 +86,22 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 		return ErrAccessDenied
 	} else {
 		// client either request for the public key or send the encrypted password
-		data, err := c.ReadPacket()
-		if err != nil {
-			return err
-		}
-		if len(data) == 1 && data[0] == 0x02 {
+		if len(authData) == 1 && authData[0] == 0x02 {
 			// send the public key
+			log.Debugf("handleCachingSha2PasswordFullAuth: write public key")
 			if err := c.writeAuthMoreDataPubkey(); err != nil {
 				return err
 			}
 			// read the encrypted password
-			data, err = c.readAuthSwitchRequestResponse()
+			var err error
+			if authData, err = c.readAuthSwitchRequestResponse(); err != nil {
+				return err
+			}
 		}
 		// the encrypted password
 		// decrypt
 		log.Debug("handleAuthSwitchResponse: decrypt a SHA2_PASSWORD")
-		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, (c.serverConf.tlsConfig.Certificates[0].PrivateKey).(*rsa.PrivateKey), data, nil)
+		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, (c.serverConf.tlsConfig.Certificates[0].PrivateKey).(*rsa.PrivateKey), authData, nil)
 		if err != nil {
 			return err
 		}
@@ -107,7 +120,7 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 
 func (c *Conn) writeCachingSha2Cache() {
 	// write cache
-	if c.password != "" {
+	if c.password == "" {
 		return
 	}
 	// SHA256(PASSWORD)
@@ -119,5 +132,6 @@ func (c *Conn) writeCachingSha2Cache() {
 	crypt.Write(m1)
 	m2 := crypt.Sum(nil)
 	// caching_sha2_password will maintain an in-memory hash of `user`@`host` => SHA256(SHA256(PASSWORD))
+	log.Debugf("write cache key: "+ fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	c.serverConf.cacheShaPassword.Store(fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()), m2)
 }

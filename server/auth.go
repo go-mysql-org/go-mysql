@@ -24,11 +24,24 @@ func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) err
 		return c.compareNativePasswordAuthData(clientAuthData, c.password)
 
 	case CACHING_SHA2_PASSWORD:
-		return c.compareCacheSha2PasswordAuthData(clientAuthData)
+		if err := c.compareCacheSha2PasswordAuthData(clientAuthData); err != nil {
+			return err
+		}
+		if c.cachingSha2FullAuth {
+			return c.handleAuthSwitchResponse()
+		}
+		return nil
 
 	case SHA256_PASSWORD:
 		if err := c.acquirePassword(); err != nil {
 			return err
+		}
+		cont, err := c.handlePublicKeyRetrieval(clientAuthData)
+		if err != nil {
+			return err
+		}
+		if !cont {
+			return nil
 		}
 		return c.compareSha256PasswordAuthData(clientAuthData, c.password)
 
@@ -124,6 +137,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error  {
 	}
 	// the caching of 'caching_sha2_password' in MySQL, see: https://dev.mysql.com/worklog/task/?id=9591
 	if _, ok := c.credentialProvider.(*InMemoryProvider); ok {
+		log.Debugf("hit ImMemoryProvider")
 		// since we have already kept the password in memory and calculate the scramble is not that high of cost, we eliminate
 		// the caching part. So our server will never ask the client to do a full authentication via RSA key exchange and it appears
 		// like the auth will always hit the cache.
@@ -136,6 +150,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error  {
 		return ErrAccessDenied
 	}
 	// other type of credential provider, we use the cache
+	log.Debugf("cache key: "+ fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	cached, ok := c.serverConf.cacheShaPassword.Load(fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	if ok {
 		// Scramble validation
@@ -146,6 +161,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error  {
 		return ErrAccessDenied
 	}
 	// cache miss, do full auth
+	log.Debugf("compareCacheSha2PasswordAuthData: cache miss, do full auth")
 	if err := c.writeAuthMoreDataFullAuth(); err != nil {
 		return err
 	}

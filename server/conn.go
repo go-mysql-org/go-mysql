@@ -43,7 +43,7 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	c.serverConf = defaultServer
 
 	c.h = h
-	p := new(InMemoryProvider)
+	p := NewInMemoryProvider()
 	p.AddUser(user, password)
 	c.credentialProvider = p
 	c.Conn = packet.NewConn(conn)
