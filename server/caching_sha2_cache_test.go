@@ -15,15 +15,15 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-var delay = 2000
+var delay = 500
 
 // test caching for 'caching_sha2_password'
 // NOTE the idea here is to plugin a throttled credential provider so that the first connection (cache miss) will take longer time
-//      than the second connection (cache hit).
+//      than the second connection (cache hit). Remember to set the password for MySQL user otherwise it won't cache empty password.
 func TestCachingSha2Cache(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 1000}
+	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 100}
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
 
@@ -40,7 +40,7 @@ func TestCachingSha2Cache(t *testing.T) {
 func TestCachingSha2CacheTLS(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 1000}
+	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 100}
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
 

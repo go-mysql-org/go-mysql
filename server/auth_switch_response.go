@@ -10,18 +10,15 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
-	"github.com/siddontang/go-log/log"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
 func (c *Conn) handleAuthSwitchResponse() error {
 	authData, err := c.readAuthSwitchRequestResponse()
 	if err != nil {
-		log.Debug(err)
 		return err
 	}
 
-	log.Debugf("handleAuthSwitchResponse: auth switch response (len=%d): %s", len(authData), string(authData))
 	switch c.authPluginName {
 	case MYSQL_NATIVE_PASSWORD:
 		if err := c.acquirePassword(); err != nil {
@@ -34,7 +31,6 @@ func (c *Conn) handleAuthSwitchResponse() error {
 
 	case CACHING_SHA2_PASSWORD:
 		if !c.cachingSha2FullAuth {
-			log.Debugf("handleAuthSwitchResponse: CACHING_SHA2_PASSWORD: Switched auth method but no MoreData packet send yet")
 			// Switched auth method but no MoreData packet send yet
 			if err := c.compareCacheSha2PasswordAuthData(authData); err != nil {
 				return err
@@ -46,11 +42,9 @@ func (c *Conn) handleAuthSwitchResponse() error {
 			}
 		}
 		// AuthMoreData packet already sent, do full auth
-		log.Debugf("handleAuthSwitchResponse: AuthMoreData packet already sent, do full auth")
 		if err := c.handleCachingSha2PasswordFullAuth(authData); err != nil {
 			return err
 		}
-		log.Debugf("handleAuthSwitchResponse: now write caching_sha2_password cache")
 		c.writeCachingSha2Cache()
 		return nil
 
@@ -93,7 +87,6 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 		// client either request for the public key or send the encrypted password
 		if len(authData) == 1 && authData[0] == 0x02 {
 			// send the public key
-			log.Debugf("handleCachingSha2PasswordFullAuth: write public key")
 			if err := c.writeAuthMoreDataPubkey(); err != nil {
 				return err
 			}
@@ -105,7 +98,6 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 		}
 		// the encrypted password
 		// decrypt
-		log.Debug("handleAuthSwitchResponse: decrypt a SHA2_PASSWORD")
 		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, (c.serverConf.tlsConfig.Certificates[0].PrivateKey).(*rsa.PrivateKey), authData, nil)
 		if err != nil {
 			return err
@@ -137,6 +129,5 @@ func (c *Conn) writeCachingSha2Cache() {
 	crypt.Write(m1)
 	m2 := crypt.Sum(nil)
 	// caching_sha2_password will maintain an in-memory hash of `user`@`host` => SHA256(SHA256(PASSWORD))
-	log.Debugf("write cache key: " + fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	c.serverConf.cacheShaPassword.Store(fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()), m2)
 }

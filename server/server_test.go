@@ -21,7 +21,7 @@ var serverConf = NewDefaultServer()
 
 var testAddr = flag.String("addr", "127.0.0.1:4000", "MySQL proxy server address")
 var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "", "MySQL password")
+var testPassword = flag.String("pass", "123456", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
 var tlsConf = NewServerTLSConfig(caPem, certPem, keyPem, tls.VerifyClientCertIfGiven)
@@ -109,7 +109,6 @@ func (s *serverTestSuite) SetUpSuite(c *C) {
 	time.Sleep(500 * time.Millisecond)
 
 	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
-	log.Debugf("mysql opened")
 	c.Assert(err, IsNil)
 
 	s.db.SetMaxIdleConns(4)

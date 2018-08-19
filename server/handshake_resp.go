@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/binary"
-	"fmt"
 
 	"github.com/juju/errors"
-	"github.com/siddontang/go-log/log"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -43,7 +41,6 @@ func (c *Conn) readHandshakeResponse() error {
 	// ignore connect attrs for now, the proxy does not support passing attrs to actual MySQL server
 
 	// try to authenticate the client
-	log.Debugf("readHandshakeResponse: auth method to compare: %s", c.authPluginName)
 	return c.compareAuthData(c.authPluginName, authData)
 }
 
@@ -52,8 +49,6 @@ func (c *Conn) readFirstPart() ([]byte, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-
-	log.Debugf("readHandshakeResponse: handshake response: %s", string(data))
 
 	pos := 0
 
@@ -81,7 +76,6 @@ func (c *Conn) readFirstPart() ([]byte, int, error) {
 
 	// is this a SSLRequest packet?
 	if len(data) == (4 + 4 + 1 + 23) {
-		log.Debugf("client requested SSL")
 		if c.serverConf.capability&CLIENT_SSL == 0 {
 			return nil, 0, errors.Errorf("The host '%s' does not support SSL connections", c.RemoteAddr().String())
 		}
@@ -91,9 +85,6 @@ func (c *Conn) readFirstPart() ([]byte, int, error) {
 			return nil, 0, err
 		}
 		c.Conn.Conn = tlsConn
-
-		//c.Conn.UpgradeTLS(tlsConn)
-		log.Debugf("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
 
 		// mysql handshake again
 		return c.readFirstPart()
@@ -174,7 +165,6 @@ func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 		if c.serverConf.capability&CLIENT_SSL == 0 {
 			return false, errors.New("server does not support SSL: CLIENT_SSL not enabled")
 		}
-		log.Debug("client requesting pub key")
 		if err := c.writeAuthMoreDataPubkey(); err != nil {
 			return false, err
 		}
@@ -189,18 +179,15 @@ func (c *Conn) handleAuthMatch(authData []byte, pos int) (bool, error) {
 	// to override the global default auth method, we can try to meet client's auth method request in Handshake Response Packet
 	// if our server also support the requested auth method. When it can not be met, like client wants 'mysql_old_password',
 	// we issue a AuthSwitchRequest to the client with a server supported auth method.
-	fmt.Println(c.authPluginName, c.serverConf.allowedAuthMethods)
 	if !isAuthMethodAllowedByServer(c.authPluginName, c.serverConf.allowedAuthMethods) {
 		// force the client to switch to an allowed method
 		switchToMethod := c.serverConf.defaultAuthMethod
 		if !isAuthMethodAllowedByServer(c.serverConf.defaultAuthMethod, c.serverConf.allowedAuthMethods) {
 			switchToMethod = c.serverConf.allowedAuthMethods[0]
 		}
-		log.Debugf("readHandshakeResponse: auth switch to: %s", switchToMethod)
 		if err := c.writeAuthSwitchRequest(switchToMethod); err != nil {
 			return false, err
 		}
-		log.Debugf("auth switch packet sent")
 		c.authPluginName = switchToMethod
 		// handle AuthSwitchResponse
 		return false, c.handleAuthSwitchResponse()

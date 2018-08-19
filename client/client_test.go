@@ -25,7 +25,6 @@ var testDB = flag.String("db", "test", "MySQL test database")
 
 func Test(t *testing.T) {
 	segs := strings.Split(*testPort, ",")
-	fmt.Println(segs)
 	for _, seg := range segs {
 		Suite(&clientTestSuite{port: seg})
 	}

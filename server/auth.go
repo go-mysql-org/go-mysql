@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
-	"github.com/siddontang/go-log/log"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -111,7 +110,6 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 	} else {
 		// client should send encrypted password
 		// decrypt
-		log.Debug("compareAuthSwitchData: decrypt a SHA256_PASSWORD")
 		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, (c.serverConf.tlsConfig.Certificates[0].PrivateKey).(*rsa.PrivateKey), clientAuthData, nil)
 		if err != nil {
 			return err
@@ -132,7 +130,6 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 	// Empty passwords are not hashed, but sent as empty string
 	if len(clientAuthData) == 0 {
-		log.Debugf("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 		if err := c.acquirePassword(); err != nil {
 			return err
 		}
@@ -143,7 +140,6 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 	}
 	// the caching of 'caching_sha2_password' in MySQL, see: https://dev.mysql.com/worklog/task/?id=9591
 	if _, ok := c.credentialProvider.(*InMemoryProvider); ok {
-		log.Debugf("hit ImMemoryProvider")
 		// since we have already kept the password in memory and calculate the scramble is not that high of cost, we eliminate
 		// the caching part. So our server will never ask the client to do a full authentication via RSA key exchange and it appears
 		// like the auth will always hit the cache.
@@ -156,7 +152,6 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 		return ErrAccessDenied
 	}
 	// other type of credential provider, we use the cache
-	log.Debugf("cache key: " + fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	cached, ok := c.serverConf.cacheShaPassword.Load(fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	if ok {
 		// Scramble validation
@@ -167,7 +162,6 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 		return ErrAccessDenied
 	}
 	// cache miss, do full auth
-	log.Debugf("compareCacheSha2PasswordAuthData: cache miss, do full auth")
 	if err := c.writeAuthMoreDataFullAuth(); err != nil {
 		return err
 	}

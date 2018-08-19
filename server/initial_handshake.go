@@ -1,7 +1,5 @@
 package server
 
-import "github.com/siddontang/go-log/log"
-
 // see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_v10.html
 func (c *Conn) writeInitialHandshake() error {
 	data := make([]byte, 4)
@@ -54,8 +52,6 @@ func (c *Conn) writeInitialHandshake() error {
 	// EOF if MySQL version (>= 5.5.7 and < 5.5.10) or (>= 5.6.0 and < 5.6.2)
 	// \NUL otherwise, so we use \NUL
 	data = append(data, 0)
-
-	log.Debugf("writeInitialHandshake: %s", string(data))
 
 	return c.WritePacket(data)
 }
