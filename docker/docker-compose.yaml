@@ -34,6 +34,7 @@ services:
         container_name: "mysql-server-default"
         ports:
             - "3306:3306"
+        command: ["mysqld", "--log-bin=mysql-bin", "--server-id=1"]
         environment:
             - MYSQL_ALLOW_EMPTY_PASSWORD=true
             - bind-address=0.0.0.0
@@ -76,6 +77,4 @@ services:
             #- MYSQL_ROOT_PASSWORD=abc123
             - MYSQL_ALLOW_EMPTY_PASSWORD=true
             - bind-address=0.0.0.0
-            #- default-authentication-plugin=sha256_password
-
 

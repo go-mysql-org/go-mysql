@@ -21,7 +21,7 @@ var serverConf = NewDefaultServer()
 
 var testAddr = flag.String("addr", "127.0.0.1:4000", "MySQL proxy server address")
 var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "123456", "MySQL password")
+var testPassword = flag.String("pass", "", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
 var tlsConf = NewServerTLSConfig(caPem, certPem, keyPem, tls.VerifyClientCertIfGiven)
