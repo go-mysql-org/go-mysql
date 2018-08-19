@@ -59,7 +59,7 @@ func NewDefaultServer() *Server {
 		serverVersion:   "5.7.0",
 		protocolVersion: 10,
 		capability: CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
-			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH,
+			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_SSL,
 		collationId:        DEFAULT_COLLATION_ID,
 		defaultAuthMethod:  MYSQL_NATIVE_PASSWORD,
 		allowedAuthMethods: []string{MYSQL_NATIVE_PASSWORD, CACHING_SHA2_PASSWORD, SHA256_PASSWORD},
@@ -89,11 +89,15 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 	//if !isAuthMethodAllowedByServer(defaultAuthMethod, allowedAuthMethods) {
 	//	panic(fmt.Sprintf("default auth method is not one of the allowed auth methods"))
 	//}
+	var capFlag = CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
+		CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH
+	if tlsConfig != nil {
+		capFlag |= CLIENT_SSL
+	}
 	return &Server{
-		serverVersion:   serverVersion,
-		protocolVersion: 10,
-		capability: CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
-			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH,
+		serverVersion:      serverVersion,
+		protocolVersion:    10,
+		capability:         capFlag,
 		collationId:        collationId,
 		defaultAuthMethod:  defaultAuthMethod,
 		allowedAuthMethods: allowedAuthMethods,

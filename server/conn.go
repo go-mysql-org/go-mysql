@@ -52,10 +52,6 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	c.salt, _ = RandomBuf(20)
 	c.closed.Set(false)
 
-	if c.serverConf.tlsConfig != nil {
-		c.serverConf.capability |= CLIENT_SSL
-	}
-
 	if err := c.handshake(); err != nil {
 		c.Close()
 		return nil, err
@@ -76,10 +72,6 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, 
 	c.stmts = make(map[uint32]*Stmt)
 	c.salt, _ = RandomBuf(20)
 	c.closed.Set(false)
-
-	if c.serverConf.tlsConfig != nil {
-		c.serverConf.capability |= CLIENT_SSL
-	}
 
 	if err := c.handshake(); err != nil {
 		c.Close()

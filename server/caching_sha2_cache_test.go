@@ -28,8 +28,6 @@ func TestCachingSha2Cache(t *testing.T) {
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
 
-	log.Debugf("cache server: %p", cacheServer)
-
 	// no TLS
 	Suite(&cacheTestSuite{
 		server:       cacheServer,
