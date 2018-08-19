@@ -2,15 +2,16 @@ package server
 
 import (
 	"bytes"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/juju/errors"
-	"crypto/rsa"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha1"
-	"github.com/siddontang/go-log/log"
+	"crypto/sha256"
 	"crypto/tls"
 	"fmt"
-	"crypto/sha256"
+
+	"github.com/juju/errors"
+	"github.com/siddontang/go-log/log"
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 var ErrAccessDenied = errors.New("access denied")
@@ -128,7 +129,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 	}
 }
 
-func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error  {
+func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 	// Empty passwords are not hashed, but sent as empty string
 	if len(clientAuthData) == 0 {
 		log.Debugf("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
@@ -155,7 +156,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error  {
 		return ErrAccessDenied
 	}
 	// other type of credential provider, we use the cache
-	log.Debugf("cache key: "+ fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
+	log.Debugf("cache key: " + fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	cached, ok := c.serverConf.cacheShaPassword.Load(fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	if ok {
 		// Scramble validation

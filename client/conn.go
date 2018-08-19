@@ -18,7 +18,7 @@ type Conn struct {
 	user      string
 	password  string
 	db        string
-	TLSConfig *tls.Config
+	tlsConfig *tls.Config
 	proto     string
 
 	capability uint32
@@ -27,7 +27,7 @@ type Conn struct {
 
 	charset string
 
-	salt []byte
+	salt           []byte
 	authPluginName string
 
 	connectionID uint32
@@ -110,6 +110,18 @@ func (c *Conn) Ping() error {
 	}
 
 	return nil
+}
+
+// use default SSL
+// pass to options when connect
+func (c *Conn) UseSSL(insecureSkipVerify bool) {
+	c.tlsConfig = &tls.Config{InsecureSkipVerify: insecureSkipVerify}
+}
+
+// use user-specified TLS config
+// pass to options when connect
+func (c *Conn) SetTLSConfig(config *tls.Config) {
+	c.tlsConfig = config
 }
 
 func (c *Conn) UseDB(dbName string) error {

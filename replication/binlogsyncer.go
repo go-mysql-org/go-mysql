@@ -195,7 +195,7 @@ func (b *BinlogSyncer) registerSlave() error {
 	log.Infof("register slave for master server %s:%d", b.cfg.Host, b.cfg.Port)
 	var err error
 	b.c, err = client.Connect(fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port), b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
-		c.TLSConfig = b.cfg.TLSConfig
+		c.tlsConfig = b.cfg.TLSConfig
 	})
 	if err != nil {
 		return errors.Trace(err)

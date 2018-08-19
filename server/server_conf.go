@@ -1,10 +1,11 @@
 package server
 
 import (
-	. "github.com/siddontang/go-mysql/mysql"
-	"fmt"
 	"crypto/tls"
+	"fmt"
 	"sync"
+
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 // supported auth methods
@@ -53,7 +54,7 @@ type Server struct {
 func NewDefaultServer() *Server {
 	caPem, caKey := generateCA()
 	certPem, keyPem := generateAndSignRSACerts(caPem, caKey)
-	tlsConf := newServerTLSConfig(certPem, keyPem, tls.VerifyClientCertIfGiven)
+	tlsConf := NewServerTLSConfig(caPem, certPem, keyPem, tls.VerifyClientCertIfGiven)
 	return &Server{
 		serverVersion:   "5.7.0",
 		protocolVersion: 10,
@@ -115,6 +116,6 @@ func isAuthMethodAllowedByServer(authMethod string, allowedAuthMethods []string)
 	return false
 }
 
-func (s * Server) InvalidateCache(username string, host string)  {
+func (s *Server) InvalidateCache(username string, host string) {
 	s.cacheShaPassword.Delete(fmt.Sprintf("%s@%s", username, host))
 }

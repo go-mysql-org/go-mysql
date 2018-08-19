@@ -23,15 +23,15 @@ var delay = 2000
 func TestCachingSha2Cache(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay+1000}
+	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 1000}
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
 
 	// no TLS
 	Suite(&cacheTestSuite{
-		server: cacheServer,
+		server:       cacheServer,
 		credProvider: remoteProvider,
-		tlsPara: 	  "false",
+		tlsPara:      "false",
 	})
 
 	TestingT(t)
@@ -40,20 +40,19 @@ func TestCachingSha2Cache(t *testing.T) {
 func TestCachingSha2CacheTLS(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay+1000}
+	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 1000}
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
 
 	// TLS
 	Suite(&cacheTestSuite{
-		server: cacheServer,
+		server:       cacheServer,
 		credProvider: remoteProvider,
-		tlsPara: 	  "skip-verify",
+		tlsPara:      "skip-verify",
 	})
 
 	TestingT(t)
 }
-
 
 type RemoteThrottleProvider struct {
 	*InMemoryProvider
@@ -61,20 +60,19 @@ type RemoteThrottleProvider struct {
 }
 
 func (m *RemoteThrottleProvider) GetCredential(username string) (password string, found bool, err error) {
-	time.Sleep(time.Millisecond* time.Duration(m.delay))
+	time.Sleep(time.Millisecond * time.Duration(m.delay))
 	return m.InMemoryProvider.GetCredential(username)
 }
 
 type cacheTestSuite struct {
-	server *Server
+	server       *Server
 	credProvider CredentialProvider
-	tlsPara string
+	tlsPara      string
 
 	db *sql.DB
 
 	l net.Listener
 }
-
 
 func (s *cacheTestSuite) SetUpSuite(c *C) {
 	var err error
@@ -140,7 +138,7 @@ func (s *cacheTestSuite) TestCache(c *C) {
 	s.runSelect(c)
 	t2 := time.Now()
 
-	d1 := int(t2.Sub(t1).Nanoseconds()/1e6)
+	d1 := int(t2.Sub(t1).Nanoseconds() / 1e6)
 
 	log.Debugf("first connection took %d milliseconds", d1)
 
@@ -156,7 +154,7 @@ func (s *cacheTestSuite) TestCache(c *C) {
 	s.runSelect(c)
 	t4 := time.Now()
 
-	d2 := int(t4.Sub(t3).Nanoseconds()/1e6)
+	d2 := int(t4.Sub(t3).Nanoseconds() / 1e6)
 
 	log.Debugf("second connection took %d milliseconds", d2)
 
@@ -230,6 +228,3 @@ func (h *testCacheHandler) HandleStmtExecute(ctx interface{}, query string, args
 func (h *testCacheHandler) HandleOtherCommand(cmd byte, data []byte) error {
 	return mysql.NewError(mysql.ER_UNKNOWN_ERROR, fmt.Sprintf("command %d is not supported now", cmd))
 }
-
-
-

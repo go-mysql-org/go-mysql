@@ -137,6 +137,6 @@ func (c *Conn) writeCachingSha2Cache() {
 	crypt.Write(m1)
 	m2 := crypt.Sum(nil)
 	// caching_sha2_password will maintain an in-memory hash of `user`@`host` => SHA256(SHA256(PASSWORD))
-	log.Debugf("write cache key: "+ fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
+	log.Debugf("write cache key: " + fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
 	c.serverConf.cacheShaPassword.Store(fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()), m2)
 }

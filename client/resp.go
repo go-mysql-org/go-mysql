@@ -4,14 +4,15 @@ import "C"
 import (
 	"encoding/binary"
 
+	"bytes"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
-		"bytes"
-	"encoding/pem"
-	"crypto/x509"
-	"crypto/rsa"
-	)
+)
 
 func (c *Conn) readUntilEOF() (err error) {
 	var data []byte
@@ -126,7 +127,7 @@ func (c *Conn) handleAuthResult() error {
 			}
 		} else if data[0] == CACHE_SHA2_FULL_AUTH {
 			// need full authentication
-			if c.TLSConfig != nil || c.proto == "unix" {
+			if c.tlsConfig != nil || c.proto == "unix" {
 				if err = c.WriteClearAuthPacket(c.password); err != nil {
 					return err
 				}
@@ -194,7 +195,6 @@ func (c *Conn) readAuthResult() ([]byte, string, error) {
 		return nil, "", c.handleErrorPacket(data)
 	}
 }
-
 
 func (c *Conn) readOK() (*Result, error) {
 	data, err := c.ReadPacket()

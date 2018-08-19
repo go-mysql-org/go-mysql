@@ -5,10 +5,11 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 
+	"fmt"
+
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/packet"
-	"fmt"
 )
 
 const defaultAuthPluginName = "mysql_native_password"
@@ -48,7 +49,7 @@ func (c *Conn) readInitialHandshake() error {
 	if c.capability&CLIENT_PROTOCOL_41 == 0 {
 		return errors.New("the MySQL server can not support protocol 41 and above required by the client")
 	}
-	if c.capability&CLIENT_SSL == 0 && c.TLSConfig != nil {
+	if c.capability&CLIENT_SSL == 0 && c.tlsConfig != nil {
 		return errors.New("the MySQL Server does not support TLS required by the client")
 	}
 	pos += 2
@@ -102,7 +103,7 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 		if len(c.password) == 0 {
 			return nil, true, nil
 		}
-		if c.TLSConfig != nil || c.proto == "unix" {
+		if c.tlsConfig != nil || c.proto == "unix" {
 			// write cleartext auth packet
 			return []byte(c.password), true, nil
 		} else {
@@ -124,10 +125,10 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Adjust client capability flags based on server support
 	capability := CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION |
-		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH | c.capability & CLIENT_LONG_FLAG
+		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH | c.capability&CLIENT_LONG_FLAG
 
 	// To enable TLS / SSL
-	if c.TLSConfig != nil {
+	if c.tlsConfig != nil {
 		capability |= CLIENT_SSL
 	}
 
@@ -183,14 +184,14 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// SSL Connection Request Packet
 	// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::SSLRequest
-	if c.TLSConfig != nil {
+	if c.tlsConfig != nil {
 		// Send TLS / SSL request packet
 		if err := c.WritePacket(data[:(4+4+1+23)+4]); err != nil {
 			return err
 		}
 
 		// Switch to TLS
-		tlsConn := tls.Client(c.Conn.Conn, c.TLSConfig)
+		tlsConn := tls.Client(c.Conn.Conn, c.tlsConfig)
 		if err := tlsConn.Handshake(); err != nil {
 			return err
 		}

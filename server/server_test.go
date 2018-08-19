@@ -24,7 +24,7 @@ var testUser = flag.String("user", "root", "MySQL user")
 var testPassword = flag.String("pass", "123456", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
-var tlsConf = newServerTLSConfig(certPem, keyPem, tls.VerifyClientCertIfGiven)
+var tlsConf = NewServerTLSConfig(caPem, certPem, keyPem, tls.VerifyClientCertIfGiven)
 
 func prepareServerConf() []*Server {
 	// add default server without TLS
@@ -67,9 +67,9 @@ func Test(t *testing.T) {
 	// no TLS
 	for _, svr := range servers {
 		Suite(&serverTestSuite{
-			server: svr,
+			server:       svr,
 			credProvider: inMemProvider,
-			tlsPara: 	  "false",
+			tlsPara:      "false",
 		})
 	}
 
@@ -79,7 +79,7 @@ func Test(t *testing.T) {
 			Suite(&serverTestSuite{
 				server:       svr,
 				credProvider: inMemProvider,
-				tlsPara: 	  "skip-verify",
+				tlsPara:      "skip-verify",
 			})
 		}
 	}
@@ -88,7 +88,7 @@ func Test(t *testing.T) {
 }
 
 type serverTestSuite struct {
-	server *Server
+	server       *Server
 	credProvider CredentialProvider
 
 	tlsPara string
@@ -97,7 +97,6 @@ type serverTestSuite struct {
 
 	l net.Listener
 }
-
 
 func (s *serverTestSuite) SetUpSuite(c *C) {
 	var err error
@@ -313,9 +312,9 @@ MwIDAQAB
 -----END PUBLIC KEY-----`)
 
 var certPem = []byte(`-----BEGIN CERTIFICATE-----
-MIIDBjCCAe4CCQDg06wCf7hctzANBgkqhkiG9w0BAQsFADBFMQswCQYDVQQGEwJB
+MIIDBjCCAe4CCQDg06wCf7hcuDANBgkqhkiG9w0BAQUFADBFMQswCQYDVQQGEwJB
 VTETMBEGA1UECBMKU29tZS1TdGF0ZTEhMB8GA1UEChMYSW50ZXJuZXQgV2lkZ2l0
-cyBQdHkgTHRkMB4XDTE4MDgxNjE1MTQyOFoXDTE5MTIyOTE1MTQyOFowRTELMAkG
+cyBQdHkgTHRkMB4XDTE4MDgxOTA4NDUyNVoXDTI4MDgxNjA4NDUyNVowRTELMAkG
 A1UEBhMCQVUxEzARBgNVBAgTClNvbWUtU3RhdGUxITAfBgNVBAoTGEludGVybmV0
 IFdpZGdpdHMgUHR5IEx0ZDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
 ALK2gqK4uvTlxJANO2JKdibvmh899z6oCo9Km0mz5unj4dpnq9hljsQuKtcHUcM4
@@ -323,13 +322,13 @@ HXcE06knaJ4TOF7lcsjaqoDO7r/SaFgjjXCqNvHD0Su4B+7qe52BZZTRV1AANP10
 PvebarXSEzaZUCyHHhSF8+Qb4vX04XKX/TOqinTVGtlnduKzP5+qsaFBtpLAw1V0
 At9EQB5BgnTYtdIsmvD4/2WhBvOjVxab75yx0R4oof4F3u528tbEegcWhBtmy2Xd
 HI3S+TLljj3kOOdB+pgrVUl+KaDavWK3T+F1vTNDe56HEVNKeWlLy1scul61E0j9
-IkZAu6aRDxtKdl7bKu0BkzMCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEASdIGQ06z
-cXlaf7dwVFJB/+IIDxWV9k54A4o6sQaAUqJPjw3MJ3m9ihegYn35UObZ6CdC1lpy
-S2MuFcQAYXle5OF9JeOlTnjunjJXJg+cp8g7NV7nvIj7Tl+PzIWig3XQ4n6rrwc0
-6xyGgpeVhnfRkJ2W2nq1xUnhHF4qxQSi7eCiWhfB2dZwEnD94+ExwhB+1bTI8+zm
-TxllD8p572qrZNEE0hA561jZVzp+vbe41DMrW++Lp4p3/juRVnItY+MGAnBdrp7k
-LzGq4NH8sTIcjGEogHLqFdcZI3ObCk74vEDc1BAWvPmNk5IUpCinpbcai7xzho1+
-WabQt52HfgPKmg==
+IkZAu6aRDxtKdl7bKu0BkzMCAwEAATANBgkqhkiG9w0BAQUFAAOCAQEAma3yFqR7
+xkeaZBg4/1I3jSlaNe5+2JB4iybAkMOu77fG5zytLomTbzdhewsuBwpTVMJdga8T
+IdPeIFCin1U+5SkbjSMlpKf+krE+5CyrNJ5jAgO9ATIqx66oCTYXfGlNapGRLfSE
+sa0iMqCe/dr4GPU+flW2DZFWiyJVDSF1JjReQnfrWY+SD2SpP/lmlgltnY8MJngd
+xBLG5nsZCpUXGB713Q8ZyIm2ThVAMiskcxBleIZDDghLuhGvY/9eFJhZpvOkjWa6
+XGEi4E1G/SA+zVKFl41nHKCdqXdmIOnpcLlFBUVloQok5a95Kqc1TYw3f+WbdFff
+99dAgk3gWwWZQA==
 -----END CERTIFICATE-----`)
 
 var keyPem = []byte(`-----BEGIN RSA PRIVATE KEY-----

@@ -13,29 +13,21 @@ import (
 
 // generate TLS config for server side
 // controlling the security level by authType
-func newServerTLSConfig(caPem, keyPem []byte, authType tls.ClientAuthType) *tls.Config {
-	caPemBlock, _ := pem.Decode(caPem)
+func NewServerTLSConfig(caPem, certPem, keyPem []byte, authType tls.ClientAuthType) *tls.Config {
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(caPem) {
 		panic("failed to add ca PEM")
 	}
 
-	keyPemBlock, _ := pem.Decode(keyPem)
-	priv, err := x509.ParsePKCS1PrivateKey(keyPemBlock.Bytes)
+	cert, err := tls.X509KeyPair(certPem, keyPem)
 	if err != nil {
 		panic(err)
 	}
 
-	cert := tls.Certificate{
-		Certificate: [][]byte{caPemBlock.Bytes},
-		PrivateKey:  priv,
-	}
-
 	config := &tls.Config{
-		ClientAuth:         authType,
-		Certificates:       []tls.Certificate{cert},
-		ClientCAs:          pool,
-		InsecureSkipVerify: true,
+		ClientAuth:   authType,
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    pool,
 	}
 	return config
 }

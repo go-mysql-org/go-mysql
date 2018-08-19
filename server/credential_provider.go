@@ -19,6 +19,7 @@ func NewInMemoryProvider() *InMemoryProvider {
 		userPool: sync.Map{},
 	}
 }
+
 // implements a in memory credential provider
 type InMemoryProvider struct {
 	userPool sync.Map // username -> password
