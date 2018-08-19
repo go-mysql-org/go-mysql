@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +27,8 @@ func TestCachingSha2Cache(t *testing.T) {
 	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 100}
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
+
+	log.Debugf("cache server: %p", cacheServer)
 
 	// no TLS
 	Suite(&cacheTestSuite{
@@ -86,10 +89,6 @@ func (s *cacheTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *cacheTestSuite) TearDownSuite(c *C) {
-	if s.db != nil {
-		s.db.Close()
-	}
-
 	if s.l != nil {
 		s.l.Close()
 	}
@@ -144,11 +143,13 @@ func (s *cacheTestSuite) TestCache(c *C) {
 
 	c.Assert(d1, GreaterEqual, delay)
 
-	s.db.Close()
+	if s.db != nil {
+		s.db.Close()
+	}
 
 	// second connection
 	t3 := time.Now()
-	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", *testUser, *testPassword, *testAddr, *testDB))
+	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
 	c.Assert(err, IsNil)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect(c)
@@ -159,6 +160,11 @@ func (s *cacheTestSuite) TestCache(c *C) {
 	log.Debugf("second connection took %d milliseconds", d2)
 
 	c.Assert(d2, Less, delay)
+	if s.db != nil {
+		s.db.Close()
+	}
+
+	s.server.cacheShaPassword = &sync.Map{}
 }
 
 type testCacheHandler struct {
