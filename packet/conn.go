@@ -2,18 +2,18 @@ package packet
 
 import "C"
 import (
-	"bufio"
 	"bytes"
 	"io"
 	"net"
 
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/x509"
+	"encoding/pem"
+
 	"github.com/juju/errors"
 	. "github.com/siddontang/go-mysql/mysql"
-	"encoding/pem"
-	"crypto/x509"
-	"crypto/sha1"
-	"crypto/rsa"
-	"crypto/rand"
 )
 
 /*
@@ -21,7 +21,9 @@ import (
 */
 type Conn struct {
 	net.Conn
-	br *bufio.Reader
+
+	// we removed the buffer reader because it will cause the SSLRequest to block (tls connection handshake won't be
+	// able to read the "Client Hello" data since it has been buffered into the buffer reader)
 
 	Sequence uint8
 }
@@ -29,7 +31,6 @@ type Conn struct {
 func NewConn(conn net.Conn) *Conn {
 	c := new(Conn)
 
-	c.br = bufio.NewReaderSize(conn, 4096)
 	c.Conn = conn
 
 	return c
@@ -48,14 +49,15 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 func (c *Conn) ReadPacketTo(w io.Writer) error {
 	header := []byte{0, 0, 0, 0}
 
-	if _, err := io.ReadFull(c.br, header); err != nil {
+	if _, err := io.ReadFull(c.Conn, header); err != nil {
 		return ErrBadConn
 	}
 
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
-	if length < 1 {
-		return errors.Errorf("invalid payload length %d", length)
-	}
+	// bug fixed: caching_sha2_password will send 0-length payload (the unscrambled password) when the password is empty
+	//if length < 1 {
+	//	return errors.Errorf("invalid payload length %d", length)
+	//}
 
 	sequence := uint8(header[3])
 
@@ -65,7 +67,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 
 	c.Sequence++
 
-	if n, err := io.CopyN(w, c.br, int64(length)); err != nil {
+	if n, err := io.CopyN(w, c.Conn, int64(length)); err != nil {
 		return ErrBadConn
 	} else if n != int64(length) {
 		return ErrBadConn

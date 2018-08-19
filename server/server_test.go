@@ -21,42 +21,36 @@ var serverConf = NewDefaultServer()
 
 var testAddr = flag.String("addr", "127.0.0.1:4000", "MySQL proxy server address")
 var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "111", "MySQL password")
+var testPassword = flag.String("pass", "123456", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
-var tlsConf = newServerTLSConfig(certPem, keyPem, tls.RequireAnyClientCert)
+var tlsConf = newServerTLSConfig(certPem, keyPem, tls.VerifyClientCertIfGiven)
 
 func prepareServerConf() []*Server {
 	// add default server without TLS
-	plainDefault := NewDefaultServer()
-	plainDefault.pubKey = nil
-	plainDefault.tlsConfig = nil
-
 	var servers = []*Server{
-		// without TLS
-		plainDefault,
-		// with TLS
+		// with default TLS
 		NewDefaultServer(),
 		// for key exchange, CLIENT_SSL must be enabled for the server and if the connection is not secured with TLS
 		// server permits MYSQL_NATIVE_PASSWORD only
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, nil, nil),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
 		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
 		// server permits SHA256_PASSWORD only
 		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{SHA256_PASSWORD}, pubPem, tlsConf),
 		// server permits CACHING_SHA2_PASSWORD only
 		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf),
 
-		// test auth switch: server permits MYSQL_NATIVE_PASSWORD only but sent different method SHA256_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{SHA256_PASSWORD}, pubPem, tlsConf),
-		// test auth switch: server permits MYSQL_NATIVE_PASSWORD only but sent different method CACHING_SHA2_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf),
-		// test auth switch: server permits SHA256_PASSWORD only but sent different method CACHING_SHA2_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf),
 		// test auth switch: server permits SHA256_PASSWORD only but sent different method MYSQL_NATIVE_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
-		// test auth switch: server permits CACHING_SHA2_PASSWORD only but sent different method SHA256_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{SHA256_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{SHA256_PASSWORD}, pubPem, tlsConf),
 		// test auth switch: server permits CACHING_SHA2_PASSWORD only but sent different method MYSQL_NATIVE_PASSWORD in handshake response
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf),
+		// test auth switch: server permits CACHING_SHA2_PASSWORD only but sent different method SHA256_PASSWORD in handshake response
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf),
+		// test auth switch: server permits MYSQL_NATIVE_PASSWORD only but sent different method SHA256_PASSWORD in handshake response
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
+		// test auth switch: server permits SHA256_PASSWORD only but sent different method CACHING_SHA2_PASSWORD in handshake response
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{SHA256_PASSWORD}, pubPem, tlsConf),
+		// test auth switch: server permits MYSQL_NATIVE_PASSWORD only but sent different method CACHING_SHA2_PASSWORD in handshake response
 		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
 	}
 	return servers
@@ -70,11 +64,24 @@ func Test(t *testing.T) {
 	inMemProvider.AddUser(*testUser, *testPassword)
 
 	servers := prepareServerConf()
+	// no TLS
 	for _, svr := range servers {
 		Suite(&serverTestSuite{
 			server: svr,
 			credProvider: inMemProvider,
+			tlsPara: 	  "false",
 		})
+	}
+
+	// TLS if server supports
+	for _, svr := range servers {
+		if svr.tlsConfig != nil {
+			Suite(&serverTestSuite{
+				server:       svr,
+				credProvider: inMemProvider,
+				tlsPara: 	  "skip-verify",
+			})
+		}
 	}
 
 	TestingT(t)
@@ -83,6 +90,8 @@ func Test(t *testing.T) {
 type serverTestSuite struct {
 	server *Server
 	credProvider CredentialProvider
+
+	tlsPara string
 
 	db *sql.DB
 
@@ -100,7 +109,8 @@ func (s *serverTestSuite) SetUpSuite(c *C) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", *testUser, *testPassword, *testAddr, *testDB))
+	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
+	log.Debugf("mysql opened")
 	c.Assert(err, IsNil)
 
 	s.db.SetMaxIdleConns(4)

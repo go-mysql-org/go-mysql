@@ -81,14 +81,21 @@ func (c *Conn) readFirstPart() ([]byte, int, error) {
 
 	// is this a SSLRequest packet?
 	if len(data) == (4 + 4 + 1 + 23) {
+		log.Debugf("client requested SSL")
 		if c.serverConf.capability&CLIENT_SSL == 0 {
 			return nil, 0, errors.Errorf("The host '%s' does not support SSL connections", c.RemoteAddr().String())
 		}
 		// switch to TLS
-		tlsConn := tls.Client(c.Conn.Conn, c.serverConf.tlsConfig)
+		tlsConn := tls.Server(c.Conn.Conn, c.serverConf.tlsConfig)
+		if err := tlsConn.Handshake(); err != nil {
+			return nil, 0, err
+		}
 		c.Conn.Conn = tlsConn
 
-		// handshake again
+		//c.Conn.UpgradeTLS(tlsConn)
+		log.Debugf("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+
+		// mysql handshake again
 		return c.readFirstPart()
 	}
 	return data, pos, nil
@@ -193,6 +200,7 @@ func (c *Conn) handleAuthMatch(authData []byte, pos int) (bool, error) {
 		if err := c.writeAuthSwitchRequest(switchToMethod); err != nil {
 			return false, err
 		}
+		log.Debugf("auth switch packet sent")
 		c.authPluginName = switchToMethod
 		// handle AuthSwitchResponse
 		return false, c.handleAuthSwitchResponse()

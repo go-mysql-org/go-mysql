@@ -43,11 +43,17 @@ type Server struct {
 	cacheShaPassword   *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
 }
 
-// new mysql server with default settings
+// New mysql server with default settings.
+//
+// NOTES:
+// TLS support will be enabled by default with auto-generated CA and server certificates (however, you can still use
+// non-TLS connection). By default, it will verify the client certificate if present. You can enable TLS support on
+// the client side without providing a client-side certificate. So only when you need the server to verify client
+// identity for maximum security, you need to set a signed certificate for the client.
 func NewDefaultServer() *Server {
 	caPem, caKey := generateCA()
 	certPem, keyPem := generateAndSignRSACerts(caPem, caKey)
-	tlsConf := newServerTLSConfig(certPem, keyPem, tls.RequireAnyClientCert)
+	tlsConf := newServerTLSConfig(certPem, keyPem, tls.VerifyClientCertIfGiven)
 	return &Server{
 		serverVersion:   "5.7.0",
 		protocolVersion: 10,
@@ -62,8 +68,14 @@ func NewDefaultServer() *Server {
 	}
 }
 
-// new mysql server with customized settings
-// the allowedAuthMethods list should include the defaultAuthMethod
+// New mysql server with customized settings.
+//
+// NOTES:
+// You can control the authentication methods and TLS settings here.
+// For auth method, you can specify some if not all of the supported methods 'mysql_native_password',
+// 'caching_sha2_password', and 'sha256_password'.
+// And for TLS support, you can specify self-signed or CA-signed certificates and decide whether the client needs to provide
+// a signed or unsigned certificate to provide different level of security.
 func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string, allowedAuthMethods []string, pubKey []byte, tlsConfig *tls.Config) *Server {
 	if defaultAuthMethod != MYSQL_NATIVE_PASSWORD && defaultAuthMethod != CACHING_SHA2_PASSWORD && defaultAuthMethod != SHA256_PASSWORD {
 		panic(fmt.Sprintf("server authentication method '%s' is not supported", defaultAuthMethod))

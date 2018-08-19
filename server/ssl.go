@@ -1,14 +1,14 @@
 package server
 
 import (
-	"crypto/x509"
-	"math/big"
-	"crypto/x509/pkix"
-	"time"
-	"crypto/rsa"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
+	"math/big"
+	"time"
 )
 
 // generate TLS config for server side
@@ -32,9 +32,10 @@ func newServerTLSConfig(caPem, keyPem []byte, authType tls.ClientAuthType) *tls.
 	}
 
 	config := &tls.Config{
-		ClientAuth:   authType,
-		Certificates: []tls.Certificate{cert},
-		ClientCAs:    pool,
+		ClientAuth:         authType,
+		Certificates:       []tls.Certificate{cert},
+		ClientCAs:          pool,
+		InsecureSkipVerify: true,
 	}
 	return config
 }
@@ -50,7 +51,7 @@ func getPublicKeyFromCert(certPem []byte) []byte {
 	if err != nil {
 		panic(err)
 	}
-	return pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes:pubKey})
+	return pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubKey})
 }
 
 // generate and sign RSA certificates with given CA

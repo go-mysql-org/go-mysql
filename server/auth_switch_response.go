@@ -17,6 +17,7 @@ import (
 func (c *Conn) handleAuthSwitchResponse() error {
 	authData, err := c.readAuthSwitchRequestResponse()
 	if err != nil {
+		log.Debug(err)
 		return err
 	}
 
@@ -80,6 +81,10 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 			return errors.New("incomplete TSL handshake")
 		}
 		// connection is SSL/TLS, client should send plain password
+		// deal with the trailing \NUL added for plain text password received
+		if l := len(authData); l != 0 && authData[l-1] == 0x00 {
+			authData = authData[:l-1]
+		}
 		if bytes.Equal(authData, []byte(c.password)) {
 			return nil
 		}

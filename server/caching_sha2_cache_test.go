@@ -27,14 +27,32 @@ func TestCachingSha2Cache(t *testing.T) {
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
 
+	// no TLS
 	Suite(&cacheTestSuite{
 		server: cacheServer,
 		credProvider: remoteProvider,
+		tlsPara: 	  "false",
 	})
 
 	TestingT(t)
 }
 
+func TestCachingSha2CacheTLS(t *testing.T) {
+	log.SetLevel(log.LevelDebug)
+
+	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay+1000}
+	remoteProvider.AddUser(*testUser, *testPassword)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
+
+	// TLS
+	Suite(&cacheTestSuite{
+		server: cacheServer,
+		credProvider: remoteProvider,
+		tlsPara: 	  "skip-verify",
+	})
+
+	TestingT(t)
+}
 
 
 type RemoteThrottleProvider struct {
@@ -50,6 +68,7 @@ func (m *RemoteThrottleProvider) GetCredential(username string) (password string
 type cacheTestSuite struct {
 	server *Server
 	credProvider CredentialProvider
+	tlsPara string
 
 	db *sql.DB
 
@@ -115,7 +134,7 @@ func (s *cacheTestSuite) TestCache(c *C) {
 	// first connection
 	t1 := time.Now()
 	var err error
-	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", *testUser, *testPassword, *testAddr, *testDB))
+	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
 	c.Assert(err, IsNil)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect(c)

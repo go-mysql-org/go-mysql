@@ -99,6 +99,10 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 			return errors.New("incomplete TSL handshake")
 		}
 		// connection is SSL/TLS, client should send plain password
+		// deal with the trailing \NUL added for plain text password received
+		if l := len(clientAuthData); l != 0 && clientAuthData[l-1] == 0x00 {
+			clientAuthData = clientAuthData[:l-1]
+		}
 		if bytes.Equal(clientAuthData, []byte(password)) {
 			return nil
 		}
@@ -127,6 +131,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error  {
 	// Empty passwords are not hashed, but sent as empty string
 	if len(clientAuthData) == 0 {
+		log.Debugf("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 		if err := c.acquirePassword(); err != nil {
 			return err
 		}

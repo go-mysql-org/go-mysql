@@ -84,10 +84,7 @@ func (c *Conn) readAuthSwitchRequestResponse() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) == 0 {
-		return nil, ErrAccessDenied
-	}
-	if data[0] == 0x00 {
+	if len(data) != 0 && data[0] == 0x00 {
 		// \NUL
 		return make([]byte, 0), nil
 	}
