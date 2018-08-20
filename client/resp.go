@@ -97,6 +97,8 @@ func (c *Conn) handleAuthResult() error {
 		//fmt.Printf("now switching auth plugin to '%s'\n", switchToPlugin)
 		if data == nil {
 			data = c.salt
+		} else {
+			copy(c.salt, data)
 		}
 		c.authPluginName = switchToPlugin
 		auth, addNull, err := c.genAuthResponse(data)
@@ -140,7 +142,7 @@ func (c *Conn) handleAuthResult() error {
 			errors.Errorf("invalid packet")
 		}
 	} else if c.authPluginName == "sha256_password" {
-		if data == nil {
+		if len(data) == 0 {
 			return nil // auth already succeeded
 		}
 		block, _ := pem.Decode(data)
@@ -148,7 +150,6 @@ func (c *Conn) handleAuthResult() error {
 		if err != nil {
 			return err
 		}
-
 		// send encrypted password
 		err = c.WriteEncryptedPassword(c.password, c.salt, pub.(*rsa.PublicKey))
 		if err != nil {

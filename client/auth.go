@@ -96,7 +96,7 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 	// password hashing
 	switch c.authPluginName {
 	case "mysql_native_password":
-		return CalcPassword(authData, []byte(c.password)), false, nil
+		return CalcPassword(authData[:20], []byte(c.password)), false, nil
 	case "caching_sha2_password":
 		return CalcCachingSha2Password(authData, c.password), false, nil
 	case "sha256_password":
@@ -122,7 +122,6 @@ func (c *Conn) writeAuthHandshake() error {
 	if c.authPluginName != "mysql_native_password" && c.authPluginName != "caching_sha2_password" && c.authPluginName != "sha256_password" {
 		return fmt.Errorf("unknow auth plugin name '%s'", c.authPluginName)
 	}
-
 	// Adjust client capability flags based on server support
 	capability := CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION |
 		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH | c.capability&CLIENT_LONG_FLAG

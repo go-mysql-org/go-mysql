@@ -41,3 +41,5 @@ func (m *InMemoryProvider) GetCredential(username string) (password string, foun
 func (m *InMemoryProvider) AddUser(username, password string) {
 	m.userPool.Store(username, password)
 }
+
+type Provider InMemoryProvider

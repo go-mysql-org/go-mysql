@@ -90,7 +90,7 @@ func (c *Conn) handshake() error {
 
 	if err := c.readHandshakeResponse(); err != nil {
 		if err == ErrAccessDenied {
-			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.LocalAddr().String(), c.user, "Yes")
+			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.LocalAddr().String(), "Yes")
 		}
 		c.writeError(err)
 		return err

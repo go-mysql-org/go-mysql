@@ -175,20 +175,14 @@ func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 }
 
 func (c *Conn) handleAuthMatch(authData []byte, pos int) (bool, error) {
-	// since our proxy server does not lock the auth method as MySQL server does by setting user-level auth method
-	// to override the global default auth method, we can try to meet client's auth method request in Handshake Response Packet
-	// if our server also support the requested auth method. When it can not be met, like client wants 'mysql_old_password',
-	// we issue a AuthSwitchRequest to the client with a server supported auth method.
-	if !isAuthMethodAllowedByServer(c.authPluginName, c.serverConf.allowedAuthMethods) {
-		// force the client to switch to an allowed method
-		switchToMethod := c.serverConf.defaultAuthMethod
-		if !isAuthMethodAllowedByServer(c.serverConf.defaultAuthMethod, c.serverConf.allowedAuthMethods) {
-			switchToMethod = c.serverConf.allowedAuthMethods[0]
-		}
-		if err := c.writeAuthSwitchRequest(switchToMethod); err != nil {
+	// if the client responds the handshake with a different auth method, the server will send the AuthSwitchRequest packet
+	// to the client to ask the client to switch.
+
+	if c.authPluginName != c.serverConf.defaultAuthMethod {
+		if err := c.writeAuthSwitchRequest(c.serverConf.defaultAuthMethod); err != nil {
 			return false, err
 		}
-		c.authPluginName = switchToMethod
+		c.authPluginName = c.serverConf.defaultAuthMethod
 		// handle AuthSwitchResponse
 		return false, c.handleAuthSwitchResponse()
 	}

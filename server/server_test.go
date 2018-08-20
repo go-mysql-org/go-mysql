@@ -31,25 +31,25 @@ func prepareServerConf() []*Server {
 		NewDefaultServer(),
 		// for key exchange, CLIENT_SSL must be enabled for the server and if the connection is not secured with TLS
 		// server permits MYSQL_NATIVE_PASSWORD only
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, pubPem, tlsConf),
 		// server permits SHA256_PASSWORD only
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{SHA256_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, pubPem, tlsConf),
 		// server permits CACHING_SHA2_PASSWORD only
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, pubPem, tlsConf),
 
 		// test auth switch: server permits SHA256_PASSWORD only but sent different method MYSQL_NATIVE_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{SHA256_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, pubPem, tlsConf),
 		// test auth switch: server permits CACHING_SHA2_PASSWORD only but sent different method MYSQL_NATIVE_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, MYSQL_NATIVE_PASSWORD, pubPem, tlsConf),
 		// test auth switch: server permits CACHING_SHA2_PASSWORD only but sent different method SHA256_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, pubPem, tlsConf),
 		// test auth switch: server permits MYSQL_NATIVE_PASSWORD only but sent different method SHA256_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, SHA256_PASSWORD, pubPem, tlsConf),
 		// test auth switch: server permits SHA256_PASSWORD only but sent different method CACHING_SHA2_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{SHA256_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, pubPem, tlsConf),
 		// test auth switch: server permits MYSQL_NATIVE_PASSWORD only but sent different method CACHING_SHA2_PASSWORD in handshake response
-		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{MYSQL_NATIVE_PASSWORD}, pubPem, tlsConf),
+		NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, pubPem, tlsConf),
 	}
 	return servers
 }

@@ -34,7 +34,7 @@ func (c *Conn) writeInitialHandshake() error {
 	data = append(data, byte(defaultFlag>>16), byte(defaultFlag>>24))
 
 	// server supports CLIENT_PLUGIN_AUTH and CLIENT_SECURE_CONNECTION
-	data = append(data, byte(8+12))
+	data = append(data, byte(8+12+1))
 
 	//reserved 10 [00]
 	data = append(data, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)

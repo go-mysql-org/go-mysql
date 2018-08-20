@@ -33,15 +33,14 @@ var defaultServer = NewDefaultServer()
 // We choose to drop the support for insecure 'mysql_old_password' auth method and require client capability 'CLIENT_PROTOCOL_41' and 'CLIENT_SECURE_CONNECTION'
 // are set. Besides, if 'CLIENT_PLUGIN_AUTH' is not set, we fallback to 'mysql_native_password' auth method.
 type Server struct {
-	serverVersion      string // e.g. "8.0.12"
-	protocolVersion    int    // minimal 10
-	capability         uint32 // server capability flag
-	collationId        uint8
-	defaultAuthMethod  string   // default authentication method, 'mysql_native_password'
-	allowedAuthMethods []string // 'mysql_native_password', 'caching_sha2_password', and 'sha256_password'
-	pubKey             []byte
-	tlsConfig          *tls.Config
-	cacheShaPassword   *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
+	serverVersion     string // e.g. "8.0.12"
+	protocolVersion   int    // minimal 10
+	capability        uint32 // server capability flag
+	collationId       uint8
+	defaultAuthMethod string // default authentication method, 'mysql_native_password'
+	pubKey            []byte
+	tlsConfig         *tls.Config
+	cacheShaPassword  *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
 }
 
 // New mysql server with default settings.
@@ -59,13 +58,12 @@ func NewDefaultServer() *Server {
 		serverVersion:   "5.7.0",
 		protocolVersion: 10,
 		capability: CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
-			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_SSL,
-		collationId:        DEFAULT_COLLATION_ID,
-		defaultAuthMethod:  MYSQL_NATIVE_PASSWORD,
-		allowedAuthMethods: []string{MYSQL_NATIVE_PASSWORD, CACHING_SHA2_PASSWORD, SHA256_PASSWORD},
-		pubKey:             getPublicKeyFromCert(certPem),
-		tlsConfig:          tlsConf,
-		cacheShaPassword:   new(sync.Map),
+			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_SSL | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
+		collationId:       DEFAULT_COLLATION_ID,
+		defaultAuthMethod: MYSQL_NATIVE_PASSWORD,
+		pubKey:            getPublicKeyFromCert(certPem),
+		tlsConfig:         tlsConf,
+		cacheShaPassword:  new(sync.Map),
 	}
 }
 
@@ -73,37 +71,33 @@ func NewDefaultServer() *Server {
 //
 // NOTES:
 // You can control the authentication methods and TLS settings here.
-// For auth method, you can specify some if not all of the supported methods 'mysql_native_password',
-// 'caching_sha2_password', and 'sha256_password'.
+// For auth method, you can specify one of the supported methods 'mysql_native_password', 'caching_sha2_password', and 'sha256_password'.
+// The specified auth method will be enforced by the server in the connection phase. That means, client will be asked to switch auth method
+// if the supplied auth method is different from the server default.
 // And for TLS support, you can specify self-signed or CA-signed certificates and decide whether the client needs to provide
 // a signed or unsigned certificate to provide different level of security.
-func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string, allowedAuthMethods []string, pubKey []byte, tlsConfig *tls.Config) *Server {
+func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string, pubKey []byte, tlsConfig *tls.Config) *Server {
 	if defaultAuthMethod != MYSQL_NATIVE_PASSWORD && defaultAuthMethod != CACHING_SHA2_PASSWORD && defaultAuthMethod != SHA256_PASSWORD {
 		panic(fmt.Sprintf("server authentication method '%s' is not supported", defaultAuthMethod))
 	}
-	for _, allowed := range allowedAuthMethods {
-		if !isAuthMethodSupported(allowed) {
-			panic(fmt.Sprintf("server authentication method '%s' is not supported", allowed))
-		}
-	}
+
 	//if !isAuthMethodAllowedByServer(defaultAuthMethod, allowedAuthMethods) {
 	//	panic(fmt.Sprintf("default auth method is not one of the allowed auth methods"))
 	//}
 	var capFlag = CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
-		CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH
+		CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
 	if tlsConfig != nil {
 		capFlag |= CLIENT_SSL
 	}
 	return &Server{
-		serverVersion:      serverVersion,
-		protocolVersion:    10,
-		capability:         capFlag,
-		collationId:        collationId,
-		defaultAuthMethod:  defaultAuthMethod,
-		allowedAuthMethods: allowedAuthMethods,
-		pubKey:             pubKey,
-		tlsConfig:          tlsConfig,
-		cacheShaPassword:   new(sync.Map),
+		serverVersion:     serverVersion,
+		protocolVersion:   10,
+		capability:        capFlag,
+		collationId:       collationId,
+		defaultAuthMethod: defaultAuthMethod,
+		pubKey:            pubKey,
+		tlsConfig:         tlsConfig,
+		cacheShaPassword:  new(sync.Map),
 	}
 }
 

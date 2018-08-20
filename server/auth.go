@@ -91,8 +91,11 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, password str
 
 func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password string) error {
 	// Empty passwords are not hashed, but sent as empty string
-	if len(clientAuthData) == 0 && password == "" {
-		return nil
+	if len(clientAuthData) == 0 {
+		if password == "" {
+			return nil
+		}
+		return ErrAccessDenied
 	}
 	if tlsConn, ok := c.Conn.Conn.(*tls.Conn); ok {
 		if !tlsConn.ConnectionState().HandshakeComplete {
@@ -147,7 +150,8 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 			return err
 		}
 		if bytes.Equal(CalcCachingSha2Password(c.salt, c.password), clientAuthData) {
-			return nil
+			// 'fast' auth: write "More data" packet (first byte == 0x01) with the second byte = 0x03
+			return c.writeAuthMoreDataFastAuth()
 		}
 		return ErrAccessDenied
 	}
