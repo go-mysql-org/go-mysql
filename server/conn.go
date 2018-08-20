@@ -39,17 +39,18 @@ var baseConnID uint32 = 10000
 
 // create connection with default server settings
 func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
-	c := new(Conn)
-	c.serverConf = defaultServer
-
-	c.h = h
 	p := NewInMemoryProvider()
 	p.AddUser(user, password)
-	c.credentialProvider = p
-	c.Conn = packet.NewConn(conn)
-	c.connectionID = atomic.AddUint32(&baseConnID, 1)
-	c.stmts = make(map[uint32]*Stmt)
-	c.salt, _ = RandomBuf(20)
+	salt, _ := RandomBuf(20)
+	c := &Conn{
+		Conn:               packet.NewConn(conn),
+		serverConf:         defaultServer,
+		credentialProvider: p,
+		h:                  h,
+		connectionID:       atomic.AddUint32(&baseConnID, 1),
+		stmts:              make(map[uint32]*Stmt),
+		salt:               salt,
+	}
 	c.closed.Set(false)
 
 	if err := c.handshake(); err != nil {
@@ -62,15 +63,16 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 
 // create connection with customized server settings
 func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
-	c := new(Conn)
-	c.serverConf = serverConf
-
-	c.h = h
-	c.credentialProvider = p
-	c.Conn = packet.NewConn(conn)
-	c.connectionID = atomic.AddUint32(&baseConnID, 1)
-	c.stmts = make(map[uint32]*Stmt)
-	c.salt, _ = RandomBuf(20)
+	salt, _ := RandomBuf(20)
+	c := &Conn{
+		Conn:               packet.NewConn(conn),
+		serverConf:         serverConf,
+		credentialProvider: p,
+		h:                  h,
+		connectionID:       atomic.AddUint32(&baseConnID, 1),
+		stmts:              make(map[uint32]*Stmt),
+		salt:               salt,
+	}
 	c.closed.Set(false)
 
 	if err := c.handshake(); err != nil {

@@ -17,8 +17,6 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-var serverConf = NewDefaultServer()
-
 var testAddr = flag.String("addr", "127.0.0.1:4000", "MySQL proxy server address")
 var testUser = flag.String("user", "root", "MySQL user")
 var testPassword = flag.String("pass", "123456", "MySQL password")
@@ -64,7 +62,7 @@ func Test(t *testing.T) {
 	inMemProvider.AddUser(*testUser, *testPassword)
 
 	servers := prepareServerConf()
-	// no TLS
+	//no TLS
 	for _, svr := range servers {
 		Suite(&serverTestSuite{
 			server:       svr,
@@ -106,7 +104,7 @@ func (s *serverTestSuite) SetUpSuite(c *C) {
 
 	go s.onAccept(c)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
 	c.Assert(err, IsNil)

@@ -16,7 +16,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-var delay = 500
+var delay = 50
 
 // test caching for 'caching_sha2_password'
 // NOTE the idea here is to plugin a throttled credential provider so that the first connection (cache miss) will take longer time
@@ -24,7 +24,7 @@ var delay = 500
 func TestCachingSha2Cache(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 100}
+	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
 
@@ -41,7 +41,7 @@ func TestCachingSha2Cache(t *testing.T) {
 func TestCachingSha2CacheTLS(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 100}
+	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
 	remoteProvider.AddUser(*testUser, *testPassword)
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, []string{CACHING_SHA2_PASSWORD}, pubPem, tlsConf)
 
@@ -83,7 +83,7 @@ func (s *cacheTestSuite) SetUpSuite(c *C) {
 
 	go s.onAccept(c)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(30 * time.Millisecond)
 }
 
 func (s *cacheTestSuite) TearDownSuite(c *C) {
@@ -136,8 +136,7 @@ func (s *cacheTestSuite) TestCache(c *C) {
 	t2 := time.Now()
 
 	d1 := int(t2.Sub(t1).Nanoseconds() / 1e6)
-
-	log.Debugf("first connection took %d milliseconds", d1)
+	//log.Debugf("first connection took %d milliseconds", d1)
 
 	c.Assert(d1, GreaterEqual, delay)
 
@@ -154,8 +153,7 @@ func (s *cacheTestSuite) TestCache(c *C) {
 	t4 := time.Now()
 
 	d2 := int(t4.Sub(t3).Nanoseconds() / 1e6)
-
-	log.Debugf("second connection took %d milliseconds", d2)
+	//log.Debugf("second connection took %d milliseconds", d2)
 
 	c.Assert(d2, Less, delay)
 	if s.db != nil {
