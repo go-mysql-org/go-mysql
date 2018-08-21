@@ -122,9 +122,9 @@ func (c *Canal) runSyncBinlog() error {
 				c.master.UpdateGTIDSet(e.GSet)
 			}
 			var (
-				mb     [][]byte
-				schema []byte
-				table  []byte
+				mb    [][]byte
+				db    []byte
+				table []byte
 			)
 			regexps := []regexp.Regexp{*expCreateTable, *expAlterTable, *expRenameTable, *expDropTable}
 			for _, reg := range regexps {
@@ -140,17 +140,17 @@ func (c *Canal) runSyncBinlog() error {
 
 			// the first last is table name, the second last is database name(if exists)
 			if len(mb[mbLen-2]) == 0 {
-				schema = e.Schema
+				db = e.Schema
 			} else {
-				schema = mb[mbLen-2]
+				db = mb[mbLen-2]
 			}
 			table = mb[mbLen-1]
 
 			savePos = true
 			force = true
-			c.ClearTableCache(schema, table)
-			log.Infof("table structure changed, clear table cache: %s.%s\n", schema, table)
-			if err = c.eventHandler.OnTableChanged(string(schema), string(table)); err != nil {
+			c.ClearTableCache(db, table)
+			log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
+			if err = c.eventHandler.OnTableChanged(string(db), string(table)); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
 				return errors.Trace(err)
 			}
 
