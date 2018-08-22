@@ -14,6 +14,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/test_util/test_keys"
 )
 
 var delay = 50
@@ -26,7 +27,7 @@ func TestCachingSha2Cache(t *testing.T) {
 
 	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
 	remoteProvider.AddUser(*testUser, *testPassword)
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, pubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// no TLS
 	Suite(&cacheTestSuite{
@@ -43,7 +44,7 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 
 	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
 	remoteProvider.AddUser(*testUser, *testPassword)
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, pubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// TLS
 	Suite(&cacheTestSuite{

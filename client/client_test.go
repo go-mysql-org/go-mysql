@@ -8,6 +8,7 @@ import (
 
 	"github.com/juju/errors"
 	. "github.com/pingcap/check"
+	"github.com/siddontang/go-mysql/test_util/test_keys"
 
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -125,7 +126,7 @@ func (s *clientTestSuite) TestConn_TLS_Certificate(c *C) {
 	// This test uses the TLS suite in 'go-mysql/docker/resources'. The certificates are not valid for any names.
 	// And if server uses auto-generated certificates, it will be an error like:
 	// "x509: certificate is valid for MySQL_Server_8.0.12_Auto_Generated_Server_Certificate, not not-a-valid-name"
-	tlsConfig := NewClientTLSConfig(caPem, certPem, keyPem, false, "not-a-valid-name")
+	tlsConfig := NewClientTLSConfig(test_keys.CaPem, test_keys.CertPem, test_keys.KeyPem, false, "not-a-valid-name")
 	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
 	_, err := Connect(addr, *testUser, *testPassword, *testDB, func(c *Conn) {
 		c.SetTLSConfig(tlsConfig)
@@ -394,76 +395,3 @@ func (s *clientTestSuite) TestStmt_Trans(c *C) {
 	str, _ = r.GetString(0, 0)
 	c.Assert(str, Equals, `abc`)
 }
-
-// the certificates are in go-mysql/docker/resources
-
-var caPem = []byte(`-----BEGIN CERTIFICATE-----
-MIIDtTCCAp2gAwIBAgIJANeS1FOzWXlZMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-BAYTAkFVMRMwEQYDVQQIEwpTb21lLVN0YXRlMSEwHwYDVQQKExhJbnRlcm5ldCBX
-aWRnaXRzIFB0eSBMdGQwHhcNMTgwODE2MTUxNDE5WhcNMjEwNjA1MTUxNDE5WjBF
-MQswCQYDVQQGEwJBVTETMBEGA1UECBMKU29tZS1TdGF0ZTEhMB8GA1UEChMYSW50
-ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-CgKCAQEAsV6xlhFxMn14Pn7XBRGLt8/HXmhVVu20IKFgIOyX7gAZr0QLsuT1fGf5
-zH9HrlgOMkfdhV847U03KPfUnBsi9lS6/xOxnH/OzTYM0WW0eNMGF7eoxrS64GSb
-PVX4pLi5+uwrrZT5HmDgZi49ANmuX6UYmH/eRRvSIoYUTV6t0aYsLyKvlpEAtRAe
-4AlKB236j5ggmJ36QUhTFTbeNbeOOgloTEdPK8Y/kgpnhiqzMdPqqIc7IeXUc456
-yX8MJUgniTM2qCNTFdEw+C2Ok0RbU6TI2SuEgVF4jtCcVEKxZ8kYbioONaePQKFR
-/EhdXO+/ag1IEdXElH9knLOfB+zCgwIDAQABo4GnMIGkMB0GA1UdDgQWBBQgHiwD
-00upIbCOunlK4HRw89DhjjB1BgNVHSMEbjBsgBQgHiwD00upIbCOunlK4HRw89Dh
-jqFJpEcwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgTClNvbWUtU3RhdGUxITAfBgNV
-BAoTGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZIIJANeS1FOzWXlZMAwGA1UdEwQF
-MAMBAf8wDQYJKoZIhvcNAQEFBQADggEBAFMZFQTFKU5tWIpWh8BbVZeVZcng0Kiq
-qwbhVwaTkqtfmbqw8/w+faOWylmLncQEMmgvnUltGMQlQKBwQM2byzPkz9phal3g
-uI0JWJYqtcMyIQUB9QbbhrDNC9kdt/ji/x6rrIqzaMRuiBXqH5LQ9h856yXzArqd
-cAQGzzYpbUCIv7ciSB93cKkU73fQLZVy5ZBy1+oAa1V9U4cb4G/20/PDmT+G3Gxz
-pEjeDKtz8XINoWgA2cSdfAhNZt5vqJaCIZ8qN0z6C7SUKwUBderERUMLUXdhUldC
-KTVHyEPvd0aULd5S5vEpKCnHcQmFcLdoN8t9k9pR9ZgwqXbyJHlxWFo=
------END CERTIFICATE-----`)
-
-var certPem = []byte(`-----BEGIN CERTIFICATE-----
-MIIDBjCCAe4CCQDg06wCf7hcuTANBgkqhkiG9w0BAQUFADBFMQswCQYDVQQGEwJB
-VTETMBEGA1UECBMKU29tZS1TdGF0ZTEhMB8GA1UEChMYSW50ZXJuZXQgV2lkZ2l0
-cyBQdHkgTHRkMB4XDTE4MDgxOTA4NDY0N1oXDTI4MDgxNjA4NDY0N1owRTELMAkG
-A1UEBhMCQVUxEzARBgNVBAgTClNvbWUtU3RhdGUxITAfBgNVBAoTGEludGVybmV0
-IFdpZGdpdHMgUHR5IEx0ZDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
-AMmivNyk3Rc1ZvLPhb3WPNkf9f2G4g9nMc0+eMrR1IKJ1U1A98ojeIBT+pfk1bSq
-Ol0UDm66Vd3YQ+4HpyYHaYV6mwoTEulL9Quk8RLa7TRwQu3PLi3o567RhVIrx8Z3
-umuWb9UUzJfSFH04Uy9+By4CJCqIQXU4BocLIKHhIkNjmAQ9fWO1hZ8zmPHSEfvu
-Wqa/DYKGvF0MJr4Lnkm/sKUd+O94p9suvwM6OGIDibACiKRF2H+JbgQLbA58zkLv
-DHtXOqsCL7HxiONX8VDrQjN/66Nh9omk/Bx2Ec8IqappHvWf768HSH79x/znaial
-VEV+6K0gP+voJHfnA10laWMCAwEAATANBgkqhkiG9w0BAQUFAAOCAQEAPD+Fn1qj
-HN62GD3eIgx6wJxYuemhdbgmEwrZZf4V70lS6e9Iloif0nBiISDxJUpXVWNRCN3Z
-3QVC++F7deDmWL/3dSpXRvWsapzbCUhVQ2iBcnZ7QCOdvAqYR1ecZx70zvXCwBcd
-6XKmRtdeNV6B211KRFmTYtVyPq4rcWrkTPGwPBncJI1eQQmyFv2T9SwVVp96Nbrq
-sf7zrJGmuVCdXGPRi/ALVHtJCz6oPoft3I707eMe+ijnFqwGbmMD4fMD6Ync/hEz
-PyR5FMZkXSXHS0gkA5pfwW7wJ2WSWDhI6JMS1gbatY7QzgHbKoQpxBPUXlnzzj2h
-7O9cgFTh/XOZXQ==
------END CERTIFICATE-----`)
-
-var keyPem = []byte(`-----BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEAyaK83KTdFzVm8s+FvdY82R/1/YbiD2cxzT54ytHUgonVTUD3
-yiN4gFP6l+TVtKo6XRQObrpV3dhD7genJgdphXqbChMS6Uv1C6TxEtrtNHBC7c8u
-LejnrtGFUivHxne6a5Zv1RTMl9IUfThTL34HLgIkKohBdTgGhwsgoeEiQ2OYBD19
-Y7WFnzOY8dIR++5apr8Ngoa8XQwmvgueSb+wpR3473in2y6/Azo4YgOJsAKIpEXY
-f4luBAtsDnzOQu8Me1c6qwIvsfGI41fxUOtCM3/ro2H2iaT8HHYRzwipqmke9Z/v
-rwdIfv3H/OdqJqVURX7orSA/6+gkd+cDXSVpYwIDAQABAoIBAAGLY5L1GFRzLkSx
-3j5kA7dODV5RyC2CBtmhnt8+2DffwmiDFOLRfrzM5+B9+j0WCLhpzOqANuQqIesS
-1+7so5xIIiPjnYN393qNWuNgFe0O5xRXP+1OGWg3ZqQIfdFBXYYxcs3ZCPAoxctn
-wQteFcP+dDR3MrkpIrOqHCfhR5foieOMP+9k5kCjk+aZqhEmFyko+X+xVO/32xs+
-+3qXhUrHt3Op5on30QMOFguniQlYwLJkd9qVjGuGMIrVPxoUz0rya4SKrGKgkAr8
-mvQe2+sZo7cc6zC2ceaGMJU7z1RalTrCObbg5mynlu+Vf0E/YiES0abkQhSbcSB9
-mAkJC7ECgYEA/H1NDEiO164yYK9ji4HM/8CmHegWS4qsgrzAs8lU0yAcgdg9e19A
-mNi8yssfIBCw62RRE4UGWS5F82myhmvq/mXbf8eCJ2CMgdCHQh1rT7WFD/Uc5Pe/
-8Lv2jNMQ61POguPyq6D0qcf8iigKIMHa1MIgAOmrgWrxulfbSUhm370CgYEAzHBu
-J9p4dAqW32+Hrtv2XE0KUjH72TXr13WErosgeGTfsIW2exXByvLasxOJSY4Wb8oS
-OLZ7bgp/EBchAc7my+nF8n5uOJxipWQUB5BoeB9aUJZ9AnWF4RDl94Jlm5PYBG/J
-lRXrMtSTTIgmSw3Ft2A1vRMOQaHX89lNwOZL758CgYAXOT84/gOFexRPKFKzpkDA
-1WtyHMLQN/UeIVZoMwCGWtHEb6tYCa7bYDQdQwmd3Wsoe5WpgfbPhR4SAYrWKl72
-/09tNWCXVp4V4qRORH52Wm/ew+Dgfpk8/0zyLwfDXXYFPAo6Fxfp9ecYng4wbSQ/
-pYtkChooUTniteoJl4s+0QKBgHbFEpoAqF3yEPi52L/TdmrlLwvVkhT86IkB8xVc
-Kn8HS5VH+V3EpBN9x2SmAupCq/JCGRftnAOwAWWdqkVcqGTq6V8Z6HrnD8A6RhCm
-6qpuvI94/iNBl4fLw25pyRH7cFITh68fTsb3DKQ3rNeJpsYEFPRFb9Ddb5JxOmTI
-5nDNAoGBAM+SyOhUGU+0Uw2WJaGWzmEutjeMRr5Z+cZ8keC/ZJNdji/faaQoeOQR
-OXI8O6RBTBwVNQMyDyttT8J8BkISwfAhSdPkjgPw9GZ1pGREl53uCFDIlX2nvtQM
-ioNzG5WHB7Gd7eUUTA91kRF9MZJTHPqNiNGR0Udj/trGyGqJebni
------END RSA PRIVATE KEY-----`)
