@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 
+	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/server"
 	"github.com/siddontang/go-mysql/test_util/test_keys"
@@ -38,7 +39,8 @@ func main() {
 			conn, err := server.NewCustomizedConn(c, svr, remoteProvider, server.EmptyHandler{})
 
 			if err != nil {
-				panic(err)
+				log.Errorf("Connection error: %v", err)
+				return
 			}
 
 			for {
