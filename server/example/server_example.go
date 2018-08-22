@@ -31,7 +31,7 @@ func main() {
 		go func() {
 			// Create a connection with user root and an empty password.
 			// You can use your own handler to handle command here.
-			svr := server.NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, server.CACHING_SHA2_PASSWORD, pubPem, tlsConf)
+			svr := server.NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, pubPem, tlsConf)
 			conn, err := server.NewCustomizedConn(c, svr, remoteProvider, server.EmptyHandler{})
 
 			if err != nil {
