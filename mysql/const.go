@@ -18,6 +18,13 @@ const (
 )
 
 const (
+	AUTH_MYSQL_OLD_PASSWORD = "mysql_old_password"
+	AUTH_NATIVE_PASSWORD = "mysql_native_password"
+	AUTH_CACHING_SHA2_PASSWORD = "caching_sha2_password"
+	AUTH_SHA256_PASSWORD = "sha256_password"
+)
+
+const (
 	SERVER_STATUS_IN_TRANS             uint16 = 0x0001
 	SERVER_STATUS_AUTOCOMMIT           uint16 = 0x0002
 	SERVER_MORE_RESULTS_EXISTS         uint16 = 0x0008

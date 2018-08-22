@@ -119,7 +119,7 @@ func (c *Conn) handleAuthResult() error {
 	}
 
 	// handle caching_sha2_password
-	if c.authPluginName == "caching_sha2_password" {
+	if c.authPluginName == AUTH_CACHING_SHA2_PASSWORD {
 		if data == nil {
 			return nil // auth already succeeded
 		}
@@ -141,7 +141,7 @@ func (c *Conn) handleAuthResult() error {
 		} else {
 			errors.Errorf("invalid packet")
 		}
-	} else if c.authPluginName == "sha256_password" {
+	} else if c.authPluginName == AUTH_SHA256_PASSWORD {
 		if len(data) == 0 {
 			return nil // auth already succeeded
 		}
@@ -182,7 +182,7 @@ func (c *Conn) readAuthResult() ([]byte, string, error) {
 		// server wants to switch auth
 		if len(data) < 1 {
 			// https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::OldAuthSwitchRequest
-			return nil, "mysql_old_password", nil
+			return nil, AUTH_MYSQL_OLD_PASSWORD, nil
 		}
 		pluginEndIndex := bytes.IndexByte(data, 0x00)
 		if pluginEndIndex < 0 {

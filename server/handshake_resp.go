@@ -123,7 +123,7 @@ func (c *Conn) readPluginName(data []byte, pos int) int {
 	} else {
 		// The method used is Native Authentication if both CLIENT_PROTOCOL_41 and CLIENT_SECURE_CONNECTION are set,
 		// but CLIENT_PLUGIN_AUTH is not set, so we fallback to 'mysql_native_password'
-		c.authPluginName = MYSQL_NATIVE_PASSWORD
+		c.authPluginName = AUTH_NATIVE_PASSWORD
 	}
 	return pos
 }
@@ -161,7 +161,7 @@ func (c *Conn) readAuthData(data []byte, pos int) ([]byte, int, int, error) {
 func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 	// if the client use 'sha256_password' auth method, and request for a public key
 	// we send back a keyfile with Protocol::AuthMoreData
-	if c.authPluginName == SHA256_PASSWORD && len(authData) == 1 && authData[0] == 0x01 {
+	if c.authPluginName == AUTH_SHA256_PASSWORD && len(authData) == 1 && authData[0] == 0x01 {
 		if c.serverConf.capability&CLIENT_SSL == 0 {
 			return false, errors.New("server does not support SSL: CLIENT_SSL not enabled")
 		}

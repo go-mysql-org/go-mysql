@@ -26,7 +26,7 @@ func TestCachingSha2Cache(t *testing.T) {
 
 	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
 	remoteProvider.AddUser(*testUser, *testPassword)
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, pubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, pubPem, tlsConf)
 
 	// no TLS
 	Suite(&cacheTestSuite{
@@ -43,7 +43,7 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 
 	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
 	remoteProvider.AddUser(*testUser, *testPassword)
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, CACHING_SHA2_PASSWORD, pubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, pubPem, tlsConf)
 
 	// TLS
 	Suite(&cacheTestSuite{

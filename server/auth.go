@@ -17,13 +17,13 @@ var ErrAccessDenied = errors.New("access denied")
 
 func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) error {
 	switch authPluginName {
-	case MYSQL_NATIVE_PASSWORD:
+	case AUTH_NATIVE_PASSWORD:
 		if err := c.acquirePassword(); err != nil {
 			return err
 		}
 		return c.compareNativePasswordAuthData(clientAuthData, c.password)
 
-	case CACHING_SHA2_PASSWORD:
+	case AUTH_CACHING_SHA2_PASSWORD:
 		if err := c.compareCacheSha2PasswordAuthData(clientAuthData); err != nil {
 			return err
 		}
@@ -32,7 +32,7 @@ func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) err
 		}
 		return nil
 
-	case SHA256_PASSWORD:
+	case AUTH_SHA256_PASSWORD:
 		if err := c.acquirePassword(); err != nil {
 			return err
 		}

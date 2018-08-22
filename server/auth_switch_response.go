@@ -20,7 +20,7 @@ func (c *Conn) handleAuthSwitchResponse() error {
 	}
 
 	switch c.authPluginName {
-	case MYSQL_NATIVE_PASSWORD:
+	case AUTH_NATIVE_PASSWORD:
 		if err := c.acquirePassword(); err != nil {
 			return err
 		}
@@ -29,7 +29,7 @@ func (c *Conn) handleAuthSwitchResponse() error {
 		}
 		return nil
 
-	case CACHING_SHA2_PASSWORD:
+	case AUTH_CACHING_SHA2_PASSWORD:
 		if !c.cachingSha2FullAuth {
 			// Switched auth method but no MoreData packet send yet
 			if err := c.compareCacheSha2PasswordAuthData(authData); err != nil {
@@ -48,7 +48,7 @@ func (c *Conn) handleAuthSwitchResponse() error {
 		c.writeCachingSha2Cache()
 		return nil
 
-	case SHA256_PASSWORD:
+	case AUTH_SHA256_PASSWORD:
 		cont, err := c.handlePublicKeyRetrieval(authData)
 		if err != nil {
 			return err

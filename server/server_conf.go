@@ -8,13 +8,6 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
-// supported auth methods
-const (
-	MYSQL_NATIVE_PASSWORD = "mysql_native_password"
-	CACHING_SHA2_PASSWORD = "caching_sha2_password"
-	SHA256_PASSWORD       = "sha256_password"
-)
-
 var defaultServer = NewDefaultServer()
 
 // Defines a basic MySQL server with configs.
@@ -60,7 +53,7 @@ func NewDefaultServer() *Server {
 		capability: CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
 			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_SSL | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
 		collationId:       DEFAULT_COLLATION_ID,
-		defaultAuthMethod: MYSQL_NATIVE_PASSWORD,
+		defaultAuthMethod: AUTH_NATIVE_PASSWORD,
 		pubKey:            getPublicKeyFromCert(certPem),
 		tlsConfig:         tlsConf,
 		cacheShaPassword:  new(sync.Map),
@@ -77,7 +70,7 @@ func NewDefaultServer() *Server {
 // And for TLS support, you can specify self-signed or CA-signed certificates and decide whether the client needs to provide
 // a signed or unsigned certificate to provide different level of security.
 func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string, pubKey []byte, tlsConfig *tls.Config) *Server {
-	if defaultAuthMethod != MYSQL_NATIVE_PASSWORD && defaultAuthMethod != CACHING_SHA2_PASSWORD && defaultAuthMethod != SHA256_PASSWORD {
+	if !isAuthMethodSupported(defaultAuthMethod) {
 		panic(fmt.Sprintf("server authentication method '%s' is not supported", defaultAuthMethod))
 	}
 
@@ -102,16 +95,7 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 }
 
 func isAuthMethodSupported(authMethod string) bool {
-	return authMethod == MYSQL_NATIVE_PASSWORD || authMethod == CACHING_SHA2_PASSWORD || authMethod == SHA256_PASSWORD
-}
-
-func isAuthMethodAllowedByServer(authMethod string, allowedAuthMethods []string) bool {
-	for _, m := range allowedAuthMethods {
-		if m == authMethod {
-			return true
-		}
-	}
-	return false
+	return authMethod == AUTH_NATIVE_PASSWORD || authMethod == AUTH_CACHING_SHA2_PASSWORD || authMethod == AUTH_SHA256_PASSWORD
 }
 
 func (s *Server) InvalidateCache(username string, host string) {
