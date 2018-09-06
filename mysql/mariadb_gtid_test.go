@@ -76,10 +76,10 @@ func (t *mariaDBTestSuite) TestMariaDBForward(c *check.C) {
 		hashError                    bool
 	}{
 		{"0-1-1", "0-1-2", false},
-		{"0-1-1", "", true},
+		{"0-1-1", "", false},
 		{"2-1-1", "1-1-1", true},
-		{"1-2-1", "1-1-1", true},
-		{"1-2-2", "1-1-1", true},
+		{"1-2-1", "1-1-1", false},
+		{"1-2-2", "1-1-1", false},
 	}
 
 	for _, cs := range cases {
@@ -147,12 +147,11 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
 		isNilGTID bool
 		gtidStr   string
 		subGTIDs  map[uint32]string
-		hasError  bool
 	}{
-		{true, "", map[uint32]string{1: "1-1-1", 2: "2-2-2"}, false},
-		{false, "1-2-2", map[uint32]string{1: "1-2-2", 2: "2-2-2"}, false},
-		{false, "1-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2"}, true},
-		{false, "3-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1"}, false},
+		{true, "", map[uint32]string{1: "1-1-1", 2: "2-2-2"}},
+		{false, "1-2-2", map[uint32]string{1: "1-2-2", 2: "2-2-2"}},
+		{false, "1-2-1", map[uint32]string{1: "1-2-1", 2: "2-2-2"}},
+		{false, "3-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1"}},
 	}
 
 	for _, cs := range cases {
@@ -165,7 +164,7 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
 			c.Assert(mariadbGTIDSet.AddSet(nil), check.IsNil)
 		} else {
 			err := gtidSet.Update(cs.gtidStr)
-			c.Assert(err != nil, check.Equals, cs.hasError)
+			c.Assert(err, check.IsNil)
 		}
 		// check sub gtid
 		c.Assert(mariadbGTIDSet.Sets, check.HasLen, len(cs.subGTIDs))
