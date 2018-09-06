@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
+	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go/hack"
 )
 
@@ -72,13 +73,27 @@ func (gtid *MariadbGTID) Clone() *MariadbGTID {
 	return o
 }
 
-func (gtid *MariadbGTID) forward(newer *MariadbGTID) error  {
+func (gtid *MariadbGTID) forward(newer *MariadbGTID) error {
 	if newer.DomainID != gtid.DomainID {
 		return errors.Errorf("%s is not same with doamin of %s", newer, gtid)
 	}
 
+	/*
+		Here's a simplified example of binlog events.
+		Although I think one domain should have only one update at same time, we can't limit the user's usage.
+		we just output a warn log and let it go on
+		| mysqld-bin.000001 | 1453 | Gtid              |       112 |        1495 | BEGIN GTID 0-112-6  |
+		| mysqld-bin.000001 | 1624 | Xid               |       112 |        1655 | COMMIT xid=74       |
+		| mysqld-bin.000001 | 1655 | Gtid              |       112 |        1697 | BEGIN GTID 0-112-7  |
+		| mysqld-bin.000001 | 1826 | Xid               |       112 |        1857 | COMMIT xid=75       |
+		| mysqld-bin.000001 | 1857 | Gtid              |       111 |        1899 | BEGIN GTID 0-111-5  |
+		| mysqld-bin.000001 | 1981 | Xid               |       111 |        2012 | COMMIT xid=77       |
+		| mysqld-bin.000001 | 2012 | Gtid              |       112 |        2054 | BEGIN GTID 0-112-8  |
+		| mysqld-bin.000001 | 2184 | Xid               |       112 |        2215 | COMMIT xid=116      |
+		| mysqld-bin.000001 | 2215 | Gtid              |       111 |        2257 | BEGIN GTID 0-111-6  |
+	*/
 	if newer.SequenceNumber <= gtid.SequenceNumber {
-		return errors.Errorf("out of order binlog appears with gtid %s vs current position gtid %s", newer, gtid)
+		log.Warnf("out of order binlog appears with gtid %s vs current position gtid %s", newer, gtid)
 	}
 
 	gtid.ServerID = newer.ServerID
@@ -110,6 +125,7 @@ func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 	}
 	return s, nil
 }
+
 // AddSet adds mariadb gtid into mariadb gtid set
 func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 	if gtid == nil {
@@ -139,7 +155,6 @@ func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 	err = s.AddSet(gtid)
 	return errors.Trace(err)
 }
-
 
 func (s *MariadbGTIDSet) String() string {
 	return hack.String(s.Encode())
@@ -176,7 +191,7 @@ func (s *MariadbGTIDSet) Equal(o GTIDSet) bool {
 	if !ok {
 		return false
 	}
-	
+
 	if len(other.Sets) != len(s.Sets) {
 		return false
 	}
