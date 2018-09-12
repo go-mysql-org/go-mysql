@@ -424,8 +424,8 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			v = formatZeroTime(0, 0)
 		} else {
 			v = e.parseFracTime(fracTime{
-				Time: time.Unix(int64(t), 0),
-				Dec:  0,
+				Time:                    time.Unix(int64(t), 0),
+				Dec:                     0,
 				timestampStringLocation: e.timestampStringLocation,
 			})
 		}
@@ -499,7 +499,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		n = int(meta & 0xFF)
 		nbits := n * 8
 
-		v, err = decodeBit(data, nbits, n)
+		v, err = littleDecodeBit(data, nbits, n)
 	case MYSQL_TYPE_BLOB:
 		v, n, err = decodeBlob(data, meta)
 	case MYSQL_TYPE_VARCHAR,
@@ -650,6 +650,38 @@ func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
 	return
 }
 
+func littleDecodeBit(data []byte, nbits int, length int) (value int64, err error) {
+	if nbits > 1 {
+		switch length {
+		case 1:
+			value = int64(data[0])
+		case 2:
+			value = int64(binary.LittleEndian.Uint16(data))
+		case 3:
+			value = int64(FixedLengthInt(data[0:3]))
+		case 4:
+			value = int64(binary.LittleEndian.Uint32(data))
+		case 5:
+			value = int64(FixedLengthInt(data[0:5]))
+		case 6:
+			value = int64(FixedLengthInt(data[0:6]))
+		case 7:
+			value = int64(FixedLengthInt(data[0:7]))
+		case 8:
+			value = int64(binary.LittleEndian.Uint64(data))
+		default:
+			err = fmt.Errorf("invalid bit length %d", length)
+		}
+	} else {
+		if length != 1 {
+			err = fmt.Errorf("invalid bit length %d", length)
+		} else {
+			value = int64(data[0])
+		}
+	}
+	return
+}
+
 func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Location) (interface{}, int, error) {
 	//get timestamp binary length
 	n := int(4 + (dec+1)/2)
@@ -669,8 +701,8 @@ func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Loc
 	}
 
 	return fracTime{
-		Time: time.Unix(sec, usec*1000),
-		Dec:  int(dec),
+		Time:                    time.Unix(sec, usec*1000),
+		Dec:                     int(dec),
 		timestampStringLocation: timestampStringLocation,
 	}, n, nil
 }
