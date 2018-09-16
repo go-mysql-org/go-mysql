@@ -490,7 +490,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			v = int64(data[0])
 			n = 1
 		case 2:
-			v = int64(binary.BigEndian.Uint16(data))
+			v = int64(binary.LittleEndian.Uint16(data))
 			n = 2
 		default:
 			err = fmt.Errorf("Unknown ENUM packlen=%d", l)
