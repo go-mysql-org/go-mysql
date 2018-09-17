@@ -91,7 +91,7 @@ func (s *clientTestSuite) TestConn_TLS(c *C) {
 
 	expected := "either ServerName or InsecureSkipVerify must be specified in the tls.Config"
 	if !strings.Contains(err.Error(), expected) {
-		c.Fatal("expected '%s' to contain '%s'", err.Error(), expected)
+		c.Fatalf("expected '%s' to contain '%s'", err.Error(), expected)
 	}
 }
 

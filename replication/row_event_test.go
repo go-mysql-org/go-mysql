@@ -523,6 +523,71 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 	}
 }
 
+func (_ *testDecodeSuite) TestEnum(c *C) {
+	// mysql> desc aenum;
+	// +-------+-------------------------------------------+------+-----+---------+-------+
+	// | Field | Type                                      | Null | Key | Default | Extra |
+	// +-------+-------------------------------------------+------+-----+---------+-------+
+	// | id    | int(11)                                   | YES  |     | NULL    |       |
+	// | aset  | enum('0','1','2','3','4','5','6','7','8') | YES  |     | NULL    |       |
+	// +-------+-------------------------------------------+------+-----+---------+-------+
+	// 2 rows in set (0.00 sec)
+	//
+	// insert into aenum(id, aset) values(1, '0');
+	tableMapEventData := []byte("\x42\x0f\x00\x00\x00\x00\x01\x00\x05\x74\x74\x65\x73\x74\x00\x05")
+	tableMapEventData = append(tableMapEventData, []byte("\x61\x65\x6e\x75\x6d\x00\x02\x03\xfe\x02\xf7\x01\x03")...)
+	tableMapEvent := new(TableMapEvent)
+	tableMapEvent.tableIDSize = 6
+	err := tableMapEvent.Decode(tableMapEventData)
+	c.Assert(err, IsNil)
+
+	rows := new(RowsEvent)
+	rows.tableIDSize = 6
+	rows.tables = make(map[uint64]*TableMapEvent)
+	rows.tables[tableMapEvent.TableID] = tableMapEvent
+	rows.Version = 2
+
+	data := []byte("\x42\x0f\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc\x01\x00\x00\x00\x01")
+
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[0][1], Equals, int64(1))
+}
+
+func (_ *testDecodeSuite) TestSet(c *C) {
+	// mysql> desc aset;
+	// +--------+---------------------------------------------------------------------------------------+------+-----+---------+-------+
+	// | Field  | Type                                                                                  | Null | Key | Default | Extra |
+	// +--------+---------------------------------------------------------------------------------------+------+-----+---------+-------+
+	// | id     | int(11)                                                                               | YES  |     | NULL    |       |
+	// | region | set('1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18') | YES  |     | NULL    |       |
+	// +--------+---------------------------------------------------------------------------------------+------+-----+---------+-------+
+	// 2 rows in set (0.00 sec)
+	//
+	// insert into aset(id, region) values(1, '1,3');
+
+	tableMapEventData := []byte("\xe7\x0e\x00\x00\x00\x00\x01\x00\x05\x74\x74\x65\x73\x74\x00\x04")
+	tableMapEventData = append(tableMapEventData, []byte("\x61\x73\x65\x74\x00\x02\x03\xfe\x02\xf8\x03\x03")...)
+	tableMapEvent := new(TableMapEvent)
+	tableMapEvent.tableIDSize = 6
+	err := tableMapEvent.Decode(tableMapEventData)
+	c.Assert(err, IsNil)
+
+	rows := new(RowsEvent)
+	rows.tableIDSize = 6
+	rows.tables = make(map[uint64]*TableMapEvent)
+	rows.tables[tableMapEvent.TableID] = tableMapEvent
+	rows.Version = 2
+
+	data := []byte("\xe7\x0e\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc\x01\x00\x00\x00\x05\x00\x00")
+
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[0][1], Equals, int64(5))
+}
+
 func (_ *testDecodeSuite) TestJsonNull(c *C) {
 	// Table:
 	// desc hj_order_preview
