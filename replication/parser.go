@@ -250,6 +250,8 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = &RowsQueryEvent{}
 			case GTID_EVENT:
 				e = &GTIDEvent{}
+			case ANONYMOUS_GTID_EVENT:
+				e = &GTIDEvent{}	
 			case BEGIN_LOAD_QUERY_EVENT:
 				e = &BeginLoadQueryEvent{}
 			case EXECUTE_LOAD_QUERY_EVENT:
