@@ -3,6 +3,7 @@ package canal
 import (
 	"fmt"
 
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
 )
@@ -23,7 +24,8 @@ type RowsEvent struct {
 	// for v1 and v2, the rows number must be even.
 	// Two rows for one event, format is [before update row, after update row]
 	// for update v0, only one row for a event, and we don't support this version.
-	Rows [][]interface{}
+	Rows    [][]interface{}
+	NextPos mysql.Position
 	// Header can be used to inspect the event
 	Header *replication.EventHeader
 }
