@@ -2,10 +2,9 @@ package replication
 
 import (
 	"context"
-        "time"
+	"time"
 	"github.com/juju/errors"
 	"github.com/siddontang/go-log/log"
-        "github.com/siddontang/go-mysql/mysql"
 )
 
 var (
