@@ -39,15 +39,14 @@ func (s *BinlogStreamer) GetEvent(ctx context.Context) (*BinlogEvent, error) {
 
 // Get the binlog event with starttime, if current binlog event timestamp smaller than specify starttime
 // return nil event 
-func (s *BinlogStreamer) GetEventWithStartTime(ctx context.Context,startTime time.Time) (*BinlogEvent, error) {
+func (s *BinlogStreamer) GetEventWithTime(ctx context.Context,startTime time.Time) (*BinlogEvent, error) {
 	if s.err != nil {
 		return nil, ErrNeedSyncAgain
 	}
-	startTime,_ = time.ParseInLocation(mysql.TimeFormat,startTime.Format(mysql.TimeFormat),time.Local)
+	startUnix := startTime.Unix()
 	select {
 	case c := <-s.ch:
-		bintime,_ := time.ParseInLocation(mysql.TimeFormat,time.Unix(int64(c.Header.Timestamp),0).Format(mysql.TimeFormat),time.Local)
-		if bintime.Sub(startTime).Seconds() >= 0 {
+		if int64(c.Header.Timestamp) >= startUnix {
 			return c, nil
 		}
 		return nil,nil
