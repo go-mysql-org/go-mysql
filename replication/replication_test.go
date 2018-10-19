@@ -285,12 +285,13 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 	}
 
 	cfg := BinlogSyncerConfig{
-		ServerID: 100,
-		Flavor:   flavor,
-		Host:     *testHost,
-		Port:     port,
-		User:     "root",
-		Password: "",
+		ServerID:   100,
+		Flavor:     flavor,
+		Host:       *testHost,
+		Port:       port,
+		User:       "root",
+		Password:   "",
+		UseDecimal: true,
 	}
 
 	t.b = NewBinlogSyncer(cfg)
