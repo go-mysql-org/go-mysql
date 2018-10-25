@@ -469,7 +469,7 @@ func (d *jsonBinaryDecoder) decodeVariableLength(data []byte) (int, int) {
 
 		if v&0x80 == 0 {
 			if length > math.MaxUint32 {
-				d.err = errors.Errorf("variable length %d must <= %d", length, math.MaxUint32)
+				d.err = errors.Errorf("variable length %d must <= %d", length, int64(math.MaxUint32))
 				return 0, 0
 			}
 

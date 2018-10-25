@@ -261,7 +261,7 @@ func (s *UUIDSet) decode(data []byte) (int, error) {
 	}
 	pos += 16
 
-	n := int64(binary.LittleEndian.Uint64(data[pos: pos+8]))
+	n := int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
 	pos += 8
 	if len(data) < int(16*n)+pos {
 		return 0, errors.Errorf("invalid uuid set buffer, must %d, but %d", pos+int(16*n), len(data))
@@ -271,9 +271,9 @@ func (s *UUIDSet) decode(data []byte) (int, error) {
 
 	var in Interval
 	for i := int64(0); i < n; i++ {
-		in.Start = int64(binary.LittleEndian.Uint64(data[pos: pos+8]))
+		in.Start = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
 		pos += 8
-		in.Stop = int64(binary.LittleEndian.Uint64(data[pos: pos+8]))
+		in.Stop = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
 		pos += 8
 		s.Intervals = append(s.Intervals, in)
 	}
@@ -287,6 +287,15 @@ func (s *UUIDSet) Decode(data []byte) error {
 		return errors.Errorf("invalid uuid set buffer, must %d, but %d", n, len(data))
 	}
 	return err
+}
+
+func (s *UUIDSet) Clone() *UUIDSet {
+	clone := new(UUIDSet)
+
+	clone.SID, _ = uuid.FromString(s.SID.String())
+	clone.Intervals = s.Intervals.Normalize()
+
+	return clone
 }
 
 type MysqlGTIDSet struct {
@@ -429,7 +438,12 @@ func (s *MysqlGTIDSet) Encode() []byte {
 }
 
 func (gtid *MysqlGTIDSet) Clone() GTIDSet {
-	clone := new(MysqlGTIDSet)
-	*clone = *gtid
+	clone := &MysqlGTIDSet{
+		Sets: make(map[string]*UUIDSet),
+	}
+	for sid, uuidSet := range gtid.Sets {
+		clone.Sets[sid] = uuidSet.Clone()
+	}
+
 	return clone
 }
