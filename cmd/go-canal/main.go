@@ -42,6 +42,7 @@ func main() {
 	cfg.User = *user
 	cfg.Password = *password
 	cfg.Flavor = *flavor
+	cfg.UseDecimal = true
 
 	cfg.ReadTimeout = *readTimeout
 	cfg.HeartbeatPeriod = *heartbeatPeriod
