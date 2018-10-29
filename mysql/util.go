@@ -1,11 +1,11 @@
 package mysql
 
 import (
-	"crypto/rand"
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand"
 	"runtime"
 	"strings"
 
@@ -48,17 +48,14 @@ func CalcPassword(scramble, password []byte) []byte {
 	return scramble
 }
 
+// Copy from github.com/pingcap/tidb mysql/util.go
+// See https://github.com/mysql/mysql-server/blob/5.7/mysys_ssl/crypt_genhash_impl.cc#L435
 func RandomBuf(size int) ([]byte, error) {
 	buf := make([]byte, size)
-
-	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	// avoid to generate '\0'
-	for i, b := range buf {
-		if uint8(b) == 0 {
-			buf[i] = '0'
+	for i := 0; i < size; i++ {
+		buf[i] = byte(rand.Intn(127))
+		if buf[i] == 0 || buf[i] == byte('$') {
+			buf[i]++
 		}
 	}
 
