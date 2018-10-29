@@ -89,10 +89,29 @@ func (c *Conn) readHandshakeResponse(password string) error {
 		return NewDefaultError(ER_NO_SUCH_USER, user, c.RemoteAddr().String())
 	}
 
-	//auth length and auth
-	authLen := int(data[pos])
-	pos++
-	auth := data[pos : pos+authLen]
+	var auth []byte
+
+	if c.capability&CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
+		// Fix from github.com/pingcap/tidb
+		// MySQL client sets the wrong capability, it will set this bit even server doesn't
+		// support ClientPluginAuthLenencClientData.
+		// https://github.com/mysql/mysql-server/blob/5.7/sql-common/client.c#L3478
+		num, null, off := LengthEncodedInt(data[pos:])
+		pos += off
+		if !null {
+			auth = data[pos : pos+int(num)]
+			pos += int(num)
+		}
+	} else if c.capability&CLIENT_SECURE_CONNECTION > 0 {
+		//auth length and auth
+		authLen := int(data[pos])
+		pos++
+		auth = data[pos : pos+authLen]
+		pos += authLen
+	} else {
+		auth = data[pos : pos+bytes.IndexByte(data[pos:], 0)]
+		pos += len(auth) + 1
+	}
 
 	checkAuth := CalcPassword(c.salt, []byte(password))
 
@@ -100,9 +119,7 @@ func (c *Conn) readHandshakeResponse(password string) error {
 		return NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), "Yes")
 	}
 
-	pos += authLen
-
-	if c.capability|CLIENT_CONNECT_WITH_DB > 0 {
+	if c.capability&CLIENT_CONNECT_WITH_DB > 0 {
 		if len(data[pos:]) == 0 {
 			return nil
 		}
