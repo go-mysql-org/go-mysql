@@ -82,7 +82,7 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	c.Assert(ta.Indexes[2].Name, Equals, "name_idx")
 	c.Assert(ta.Columns[4].EnumValues, DeepEquals, []string{"appointing", "serving", "abnormal", "stop", "noaftermarket", "finish", "financial_audit"})
 	c.Assert(ta.Columns[5].SetValues, DeepEquals, []string{"a", "b", "c"})
-	c.Assert(ta.Columns[7].Type, Equals, TYPE_FLOAT)
+	c.Assert(ta.Columns[7].Type, Equals, TYPE_DECIMAL)
 	c.Assert(ta.Columns[0].IsUnsigned, IsFalse)
 	c.Assert(ta.Columns[8].IsUnsigned, IsTrue)
 	c.Assert(ta.Columns[9].IsUnsigned, IsTrue)

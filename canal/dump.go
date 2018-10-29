@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
@@ -64,6 +65,22 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 					return dump.ErrSkip
 				}
 				vs[i] = f
+			} else if tableInfo.Columns[i].Type == schema.TYPE_DECIMAL {
+				if h.c.cfg.UseDecimal {
+					d, err := decimal.NewFromString(v)
+					if err != nil {
+						log.Errorf("parse row %v at %d error %v, skip", values, i, err)
+						return dump.ErrSkip
+					}
+					vs[i] = d
+				} else {
+					f, err := strconv.ParseFloat(v, 64)
+					if err != nil {
+						log.Errorf("parse row %v at %d error %v, skip", values, i, err)
+						return dump.ErrSkip
+					}
+					vs[i] = f
+				}
 			} else if strings.HasPrefix(v, "0x") {
 				buf, err := hex.DecodeString(v[2:])
 				if err != nil {
