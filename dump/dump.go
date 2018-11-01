@@ -147,6 +147,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 	args = append(args, "--skip-opt")
 	args = append(args, "--quick")
 
+	// Disable --column-statistics casue default behavior changes in mysqldump 8.0
+	// This can cause this problem https://serverfault.com/questions/912162/mysqldump-throws-unknown-table-column-statistics-in-information-schema-1109
+	args = append(args, "--column-statistics=0")
+
 	// We only care about data
 	args = append(args, "--no-create-info")
 
