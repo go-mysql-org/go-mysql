@@ -200,6 +200,8 @@ func (c *Canal) run() error {
 		c.cancel()
 	}()
 
+	c.master.UpdateTimestamp(uint32(time.Now().Unix()))
+
 	if !c.dumped {
 		c.dumped = true
 
@@ -456,6 +458,10 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 
 func (c *Canal) SyncedPosition() mysql.Position {
 	return c.master.Position()
+}
+
+func (c *Canal) SyncedTimestamp() uint32 {
+	return c.master.timestamp
 }
 
 func (c *Canal) SyncedGTIDSet() mysql.GTIDSet {

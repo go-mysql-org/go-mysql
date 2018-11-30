@@ -132,6 +132,8 @@ func (c *Canal) dump() error {
 		return errors.New("mysqldump does not exist")
 	}
 
+	c.master.UpdateTimestamp(uint32(time.Now().Unix()))
+
 	h := &dumpParseHandler{c: c}
 	// If users call StartFromGTID with empty position to start dumping with gtid,
 	// we record the current gtid position before dump starts.
