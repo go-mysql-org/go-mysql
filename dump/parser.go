@@ -82,7 +82,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 				return errors.Errorf("parse values %v err", line)
 			}
 
-			if err = h.Data(db, table, values); err != nil && err != ErrSkip {
+			if err = h.Data(db, table, values); err != nil {
 				return errors.Trace(err)
 			}
 		}
