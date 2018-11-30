@@ -50,6 +50,8 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 	for i, v := range values {
 		if v == "NULL" {
 			vs[i] = nil
+		} else if v == "_binary ''" {
+			vs[i] = []byte{}
 		} else if v[0] != '\'' {
 			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER {
 				n, err := strconv.ParseInt(v, 10, 64)
