@@ -31,9 +31,10 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		log.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
-		s, err := c.syncer.StartSyncGTID(gset)
+		copyedGset, _ := mysql.ParseGTIDSet(c.cfg.Flavor, gset.String())
+		s, err := c.syncer.StartSyncGTID(copyedGset)
 		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
+			return nil, errors.Errorf("start sync replication at GTID set %v error %v", copyedGset, err)
 		}
 		log.Infof("start sync binlog at GTID set %v", gset)
 		return s, nil
@@ -229,13 +230,13 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
 	rr, err := c.Execute("SHOW MASTER STATUS")
 	if err != nil {
-		return mysql.Position{"", 0}, errors.Trace(err)
+		return mysql.Position{Name: "", Pos: 0}, errors.Trace(err)
 	}
 
 	name, _ := rr.GetString(0, 0)
 	pos, _ := rr.GetInt(0, 1)
 
-	return mysql.Position{name, uint32(pos)}, nil
+	return mysql.Position{Name: name, Pos: uint32(pos)}, nil
 }
 
 func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
