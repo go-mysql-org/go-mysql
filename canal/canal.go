@@ -398,21 +398,9 @@ func (c *Canal) checkBinlogRowFormat() error {
 }
 
 func (c *Canal) prepareSyncer() error {
-	seps := strings.Split(c.cfg.Addr, ":")
-	if len(seps) != 2 {
-		return errors.Errorf("invalid mysql addr format %s, must host:port", c.cfg.Addr)
-	}
-
-	port, err := strconv.ParseUint(seps[1], 10, 16)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
 	cfg := replication.BinlogSyncerConfig{
 		ServerID:        c.cfg.ServerID,
 		Flavor:          c.cfg.Flavor,
-		Host:            seps[0],
-		Port:            uint16(port),
 		User:            c.cfg.User,
 		Password:        c.cfg.Password,
 		Charset:         c.cfg.Charset,
@@ -421,6 +409,23 @@ func (c *Canal) prepareSyncer() error {
 		UseDecimal:      c.cfg.UseDecimal,
 		ParseTime:       c.cfg.ParseTime,
 		SemiSyncEnabled: c.cfg.SemiSyncEnabled,
+	}
+
+	if strings.Contains(c.cfg.Addr, "/") {
+		cfg.Host = c.cfg.Addr
+	} else {
+		seps := strings.Split(c.cfg.Addr, ":")
+		if len(seps) != 2 {
+			return errors.Errorf("invalid mysql addr format %s, must host:port", c.cfg.Addr)
+		}
+
+		port, err := strconv.ParseUint(seps[1], 10, 16)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		cfg.Host = seps[0]
+		cfg.Port = uint16(port)
 	}
 
 	c.syncer = replication.NewBinlogSyncer(cfg)
