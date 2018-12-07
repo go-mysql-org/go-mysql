@@ -63,7 +63,7 @@ type Config struct {
 	Dump DumpConfig `toml:"dump"`
 
 	UseDecimal bool `toml:"use_decimal"`
-	ParseTime bool  `toml:"parse_time"`
+	ParseTime  bool `toml:"parse_time"`
 
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool `toml:"semi_sync_enabled"`
@@ -97,8 +97,7 @@ func NewDefaultConfig() *Config {
 	c.Password = ""
 
 	c.Charset = mysql.DEFAULT_CHARSET
-	rand.Seed(time.Now().Unix())
-	c.ServerID = uint32(rand.Intn(1000)) + 1001
+	c.ServerID = uint32(rand.New(rand.NewSource(time.Now().Unix())).Intn(1000)) + 1001
 
 	c.Flavor = "mysql"
 
