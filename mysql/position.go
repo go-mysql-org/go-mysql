@@ -33,5 +33,5 @@ func (p Position) Compare(o Position) int {
 }
 
 func (p Position) String() string {
-	return fmt.Sprintf("%s:%d", p.Name, p.Pos)
+	return fmt.Sprintf("(%s, %d)", p.Name, p.Pos)
 }
