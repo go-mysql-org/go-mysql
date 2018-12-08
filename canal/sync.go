@@ -69,6 +69,10 @@ func (c *Canal) runSyncBinlog() error {
 		// TODO: If we meet any DDL query, we must save too.
 		switch e := ev.Event.(type) {
 		case *replication.RotateEvent:
+			if ev.Header.Timestamp == 0 {
+				// We get current Master's server_id from fake rotate event.
+				pos.ServerID = ev.Header.ServerID
+			}
 			pos.Name = string(e.NextLogName)
 			pos.Pos = uint32(e.Position)
 			log.Infof("rotate binlog to %s", pos)
