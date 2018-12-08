@@ -219,12 +219,13 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 				return errors.Trace(err)
 			}
 			curPos := c.master.Position()
-			if curPos.Compare(pos) >= 0 {
-				return nil
-			} else {
+			// If server_id is different or curPos is before pos, we need to wait
+			if curPos.ServerID != pos.ServerID || curPos.Compare(pos) < 0 {
 				log.Debugf("master pos is %v, wait catching %v", curPos, pos)
 				time.Sleep(100 * time.Millisecond)
+				continue
 			}
+			return nil
 		}
 	}
 
@@ -232,15 +233,19 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 }
 
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
+	serverID, err := c.GetMasterServerID()
+	if err != nil {
+		return mysql.Position{}, errors.Trace(err)
+	}
 	rr, err := c.Execute("SHOW MASTER STATUS")
 	if err != nil {
-		return mysql.Position{Name: "", Pos: 0}, errors.Trace(err)
+		return mysql.Position{}, errors.Trace(err)
 	}
 
 	name, _ := rr.GetString(0, 0)
 	pos, _ := rr.GetInt(0, 1)
 
-	return mysql.Position{Name: name, Pos: uint32(pos)}, nil
+	return mysql.Position{Name: name, Pos: uint32(pos), ServerID: uint32(serverID)}, nil
 }
 
 func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
@@ -273,4 +278,17 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
+}
+
+func (c *Canal) GetMasterServerID() (uint32, error) {
+	query := "SELECT @@GLOBAL.server_id"
+	rr, err := c.Execute(query)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	serverID, err := rr.GetInt(0, 0)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	return uint32(serverID), nil
 }
