@@ -759,20 +759,10 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 }
 
 func (b *BinlogSyncer) getGtidSet() GTIDSet {
-	var gtidSet GTIDSet
-
 	if b.gset == nil {
 		return nil
 	}
-
-	switch b.cfg.Flavor {
-	case MariaDBFlavor:
-		gtidSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
-	default:
-		gtidSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
-	}
-
-	return gtidSet
+	return b.gset.Clone()
 }
 
 // LastConnectionID returns last connectionID.

@@ -31,10 +31,9 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		log.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
-		copyedGset, _ := mysql.ParseGTIDSet(c.cfg.Flavor, gset.String())
-		s, err := c.syncer.StartSyncGTID(copyedGset)
+		s, err := c.syncer.StartSyncGTID(gset)
 		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID set %v error %v", copyedGset, err)
+			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
 		}
 		log.Infof("start sync binlog at GTID set %v", gset)
 		return s, nil
