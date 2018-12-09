@@ -68,10 +68,6 @@ func (c *Canal) runSyncBinlog() error {
 		// TODO: If we meet any DDL query, we must save too.
 		switch e := ev.Event.(type) {
 		case *replication.RotateEvent:
-			if ev.Header.Timestamp == 0 {
-				// We get current Master's server_id from fake rotate event.
-				pos.ServerID = ev.Header.ServerID
-			}
 			pos.Name = string(e.NextLogName)
 			pos.Pos = uint32(e.Position)
 			log.Infof("rotate binlog to %s", pos)
@@ -218,13 +214,12 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 				return errors.Trace(err)
 			}
 			curPos := c.master.Position()
-			// If server_id is different or curPos is before pos, we need to wait
-			if curPos.ServerID != pos.ServerID || curPos.Compare(pos) < 0 {
+			if curPos.Compare(pos) >= 0 {
+				return nil
+			} else {
 				log.Debugf("master pos is %v, wait catching %v", curPos, pos)
 				time.Sleep(100 * time.Millisecond)
-				continue
 			}
-			return nil
 		}
 	}
 
@@ -232,10 +227,6 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 }
 
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
-	serverID, err := c.GetMasterServerID()
-	if err != nil {
-		return mysql.Position{}, errors.Trace(err)
-	}
 	rr, err := c.Execute("SHOW MASTER STATUS")
 	if err != nil {
 		return mysql.Position{}, errors.Trace(err)
@@ -244,7 +235,7 @@ func (c *Canal) GetMasterPos() (mysql.Position, error) {
 	name, _ := rr.GetString(0, 0)
 	pos, _ := rr.GetInt(0, 1)
 
-	return mysql.Position{Name: name, Pos: uint32(pos), ServerID: uint32(serverID)}, nil
+	return mysql.Position{Name: name, Pos: uint32(pos)}, nil
 }
 
 func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
@@ -277,17 +268,4 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
-}
-
-func (c *Canal) GetMasterServerID() (uint32, error) {
-	query := "SELECT @@GLOBAL.server_id"
-	rr, err := c.Execute(query)
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-	serverID, err := rr.GetInt(0, 0)
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-	return uint32(serverID), nil
 }

@@ -6,15 +6,11 @@ import (
 
 // For binlog filename + position based replication
 type Position struct {
-	Name     string
-	Pos      uint32
-	ServerID uint32
+	Name string
+	Pos  uint32
 }
 
 func (p Position) Compare(o Position) int {
-	if p.ServerID != o.ServerID {
-		panic(fmt.Sprintf("unsupported comparison between different server id: %d != %d", p.ServerID, o.ServerID))
-	}
 	// First compare binlog name
 	if p.Name > o.Name {
 		return 1
