@@ -10,7 +10,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/schema"
 )
@@ -56,43 +55,37 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER {
 				n, err := strconv.ParseInt(v, 10, 64)
 				if err != nil {
-					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-					return dump.ErrSkip
+					return fmt.Errorf("parse row %v at %d error %v, int expected", values, i, err)
 				}
 				vs[i] = n
 			} else if tableInfo.Columns[i].Type == schema.TYPE_FLOAT {
 				f, err := strconv.ParseFloat(v, 64)
 				if err != nil {
-					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-					return dump.ErrSkip
+					return fmt.Errorf("parse row %v at %d error %v, float expected", values, i, err)
 				}
 				vs[i] = f
 			} else if tableInfo.Columns[i].Type == schema.TYPE_DECIMAL {
 				if h.c.cfg.UseDecimal {
 					d, err := decimal.NewFromString(v)
 					if err != nil {
-						log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-						return dump.ErrSkip
+						return fmt.Errorf("parse row %v at %d error %v, decimal expected", values, i, err)
 					}
 					vs[i] = d
 				} else {
 					f, err := strconv.ParseFloat(v, 64)
 					if err != nil {
-						log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-						return dump.ErrSkip
+						return fmt.Errorf("parse row %v at %d error %v, float expected", values, i, err)
 					}
 					vs[i] = f
 				}
 			} else if strings.HasPrefix(v, "0x") {
 				buf, err := hex.DecodeString(v[2:])
 				if err != nil {
-					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-					return dump.ErrSkip
+					return fmt.Errorf("parse row %v at %d error %v, hex literal expected", values, i, err)
 				}
 				vs[i] = string(buf)
 			} else {
-				log.Errorf("parse row %v error, invalid type at %d, skip", values, i)
-				return dump.ErrSkip
+				return fmt.Errorf("parse row %v error, invalid type at %d", values, i)
 			}
 		} else {
 			vs[i] = v[1 : len(v)-1]
