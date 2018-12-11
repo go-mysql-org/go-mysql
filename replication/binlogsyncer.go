@@ -416,7 +416,7 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p Position) error {
 }
 
 func (b *BinlogSyncer) writeBinlogDumpMysqlGTIDCommand(gset GTIDSet) error {
-	p := Position{"", 4}
+	p := Position{Name: "", Pos: 4}
 	gtidData := gset.Encode()
 
 	b.c.ResetSequence()
@@ -472,7 +472,7 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 	}
 
 	// Since we use @slave_connect_state, the file and position here are ignored.
-	return b.writeBinlogDumpCommand(Position{"", 0})
+	return b.writeBinlogDumpCommand(Position{Name: "", Pos: 0})
 }
 
 // localHostname returns the hostname that register slave would register as.
@@ -759,20 +759,10 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 }
 
 func (b *BinlogSyncer) getGtidSet() GTIDSet {
-	var gtidSet GTIDSet
-
 	if b.gset == nil {
 		return nil
 	}
-
-	switch b.cfg.Flavor {
-	case MariaDBFlavor:
-		gtidSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
-	default:
-		gtidSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
-	}
-
-	return gtidSet
+	return b.gset.Clone()
 }
 
 // LastConnectionID returns last connectionID.

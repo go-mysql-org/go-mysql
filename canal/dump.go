@@ -159,7 +159,7 @@ func (c *Canal) dump() error {
 		return errors.Trace(err)
 	}
 
-	pos := mysql.Position{h.name, uint32(h.pos)}
+	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 	c.master.Update(pos)
 	c.eventHandler.OnPosSynced(pos, true)
 	var startPos fmt.Stringer = pos
