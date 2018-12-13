@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -192,9 +193,16 @@ func (b *BinlogSyncer) registerSlave() error {
 		b.c.Close()
 	}
 
-	log.Infof("register slave for master server %s:%d", b.cfg.Host, b.cfg.Port)
+	addr := ""
+	if strings.Contains(b.cfg.Host, "/") {
+		addr = b.cfg.Host
+	} else {
+		addr = fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port)
+	}
+
+	log.Infof("register slave for master server %s", addr)
 	var err error
-	b.c, err = client.Connect(fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port), b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
+	b.c, err = client.Connect(addr, b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
 		c.TLSConfig = b.cfg.TLSConfig
 	})
 	if err != nil {

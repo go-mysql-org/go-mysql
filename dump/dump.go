@@ -121,10 +121,14 @@ func (d *Dumper) Dump(w io.Writer) error {
 	args := make([]string, 0, 16)
 
 	// Common args
-	seps := strings.Split(d.Addr, ":")
-	args = append(args, fmt.Sprintf("--host=%s", seps[0]))
-	if len(seps) > 1 {
-		args = append(args, fmt.Sprintf("--port=%s", seps[1]))
+	if strings.Contains(d.Addr, "/") {
+		args = append(args, fmt.Sprintf("--socket=%s", d.Addr))
+	} else {
+		seps := strings.SplitN(d.Addr, ":", 2)
+		args = append(args, fmt.Sprintf("--host=%s", seps[0]))
+		if len(seps) > 1 {
+			args = append(args, fmt.Sprintf("--port=%s", seps[1]))
+		}
 	}
 
 	args = append(args, fmt.Sprintf("--user=%s", d.User))

@@ -10,7 +10,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/dump"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/schema"
 )
@@ -50,47 +49,43 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 	for i, v := range values {
 		if v == "NULL" {
 			vs[i] = nil
+		} else if v == "_binary ''" {
+			vs[i] = []byte{}
 		} else if v[0] != '\'' {
 			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER {
 				n, err := strconv.ParseInt(v, 10, 64)
 				if err != nil {
-					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-					return dump.ErrSkip
+					return fmt.Errorf("parse row %v at %d error %v, int expected", values, i, err)
 				}
 				vs[i] = n
 			} else if tableInfo.Columns[i].Type == schema.TYPE_FLOAT {
 				f, err := strconv.ParseFloat(v, 64)
 				if err != nil {
-					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-					return dump.ErrSkip
+					return fmt.Errorf("parse row %v at %d error %v, float expected", values, i, err)
 				}
 				vs[i] = f
 			} else if tableInfo.Columns[i].Type == schema.TYPE_DECIMAL {
 				if h.c.cfg.UseDecimal {
 					d, err := decimal.NewFromString(v)
 					if err != nil {
-						log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-						return dump.ErrSkip
+						return fmt.Errorf("parse row %v at %d error %v, decimal expected", values, i, err)
 					}
 					vs[i] = d
 				} else {
 					f, err := strconv.ParseFloat(v, 64)
 					if err != nil {
-						log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-						return dump.ErrSkip
+						return fmt.Errorf("parse row %v at %d error %v, float expected", values, i, err)
 					}
 					vs[i] = f
 				}
 			} else if strings.HasPrefix(v, "0x") {
 				buf, err := hex.DecodeString(v[2:])
 				if err != nil {
-					log.Errorf("parse row %v at %d error %v, skip", values, i, err)
-					return dump.ErrSkip
+					return fmt.Errorf("parse row %v at %d error %v, hex literal expected", values, i, err)
 				}
 				vs[i] = string(buf)
 			} else {
-				log.Errorf("parse row %v error, invalid type at %d, skip", values, i)
-				return dump.ErrSkip
+				return fmt.Errorf("parse row %v error, invalid type at %d", values, i)
 			}
 		} else {
 			vs[i] = v[1 : len(v)-1]
@@ -130,6 +125,8 @@ func (c *Canal) dump() error {
 		return errors.New("mysqldump does not exist")
 	}
 
+	c.master.UpdateTimestamp(uint32(time.Now().Unix()))
+
 	h := &dumpParseHandler{c: c}
 	// If users call StartFromGTID with empty position to start dumping with gtid,
 	// we record the current gtid position before dump starts.
@@ -161,7 +158,9 @@ func (c *Canal) dump() error {
 
 	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 	c.master.Update(pos)
-	c.eventHandler.OnPosSynced(pos, true)
+	if err := c.eventHandler.OnPosSynced(pos, true); err != nil {
+		return errors.Trace(err)
+	}
 	var startPos fmt.Stringer = pos
 	if h.gset != nil {
 		c.master.UpdateGTIDSet(h.gset)
