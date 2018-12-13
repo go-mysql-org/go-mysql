@@ -156,7 +156,7 @@ func (c *Canal) dump() error {
 		return errors.Trace(err)
 	}
 
-	pos := mysql.Position{h.name, uint32(h.pos)}
+	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 	c.master.Update(pos)
 	if err := c.eventHandler.OnPosSynced(pos, true); err != nil {
 		return errors.Trace(err)

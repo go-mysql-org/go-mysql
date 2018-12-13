@@ -81,11 +81,14 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	pos += n
 
-	if len(data[pos:]) != bitmapByteSize(int(e.ColumnCount)) {
+	nullBitmapSize := bitmapByteSize(int(e.ColumnCount))
+	if len(data[pos:]) < nullBitmapSize {
 		return io.EOF
 	}
 
-	e.NullBitmap = data[pos:]
+	e.NullBitmap = data[pos : pos+nullBitmapSize]
+
+	// TODO: handle optional field meta
 
 	return nil
 }

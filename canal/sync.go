@@ -233,13 +233,13 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
 	rr, err := c.Execute("SHOW MASTER STATUS")
 	if err != nil {
-		return mysql.Position{"", 0}, errors.Trace(err)
+		return mysql.Position{}, errors.Trace(err)
 	}
 
 	name, _ := rr.GetString(0, 0)
 	pos, _ := rr.GetInt(0, 1)
 
-	return mysql.Position{name, uint32(pos)}, nil
+	return mysql.Position{Name: name, Pos: uint32(pos)}, nil
 }
 
 func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {

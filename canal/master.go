@@ -59,5 +59,8 @@ func (m *masterInfo) GTIDSet() mysql.GTIDSet {
 	m.RLock()
 	defer m.RUnlock()
 
-	return m.gset
+	if m.gset == nil {
+		return nil
+	}
+	return m.gset.Clone()
 }
