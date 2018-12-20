@@ -203,7 +203,7 @@ func (b *BinlogSyncer) registerSlave() error {
 	log.Infof("register slave for master server %s", addr)
 	var err error
 	b.c, err = client.Connect(addr, b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
-		c.TLSConfig = b.cfg.TLSConfig
+		c.SetTLSConfig(b.cfg.TLSConfig)
 	})
 	if err != nil {
 		return errors.Trace(err)
