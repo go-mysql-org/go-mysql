@@ -8,10 +8,10 @@
   version = "v0.3.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/go-sql-driver/mysql"
   packages = ["."]
-  revision = "a0583e0143b1624142adab07e0e97fe106d99561"
-  version = "v1.3.0"
+  revision = "99ff426eb706cffe92ff3d058e168b278cabf7c7"
 
 [[projects]]
   branch = "master"
@@ -43,8 +43,8 @@
 [[projects]]
   name = "github.com/shopspring/decimal"
   packages = ["."]
-  revision = "69b3a8ad1f5f2c8bd855cb6506d18593064a346b"
-  version = "1.0.1"
+  revision = "cd690d0c9e2447b1ef2a129a6b7b49077da89b8e"
+  version = "1.1.0"
 
 [[projects]]
   branch = "master"
@@ -64,9 +64,15 @@
   ]
   revision = "a4d157e46fa3e08b7e7ff329af341fa3ff86c02c"
 
+[[projects]]
+  name = "google.golang.org/appengine"
+  packages = ["cloudsql"]
+  revision = "b1f26356af11148e710935ed1ac8a7f5702c7612"
+  version = "v1.1.0"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3a6f74dc90e82303c48131160fe66213a85d53581b2a0e0c7b36a8df0463fdd0"
+  inputs-digest = "a1f9939938a58551bbb3f19411c9d1386995d36296de6f6fb5d858f5923db85e"
   solver-name = "gps-cdcl"
   solver-version = 1

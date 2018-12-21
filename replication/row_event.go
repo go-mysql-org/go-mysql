@@ -71,7 +71,7 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	var err error
 	var metaData []byte
-	if metaData, _, n, err = LengthEnodedString(data[pos:]); err != nil {
+	if metaData, _, n, err = LengthEncodedString(data[pos:]); err != nil {
 		return errors.Trace(err)
 	}
 
