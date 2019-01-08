@@ -20,6 +20,7 @@ type Dumper struct {
 	Addr     string
 	User     string
 	Password string
+	Protocol string
 
 	// Will override Databases
 	Tables  []string
@@ -141,6 +142,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 	if d.maxAllowedPacket > 0 {
 		// mysqldump param should be --max-allowed-packet=%dM not be --max_allowed_packet=%dM
 		args = append(args, fmt.Sprintf("--max-allowed-packet=%dM", d.maxAllowedPacket))
+	}
+
+	if d.Protocol != "" {
+		args = append(args, fmt.Sprintf("--protocol=%s", d.Protocol))
 	}
 
 	args = append(args, "--single-transaction")
