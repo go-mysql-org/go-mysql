@@ -95,7 +95,7 @@ You must use ROW format for binlog, full binlog row image is preferred, because 
 
 A simple example:
 
-```
+```go
 cfg := NewDefaultConfig()
 cfg.Addr = "127.0.0.1:3306"
 cfg.User = "root"
@@ -228,7 +228,7 @@ Although there are many companies use MySQL 5.0 - 5.5, I think upgrade MySQL to 
 
 Driver is the package that you can use go-mysql with go database/sql like other drivers. A simple example:
 
-```
+```go
 package main
 
 import (
