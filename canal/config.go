@@ -7,7 +7,7 @@ import (
 	"crypto/tls"
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/bburket/go-mysql/mysql"
 )
 
 type DumpConfig struct {

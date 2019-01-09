@@ -5,7 +5,7 @@ import (
 	"net"
 
 	"github.com/juju/errors"
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/bburket/go-mysql/mysql"
 )
 
 // Limiatation

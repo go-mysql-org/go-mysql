@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/bburket/go-mysql/canal"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/bburket/go-mysql/mysql"
 )
 
 var host = flag.String("host", "127.0.0.1", "MySQL host")

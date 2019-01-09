@@ -14,9 +14,9 @@ import (
 	"github.com/bburket/go-mysql/client"
 	"github.com/bburket/go-mysql/replication"
 	"github.com/juju/errors"
-	"github.com/siddontang/go-mysql/dump"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/schema"
+	"github.com/bburket/go-mysql/dump"
+	"github.com/bburket/go-mysql/mysql"
+	"github.com/bburket/go-mysql/schema"
 	log "github.com/sirupsen/logrus"
 )
 

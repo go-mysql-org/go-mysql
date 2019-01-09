@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/bburket/go-mysql/mysql"
 )
 
 // Unlick mysqldump, Dumper is designed for parsing and syning data easily.

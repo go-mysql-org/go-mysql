@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/packet"
+	. "github.com/bburket/go-mysql/mysql"
+	"github.com/bburket/go-mysql/packet"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -8,8 +8,8 @@ import (
 	"github.com/bburket/go-mysql/replication"
 	"github.com/juju/errors"
 	"github.com/satori/go.uuid"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/schema"
+	"github.com/bburket/go-mysql/mysql"
+	"github.com/bburket/go-mysql/schema"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
-	"github.com/siddontang/go-mysql/schema"
+	"github.com/bburket/go-mysql/schema"
 )
 
 const (

@@ -13,7 +13,7 @@ import (
 	"github.com/bburket/go-mysql/client"
 	"github.com/juju/errors"
 	"github.com/satori/go.uuid"
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/bburket/go-mysql/mysql"
 	log "github.com/sirupsen/logrus"
 )
 
