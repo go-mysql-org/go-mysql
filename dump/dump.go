@@ -70,6 +70,10 @@ func (d *Dumper) SetCharset(charset string) {
 	d.Charset = charset
 }
 
+func (d *Dumper) SetProtocol(protocol string) {
+	d.Protocol = protocol
+}
+
 func (d *Dumper) SetWhere(where string) {
 	d.Where = where
 }
