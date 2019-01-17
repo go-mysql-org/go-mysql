@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 

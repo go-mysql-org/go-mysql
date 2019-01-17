@@ -3,7 +3,7 @@ package mysql
 import (
 	"fmt"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 )
 
 var (

@@ -34,8 +34,8 @@
   branch = "master"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/juju/errors"
+  name = "github.com/pingcap/errors"
+  version = "v0.11.0"
 
 [[constraint]]
   name = "github.com/satori/go.uuid"

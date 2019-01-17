@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
 	. "github.com/siddontang/go-mysql/mysql"
