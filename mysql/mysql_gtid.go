@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go/hack"
 )
@@ -430,7 +430,7 @@ func (s *MysqlGTIDSet) Encode() []byte {
 
 	binary.Write(&buf, binary.LittleEndian, uint64(len(s.Sets)))
 
-	for i, _ := range s.Sets {
+	for i := range s.Sets {
 		s.Sets[i].encode(&buf)
 	}
 

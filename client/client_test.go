@@ -6,14 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/juju/errors"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/test_util/test_keys"
 
 	"github.com/siddontang/go-mysql/mysql"
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL server host")
+
 // We cover the whole range of MySQL server versions using docker-compose to bind them to different ports for testing.
 // MySQL is constantly updating auth plugin to make it secure:
 // starting from MySQL 8.0.4, a new auth plugin is introduced, causing plain password auth to fail with error:
@@ -134,9 +135,9 @@ func (s *clientTestSuite) TestConn_TLS_Certificate(c *C) {
 	if err == nil {
 		c.Fatal("expected error")
 	}
-	if !strings.Contains(errors.Details(err), "certificate is not valid for any names") &&
-		!strings.Contains(errors.Details(err), "certificate is valid for") {
-		c.Fatalf("expected errors for server name verification, but got unknown error: %s", errors.Details(err))
+	if !strings.Contains(errors.ErrorStack(err), "certificate is not valid for any names") &&
+		!strings.Contains(errors.ErrorStack(err), "certificate is valid for") {
+		c.Fatalf("expected errors for server name verification, but got unknown error: %s", errors.ErrorStack(err))
 	}
 }
 

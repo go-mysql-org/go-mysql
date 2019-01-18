@@ -49,6 +49,6 @@ func (h *NullHandler) Write(b []byte) (n int, err error) {
 }
 
 // Close implements Handler interface
-func (h *NullHandler) Close() {
-
+func (h *NullHandler) Close() error {
+	return nil
 }
