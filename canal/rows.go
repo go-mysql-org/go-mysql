@@ -3,8 +3,8 @@ package canal
 import (
 	"fmt"
 
+	"github.com/bytewatch/dolphinbeat/schema"
 	"github.com/siddontang/go-mysql/replication"
-	"github.com/siddontang/go-mysql/schema"
 )
 
 // The action name for sync.
@@ -16,7 +16,7 @@ const (
 
 // RowsEvent is the event for row replication.
 type RowsEvent struct {
-	Table  *schema.Table
+	Table  *schema.TableDef
 	Action string
 	// changed row list
 	// binlog has three update event version, v0, v1 and v2.
@@ -28,7 +28,7 @@ type RowsEvent struct {
 	Header *replication.EventHeader
 }
 
-func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, header *replication.EventHeader) *RowsEvent {
+func newRowsEvent(table *schema.TableDef, action string, rows [][]interface{}, header *replication.EventHeader) *RowsEvent {
 	e := new(RowsEvent)
 
 	e.Table = table
@@ -45,12 +45,19 @@ func (r *RowsEvent) handleUnsigned() {
 	// Handle Unsigned Columns here, for binlog replication, we can't know the integer is unsigned or not,
 	// so we use int type but this may cause overflow outside sometimes, so we must convert to the really .
 	// unsigned type
-	if len(r.Table.UnsignedColumns) == 0 {
+	var unsignedColumns []int
+	for idx, column := range r.Table.Columns {
+		if column.Unsigned {
+			unsignedColumns = append(unsignedColumns, idx)
+		}
+	}
+
+	if len(unsignedColumns) == 0 {
 		return
 	}
 
 	for i := 0; i < len(r.Rows); i++ {
-		for _, index := range r.Table.UnsignedColumns {
+		for _, index := range unsignedColumns {
 			switch t := r.Rows[i][index].(type) {
 			case int8:
 				r.Rows[i][index] = uint8(t)
@@ -71,5 +78,5 @@ func (r *RowsEvent) handleUnsigned() {
 
 // String implements fmt.Stringer interface.
 func (r *RowsEvent) String() string {
-	return fmt.Sprintf("%s %s %v", r.Action, r.Table, r.Rows)
+	return fmt.Sprintf("%s %v %v", r.Action, r.Table, r.Rows)
 }

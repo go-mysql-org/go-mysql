@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/bytewatch/dolphinbeat/schema"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -41,6 +42,24 @@ type DumpConfig struct {
 	Protocol string `toml:"protocol"`
 }
 
+type TrackerConfig struct {
+	// The charset_set_server of source mysql, we need
+	// this charset to handle ddl statement
+	CharsetServer string `toml:"charset_server"`
+
+	// Storage type to store schema data, may be boltdb or mysql
+	Storage string `toml:"storage"`
+
+	// Boltdb file path to store data
+	Dir string `toml:"dir"`
+
+	// MySQL info to connect
+	Addr     string `toml:"addr"`
+	User     string `toml:"user"`
+	Password string `toml:"password"`
+	Database string `toml:"database"`
+}
+
 type Config struct {
 	Addr     string `toml:"addr"`
 	User     string `toml:"user"`
@@ -60,10 +79,9 @@ type Config struct {
 	IncludeTableRegex []string `toml:"include_table_regex"`
 	ExcludeTableRegex []string `toml:"exclude_table_regex"`
 
-	// discard row event without table meta
-	DiscardNoMetaRowEvent bool `toml:"discard_no_meta_row_event"`
-
 	Dump DumpConfig `toml:"dump"`
+
+	Tracker TrackerConfig `toml:"schema_tracker"`
 
 	UseDecimal bool `toml:"use_decimal"`
 	ParseTime  bool `toml:"parse_time"`
@@ -107,6 +125,9 @@ func NewDefaultConfig() *Config {
 	c.Dump.ExecutionPath = "mysqldump"
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
+
+	c.Tracker.Storage = schema.StorageType_Boltdb
+	c.Tracker.Dir = "."
 
 	return c
 }

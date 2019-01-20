@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytewatch/dolphinbeat/schema"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/schema"
 )
 
 type dumpParseHandler struct {
@@ -27,6 +27,16 @@ func (h *dumpParseHandler) BinLog(name string, pos uint64) error {
 	return nil
 }
 
+func (h *dumpParseHandler) DDL(db string, statement string) error {
+	if err := h.c.ctx.Err(); err != nil {
+		return err
+	}
+	if err := h.c.tracker.Exec(db, statement); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (h *dumpParseHandler) Data(db string, table string, values []string) error {
 	if err := h.c.ctx.Err(); err != nil {
 		return err
@@ -35,9 +45,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 	tableInfo, err := h.c.GetTable(db, table)
 	if err != nil {
 		e := errors.Cause(err)
-		if e == ErrExcludedTable ||
-			e == schema.ErrTableNotExist ||
-			e == schema.ErrMissingTableMeta {
+		if e == ErrExcludedTable {
 			return nil
 		}
 		log.Errorf("get %s.%s information err: %v", db, table, err)
@@ -52,19 +60,23 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		} else if v == "_binary ''" {
 			vs[i] = []byte{}
 		} else if v[0] != '\'' {
-			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER {
+			if tableInfo.Columns[i].InnerType == schema.TypeShort ||
+				tableInfo.Columns[i].InnerType == schema.TypeInt24 ||
+				tableInfo.Columns[i].InnerType == schema.TypeLong ||
+				tableInfo.Columns[i].InnerType == schema.TypeLonglong {
 				n, err := strconv.ParseInt(v, 10, 64)
 				if err != nil {
 					return fmt.Errorf("parse row %v at %d error %v, int expected", values, i, err)
 				}
 				vs[i] = n
-			} else if tableInfo.Columns[i].Type == schema.TYPE_FLOAT {
+			} else if tableInfo.Columns[i].InnerType == schema.TypeFloat {
 				f, err := strconv.ParseFloat(v, 64)
 				if err != nil {
 					return fmt.Errorf("parse row %v at %d error %v, float expected", values, i, err)
 				}
 				vs[i] = f
-			} else if tableInfo.Columns[i].Type == schema.TYPE_DECIMAL {
+			} else if tableInfo.Columns[i].InnerType == schema.TypeDecimal ||
+				tableInfo.Columns[i].InnerType == schema.TypeNewDecimal {
 				if h.c.cfg.UseDecimal {
 					d, err := decimal.NewFromString(v)
 					if err != nil {
@@ -158,9 +170,6 @@ func (c *Canal) dump() error {
 
 	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 	c.master.Update(pos)
-	if err := c.eventHandler.OnPosSynced(pos, true); err != nil {
-		return errors.Trace(err)
-	}
 	var startPos fmt.Stringer = pos
 	if h.gset != nil {
 		c.master.UpdateGTIDSet(h.gset)
@@ -172,6 +181,8 @@ func (c *Canal) dump() error {
 }
 
 func (c *Canal) tryDump() error {
+	var err error
+
 	pos := c.master.Position()
 	gset := c.master.GTIDSet()
 	if (len(pos.Name) > 0 && pos.Pos > 0) ||
@@ -186,5 +197,29 @@ func (c *Canal) tryDump() error {
 		return nil
 	}
 
-	return c.dump()
+	// Reset schema info
+	err = c.tracker.Reset()
+	if err != nil {
+		return err
+	}
+
+	err = c.dump()
+	if err != nil {
+		return err
+	}
+
+	// Tell schema tracker to make a snapshot
+	pos = c.master.Position()
+	err = c.tracker.Persist(pos)
+	if err != nil {
+		return err
+	}
+
+	// If data and schema in backup file are persisted,
+	// we tell event handler to save the pos
+	if err = c.eventHandler.OnPosSynced(pos, true); err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }

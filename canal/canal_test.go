@@ -14,6 +14,9 @@ import (
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL host")
+var testPort = flag.Int("port", 3306, "MySQL port")
+var testUser = flag.String("user", "root", "MySQL user")
+var testPassword = flag.String("password", "", "MySQL password")
 
 func Test(t *testing.T) {
 	TestingT(t)
@@ -27,8 +30,9 @@ var _ = Suite(&canalTestSuite{})
 
 func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg := NewDefaultConfig()
-	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
-	cfg.User = "root"
+	cfg.Addr = fmt.Sprintf("%s:%d", *testHost, *testPort)
+	cfg.User = *testUser
+	cfg.Password = *testPassword
 	cfg.HeartbeatPeriod = 200 * time.Millisecond
 	cfg.ReadTimeout = 300 * time.Millisecond
 	cfg.Dump.ExecutionPath = "mysqldump"
@@ -60,8 +64,6 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 
 	s.execute(c, "DELETE FROM test.canal_test")
 	s.execute(c, "INSERT INTO test.canal_test (content, name) VALUES (?, ?), (?, ?), (?, ?)", "1", "a", `\0\ndsfasdf`, "b", "", "c")
-
-	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
 
 	s.c.SetEventHandler(&testEventHandler{c: c})
 	go func() {

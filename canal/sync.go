@@ -10,7 +10,6 @@ import (
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"github.com/siddontang/go-mysql/schema"
 )
 
 var (
@@ -81,14 +80,8 @@ func (c *Canal) runSyncBinlog() error {
 			// we only focus row based event
 			err = c.handleRowsEvent(ev)
 			if err != nil {
-				e := errors.Cause(err)
-				// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
-				if e != ErrExcludedTable &&
-					e != schema.ErrTableNotExist &&
-					e != schema.ErrMissingTableMeta {
-					log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
-					return errors.Trace(err)
-				}
+				log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+				return errors.Trace(err)
 			}
 			continue
 		case *replication.XIDEvent:
@@ -149,10 +142,14 @@ func (c *Canal) runSyncBinlog() error {
 
 			savePos = true
 			force = true
-			c.ClearTableCache(db, table)
-			log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
-			if err = c.eventHandler.OnTableChanged(string(db), string(table)); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
+
+			if err = c.eventHandler.OnTableChanged(string(db), string(table)); err != nil {
 				return errors.Trace(err)
+			}
+
+			// Track and replay this ddl
+			if err = c.trackDDL(string(db), string(e.Query), pos); err != nil {
+				return err
 			}
 
 			// Now we only handle Table Changed DDL, maybe we will support more later.
@@ -175,6 +172,42 @@ func (c *Canal) runSyncBinlog() error {
 	return nil
 }
 
+func (c *Canal) trackDDL(db string, query string, pos mysql.Position) error {
+	// Before track the ddl, we need to ensure all dml events before has synced,
+	// because once we have change the schmea, we don't know the old schema info
+	// related with old dml events.
+	err := c.runBeforeSchemaChangeHook(db, query)
+	if err != nil {
+		log.Errorf("run before_schema_change hook error: %s", err)
+		return errors.Trace(err)
+	}
+
+	for {
+		err = c.tracker.ExecAndPersist(db, query, mysql.Position{pos.Name, pos.Pos})
+		if err == nil {
+			return nil
+		}
+		if err != nil {
+			var skip bool
+			log.Errorf("exec and persist error: %s", err)
+			skip, err = c.runOnSchemaChangeFailedHook(db, query, err)
+			if err != nil {
+				log.Errorf("run on_schema_change_failed error: %s", err)
+				return errors.Trace(err)
+			}
+
+			if skip {
+				log.Warnf("skip a ddl statement: %s", query)
+				return nil
+			}
+			log.Warnf("try to execute ddl again...")
+		}
+	}
+
+	return nil
+
+}
+
 func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	ev := e.Event.(*replication.RowsEvent)
 
@@ -184,7 +217,10 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 
 	t, err := c.GetTable(schema, table)
 	if err != nil {
-		return err
+		if err != ErrExcludedTable {
+			return err
+		}
+		return nil
 	}
 	var action string
 	switch e.Header.EventType {

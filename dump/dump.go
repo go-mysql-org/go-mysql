@@ -160,9 +160,6 @@ func (d *Dumper) Dump(w io.Writer) error {
 	args = append(args, "--skip-opt")
 	args = append(args, "--quick")
 
-	// We only care about data
-	args = append(args, "--no-create-info")
-
 	// Multi row is easy for us to parse the data
 	args = append(args, "--skip-extended-insert")
 
@@ -197,6 +194,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 		// If we only dump some tables, the dump data will not have database name
 		// which makes us hard to parse, so here we add it manually.
 
+		w.Write([]byte(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;\n", d.TableDB)))
 		w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
 	}
 

@@ -20,16 +20,19 @@ type ParseHandler interface {
 	// Parse CHANGE MASTER TO MASTER_LOG_FILE=name, MASTER_LOG_POS=pos;
 	BinLog(name string, pos uint64) error
 
+	DDL(schema string, statement string) error
 	Data(schema string, table string, values []string) error
 }
 
 var binlogExp *regexp.Regexp
 var useExp *regexp.Regexp
+var ddlExp *regexp.Regexp
 var valuesExp *regexp.Regexp
 
 func init() {
 	binlogExp = regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
 	useExp = regexp.MustCompile("^USE `(.+)`;")
+	ddlExp = regexp.MustCompile("^CREATE\\s.*")
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
 }
 
@@ -40,7 +43,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 
 	var db string
 	var binlogParsed bool
-
+	sql := ""
 	for {
 		line, err := rb.ReadString('\n')
 		if err != nil && err != io.EOF {
@@ -54,12 +57,17 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 			return c == '\r' || c == '\n'
 		})
 
+		sql = sql + line
+		if line == "" || line[len(line)-1] != ';' {
+			continue
+		}
+
 		if parseBinlogPos && !binlogParsed {
-			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+			if m := binlogExp.FindAllStringSubmatch(sql, -1); len(m) == 1 {
 				name := m[0][1]
 				pos, err := strconv.ParseUint(m[0][2], 10, 64)
 				if err != nil {
-					return errors.Errorf("parse binlog %v err, invalid number", line)
+					return errors.Errorf("parse binlog %v err, invalid number", sql)
 				}
 
 				if err = h.BinLog(name, pos); err != nil && err != ErrSkip {
@@ -70,29 +78,36 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 			}
 		}
 
-		if m := useExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+		if m := useExp.FindAllStringSubmatch(sql, -1); len(m) == 1 {
 			db = m[0][1]
 		}
 
-		if m := valuesExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+		if m := ddlExp.FindAllStringSubmatch(sql, -1); len(m) == 1 {
+			if err = h.DDL(db, sql); err != nil {
+				return errors.Trace(err)
+			}
+		}
+
+		if m := valuesExp.FindAllStringSubmatch(sql, -1); len(m) == 1 {
 			table := m[0][1]
 
 			values, err := parseValues(m[0][2])
 			if err != nil {
-				return errors.Errorf("parse values %v err", line)
+				return errors.Errorf("parse values %v err", sql)
 			}
 
 			if err = h.Data(db, table, values); err != nil && err != ErrSkip {
 				return errors.Trace(err)
 			}
 		}
+		sql = ""
 	}
 
 	return nil
 }
 
 func parseValues(str string) ([]string, error) {
-	// values are seperated by comma, but we can not split using comma directly
+	// values are separated by comma, but we can not split using comma directly
 	// string is enclosed by single quote
 
 	// a simple implementation, may be more robust later.
