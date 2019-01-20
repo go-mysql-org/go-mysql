@@ -2,71 +2,108 @@
 
 
 [[projects]]
+  digest = "1:5d72bbcc9c8667b11c3dc3cbe681c5a6f71e5096744c0bf7726ab5c6425d5dc4"
   name = "github.com/BurntSushi/toml"
   packages = ["."]
-  revision = "b26d9c308763d68093482582cea63d69be07a0f0"
-  version = "v0.3.0"
-
-[[projects]]
-  name = "github.com/go-sql-driver/mysql"
-  packages = ["."]
-  revision = "a0583e0143b1624142adab07e0e97fe106d99561"
-  version = "v1.3.0"
+  pruneopts = "NUT"
+  revision = "3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005"
+  version = "v0.3.1"
 
 [[projects]]
   branch = "master"
+  digest = "1:dce58f88343bd78f4d32dd9601aab4fa5d9994fd2cafa185c51bbd858851cdf9"
+  name = "github.com/go-sql-driver/mysql"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "c45f530f8e7fe40f4687eaa50d0c8c5f1b66f9e0"
+
+[[projects]]
+  digest = "1:0c11e987235e8f37af4e9f24cca02754827d009e8b66cf24483b0006504f6045"
   name = "github.com/jmoiron/sqlx"
   packages = [
     ".",
-    "reflectx"
+    "reflectx",
   ]
-  revision = "2aeb6a910c2b94f2d5eb53d9895d80e27264ec41"
+  pruneopts = "NUT"
+  revision = "d161d7a76b5661016ad0b085869f77fd410f3e6a"
+  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
-  name = "github.com/juju/errors"
-  packages = ["."]
-  revision = "c7d06af17c68cd34c835053720b21f6549d9b0ee"
-
-[[projects]]
-  branch = "master"
+  digest = "1:ba60c477d0e46a3574c4f7f7aef680439c8e4ac2abaeea8139054f447bc7b00f"
   name = "github.com/pingcap/check"
   packages = ["."]
-  revision = "1c287c953996ab3a0bf535dba9d53d809d3dc0b6"
+  pruneopts = "NUT"
+  revision = "67f458068fc864dabf17e38d4d337f28430d13ed"
 
 [[projects]]
+  digest = "1:4b96ce0f151b10c52b1d6876c179e9a6d2329f98939c4cf8148daaf27f981413"
+  name = "github.com/pingcap/errors"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "1176802fff62540cc87d289bd40c52a2d6b2ea16"
+  version = "v0.11.0"
+
+[[projects]]
+  digest = "1:6bc0652ea6e39e22ccd522458b8bdd8665bf23bdc5a20eec90056e4dc7e273ca"
   name = "github.com/satori/go.uuid"
   packages = ["."]
+  pruneopts = "NUT"
   revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
   version = "v1.2.0"
 
 [[projects]]
+  digest = "1:11afe1ad32273aeda2ff5e80317638da5006aff881263b995038900a89494eff"
   name = "github.com/shopspring/decimal"
   packages = ["."]
-  revision = "69b3a8ad1f5f2c8bd855cb6506d18593064a346b"
-  version = "1.0.1"
+  pruneopts = "NUT"
+  revision = "cd690d0c9e2447b1ef2a129a6b7b49077da89b8e"
+  version = "1.1.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:867b32924d64471acb59c4a14aa1ede13737cc1482eed26c5c65bd004a0e5913"
   name = "github.com/siddontang/go"
   packages = [
     "hack",
-    "sync2"
+    "sync2",
   ]
-  revision = "2b7082d296ba89ae7ead0f977816bddefb65df9d"
+  pruneopts = "NUT"
+  revision = "bdc77568d726a8702315ec4eafda030b6abc4f43"
 
 [[projects]]
   branch = "master"
+  digest = "1:6336d25b225c6ec8733bb33d77249c22d41e6ee3adafa89313de71ade2551b7f"
   name = "github.com/siddontang/go-log"
   packages = [
     "log",
-    "loggers"
+    "loggers",
   ]
-  revision = "a4d157e46fa3e08b7e7ff329af341fa3ff86c02c"
+  pruneopts = "NUT"
+  revision = "8d05993dda0722163e59b0e79e8c6dda6c38d5c0"
+
+[[projects]]
+  digest = "1:c25289f43ac4a68d88b02245742347c94f1e108c534dda442188015ff80669b3"
+  name = "google.golang.org/appengine"
+  packages = ["cloudsql"]
+  pruneopts = "NUT"
+  revision = "e9657d882bb81064595ca3b56cbe2546bbabf7b1"
+  version = "v1.4.0"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3a6f74dc90e82303c48131160fe66213a85d53581b2a0e0c7b36a8df0463fdd0"
+  input-imports = [
+    "github.com/BurntSushi/toml",
+    "github.com/go-sql-driver/mysql",
+    "github.com/jmoiron/sqlx",
+    "github.com/pingcap/check",
+    "github.com/pingcap/errors",
+    "github.com/satori/go.uuid",
+    "github.com/shopspring/decimal",
+    "github.com/siddontang/go-log/log",
+    "github.com/siddontang/go/hack",
+    "github.com/siddontang/go/sync2",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

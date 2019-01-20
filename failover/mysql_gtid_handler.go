@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 

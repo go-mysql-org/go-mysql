@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -12,13 +13,25 @@ import (
 // -----------------------------------------------------------------------
 // Test suite registry.
 
-var allSuites []interface{}
+var (
+	allParallelSuites []interface{}
+	allSerialSuites   []interface{}
+	)
+
 
 // Suite registers the given value as a test suite to be run. Any methods
 // starting with the Test prefix in the given value will be considered as
 // a test method.
 func Suite(suite interface{}) interface{} {
-	allSuites = append(allSuites, suite)
+	allParallelSuites = append(allParallelSuites, suite)
+	return suite
+}
+
+// SerialSuites registers the given value as a test suite to be run serially. Any methods
+// starting with the Test prefix in the given value will be considered as
+// a test method.
+func SerialSuites(suite interface{}) interface{} {
+	allSerialSuites = append(allSerialSuites, suite)
 	return suite
 }
 
@@ -43,6 +56,8 @@ var (
 	newListFlag    = flag.Bool("check.list", false, "List the names of all tests that will be run")
 	newWorkFlag    = flag.Bool("check.work", false, "Display and do not remove the test working directory")
 	newExcludeFlag = flag.String("check.exclude", "", "Regular expression to exclude tests to run")
+
+	CustomParallelSuiteFlag = flag.Bool("check.p", false, "Run suites in parallel")
 )
 
 var CustomVerboseFlag bool
@@ -84,10 +99,41 @@ func TestingT(testingT *testing.T) {
 // provided run configuration.
 func RunAll(runConf *RunConf) *Result {
 	result := Result{}
-	for _, suite := range allSuites {
+	if !*CustomParallelSuiteFlag {
+		// run all suites serially.
+		for _, suite := range allParallelSuites {
+			result.Add(Run(suite, runConf))
+		}
+
+		for _, suite := range allSerialSuites {
+			result.Add(Run(suite, runConf))
+		}
+		return &result
+	}
+
+	wg := sync.WaitGroup{}
+	notifyRunningSuitesCh := make(chan struct{})
+	suiteRunners := make([]*suiteRunner, 0, len(allParallelSuites))
+	for _, suite := range allParallelSuites {
+		suiteRunners = append(suiteRunners, parallelRun(suite, runConf, &wg, notifyRunningSuitesCh))
+	}
+	close(notifyRunningSuitesCh)
+	wg.Wait()
+	for _, runner := range suiteRunners {
+		ret := &runner.tracker.result
+		result.Add(ret)
+	}
+
+	for _, suite := range allSerialSuites {
 		result.Add(Run(suite, runConf))
 	}
 	return &result
+}
+
+func parallelRun(suite interface{}, runConf *RunConf, wg *sync.WaitGroup, notifyRunningSuitesCh chan struct{}) *suiteRunner {
+	runner := newSuiteRunner(suite, runConf)
+	runner.asyncRun(wg, notifyRunningSuitesCh)
+	return runner
 }
 
 // Run runs the provided test suite using the provided run configuration.
@@ -100,7 +146,11 @@ func Run(suite interface{}, runConf *RunConf) *Result {
 // Suite function that will be run with the provided run configuration.
 func ListAll(runConf *RunConf) []string {
 	var names []string
-	for _, suite := range allSuites {
+	for _, suite := range allParallelSuites {
+		names = append(names, List(suite, runConf)...)
+	}
+
+	for _, suite := range allSerialSuites {
 		names = append(names, List(suite, runConf)...)
 	}
 	return names

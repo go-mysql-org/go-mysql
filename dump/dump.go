@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
 	. "github.com/siddontang/go-mysql/mysql"
 )
@@ -20,6 +20,7 @@ type Dumper struct {
 	Addr     string
 	User     string
 	Password string
+	Protocol string
 
 	// Will override Databases
 	Tables  []string
@@ -67,6 +68,10 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 
 func (d *Dumper) SetCharset(charset string) {
 	d.Charset = charset
+}
+
+func (d *Dumper) SetProtocol(protocol string) {
+	d.Protocol = protocol
 }
 
 func (d *Dumper) SetWhere(where string) {
@@ -121,10 +126,14 @@ func (d *Dumper) Dump(w io.Writer) error {
 	args := make([]string, 0, 16)
 
 	// Common args
-	seps := strings.Split(d.Addr, ":")
-	args = append(args, fmt.Sprintf("--host=%s", seps[0]))
-	if len(seps) > 1 {
-		args = append(args, fmt.Sprintf("--port=%s", seps[1]))
+	if strings.Contains(d.Addr, "/") {
+		args = append(args, fmt.Sprintf("--socket=%s", d.Addr))
+	} else {
+		seps := strings.SplitN(d.Addr, ":", 2)
+		args = append(args, fmt.Sprintf("--host=%s", seps[0]))
+		if len(seps) > 1 {
+			args = append(args, fmt.Sprintf("--port=%s", seps[1]))
+		}
 	}
 
 	args = append(args, fmt.Sprintf("--user=%s", d.User))
@@ -137,6 +146,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 	if d.maxAllowedPacket > 0 {
 		// mysqldump param should be --max-allowed-packet=%dM not be --max_allowed_packet=%dM
 		args = append(args, fmt.Sprintf("--max-allowed-packet=%dM", d.maxAllowedPacket))
+	}
+
+	if d.Protocol != "" {
+		args = append(args, fmt.Sprintf("--protocol=%s", d.Protocol))
 	}
 
 	args = append(args, "--single-transaction")

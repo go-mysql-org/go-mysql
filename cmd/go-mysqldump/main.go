@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/dump"
 )
 

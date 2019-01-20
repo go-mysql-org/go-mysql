@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -36,6 +36,9 @@ type DumpConfig struct {
 
 	// Set to change the default max_allowed_packet size
 	MaxAllowedPacketMB int `toml:"max_allowed_packet_mb"`
+
+	// Set to change the default protocol to connect with
+	Protocol string `toml:"protocol"`
 }
 
 type Config struct {

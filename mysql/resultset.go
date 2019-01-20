@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 )
 
@@ -28,7 +28,7 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 	var n int = 0
 
 	for i := range f {
-		v, isNull, n, err = LengthEnodedString(p[pos:])
+		v, isNull, n, err = LengthEncodedString(p[pos:])
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -151,7 +151,7 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			MYSQL_TYPE_BIT, MYSQL_TYPE_ENUM, MYSQL_TYPE_SET, MYSQL_TYPE_TINY_BLOB,
 			MYSQL_TYPE_MEDIUM_BLOB, MYSQL_TYPE_LONG_BLOB, MYSQL_TYPE_BLOB,
 			MYSQL_TYPE_VAR_STRING, MYSQL_TYPE_STRING, MYSQL_TYPE_GEOMETRY:
-			v, isNull, n, err = LengthEnodedString(p[pos:])
+			v, isNull, n, err = LengthEncodedString(p[pos:])
 			pos += n
 			if err != nil {
 				return nil, errors.Trace(err)

@@ -62,17 +62,13 @@ type Logger struct {
 	// TODO: support logger.Contextual
 	loggers.Advanced
 
-	sync.Mutex
-
 	level Level
 	flag  int
 
+	hLock   sync.Mutex
 	handler Handler
 
-	quit chan struct{}
-	msg  chan []byte
-
-	bufs [][]byte
+	bufs sync.Pool
 }
 
 // New creates a logger with specified handler and flag
@@ -84,13 +80,11 @@ func New(handler Handler, flag int) *Logger {
 
 	l.flag = flag
 
-	l.quit = make(chan struct{})
-
-	l.msg = make(chan []byte, 1024)
-
-	l.bufs = make([][]byte, 0, 16)
-
-	go l.run()
+	l.bufs = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 0, 1024)
+		},
+	}
 
 	return l
 }
@@ -105,49 +99,11 @@ func newStdHandler() *StreamHandler {
 	return h
 }
 
-func (l *Logger) run() {
-	for {
-		select {
-		case msg := <-l.msg:
-			l.handler.Write(msg)
-			l.putBuf(msg)
-		case <-l.quit:
-			l.handler.Close()
-		}
-	}
-}
-
-func (l *Logger) popBuf() []byte {
-	l.Lock()
-	var buf []byte
-	if len(l.bufs) == 0 {
-		buf = make([]byte, 0, 1024)
-	} else {
-		buf = l.bufs[len(l.bufs)-1]
-		l.bufs = l.bufs[0 : len(l.bufs)-1]
-	}
-	l.Unlock()
-
-	return buf
-}
-
-func (l *Logger) putBuf(buf []byte) {
-	l.Lock()
-	if len(l.bufs) < maxBufPoolSize {
-		buf = buf[0:0]
-		l.bufs = append(l.bufs, buf)
-	}
-	l.Unlock()
-}
-
 // Close closes the logger
 func (l *Logger) Close() {
-	if l.quit == nil {
-		return
-	}
-
-	close(l.quit)
-	l.quit = nil
+	l.hLock.Lock()
+	defer l.hLock.Unlock()
+	l.handler.Close()
 }
 
 // SetLevel sets log level, any log level less than it will not log
@@ -182,7 +138,9 @@ func (l *Logger) Output(callDepth int, level Level, msg string) {
 		return
 	}
 
-	buf := l.popBuf()
+	buf := l.bufs.Get().([]byte)
+	buf = buf[0:0]
+	defer l.bufs.Put(buf)
 
 	if l.flag&Ltime > 0 {
 		now := time.Now().Format(timeFormat)
@@ -222,7 +180,10 @@ func (l *Logger) Output(callDepth int, level Level, msg string) {
 	if len(msg) == 0 || msg[len(msg)-1] != '\n' {
 		buf = append(buf, '\n')
 	}
-	l.msg <- buf
+
+	l.hLock.Lock()
+	l.handler.Write(buf)
+	l.hLock.Unlock()
 }
 
 // Fatal records the log with fatal level and exits
