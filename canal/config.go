@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/bytewatch/dolphinbeat/schema"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/schema"
 )
 
 type DumpConfig struct {
