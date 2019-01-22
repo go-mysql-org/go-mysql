@@ -1,5 +1,8 @@
 all: build
 
+GO111MODULE=on
+export export
+
 build:
 	go build -o bin/go-mysqlbinlog cmd/go-mysqlbinlog/main.go 
 	go build -o bin/go-mysqldump cmd/go-mysqldump/main.go 
