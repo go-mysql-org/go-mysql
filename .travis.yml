@@ -28,6 +28,8 @@ before_install:
 
   - mysql -e "CREATE DATABASE IF NOT EXISTS test;" -uroot
 
+env:
+  - GO111MODULE=on
 
 script:
   - make test
