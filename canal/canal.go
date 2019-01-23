@@ -357,16 +357,17 @@ func (c *Canal) checkBinlogRowFormat() error {
 
 func (c *Canal) prepareSyncer() error {
 	cfg := replication.BinlogSyncerConfig{
-		ServerID:        c.cfg.ServerID,
-		Flavor:          c.cfg.Flavor,
-		User:            c.cfg.User,
-		Password:        c.cfg.Password,
-		Charset:         c.cfg.Charset,
-		HeartbeatPeriod: c.cfg.HeartbeatPeriod,
-		ReadTimeout:     c.cfg.ReadTimeout,
-		UseDecimal:      c.cfg.UseDecimal,
-		ParseTime:       c.cfg.ParseTime,
-		SemiSyncEnabled: c.cfg.SemiSyncEnabled,
+		ServerID:             c.cfg.ServerID,
+		Flavor:               c.cfg.Flavor,
+		User:                 c.cfg.User,
+		Password:             c.cfg.Password,
+		Charset:              c.cfg.Charset,
+		HeartbeatPeriod:      c.cfg.HeartbeatPeriod,
+		ReadTimeout:          c.cfg.ReadTimeout,
+		UseDecimal:           c.cfg.UseDecimal,
+		ParseTime:            c.cfg.ParseTime,
+		SemiSyncEnabled:      c.cfg.SemiSyncEnabled,
+		MaxReconnectAttempts: c.cfg.MaxReconnectAttempts,
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {

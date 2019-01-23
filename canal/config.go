@@ -88,6 +88,10 @@ type Config struct {
 
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool `toml:"semi_sync_enabled"`
+
+	// Set to change the maximum number of attempts to re-establish a broken
+	// connection
+	MaxReconnectAttempts int `toml:"max_reconnect_attempts"`
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
