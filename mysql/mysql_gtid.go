@@ -108,7 +108,7 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 	return n
 }
 
-// Return true if sub in s
+// Contain returns true if sub in s
 func (s IntervalSlice) Contain(sub IntervalSlice) bool {
 	j := 0
 	for i := 0; i < len(sub); i++ {

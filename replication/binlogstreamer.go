@@ -36,7 +36,7 @@ func (s *BinlogStreamer) GetEvent(ctx context.Context) (*BinlogEvent, error) {
 	}
 }
 
-// Get the binlog event with starttime, if current binlog event timestamp smaller than specify starttime
+// GetEventWithStartTime gets the binlog event with starttime, if current binlog event timestamp smaller than specify starttime
 // return nil event
 func (s *BinlogStreamer) GetEventWithStartTime(ctx context.Context, startTime time.Time) (*BinlogEvent, error) {
 	if s.err != nil {

@@ -368,7 +368,7 @@ func (c *Canal) ClearTableCache(db []byte, table []byte) {
 	c.tableLock.Unlock()
 }
 
-// Check MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
+// CheckBinlogRowImage checks MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
 func (c *Canal) CheckBinlogRowImage(image string) error {
 	// need to check MySQL binlog row image? full, minimal or noblob?
 	// now only log

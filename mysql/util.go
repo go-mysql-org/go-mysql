@@ -50,7 +50,7 @@ func CalcPassword(scramble, password []byte) []byte {
 	return scramble
 }
 
-// Hash password using MySQL 8+ method (SHA256)
+// CalcCachingSha2Password: Hash password using MySQL 8+ method (SHA256)
 func CalcCachingSha2Password(scramble []byte, password string) []byte {
 	if len(password) == 0 {
 		return nil
@@ -89,7 +89,7 @@ func EncryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, 
 	return rsa.EncryptOAEP(sha1v, rand.Reader, pub, plain, nil)
 }
 
-// encodes a uint64 value and appends it to the given bytes slice
+// AppendLengthEncodedInteger: encodes a uint64 value and appends it to the given bytes slice
 func AppendLengthEncodedInteger(b []byte, n uint64) []byte {
 	switch {
 	case n <= 250:
@@ -122,7 +122,7 @@ func RandomBuf(size int) ([]byte, error) {
 	return buf, nil
 }
 
-// little endian
+// FixedLengthInt: little endian
 func FixedLengthInt(buf []byte) uint64 {
 	var num uint64 = 0
 	for i, b := range buf {
@@ -131,7 +131,7 @@ func FixedLengthInt(buf []byte) uint64 {
 	return num
 }
 
-// big endian
+// BFixedLengthInt: big endian
 func BFixedLengthInt(buf []byte) uint64 {
 	var num uint64 = 0
 	for i, b := range buf {
@@ -188,7 +188,7 @@ func PutLengthEncodedInt(n uint64) []byte {
 	return nil
 }
 
-// returns the string read as a bytes slice, whether the value is NULL,
+// LengthEncodedString returns the string read as a bytes slice, whether the value is NULL,
 // the number of bytes read and an error, in case the string is longer than
 // the input slice
 func LengthEncodedString(b []byte) ([]byte, bool, int, error) {
@@ -345,7 +345,7 @@ var (
 	EncodeMap [256]byte
 )
 
-// only support utf-8
+// Escape: only support utf-8
 func Escape(sql string) string {
 	dest := make([]byte, 0, 2*len(sql))
 
