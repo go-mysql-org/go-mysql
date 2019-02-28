@@ -165,7 +165,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	// Multi row is easy for us to parse the data
 	args = append(args, "--skip-extended-insert")
-
+	args = append(args, "--skip-tz-utc")
 	if d.hexBlob {
 		// Use hex for the binary type
 		args = append(args, "--hex-blob")

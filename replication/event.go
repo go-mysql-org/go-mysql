@@ -476,6 +476,7 @@ func (e *MariadbGTIDListEvent) Decode(data []byte) error {
 		e.GTIDs[i].ServerID = binary.LittleEndian.Uint32(data[pos:])
 		pos += 4
 		e.GTIDs[i].SequenceNumber = binary.LittleEndian.Uint64(data[pos:])
+		pos += 8
 	}
 
 	return nil
