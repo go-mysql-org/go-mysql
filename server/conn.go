@@ -37,7 +37,7 @@ type Conn struct {
 
 var baseConnID uint32 = 10000
 
-// create connection with default server settings
+// NewConn: create connection with default server settings
 func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
 	p := NewInMemoryProvider()
 	p.AddUser(user, password)
@@ -61,7 +61,7 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	return c, nil
 }
 
-// create connection with customized server settings
+// NewCustomizedConn: create connection with customized server settings
 func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
 	salt, _ := RandomBuf(20)
 	c := &Conn{

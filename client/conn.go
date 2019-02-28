@@ -112,13 +112,13 @@ func (c *Conn) Ping() error {
 	return nil
 }
 
-// use default SSL
+// UseSSL: use default SSL
 // pass to options when connect
 func (c *Conn) UseSSL(insecureSkipVerify bool) {
 	c.tlsConfig = &tls.Config{InsecureSkipVerify: insecureSkipVerify}
 }
 
-// use user-specified TLS config
+// SetTLSConfig: use user-specified TLS config
 // pass to options when connect
 func (c *Conn) SetTLSConfig(config *tls.Config) {
 	c.tlsConfig = config

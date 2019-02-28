@@ -368,7 +368,7 @@ func (ta *Table) fetchPrimaryKeyColumns() error {
 	return nil
 }
 
-// Get primary keys in one row for a table, a table may use multi fields as the PK
+// GetPKValues gets primary keys in one row for a table, a table may use multi fields as the PK
 func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 	indexes := ta.PKColumns
 	if len(indexes) == 0 {
@@ -387,7 +387,7 @@ func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 	return values, nil
 }
 
-// Get term column's value
+// GetColumnValue gets term column's value
 func (ta *Table) GetColumnValue(column string, row []interface{}) (interface{}, error) {
 	index := ta.FindColumn(column)
 	if index == -1 {

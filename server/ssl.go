@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// generate TLS config for server side
+// NewServerTLSConfig: generate TLS config for server side
 // controlling the security level by authType
 func NewServerTLSConfig(caPem, certPem, keyPem []byte, authType tls.ClientAuthType) *tls.Config {
 	pool := x509.NewCertPool()

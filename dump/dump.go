@@ -82,7 +82,7 @@ func (d *Dumper) SetErrOut(o io.Writer) {
 	d.ErrOut = o
 }
 
-// In some cloud MySQL, we have no privilege to use `--master-data`.
+// SkipMasterData: In some cloud MySQL, we have no privilege to use `--master-data`.
 func (d *Dumper) SkipMasterData(v bool) {
 	d.masterDataSkipped = v
 }
@@ -209,7 +209,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 	return cmd.Run()
 }
 
-// Dump MySQL and parse immediately
+// DumpAndParse: Dump MySQL and parse immediately
 func (d *Dumper) DumpAndParse(h ParseHandler) error {
 	r, w := io.Pipe()
 

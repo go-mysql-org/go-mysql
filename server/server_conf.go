@@ -36,7 +36,7 @@ type Server struct {
 	cacheShaPassword  *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
 }
 
-// New mysql server with default settings.
+// NewDefaultServer: New mysql server with default settings.
 //
 // NOTES:
 // TLS support will be enabled by default with auto-generated CA and server certificates (however, you can still use
@@ -60,7 +60,7 @@ func NewDefaultServer() *Server {
 	}
 }
 
-// New mysql server with customized settings.
+// NewServer: New mysql server with customized settings.
 //
 // NOTES:
 // You can control the authentication methods and TLS settings here.

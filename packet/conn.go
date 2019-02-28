@@ -83,7 +83,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	return nil
 }
 
-// data already has 4 bytes header
+// WritePacket: data already has 4 bytes header
 // will modify data inplace
 func (c *Conn) WritePacket(data []byte) error {
 	length := len(data) - 4
@@ -121,7 +121,7 @@ func (c *Conn) WritePacket(data []byte) error {
 	}
 }
 
-//  Client clear text authentication packet
+// WriteClearAuthPacket: Client clear text authentication packet
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
 func (c *Conn) WriteClearAuthPacket(password string) error {
 	// Calculate the packet length and add a tailing 0
@@ -135,7 +135,7 @@ func (c *Conn) WriteClearAuthPacket(password string) error {
 	return c.WritePacket(data)
 }
 
-//  Caching sha2 authentication. Public key request and send encrypted password
+// WritePublicKeyAuthPacket: Caching sha2 authentication. Public key request and send encrypted password
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
 func (c *Conn) WritePublicKeyAuthPacket(password string, cipher []byte) error {
 	// request public key
