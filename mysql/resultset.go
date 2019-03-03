@@ -63,6 +63,8 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 	return data, nil
 }
 
+// ParseBinary parses the binary format of data
+// see https://dev.mysql.com/doc/internals/en/binary-protocol-value.html
 func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 	data := make([]interface{}, len(f))
 
@@ -109,17 +111,7 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			pos += 2
 			continue
 
-		case MYSQL_TYPE_INT24:
-			if isUnsigned {
-				data[i] = ParseBinaryUint24(p[pos : pos+3])
-			} else {
-				data[i] = ParseBinaryInt24(p[pos : pos+3])
-			}
-			//3 byte
-			pos += 3
-			continue
-
-		case MYSQL_TYPE_LONG:
+		case MYSQL_TYPE_INT24, MYSQL_TYPE_LONG:
 			if isUnsigned {
 				data[i] = ParseBinaryUint32(p[pos : pos+4])
 			} else {
