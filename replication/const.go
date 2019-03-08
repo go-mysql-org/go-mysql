@@ -30,6 +30,13 @@ const (
 	BINLOG_DUMP_NON_BLOCK   uint16 = 0x01
 	BINLOG_THROUGH_POSITION uint16 = 0x02
 	BINLOG_THROUGH_GTID     uint16 = 0x04
+
+	// binlog dump flags for MariaDB.
+	// see https://mariadb.com/kb/en/library/com_binlog_dump/.
+	// in MySQL Internals Manual (https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html),
+	// BINLOG_THROUGH_POSITION also defined as 0x02, but it can not be found in the source code of MySQL 5.6/5.7.
+	// and in the source code of MariaDB 10.1, `#define BINLOG_SEND_ANNOTATE_ROWS_EVENT   2` exists.
+	BINLOG_SEND_ANNOTATE_ROWS_EVENT uint16 = 0x02
 )
 
 const (

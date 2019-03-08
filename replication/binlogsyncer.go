@@ -93,6 +93,11 @@ type BinlogSyncerConfig struct {
 	// For MariaDB, binlog_checksum was introduced since MariaDB 5.3, but CRC32 was set as default value since MariaDB 10.2.1 .
 	// https://mariadb.com/kb/en/library/replication-and-binary-log-server-system-variables/#binlog_checksum
 	VerifyChecksum bool
+
+	// Request the MariaDB master to send Annotate_rows_log_event, similar to `--replicate-annotate-row-events` option in MariaDB.
+	// see https://mariadb.com/kb/en/library/annotate_rows_log_event/#slave-option-replicate-annotate-row-events,
+	// and https://github.com/MariaDB/server/blob/bf71d263621c90cbddc7bde9bf071dae503f333f/sql/sql_repl.cc#L1809.
+	RequestMariaDBAnnotateRowsEvent bool
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -412,7 +417,11 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p Position) error {
 	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
 	pos += 4
 
-	binary.LittleEndian.PutUint16(data[pos:], BINLOG_DUMP_NEVER_STOP)
+	var flags = BINLOG_DUMP_NEVER_STOP
+	if b.cfg.Flavor == MariaDBFlavor && b.cfg.RequestMariaDBAnnotateRowsEvent {
+		flags |= BINLOG_SEND_ANNOTATE_ROWS_EVENT
+	}
+	binary.LittleEndian.PutUint16(data[pos:], flags)
 	pos += 2
 
 	binary.LittleEndian.PutUint32(data[pos:], b.cfg.ServerID)
