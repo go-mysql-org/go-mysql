@@ -94,13 +94,13 @@ type BinlogSyncerConfig struct {
 	// https://mariadb.com/kb/en/library/replication-and-binary-log-server-system-variables/#binlog_checksum
 	VerifyChecksum bool
 
-	// Flag used to send binglog dump event. Default 0, aka BINLOG_DUMP_NEVER_STOP.
+	// DumpCommandFlag is used to send binglog dump command. Default 0, aka BINLOG_DUMP_NEVER_STOP.
 	// For MySQL, BINLOG_DUMP_NEVER_STOP and BINLOG_DUMP_NON_BLOCK are available.
 	// https://dev.mysql.com/doc/internals/en/com-binlog-dump.html#binlog-dump-non-block
 	// For MariaDB, BINLOG_DUMP_NEVER_STOP, BINLOG_DUMP_NON_BLOCK and BINLOG_SEND_ANNOTATE_ROWS_EVENT are available.
 	// https://mariadb.com/kb/en/library/com_binlog_dump/
 	// https://mariadb.com/kb/en/library/annotate_rows_event/
-	DumpFlag uint16
+	DumpCommandFlag uint16
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -420,7 +420,7 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p Position) error {
 	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
 	pos += 4
 
-	binary.LittleEndian.PutUint16(data[pos:], b.cfg.DumpFlag)
+	binary.LittleEndian.PutUint16(data[pos:], b.cfg.DumpCommandFlag)
 	pos += 2
 
 	binary.LittleEndian.PutUint32(data[pos:], b.cfg.ServerID)
