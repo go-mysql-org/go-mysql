@@ -660,3 +660,73 @@ func (_ *testDecodeSuite) TestJsonNull(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rows.Rows[0][3], HasLen, 0)
 }
+
+func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
+	// Table:
+	// mysql> desc t11;
+	// +----------+--------------+------+-----+---------+-------------------+
+	// | Field    | Type         | Null | Key | Default | Extra             |
+	// +----------+--------------+------+-----+---------+-------------------+
+	// | id       | int(11)      | YES  |     | NULL    |                   |
+	// | cfg      | varchar(100) | YES  |     | NULL    |                   |
+	// | cfg_json | json         | YES  |     | NULL    | VIRTUAL GENERATED |
+	// | age      | int(11)      | YES  |     | NULL    |                   |
+	// +----------+--------------+------+-----+---------+-------------------+
+	// mysql> insert into t11(id, cfg) values (1, '{}');
+
+	// test json deserialization
+	// mysql> update t11 set cfg = '{"a":1234}' where id = 1;
+	// mysql> update test set cfg = '{}' where id = 1;
+
+	tableMapEventData := []byte("l\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x03t11\x00\x04\x03\x0f\xf5\x03\x03d\x00\x04\x0f")
+
+	tableMapEvent := new(TableMapEvent)
+	tableMapEvent.tableIDSize = 6
+	err := tableMapEvent.Decode(tableMapEventData)
+	c.Assert(err, IsNil)
+
+	rows := new(RowsEvent)
+	rows.tableIDSize = 6
+	rows.tables = make(map[uint64]*TableMapEvent)
+	rows.tables[tableMapEvent.TableID] = tableMapEvent
+	rows.Version = 2
+
+	data := []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[0][2], DeepEquals, []uint8("{}"))
+
+	// after MySQL 5.7.22
+	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+
+	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{\"a\":1234}"))
+	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+
+	// before MySQL 5.7.22
+	rows.ignoreJSONDecodeErr = true
+	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x01\x00\x0c\x00\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("null"))
+	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+
+	rows.ignoreJSONDecodeErr = false
+	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	// this value is wrong in binlog, but can be parsed without error
+	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+}

@@ -233,6 +233,7 @@ type RowsEvent struct {
 	parseTime               bool
 	timestampStringLocation *time.Location
 	useDecimal              bool
+	ignoreJSONDecodeErr     bool
 }
 
 func (e *RowsEvent) Decode(data []byte) error {
