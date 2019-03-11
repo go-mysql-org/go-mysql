@@ -177,7 +177,7 @@ func (c *Canal) tryDump() error {
 	if (len(pos.Name) > 0 && pos.Pos > 0) ||
 		(gset != nil && gset.String() != "") {
 		// we will sync with binlog name and position
-		log.Infof("skip dump, use last binlog replication pos %s or GTID set %s", pos, gset)
+		log.Infof("skip dump, use last binlog replication pos %s or GTID set %v", pos, gset)
 		return nil
 	}
 
