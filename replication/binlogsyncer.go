@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
@@ -93,6 +93,14 @@ type BinlogSyncerConfig struct {
 	// For MariaDB, binlog_checksum was introduced since MariaDB 5.3, but CRC32 was set as default value since MariaDB 10.2.1 .
 	// https://mariadb.com/kb/en/library/replication-and-binary-log-server-system-variables/#binlog_checksum
 	VerifyChecksum bool
+
+	// DumpCommandFlag is used to send binglog dump command. Default 0, aka BINLOG_DUMP_NEVER_STOP.
+	// For MySQL, BINLOG_DUMP_NEVER_STOP and BINLOG_DUMP_NON_BLOCK are available.
+	// https://dev.mysql.com/doc/internals/en/com-binlog-dump.html#binlog-dump-non-block
+	// For MariaDB, BINLOG_DUMP_NEVER_STOP, BINLOG_DUMP_NON_BLOCK and BINLOG_SEND_ANNOTATE_ROWS_EVENT are available.
+	// https://mariadb.com/kb/en/library/com_binlog_dump/
+	// https://mariadb.com/kb/en/library/annotate_rows_event/
+	DumpCommandFlag uint16
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -412,7 +420,7 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p Position) error {
 	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
 	pos += 4
 
-	binary.LittleEndian.PutUint16(data[pos:], BINLOG_DUMP_NEVER_STOP)
+	binary.LittleEndian.PutUint16(data[pos:], b.cfg.DumpCommandFlag)
 	pos += 2
 
 	binary.LittleEndian.PutUint32(data[pos:], b.cfg.ServerID)
