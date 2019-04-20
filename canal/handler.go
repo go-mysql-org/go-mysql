@@ -37,7 +37,7 @@ func (h *DummyEventHandler) OnPosSynced(mysql.Position, bool) error { return nil
 
 /* Add support for GTID at the end of a transaction and keep backward compatibility */
 func (h *DummyEventHandler) OnGTIDSynced(position mysql.GTIDSet, force bool) error { return nil }
-func (h *DummyEventHandler) String() string                         { return "DummyEventHandler" }
+func (h *DummyEventHandler) String() string                                        { return "DummyEventHandler" }
 
 // `SetEventHandler` registers the sync handler, you must register your
 // own handler before starting Canal.

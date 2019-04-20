@@ -93,8 +93,8 @@ func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql
 
 type testEventHandler struct {
 	DummyEventHandler
-	c                        *C
-	OnPosSyncedCalls         []string
+	c                *C
+	OnPosSyncedCalls []string
 }
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
@@ -106,12 +106,12 @@ func (h *testEventHandler) String() string {
 	return "testEventHandler"
 }
 
-func (h *testEventHandler)	OnPosSynced(p mysql.Position, f bool) error {
+func (h *testEventHandler) OnPosSynced(p mysql.Position, f bool) error {
 	OnPosSyncedCalls++
 	return nil
 }
 
-func (h *testEventHandler)	OnGTIDSynced(set mysql.GTIDSet, f bool) error {
+func (h *testEventHandler) OnGTIDSynced(set mysql.GTIDSet, f bool) error {
 	OnPosSyncedWithGTIDCalls++
 	return nil
 }
@@ -149,7 +149,7 @@ func (s *canalTestSuite) TestCanalFilter(c *C) {
 }
 
 func TestOnGTIDSynced(t *testing.T) {
-	if OnPosSyncedCalls != OnPosSyncedWithGTIDCalls{
+	if OnPosSyncedCalls != OnPosSyncedWithGTIDCalls {
 		t.Fatalf("Expected %d calls, got %d", OnPosSyncedCalls, OnPosSyncedWithGTIDCalls)
 	}
 }
