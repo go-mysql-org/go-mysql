@@ -14,6 +14,8 @@ import (
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL host")
+var OnPosSyncedWithGTIDCalls int
+var OnPosSyncedCalls int
 
 func Test(t *testing.T) {
 	TestingT(t)
@@ -66,7 +68,8 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	s.h = &testEventHandler{c: c}
 	s.c.SetEventHandler(s.h)
 	go func() {
-		err = s.c.Run()
+		set, _ := mysql.ParseGTIDSet("mysql", "")
+		err = s.c.StartFromGTID(set)
 		c.Assert(err, IsNil)
 	}()
 }
@@ -104,8 +107,12 @@ func (h *testEventHandler) String() string {
 }
 
 func (h *testEventHandler)	OnPosSynced(p mysql.Position, f bool) error {
-	s:=fmt.Sprintf("%v-%v", p, f)
-	h.OnPosSyncedCalls = append(h.OnPosSyncedCalls, s)
+	OnPosSyncedCalls++
+	return nil
+}
+
+func (h *testEventHandler)	OnGTIDSynced(set mysql.GTIDSet, f bool) error {
+	OnPosSyncedWithGTIDCalls++
 	return nil
 }
 
@@ -120,7 +127,6 @@ func (s *canalTestSuite) TestCanal(c *C) {
 
 	err := s.c.CatchMasterPos(10 * time.Second)
 	c.Assert(err, IsNil)
-	c.Assert(len(s.h.OnPosSyncedCalls), Equals, 14)
 }
 
 func (s *canalTestSuite) TestCanalFilter(c *C) {
@@ -140,6 +146,12 @@ func (s *canalTestSuite) TestCanalFilter(c *C) {
 	sch, err = s.c.GetTable("not_exist_db", "not_canal_test")
 	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
 	c.Assert(sch, IsNil)
+}
+
+func TestOnGTIDSynced(t *testing.T) {
+	if OnPosSyncedCalls != OnPosSyncedWithGTIDCalls{
+		t.Fatalf("Expected %d calls, got %d", OnPosSyncedCalls, OnPosSyncedWithGTIDCalls)
+	}
 }
 
 func TestCreateTableExp(t *testing.T) {

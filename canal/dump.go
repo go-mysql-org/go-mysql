@@ -138,6 +138,7 @@ func (c *Canal) dump() error {
 			return errors.Trace(err)
 		}
 		h.gset = gset
+		c.eventHandler.OnGTIDSynced(gset, true);
 	}
 
 	if c.cfg.Dump.SkipMasterData {
