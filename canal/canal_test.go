@@ -20,6 +20,7 @@ func Test(t *testing.T) {
 }
 
 type canalTestSuite struct {
+	h *testEventHandler
 	c *Canal
 }
 
@@ -62,8 +63,8 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	s.execute(c, "INSERT INTO test.canal_test (content, name) VALUES (?, ?), (?, ?), (?, ?)", "1", "a", `\0\ndsfasdf`, "b", "", "c")
 
 	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
-
-	s.c.SetEventHandler(&testEventHandler{c: c})
+	s.h = &testEventHandler{c: c}
+	s.c.SetEventHandler(s.h)
 	go func() {
 		err = s.c.Run()
 		c.Assert(err, IsNil)
@@ -89,8 +90,8 @@ func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql
 
 type testEventHandler struct {
 	DummyEventHandler
-
-	c *C
+	c                        *C
+	OnPosSyncedCalls         []string
 }
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
@@ -100,6 +101,12 @@ func (h *testEventHandler) OnRow(e *RowsEvent) error {
 
 func (h *testEventHandler) String() string {
 	return "testEventHandler"
+}
+
+func (h *testEventHandler)	OnPosSynced(p mysql.Position, f bool) error {
+	s:=fmt.Sprintf("%v-%v", p, f)
+	h.OnPosSyncedCalls = append(h.OnPosSyncedCalls, s)
+	return nil
 }
 
 func (s *canalTestSuite) TestCanal(c *C) {
@@ -113,6 +120,7 @@ func (s *canalTestSuite) TestCanal(c *C) {
 
 	err := s.c.CatchMasterPos(10 * time.Second)
 	c.Assert(err, IsNil)
+	c.Assert(len(s.h.OnPosSyncedCalls), Equals, 14)
 }
 
 func (s *canalTestSuite) TestCanalFilter(c *C) {

@@ -19,8 +19,10 @@ before_install:
   - "sudo service mysql stop || true"
   - "echo '[mysqld]'            | sudo tee /etc/mysql/conf.d/replication.cnf"
   - "echo 'server-id=1'         | sudo tee -a /etc/mysql/conf.d/replication.cnf"
-  - "echo 'log-bin=mysql'   | sudo tee -a /etc/mysql/conf.d/replication.cnf"
+  - "echo 'log-bin=mysql'       | sudo tee -a /etc/mysql/conf.d/replication.cnf"
   - "echo 'binlog-format = row' | sudo tee -a /etc/mysql/conf.d/replication.cnf"
+  - "echo 'gtid-mode = ON'      | sudo tee -a /etc/mysql/conf.d/replication.cnf"
+  - "echo 'enforce_gtid_consistency = ON' | sudo tee -a /etc/mysql/conf.d/replication.cnf"
 
   # Start mysql (avoid errors to have logs)
   - "sudo service mysql start || true"

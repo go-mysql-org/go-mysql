@@ -17,6 +17,8 @@ type EventHandler interface {
 	OnGTID(gtid mysql.GTIDSet) error
 	// OnPosSynced Use your own way to sync position. When force is true, sync position immediately.
 	OnPosSynced(pos mysql.Position, force bool) error
+	// OnPosSynced Sync position and GTID if desired
+	OnPosSyncedWithGTID(mysql.Position, mysql.GTIDSet, bool) error
 	String() string
 }
 
@@ -32,6 +34,11 @@ func (h *DummyEventHandler) OnRow(*RowsEvent) error                 { return nil
 func (h *DummyEventHandler) OnXID(mysql.Position) error             { return nil }
 func (h *DummyEventHandler) OnGTID(mysql.GTIDSet) error             { return nil }
 func (h *DummyEventHandler) OnPosSynced(mysql.Position, bool) error { return nil }
+
+/* Add support for GTID at the end of a transaction and keep backward compatibility */
+func (h *DummyEventHandler) OnPosSyncedWithGTID(position mysql.Position, set mysql.GTIDSet, force bool) error {
+	return h.OnPosSynced(position, force)
+}
 func (h *DummyEventHandler) String() string                         { return "DummyEventHandler" }
 
 // `SetEventHandler` registers the sync handler, you must register your

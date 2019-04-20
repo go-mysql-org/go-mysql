@@ -166,7 +166,7 @@ func (c *Canal) runSyncBinlog() error {
 		if savePos {
 			c.master.Update(pos)
 			c.master.UpdateTimestamp(ev.Header.Timestamp)
-			if err := c.eventHandler.OnPosSynced(pos, force); err != nil {
+			if err := c.eventHandler.OnPosSyncedWithGTID(pos, c.master.GTIDSet(),force); err != nil {
 				return errors.Trace(err)
 			}
 		}
