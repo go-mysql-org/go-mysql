@@ -117,7 +117,8 @@ type BinlogSyncer struct {
 
 	nextPos Position
 
-	gset GTIDSet
+	currGset GTIDSet
+	prevGset GTIDSet
 
 	running bool
 
@@ -379,7 +380,7 @@ func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 	log.Infof("begin to sync binlog from GTID set %s", gset)
 
-	b.gset = gset
+	b.prevGset = gset
 
 	b.m.Lock()
 	defer b.m.Unlock()
@@ -572,9 +573,9 @@ func (b *BinlogSyncer) retrySync() error {
 
 	b.parser.Reset()
 
-	if b.gset != nil {
-		log.Infof("begin to re-sync from %s", b.gset.String())
-		if err := b.prepareSyncGTID(b.gset); err != nil {
+	if b.prevGset != nil {
+		log.Infof("begin to re-sync from %s", b.prevGset.String())
+		if err := b.prepareSyncGTID(b.prevGset); err != nil {
 			return errors.Trace(err)
 		}
 	} else {
@@ -640,7 +641,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 			// we meet connection error, should re-connect again with
 			// last nextPos or nextGTID we got.
-			if len(b.nextPos.Name) == 0 && b.gset == nil {
+			if len(b.nextPos.Name) == 0 && b.prevGset == nil {
 				// we can't get the correct position, close.
 				s.closeWithError(err)
 				return
@@ -730,26 +731,44 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.nextPos.Pos = uint32(event.Position)
 		log.Infof("rotate to %s", b.nextPos)
 	case *GTIDEvent:
-		if b.gset == nil {
+		if b.prevGset == nil {
 			break
 		}
 		u, _ := uuid.FromBytes(event.SID)
-		err := b.gset.Update(fmt.Sprintf("%s:%d", u.String(), event.GNO))
-		if err != nil {
-			return errors.Trace(err)
+		if b.currGset == nil {
+			gset, err := ParseGTIDSet(MySQLFlavor, u.String())
+			if err != nil {
+				return errors.Trace(err)
+			}
+			b.currGset = gset
+		} else {
+			err := b.currGset.Update(fmt.Sprintf("%s:%d", u.String(), event.GNO))
+			if err != nil {
+				return errors.Trace(err)
+			}
 		}
 	case *MariadbGTIDEvent:
-		if b.gset == nil {
+		if b.prevGset == nil {
 			break
 		}
 		GTID := event.GTID
-		err := b.gset.Update(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
-		if err != nil {
-			return errors.Trace(err)
+		if b.currGset == nil {
+			gset, err := ParseGTIDSet(MariaDBFlavor, GTID.String())
+			if err != nil {
+				return errors.Trace(err)
+			}
+			b.currGset = gset
+		} else {
+			err := b.currGset.Update(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+			if err != nil {
+				return errors.Trace(err)
+			}
 		}
 	case *XIDEvent:
+		b.prevGset = b.currGset.Clone()
 		event.GSet = b.getGtidSet()
 	case *QueryEvent:
+		b.prevGset = b.currGset.Clone()
 		event.GSet = b.getGtidSet()
 	}
 
@@ -775,10 +794,10 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 }
 
 func (b *BinlogSyncer) getGtidSet() GTIDSet {
-	if b.gset == nil {
+	if b.prevGset == nil {
 		return nil
 	}
-	return b.gset.Clone()
+	return b.prevGset.Clone()
 }
 
 // LastConnectionID returns last connectionID.
