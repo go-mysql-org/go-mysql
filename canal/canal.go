@@ -46,6 +46,8 @@ type Canal struct {
 	includeTableRegex []*regexp.Regexp
 	excludeTableRegex []*regexp.Regexp
 
+	delay uint32
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -164,6 +166,10 @@ func (c *Canal) prepareDumper() error {
 	}
 
 	return nil
+}
+
+func (c *Canal) GetDelay() uint32 {
+	return c.delay
 }
 
 // Run will first try to dump all data from MySQL master `mysqldump`,
