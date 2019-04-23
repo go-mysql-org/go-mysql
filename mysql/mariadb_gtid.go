@@ -92,7 +92,7 @@ func (gtid *MariadbGTID) forward(newer *MariadbGTID) error {
 		| mysqld-bin.000001 | 2184 | Xid               |       112 |        2215 | COMMIT xid=116      |
 		| mysqld-bin.000001 | 2215 | Gtid              |       111 |        2257 | BEGIN GTID 0-111-6  |
 	*/
-	if newer.SequenceNumber <= gtid.SequenceNumber {
+	if newer.SequenceNumber < gtid.SequenceNumber {
 		log.Warnf("out of order binlog appears with gtid %s vs current position gtid %s", newer, gtid)
 	}
 
