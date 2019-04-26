@@ -2,10 +2,12 @@ package canal
 
 import (
 	"fmt"
-	"regexp"
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
+	_ "github.com/pingcap/tidb/types/parser_driver"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
@@ -14,11 +16,7 @@ import (
 )
 
 var (
-	expCreateTable   = regexp.MustCompile("(?i)^CREATE\\sTABLE(\\sIF\\sNOT\\sEXISTS)?\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
-	expAlterTable    = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
-	expRenameTable   = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s{1,}TO\\s.*?")
-	expDropTable     = regexp.MustCompile("(?i)^DROP\\sTABLE(\\sIF\\sEXISTS){0,1}\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}(?:$|\\s)")
-	expTruncateTable = regexp.MustCompile("(?i)^TRUNCATE\\s+(?:TABLE\\s+)?(?:`?([^`\\s]+)`?\\.`?)?([^`\\s]+)`?")
+	sqlParse = parser.New()
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -122,42 +120,38 @@ func (c *Canal) runSyncBinlog() error {
 			if e.GSet != nil {
 				c.master.UpdateGTIDSet(e.GSet)
 			}
-			var (
-				mb    [][]byte
-				db    []byte
-				table []byte
-			)
-			regexps := []regexp.Regexp{*expCreateTable, *expAlterTable, *expRenameTable, *expDropTable, *expTruncateTable}
-			for _, reg := range regexps {
-				mb = reg.FindSubmatch(e.Query)
-				if len(mb) != 0 {
-					break
-				}
-			}
-			mbLen := len(mb)
-			if mbLen == 0 {
+			stmts, _, err := sqlParse.Parse(string(e.Query), "", "")
+			if err != nil {
+				log.Errorf("parse query err %v", err)
 				continue
 			}
-
-			// the first last is table name, the second last is database name(if exists)
-			if len(mb[mbLen-2]) == 0 {
-				db = e.Schema
-			} else {
-				db = mb[mbLen-2]
-			}
-			table = mb[mbLen-1]
-
-			savePos = true
-			force = true
-			c.ClearTableCache(db, table)
-			log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
-			if err = c.eventHandler.OnTableChanged(string(db), string(table)); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
-				return errors.Trace(err)
-			}
-
-			// Now we only handle Table Changed DDL, maybe we will support more later.
-			if err = c.eventHandler.OnDDL(pos, e); err != nil {
-				return errors.Trace(err)
+			for _, stmt := range stmts {
+				switch t := stmt.(type) {
+				case *ast.RenameTableStmt:
+					for _, tableInfo := range t.TableToTables {
+						db := tableInfo.OldTable.Schema.String()
+						table := tableInfo.OldTable.Name.String()
+						c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+					}
+				case *ast.AlterTableStmt:
+					db := t.Table.Schema.String()
+					table := t.Table.Name.String()
+					c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+				case *ast.DropTableStmt:
+					for _, table := range t.Tables {
+						db := table.Schema.String()
+						table := table.Name.String()
+						c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+					}
+				case *ast.CreateTableStmt:
+					db := t.Table.Schema.String()
+					table := t.Table.Name.String()
+					c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+				case *ast.TruncateTableStmt:
+					db := t.Table.Schema.String()
+					table := t.Table.Name.String()
+					c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+				}
 			}
 		default:
 			continue
@@ -174,7 +168,24 @@ func (c *Canal) runSyncBinlog() error {
 
 	return nil
 }
+func (c *Canal) updateTable(db, table string, e *replication.QueryEvent, pos mysql.Position, ts uint32) (err error) {
+	c.ClearTableCache([]byte(db), []byte(table))
+	log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
+	if err = c.eventHandler.OnTableChanged(string(db), string(table)); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
+		return errors.Trace(err)
+	}
 
+	// Now we only handle Table Changed DDL, maybe we will support more later.
+	if err = c.eventHandler.OnDDL(pos, e); err != nil {
+		return errors.Trace(err)
+	}
+	c.master.Update(pos)
+	c.master.UpdateTimestamp(ts)
+	if err := c.eventHandler.OnPosSynced(pos, true); err != nil {
+		return errors.Trace(err)
+	}
+	return
+}
 func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	ev := e.Event.(*replication.RowsEvent)
 
