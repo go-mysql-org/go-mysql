@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	_ "github.com/pingcap/tidb/types/parser_driver"
 	"github.com/satori/go.uuid"
@@ -13,10 +12,6 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-)
-
-var (
-	sqlParse = parser.New()
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -120,7 +115,7 @@ func (c *Canal) runSyncBinlog() error {
 			if e.GSet != nil {
 				c.master.UpdateGTIDSet(e.GSet)
 			}
-			stmts, _, err := sqlParse.Parse(string(e.Query), "", "")
+			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 			if err != nil {
 				log.Errorf("parse query err %v", err)
 				continue

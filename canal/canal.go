@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
@@ -27,6 +28,7 @@ type Canal struct {
 
 	cfg *Config
 
+	parser     *parser.Parser
 	master     *masterInfo
 	dumper     *dump.Dumper
 	dumped     bool
@@ -62,7 +64,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	c.dumpDoneCh = make(chan struct{})
 	c.eventHandler = &DummyEventHandler{}
-
+	c.parser = parser.New()
 	c.tables = make(map[string]*schema.Table)
 	if c.cfg.DiscardNoMetaRowEvent {
 		c.errorTablesGetTime = make(map[string]time.Time)
