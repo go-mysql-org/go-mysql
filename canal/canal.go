@@ -3,6 +3,7 @@ package canal
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/format"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
@@ -20,6 +23,27 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
 )
+
+func init() {
+	ast.NewValueExpr = newValueExpr
+}
+
+type valueExpr struct {
+	ast.TexprNode
+}
+
+func newValueExpr(v interface{}) ast.ValueExpr                      { return &valueExpr{} }
+func (ve *valueExpr) SetValue(val interface{})                      {}
+func (ve *valueExpr) GetValue() interface{}                         { return nil }
+func (ve *valueExpr) GetDatumString() string                        { return "" }
+func (ve *valueExpr) GetString() string                             { return "" }
+func (ve *valueExpr) GetProjectionOffset() int                      { return 0 }
+func (ve *valueExpr) SetProjectionOffset(offset int)                {}
+func (ve *valueExpr) Restore(ctx *format.RestoreCtx) error          { return nil }
+func (ve *valueExpr) Accept(v ast.Visitor) (node ast.Node, ok bool) { return }
+func (ve *valueExpr) Text() string                                  { return "" }
+func (ve *valueExpr) SetText(text string)                           {}
+func (ve *valueExpr) Format(w io.Writer)                            {}
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
 // MySQL must open row format for binlog

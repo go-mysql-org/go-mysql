@@ -6,7 +6,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
-	_ "github.com/pingcap/tidb/types/parser_driver"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
