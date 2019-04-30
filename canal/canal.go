@@ -26,13 +26,32 @@ import (
 
 func init() {
 	ast.NewValueExpr = newValueExpr
+	ast.NewParamMarkerExpr = newParamExpr
+	ast.NewDecimal = func(_ string) (interface{}, error) {
+		return nil, nil
+	}
+	ast.NewHexLiteral = func(_ string) (interface{}, error) {
+		return nil, nil
+	}
+	ast.NewBitLiteral = func(_ string) (interface{}, error) {
+		return nil, nil
+	}
 }
+
+type paramExpr struct {
+	valueExpr
+}
+
+func newParamExpr(_ int) ast.ParamMarkerExpr {
+	return &paramExpr{}
+}
+func (pe *paramExpr) SetOrder(o int) {}
 
 type valueExpr struct {
 	ast.TexprNode
 }
 
-func newValueExpr(v interface{}) ast.ValueExpr                      { return &valueExpr{} }
+func newValueExpr(_ interface{}) ast.ValueExpr                      { return &valueExpr{} }
 func (ve *valueExpr) SetValue(val interface{})                      {}
 func (ve *valueExpr) GetValue() interface{}                         { return nil }
 func (ve *valueExpr) GetDatumString() string                        { return "" }
