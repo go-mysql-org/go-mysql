@@ -138,7 +138,6 @@ func (c *Canal) dump() error {
 			return errors.Trace(err)
 		}
 		h.gset = gset
-		c.eventHandler.OnGTIDSynced(gset, true)
 	}
 
 	if c.cfg.Dump.SkipMasterData {
@@ -159,7 +158,7 @@ func (c *Canal) dump() error {
 
 	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 	c.master.Update(pos)
-	if err := c.eventHandler.OnPosSynced(pos, true); err != nil {
+	if err := c.eventHandler.OnPosSynced(pos, c.master.GTIDSet(),true); err != nil {
 		return errors.Trace(err)
 	}
 	var startPos fmt.Stringer = pos
