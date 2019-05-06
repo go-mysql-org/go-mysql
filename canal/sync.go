@@ -175,7 +175,7 @@ func (c *Canal) runSyncBinlog() error {
 func (c *Canal) updateTable(db, table string, e *replication.QueryEvent, pos mysql.Position, ts uint32) (err error) {
 	c.ClearTableCache([]byte(db), []byte(table))
 	log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
-	if err = c.eventHandler.OnTableChanged(string(db), string(table)); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
+	if err = c.eventHandler.OnTableChanged(db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
 		return errors.Trace(err)
 	}
 
