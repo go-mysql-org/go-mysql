@@ -125,26 +125,36 @@ func (c *Canal) runSyncBinlog() error {
 					for _, tableInfo := range t.TableToTables {
 						db := tableInfo.OldTable.Schema.String()
 						table := tableInfo.OldTable.Name.String()
-						c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+						if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
+							return errors.Trace(err)
+						}
 					}
 				case *ast.AlterTableStmt:
 					db := t.Table.Schema.String()
 					table := t.Table.Name.String()
-					c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
+						return errors.Trace(err)
+					}
 				case *ast.DropTableStmt:
 					for _, table := range t.Tables {
 						db := table.Schema.String()
 						table := table.Name.String()
-						c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+						if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
+							return errors.Trace(err)
+						}
 					}
 				case *ast.CreateTableStmt:
 					db := t.Table.Schema.String()
 					table := t.Table.Name.String()
-					c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
+						return errors.Trace(err)
+					}
 				case *ast.TruncateTableStmt:
 					db := t.Table.Schema.String()
 					table := t.Table.Name.String()
-					c.updateTable(db, table, e, pos, ev.Header.Timestamp)
+					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
+						return errors.Trace(err)
+					}
 				}
 			}
 		default:
