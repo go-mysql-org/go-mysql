@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -46,7 +47,7 @@ type Canal struct {
 	includeTableRegex []*regexp.Regexp
 	excludeTableRegex []*regexp.Regexp
 
-	delay uint32
+	delay *uint32
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -70,6 +71,8 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
 	c.master = &masterInfo{}
+	
+	c.delay = new(0)
 
 	var err error
 
@@ -169,7 +172,7 @@ func (c *Canal) prepareDumper() error {
 }
 
 func (c *Canal) GetDelay() uint32 {
-	return c.delay
+	return atomic.LoadUint32(c.delay)
 }
 
 // Run will first try to dump all data from MySQL master `mysqldump`,
