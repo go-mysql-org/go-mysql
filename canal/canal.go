@@ -72,7 +72,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	}
 	c.master = &masterInfo{}
 	
-	c.delay = new(0)
+	c.delay = new(uint32)
 
 	var err error
 
