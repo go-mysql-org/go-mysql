@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -97,13 +97,13 @@ func (c *Canal) runSyncBinlog() error {
 			}
 			continue
 		case *replication.XIDEvent:
-			if e.GSet != nil {
-				c.master.UpdateGTIDSet(e.GSet)
-			}
 			savePos = true
 			// try to save the position later
 			if err := c.eventHandler.OnXID(pos); err != nil {
 				return errors.Trace(err)
+			}
+			if e.GSet != nil {
+				c.master.UpdateGTIDSet(e.GSet)
 			}
 		case *replication.MariadbGTIDEvent:
 			// try to save the GTID later
@@ -124,9 +124,6 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
-			if e.GSet != nil {
-				c.master.UpdateGTIDSet(e.GSet)
-			}
 			var (
 				mb    [][]byte
 				db    []byte
@@ -163,6 +160,9 @@ func (c *Canal) runSyncBinlog() error {
 			// Now we only handle Table Changed DDL, maybe we will support more later.
 			if err = c.eventHandler.OnDDL(pos, e); err != nil {
 				return errors.Trace(err)
+			}
+			if e.GSet != nil {
+				c.master.UpdateGTIDSet(e.GSet)
 			}
 		default:
 			continue
