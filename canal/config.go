@@ -68,6 +68,8 @@ type Config struct {
 	UseDecimal bool `toml:"use_decimal"`
 	ParseTime  bool `toml:"parse_time"`
 
+	TimestampStringLocation *time.Location
+
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool `toml:"semi_sync_enabled"`
 
