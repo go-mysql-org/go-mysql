@@ -456,6 +456,7 @@ func (c *Canal) prepareSyncer() error {
 		ParseTime:            c.cfg.ParseTime,
 		SemiSyncEnabled:      c.cfg.SemiSyncEnabled,
 		MaxReconnectAttempts: c.cfg.MaxReconnectAttempts,
+		TimestampStringLocation: c.cfg.TimestampStringLocation,
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -84,13 +84,13 @@ func (c *Canal) runSyncBinlog() error {
 			}
 			continue
 		case *replication.XIDEvent:
-			if e.GSet != nil {
-				c.master.UpdateGTIDSet(e.GSet)
-			}
 			savePos = true
 			// try to save the position later
 			if err := c.eventHandler.OnXID(pos); err != nil {
 				return errors.Trace(err)
+			}
+			if e.GSet != nil {
+				c.master.UpdateGTIDSet(e.GSet)
 			}
 		case *replication.MariadbGTIDEvent:
 			// try to save the GTID later
@@ -122,6 +122,8 @@ func (c *Canal) runSyncBinlog() error {
 			for _, stmt := range stmts {
 				switch t := stmt.(type) {
 				case *ast.RenameTableStmt:
+					savePos = true
+					force = true
 					for _, tableInfo := range t.TableToTables {
 						db := tableInfo.OldTable.Schema.String()
 						table := tableInfo.OldTable.Name.String()
@@ -130,12 +132,16 @@ func (c *Canal) runSyncBinlog() error {
 						}
 					}
 				case *ast.AlterTableStmt:
+					savePos = true
+					force = true
 					db := t.Table.Schema.String()
 					table := t.Table.Name.String()
 					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
 						return errors.Trace(err)
 					}
 				case *ast.DropTableStmt:
+					savePos = true
+					force = true
 					for _, table := range t.Tables {
 						db := table.Schema.String()
 						table := table.Name.String()
@@ -144,18 +150,26 @@ func (c *Canal) runSyncBinlog() error {
 						}
 					}
 				case *ast.CreateTableStmt:
+					savePos = true
+					force = true
 					db := t.Table.Schema.String()
 					table := t.Table.Name.String()
 					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
 						return errors.Trace(err)
 					}
 				case *ast.TruncateTableStmt:
+					savePos = true
+					force = true
 					db := t.Table.Schema.String()
 					table := t.Table.Name.String()
 					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
 						return errors.Trace(err)
 					}
+				default:
 				}
+			}
+			if e.GSet != nil {
+				c.master.UpdateGTIDSet(e.GSet)
 			}
 		default:
 			continue
@@ -181,11 +195,6 @@ func (c *Canal) updateTable(db, table string, e *replication.QueryEvent, pos mys
 
 	// Now we only handle Table Changed DDL, maybe we will support more later.
 	if err = c.eventHandler.OnDDL(pos, e); err != nil {
-		return errors.Trace(err)
-	}
-	c.master.Update(pos)
-	c.master.UpdateTimestamp(ts)
-	if err := c.eventHandler.OnPosSynced(pos, true); err != nil {
 		return errors.Trace(err)
 	}
 	return
