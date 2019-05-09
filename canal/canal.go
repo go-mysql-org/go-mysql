@@ -3,7 +3,6 @@ package canal
 import (
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -14,8 +13,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/format"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
@@ -23,46 +20,6 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
 )
-
-func init() {
-	ast.NewValueExpr = newValueExpr
-	ast.NewParamMarkerExpr = newParamExpr
-	ast.NewDecimal = func(_ string) (interface{}, error) {
-		return nil, nil
-	}
-	ast.NewHexLiteral = func(_ string) (interface{}, error) {
-		return nil, nil
-	}
-	ast.NewBitLiteral = func(_ string) (interface{}, error) {
-		return nil, nil
-	}
-}
-
-type paramExpr struct {
-	valueExpr
-}
-
-func newParamExpr(_ int) ast.ParamMarkerExpr {
-	return &paramExpr{}
-}
-func (pe *paramExpr) SetOrder(o int) {}
-
-type valueExpr struct {
-	ast.TexprNode
-}
-
-func newValueExpr(_ interface{}) ast.ValueExpr                      { return &valueExpr{} }
-func (ve *valueExpr) SetValue(val interface{})                      {}
-func (ve *valueExpr) GetValue() interface{}                         { return nil }
-func (ve *valueExpr) GetDatumString() string                        { return "" }
-func (ve *valueExpr) GetString() string                             { return "" }
-func (ve *valueExpr) GetProjectionOffset() int                      { return 0 }
-func (ve *valueExpr) SetProjectionOffset(offset int)                {}
-func (ve *valueExpr) Restore(ctx *format.RestoreCtx) error          { return nil }
-func (ve *valueExpr) Accept(v ast.Visitor) (node ast.Node, ok bool) { return }
-func (ve *valueExpr) Text() string                                  { return "" }
-func (ve *valueExpr) SetText(text string)                           {}
-func (ve *valueExpr) Format(w io.Writer)                            {}
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
 // MySQL must open row format for binlog
@@ -445,17 +402,17 @@ func (c *Canal) checkBinlogRowFormat() error {
 
 func (c *Canal) prepareSyncer() error {
 	cfg := replication.BinlogSyncerConfig{
-		ServerID:             c.cfg.ServerID,
-		Flavor:               c.cfg.Flavor,
-		User:                 c.cfg.User,
-		Password:             c.cfg.Password,
-		Charset:              c.cfg.Charset,
-		HeartbeatPeriod:      c.cfg.HeartbeatPeriod,
-		ReadTimeout:          c.cfg.ReadTimeout,
-		UseDecimal:           c.cfg.UseDecimal,
-		ParseTime:            c.cfg.ParseTime,
-		SemiSyncEnabled:      c.cfg.SemiSyncEnabled,
-		MaxReconnectAttempts: c.cfg.MaxReconnectAttempts,
+		ServerID:                c.cfg.ServerID,
+		Flavor:                  c.cfg.Flavor,
+		User:                    c.cfg.User,
+		Password:                c.cfg.Password,
+		Charset:                 c.cfg.Charset,
+		HeartbeatPeriod:         c.cfg.HeartbeatPeriod,
+		ReadTimeout:             c.cfg.ReadTimeout,
+		UseDecimal:              c.cfg.UseDecimal,
+		ParseTime:               c.cfg.ParseTime,
+		SemiSyncEnabled:         c.cfg.SemiSyncEnabled,
+		MaxReconnectAttempts:    c.cfg.MaxReconnectAttempts,
 		TimestampStringLocation: c.cfg.TimestampStringLocation,
 	}
 

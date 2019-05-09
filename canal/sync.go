@@ -116,56 +116,19 @@ func (c *Canal) runSyncBinlog() error {
 			}
 			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 			if err != nil {
-				log.Errorf("parse query err %v", err)
+				log.Errorf("parse query(%s) err %v", e.Query, err)
 				continue
 			}
 			for _, stmt := range stmts {
-				switch t := stmt.(type) {
-				case *ast.RenameTableStmt:
+				nodes := parseStmt(stmt)
+				if len(nodes) > 0 {
 					savePos = true
 					force = true
-					for _, tableInfo := range t.TableToTables {
-						db := tableInfo.OldTable.Schema.String()
-						table := tableInfo.OldTable.Name.String()
-						if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
-							return errors.Trace(err)
-						}
-					}
-				case *ast.AlterTableStmt:
-					savePos = true
-					force = true
-					db := t.Table.Schema.String()
-					table := t.Table.Name.String()
-					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
+				}
+				for _, node := range nodes {
+					if err = c.updateTable(node.db, node.table, e, pos, ev.Header.Timestamp); err != nil {
 						return errors.Trace(err)
 					}
-				case *ast.DropTableStmt:
-					savePos = true
-					force = true
-					for _, table := range t.Tables {
-						db := table.Schema.String()
-						table := table.Name.String()
-						if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
-							return errors.Trace(err)
-						}
-					}
-				case *ast.CreateTableStmt:
-					savePos = true
-					force = true
-					db := t.Table.Schema.String()
-					table := t.Table.Name.String()
-					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
-						return errors.Trace(err)
-					}
-				case *ast.TruncateTableStmt:
-					savePos = true
-					force = true
-					db := t.Table.Schema.String()
-					table := t.Table.Name.String()
-					if err = c.updateTable(db, table, e, pos, ev.Header.Timestamp); err != nil {
-						return errors.Trace(err)
-					}
-				default:
 				}
 			}
 			if e.GSet != nil {
@@ -186,6 +149,52 @@ func (c *Canal) runSyncBinlog() error {
 
 	return nil
 }
+
+type node struct {
+	db    string
+	table string
+}
+
+func parseStmt(stmt ast.StmtNode) (ns []*node) {
+	switch t := stmt.(type) {
+	case *ast.RenameTableStmt:
+		for _, tableInfo := range t.TableToTables {
+			n := &node{
+				db:    tableInfo.OldTable.Schema.String(),
+				table: tableInfo.OldTable.Name.String(),
+			}
+			ns = append(ns, n)
+		}
+	case *ast.AlterTableStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Name.String(),
+		}
+		ns = []*node{n}
+	case *ast.DropTableStmt:
+		for _, table := range t.Tables {
+			n := &node{
+				db:    table.Schema.String(),
+				table: table.Name.String(),
+			}
+			ns = append(ns, n)
+		}
+	case *ast.CreateTableStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Name.String(),
+		}
+		ns = []*node{n}
+	case *ast.TruncateTableStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Schema.String(),
+		}
+		ns = []*node{n}
+	}
+	return
+}
+
 func (c *Canal) updateTable(db, table string, e *replication.QueryEvent, pos mysql.Position, ts uint32) (err error) {
 	c.ClearTableCache([]byte(db), []byte(table))
 	log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
