@@ -111,9 +111,6 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
-			if e.GSet != nil {
-				c.master.UpdateGTIDSet(e.GSet)
-			}
 			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 			if err != nil {
 				log.Errorf("parse query(%s) err %v", e.Query, err)
