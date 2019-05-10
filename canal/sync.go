@@ -117,16 +117,20 @@ func (c *Canal) runSyncBinlog() error {
 			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 			if err != nil {
 				log.Errorf("parse query(%s) err %v", e.Query, err)
-				continue
+				return errors.Trace(err)
 			}
 			for _, stmt := range stmts {
 				nodes := parseStmt(stmt)
+				for _, node := range nodes {
+					if err = c.updateTable(node.db, node.table); err != nil {
+						return errors.Trace(err)
+					}
+				}
 				if len(nodes) > 0 {
 					savePos = true
 					force = true
-				}
-				for _, node := range nodes {
-					if err = c.updateTable(node.db, node.table, e, pos, ev.Header.Timestamp); err != nil {
+					// Now we only handle Table Changed DDL, maybe we will support more later.
+					if err = c.eventHandler.OnDDL(pos, e); err != nil {
 						return errors.Trace(err)
 					}
 				}
@@ -195,15 +199,10 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 	return
 }
 
-func (c *Canal) updateTable(db, table string, e *replication.QueryEvent, pos mysql.Position, ts uint32) (err error) {
+func (c *Canal) updateTable(db, table string) (err error) {
 	c.ClearTableCache([]byte(db), []byte(table))
 	log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
 	if err = c.eventHandler.OnTableChanged(db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
-		return errors.Trace(err)
-	}
-
-	// Now we only handle Table Changed DDL, maybe we will support more later.
-	if err = c.eventHandler.OnDDL(pos, e); err != nil {
 		return errors.Trace(err)
 	}
 	return
