@@ -132,7 +132,7 @@ func (c *Canal) runSyncBinlog() error {
 					}
 				}
 			}
-			if e.GSet != nil {
+			if savePos && e.GSet != nil {
 				c.master.UpdateGTIDSet(e.GSet)
 			}
 		default:
