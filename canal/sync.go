@@ -3,6 +3,7 @@ package canal
 import (
 	"fmt"
 	"regexp"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -55,6 +56,10 @@ func (c *Canal) runSyncBinlog() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+
+		// Update the delay between the Canal and the Master before the handler hooks are called
+		c.updateReplicationDelay(ev)
+
 		savePos = false
 		force = false
 		pos := c.master.Position()
@@ -173,6 +178,10 @@ func (c *Canal) runSyncBinlog() error {
 	}
 
 	return nil
+}
+
+func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
+	atomic.AddUint32(c.delay, uint32(time.Now().Unix()) - ev.Header.Timestamp)
 }
 
 func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
