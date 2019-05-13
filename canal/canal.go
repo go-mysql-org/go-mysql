@@ -234,7 +234,6 @@ func (c *Canal) run() error {
 
 func (c *Canal) Close() {
 	log.Infof("closing canal")
-
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -245,7 +244,7 @@ func (c *Canal) Close() {
 	c.connLock.Unlock()
 	c.syncer.Close()
 
-	c.eventHandler.OnPosSynced(c.master.Position(), true)
+	c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
