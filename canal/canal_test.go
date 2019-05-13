@@ -62,10 +62,11 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	s.execute(c, "INSERT INTO test.canal_test (content, name) VALUES (?, ?), (?, ?), (?, ?)", "1", "a", `\0\ndsfasdf`, "b", "", "c")
 
 	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
-
+	
 	s.c.SetEventHandler(&testEventHandler{c: c})
 	go func() {
-		err = s.c.Run()
+		set, _ := mysql.ParseGTIDSet("mysql", "")
+		err = s.c.StartFromGTID(set)
 		c.Assert(err, IsNil)
 	}()
 }
@@ -89,7 +90,6 @@ func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql
 
 type testEventHandler struct {
 	DummyEventHandler
-
 	c *C
 }
 
@@ -100,6 +100,10 @@ func (h *testEventHandler) OnRow(e *RowsEvent) error {
 
 func (h *testEventHandler) String() string {
 	return "testEventHandler"
+}
+
+func (h *testEventHandler) OnPosSynced(p mysql.Position, set mysql.GTIDSet, f bool) error {
+	return nil
 }
 
 func (s *canalTestSuite) TestCanal(c *C) {

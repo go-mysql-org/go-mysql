@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -48,6 +49,8 @@ type Canal struct {
 	includeTableRegex []*regexp.Regexp
 	excludeTableRegex []*regexp.Regexp
 
+	delay *uint32
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -70,6 +73,8 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
 	c.master = &masterInfo{}
+	
+	c.delay = new(uint32)
 
 	var err error
 
@@ -168,6 +173,10 @@ func (c *Canal) prepareDumper() error {
 	return nil
 }
 
+func (c *Canal) GetDelay() uint32 {
+	return atomic.LoadUint32(c.delay)
+}
+
 // Run will first try to dump all data from MySQL master `mysqldump`,
 // then sync from the binlog position in the dump data.
 // It will run forever until meeting an error or Canal closed.
@@ -227,7 +236,6 @@ func (c *Canal) run() error {
 
 func (c *Canal) Close() {
 	log.Infof("closing canal")
-
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -238,7 +246,7 @@ func (c *Canal) Close() {
 	c.connLock.Unlock()
 	c.syncer.Close()
 
-	c.eventHandler.OnPosSynced(c.master.Position(), true)
+	c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
