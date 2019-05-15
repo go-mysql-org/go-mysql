@@ -2,24 +2,16 @@ package canal
 
 import (
 	"fmt"
-	"regexp"
 	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/ast"
 	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
-)
-
-var (
-	expCreateTable   = regexp.MustCompile("(?i)^CREATE\\sTABLE(\\sIF\\sNOT\\sEXISTS)?\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
-	expAlterTable    = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s.*")
-	expRenameTable   = regexp.MustCompile("(?i)^RENAME\\sTABLE\\s.*?`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}\\s{1,}TO\\s.*?")
-	expDropTable     = regexp.MustCompile("(?i)^DROP\\sTABLE(\\sIF\\sEXISTS){0,1}\\s`{0,1}(.*?)`{0,1}\\.{0,1}`{0,1}([^`\\.]+?)`{0,1}(?:$|\\s)")
-	expTruncateTable = regexp.MustCompile("(?i)^TRUNCATE\\s+(?:TABLE\\s+)?(?:`?([^`\\s]+)`?\\.`?)?([^`\\s]+)`?")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -124,44 +116,28 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
-			var (
-				mb    [][]byte
-				db    []byte
-				table []byte
-			)
-			regexps := []regexp.Regexp{*expCreateTable, *expAlterTable, *expRenameTable, *expDropTable, *expTruncateTable}
-			for _, reg := range regexps {
-				mb = reg.FindSubmatch(e.Query)
-				if len(mb) != 0 {
-					break
+			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
+			if err != nil {
+				log.Errorf("parse query(%s) err %v", e.Query, err)
+				return errors.Trace(err)
+			}
+			for _, stmt := range stmts {
+				nodes := parseStmt(stmt)
+				for _, node := range nodes {
+					if err = c.updateTable(node.db, node.table); err != nil {
+						return errors.Trace(err)
+					}
+				}
+				if len(nodes) > 0 {
+					savePos = true
+					force = true
+					// Now we only handle Table Changed DDL, maybe we will support more later.
+					if err = c.eventHandler.OnDDL(pos, e); err != nil {
+						return errors.Trace(err)
+					}
 				}
 			}
-			mbLen := len(mb)
-			if mbLen == 0 {
-				continue
-			}
-
-			// the first last is table name, the second last is database name(if exists)
-			if len(mb[mbLen-2]) == 0 {
-				db = e.Schema
-			} else {
-				db = mb[mbLen-2]
-			}
-			table = mb[mbLen-1]
-
-			savePos = true
-			force = true
-			c.ClearTableCache(db, table)
-			log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
-			if err = c.eventHandler.OnTableChanged(string(db), string(table)); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
-				return errors.Trace(err)
-			}
-
-			// Now we only handle Table Changed DDL, maybe we will support more later.
-			if err = c.eventHandler.OnDDL(pos, e); err != nil {
-				return errors.Trace(err)
-			}
-			if e.GSet != nil {
+			if savePos && e.GSet != nil {
 				c.master.UpdateGTIDSet(e.GSet)
 			}
 		default:
@@ -180,8 +156,61 @@ func (c *Canal) runSyncBinlog() error {
 	return nil
 }
 
+type node struct {
+	db    string
+	table string
+}
+
+func parseStmt(stmt ast.StmtNode) (ns []*node) {
+	switch t := stmt.(type) {
+	case *ast.RenameTableStmt:
+		for _, tableInfo := range t.TableToTables {
+			n := &node{
+				db:    tableInfo.OldTable.Schema.String(),
+				table: tableInfo.OldTable.Name.String(),
+			}
+			ns = append(ns, n)
+		}
+	case *ast.AlterTableStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Name.String(),
+		}
+		ns = []*node{n}
+	case *ast.DropTableStmt:
+		for _, table := range t.Tables {
+			n := &node{
+				db:    table.Schema.String(),
+				table: table.Name.String(),
+			}
+			ns = append(ns, n)
+		}
+	case *ast.CreateTableStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Name.String(),
+		}
+		ns = []*node{n}
+	case *ast.TruncateTableStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Schema.String(),
+		}
+		ns = []*node{n}
+	}
+	return
+}
+
+func (c *Canal) updateTable(db, table string) (err error) {
+	c.ClearTableCache([]byte(db), []byte(table))
+	log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
+	if err = c.eventHandler.OnTableChanged(db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
+		return errors.Trace(err)
+	}
+	return
+}
 func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
-	atomic.AddUint32(c.delay, uint32(time.Now().Unix()) - ev.Header.Timestamp)
+	atomic.AddUint32(c.delay, uint32(time.Now().Unix())-ev.Header.Timestamp)
 }
 
 func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {

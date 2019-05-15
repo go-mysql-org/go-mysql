@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
@@ -28,6 +29,7 @@ type Canal struct {
 
 	cfg *Config
 
+	parser     *parser.Parser
 	master     *masterInfo
 	dumper     *dump.Dumper
 	dumped     bool
@@ -65,7 +67,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	c.dumpDoneCh = make(chan struct{})
 	c.eventHandler = &DummyEventHandler{}
-
+	c.parser = parser.New()
 	c.tables = make(map[string]*schema.Table)
 	if c.cfg.DiscardNoMetaRowEvent {
 		c.errorTablesGetTime = make(map[string]time.Time)
@@ -408,17 +410,17 @@ func (c *Canal) checkBinlogRowFormat() error {
 
 func (c *Canal) prepareSyncer() error {
 	cfg := replication.BinlogSyncerConfig{
-		ServerID:             c.cfg.ServerID,
-		Flavor:               c.cfg.Flavor,
-		User:                 c.cfg.User,
-		Password:             c.cfg.Password,
-		Charset:              c.cfg.Charset,
-		HeartbeatPeriod:      c.cfg.HeartbeatPeriod,
-		ReadTimeout:          c.cfg.ReadTimeout,
-		UseDecimal:           c.cfg.UseDecimal,
-		ParseTime:            c.cfg.ParseTime,
-		SemiSyncEnabled:      c.cfg.SemiSyncEnabled,
-		MaxReconnectAttempts: c.cfg.MaxReconnectAttempts,
+		ServerID:                c.cfg.ServerID,
+		Flavor:                  c.cfg.Flavor,
+		User:                    c.cfg.User,
+		Password:                c.cfg.Password,
+		Charset:                 c.cfg.Charset,
+		HeartbeatPeriod:         c.cfg.HeartbeatPeriod,
+		ReadTimeout:             c.cfg.ReadTimeout,
+		UseDecimal:              c.cfg.UseDecimal,
+		ParseTime:               c.cfg.ParseTime,
+		SemiSyncEnabled:         c.cfg.SemiSyncEnabled,
+		MaxReconnectAttempts:    c.cfg.MaxReconnectAttempts,
 		TimestampStringLocation: c.cfg.TimestampStringLocation,
 	}
 
