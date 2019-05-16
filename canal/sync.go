@@ -124,6 +124,9 @@ func (c *Canal) runSyncBinlog() error {
 			for _, stmt := range stmts {
 				nodes := parseStmt(stmt)
 				for _, node := range nodes {
+					if node.db == "" {
+						node.db = string(e.Schema)
+					}
 					if err = c.updateTable(node.db, node.table); err != nil {
 						return errors.Trace(err)
 					}
