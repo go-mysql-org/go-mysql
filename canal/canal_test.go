@@ -11,6 +11,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/replication"
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL host")
@@ -62,7 +63,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	s.execute(c, "INSERT INTO test.canal_test (content, name) VALUES (?, ?), (?, ?), (?, ?)", "1", "a", `\0\ndsfasdf`, "b", "", "c")
 
 	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
-	
+
 	s.c.SetEventHandler(&testEventHandler{c: c})
 	go func() {
 		set, _ := mysql.ParseGTIDSet("mysql", "")
@@ -271,6 +272,45 @@ func TestDropTableExp(t *testing.T) {
 				if (len(rdb) > 0 && rdb != db) || rtable != table {
 					t.Fatalf("TestDropTableExp:case %s failed db %s,table %s\n", s, rdb, rtable)
 				}
+			}
+		}
+	}
+}
+func TestWithoutSchemeExp(t *testing.T) {
+
+	cases := []replication.QueryEvent{
+		replication.QueryEvent{
+			Schema: []byte("test"),
+			Query:  []byte("drop table test0"),
+		},
+		replication.QueryEvent{
+			Schema: []byte("test"),
+			Query:  []byte("rename table `test0` to `testtmp`"),
+		},
+		replication.QueryEvent{
+			Schema: []byte("test"),
+			Query:  []byte("ALTER TABLE `test0` ADD `field2` DATE  NULL  AFTER `field1`;"),
+		},
+		replication.QueryEvent{
+			Schema: []byte("test"),
+			Query:  []byte("CREATE TABLE IF NOT EXISTS test0 (`id` int(10)) ENGINE=InnoDB"),
+		},
+	}
+	table := "test0"
+	db := "test"
+	pr := parser.New()
+	for _, s := range cases {
+		stmts, _, err := pr.Parse(string(s.Query), "", "")
+		if err != nil {
+			t.Fatalf("TestCreateTableExp:case %s failed\n", s.Query)
+		}
+		for _, st := range stmts {
+			nodes := parseStmt(st)
+			if len(nodes) == 0 {
+				continue
+			}
+			if nodes[0].db != "" || nodes[0].table != table || string(s.Schema) != db {
+				t.Fatalf("TestCreateTableExp:case %s failed\n", s.Query)
 			}
 		}
 	}
