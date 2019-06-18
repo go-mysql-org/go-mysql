@@ -44,7 +44,6 @@ func (c *Canal) runSyncBinlog() error {
 	force := false
 	for {
 		ev, err := s.GetEvent(c.ctx)
-
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -57,7 +56,7 @@ func (c *Canal) runSyncBinlog() error {
 		pos := c.master.Position()
 
 		curPos := pos.Pos
-		//next binlog pos
+		// next binlog pos
 		pos.Pos = ev.Header.LogPos
 
 		// We only save position with RotateEvent and XIDEvent.
@@ -118,8 +117,8 @@ func (c *Canal) runSyncBinlog() error {
 		case *replication.QueryEvent:
 			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 			if err != nil {
-				log.Errorf("parse query(%s) err %v", e.Query, err)
-				return errors.Trace(err)
+				log.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
+				continue
 			}
 			for _, stmt := range stmts {
 				nodes := parseStmt(stmt)
