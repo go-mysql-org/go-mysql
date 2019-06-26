@@ -65,6 +65,10 @@ func (c *Canal) runSyncBinlog() error {
 		// TODO: If we meet any DDL query, we must save too.
 		switch e := ev.Event.(type) {
 		case *replication.RotateEvent:
+			// if event pos equal to local pos.maybe be fake rotate event,do nothing.
+			if string(e.NextLogName) == pos.Name && uint32(e.Position) == pos.Pos {
+				continue
+			}
 			pos.Name = string(e.NextLogName)
 			pos.Pos = uint32(e.Position)
 			log.Infof("rotate binlog to %s", pos)
