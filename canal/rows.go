@@ -2,6 +2,7 @@ package canal
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
@@ -57,7 +58,14 @@ func (r *RowsEvent) handleUnsigned() {
 			case int16:
 				r.Rows[i][index] = uint16(t)
 			case int32:
-				r.Rows[i][index] = uint32(t)
+				if strings.Contains(strings.ToLower(r.Table.Columns[i].RawType), "mediumint") {
+					b0 := byte(t & 0xFF)
+					b1 := byte(t >> 8)
+					b2 := byte(t >> 16)
+					r.Rows[i][index] = uint32(uint32(b0) | uint32(b1)<<8 | uint32(b2)<<16)
+				} else {
+					r.Rows[i][index] = uint32(t)
+				}
 			case int64:
 				r.Rows[i][index] = uint64(t)
 			case int:
