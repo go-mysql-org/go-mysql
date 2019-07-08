@@ -98,8 +98,9 @@ type testEventHandler struct {
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
 	log.Infof("OnRow %s %v\n", e.Action, e.Rows)
-	if e.Rows[0][4].(uint32) < 0 {
-		return fmt.Errorf("invalid unsigned medium int %v", e.Rows[0][4])
+	umi := e.Rows[0][4].(uint32) // 4th col is umi
+	if umi != 0 && umi != 1 && umi != 16777215 {
+		return fmt.Errorf("invalid unsigned medium int %d", umi)
 	}
 	return nil
 }
@@ -118,9 +119,7 @@ func (s *canalTestSuite) TestCanal(c *C) {
 	for i := 1; i < 10; i++ {
 		s.execute(c, "INSERT INTO test.canal_test (name) VALUES (?)", fmt.Sprintf("%d", i))
 	}
-	s.execute(c, "INSERT INTO test.canal_test (mi,umi) VALUES (?,?)", 0, 0)
-	s.execute(c, "INSERT INTO test.canal_test (mi,umi) VALUES (?,?)", -1, 16777215)
-	s.execute(c, "INSERT INTO test.canal_test (mi,umi) VALUES (?,?)", 1, 1)
+	s.execute(c, "INSERT INTO test.canal_test (mi,umi) VALUES (?,?), (?,?), (?,?)", 0, 0, -1, 16777215, 1, 1)
 	s.execute(c, "ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
 	s.execute(c, "INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
 
