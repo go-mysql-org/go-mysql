@@ -98,8 +98,8 @@ type testEventHandler struct {
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
 	log.Infof("OnRow %s %v\n", e.Action, e.Rows)
-	umi := e.Rows[0][4].(uint32) // 4th col is umi
-	if umi != 0 && umi != 1 && umi != 16777215 {
+	umi, ok := e.Rows[0][4].(uint32) // 4th col is umi. mysqldump gives uint64 instead of uint32
+	if ok && (umi != 0 && umi != 1 && umi != 16777215) {
 		return fmt.Errorf("invalid unsigned medium int %d", umi)
 	}
 	return nil
