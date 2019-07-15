@@ -50,7 +50,11 @@ func (c *Canal) runSyncBinlog() error {
 
 		// Update the delay between the Canal and the Master before the handler hooks are called
 		c.updateReplicationDelay(ev)
-
+		// if log pos equal zero ,it is a fake rotate event,ignore it.
+		// see https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
+		if ev.Header.LogPos == 0 {
+			continue
+		}
 		savePos = false
 		force = false
 		pos := c.master.Position()
@@ -65,10 +69,6 @@ func (c *Canal) runSyncBinlog() error {
 		// TODO: If we meet any DDL query, we must save too.
 		switch e := ev.Event.(type) {
 		case *replication.RotateEvent:
-			// if event pos equal to local pos.maybe be fake rotate event,do nothing.
-			if string(e.NextLogName) == pos.Name && uint32(e.Position) == pos.Pos {
-				continue
-			}
 			pos.Name = string(e.NextLogName)
 			pos.Pos = uint32(e.Position)
 			log.Infof("rotate binlog to %s", pos)
