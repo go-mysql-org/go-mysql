@@ -25,11 +25,12 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		log.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
+		gsetClone := gset.Clone()
 		s, err := c.syncer.StartSyncGTID(gset)
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
 		}
-		log.Infof("start sync binlog at GTID set %v", gset)
+		log.Infof("start sync binlog at GTID set %v", gsetClone)
 		return s, nil
 	}
 }
