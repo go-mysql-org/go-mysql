@@ -744,6 +744,9 @@ func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
 		{[]byte("\x80\x00\x00\x00\x00"), 0, false, "0000-00-00 00:00:00"},
 		{[]byte("\x80\x00\x02\xf1\x05"), 0, false, "0000-00-01 15:04:05"},
 		{[]byte("\x80\x03\x82\x00\x00"), 0, false, "0001-01-01 00:00:00"},
+		{[]byte("\x80\x03\x82\x00\x00\x0c"), uint16(2), false, "0001-01-01 00:00:00.12"},
+		{[]byte("\x80\x03\x82\x00\x00\x04\xd3"), uint16(4), false, "0001-01-01 00:00:00.1235"},
+		{[]byte("\x80\x03\x82\x00\x00\x01\xe2\x40"), uint16(6), false, "0001-01-01 00:00:00.123456"},
 	}
 	for _, tc := range testcases {
 		value, _, err := decodeDatetime2(tc.data, tc.dec)
