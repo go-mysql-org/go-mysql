@@ -22,6 +22,7 @@ before_install:
   - sudo mysql_upgrade
 
   # stop mysql and use row-based format binlog
+  - "sudo mysql_ssl_rsa_setup --uid=mysql"
   - "sudo service mysql stop || true"
   - "echo '[mysqld]'            | sudo tee /etc/mysql/conf.d/replication.cnf"
   - "echo 'server-id=1'         | sudo tee -a /etc/mysql/conf.d/replication.cnf"
