@@ -58,7 +58,7 @@ func (r *RowsEvent) handleUnsigned() {
 			case int16:
 				r.Rows[i][index] = uint16(t)
 			case int32:
-				if r.Table.Columns[i].Type == schema.TYPE_MEDIUM_INT {
+				if r.Table.Columns[index].Type == schema.TYPE_MEDIUM_INT {
 					// problem with mediumint is that it's a 3-byte type. There is no compatible golang type to match that.
 					// So to convert from negative to positive we'd need to convert the value manually
 					if i >= 0 {
