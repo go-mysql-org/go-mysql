@@ -2,6 +2,7 @@ package canal
 
 import (
 	"fmt"
+
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go-mysql/schema"
 )
@@ -51,29 +52,24 @@ func (r *RowsEvent) handleUnsigned() {
 	}
 
 	for i := 0; i < len(r.Rows); i++ {
-		for _, index := range r.Table.UnsignedColumns {
-			switch t := r.Rows[i][index].(type) {
+		for _, columnIdx := range r.Table.UnsignedColumns {
+			switch value := r.Rows[i][columnIdx].(type) {
 			case int8:
-				r.Rows[i][index] = uint8(t)
+				r.Rows[i][columnIdx] = uint8(value)
 			case int16:
-				r.Rows[i][index] = uint16(t)
+				r.Rows[i][columnIdx] = uint16(value)
 			case int32:
-				if r.Table.Columns[i].Type == schema.TYPE_MEDIUM_INT {
-					// problem with mediumint is that it's a 3-byte type. There is no compatible golang type to match that.
-					// So to convert from negative to positive we'd need to convert the value manually
-					if i >= 0 {
-						r.Rows[i][index] = uint32(t)
-					} else {
-						r.Rows[i][index] = uint32(maxMediumintUnsigned + t + 1)
-					}
-					return
+				// problem with mediumint is that it's a 3-byte type. There is no compatible golang type to match that.
+				// So to convert from negative to positive we'd need to convert the value manually
+				if value < 0 && r.Table.Columns[columnIdx].Type == schema.TYPE_MEDIUM_INT {
+					r.Rows[i][columnIdx] = uint32(maxMediumintUnsigned + value + 1)
 				} else {
-					r.Rows[i][index] = uint32(t)
+					r.Rows[i][columnIdx] = uint32(value)
 				}
 			case int64:
-				r.Rows[i][index] = uint64(t)
+				r.Rows[i][columnIdx] = uint64(value)
 			case int:
-				r.Rows[i][index] = uint(t)
+				r.Rows[i][columnIdx] = uint(value)
 			default:
 				// nothing to do
 			}
