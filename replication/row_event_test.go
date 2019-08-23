@@ -730,3 +730,36 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
 	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
 }
+
+func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
+	testcases := []struct {
+		data        []byte
+		dec         uint16
+		getFracTime bool
+		expected    string
+	}{
+		{[]byte("\xfe\xf3\xff\x7e\xfb"), 0, true, "9999-12-31 23:59:59"},
+		{[]byte("\x99\x9a\xb8\xf7\xaa"), 0, true, "2016-10-28 15:30:42"},
+		{[]byte("\x99\x02\xc2\x00\x00"), 0, true, "1970-01-01 00:00:00"},
+		{[]byte("\x80\x00\x00\x00\x00"), 0, false, "0000-00-00 00:00:00"},
+		{[]byte("\x80\x00\x02\xf1\x05"), 0, false, "0000-00-01 15:04:05"},
+		{[]byte("\x80\x03\x82\x00\x00"), 0, false, "0001-01-01 00:00:00"},
+		{[]byte("\x80\x03\x82\x00\x00\x0c"), uint16(2), false, "0001-01-01 00:00:00.12"},
+		{[]byte("\x80\x03\x82\x00\x00\x04\xd3"), uint16(4), false, "0001-01-01 00:00:00.1235"},
+		{[]byte("\x80\x03\x82\x00\x00\x01\xe2\x40"), uint16(6), false, "0001-01-01 00:00:00.123456"},
+	}
+	for _, tc := range testcases {
+		value, _, err := decodeDatetime2(tc.data, tc.dec)
+		c.Assert(err, IsNil)
+		switch t := value.(type) {
+		case fracTime:
+			c.Assert(tc.getFracTime, IsTrue)
+			c.Assert(t.String(), Equals, tc.expected)
+		case string:
+			c.Assert(tc.getFracTime, IsFalse)
+			c.Assert(t, Equals, tc.expected)
+		default:
+			c.Errorf("invalid value type: %T", value)
+		}
+	}
+}
