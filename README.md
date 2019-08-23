@@ -122,7 +122,7 @@ func (h *MyEventHandler) String() string {
 c.SetEventHandler(&MyEventHandler{})
 
 // Start canal
-c.Start()
+c.Run()
 ```
 
 You can see [go-mysql-elasticsearch](https://github.com/siddontang/go-mysql-elasticsearch) for how to sync MySQL data into Elasticsearch. 
