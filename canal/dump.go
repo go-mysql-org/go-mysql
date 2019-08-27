@@ -52,7 +52,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		} else if v == "_binary ''" {
 			vs[i] = []byte{}
 		} else if v[0] != '\'' {
-			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER {
+			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER || tableInfo.Columns[i].Type == schema.TYPE_MEDIUM_INT {
 				n, err := strconv.ParseInt(v, 10, 64)
 				if err != nil {
 					return fmt.Errorf("parse row %v at %d error %v, int expected", values, i, err)
@@ -158,7 +158,7 @@ func (c *Canal) dump() error {
 
 	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 	c.master.Update(pos)
-	if err := c.eventHandler.OnPosSynced(pos, true); err != nil {
+	if err := c.eventHandler.OnPosSynced(pos, c.master.GTIDSet(), true); err != nil {
 		return errors.Trace(err)
 	}
 	var startPos fmt.Stringer = pos

@@ -754,6 +754,19 @@ func decodeDatetime2(data []byte, dec uint16) (interface{}, int, error) {
 	minute := int((hms >> 6) % (1 << 6))
 	hour := int((hms >> 12))
 
+	// DATETIME encoding for nonfractional part after MySQL 5.6.4
+	// https://dev.mysql.com/doc/internals/en/date-and-time-data-type-representation.html
+	// integer value for 1970-01-01 00:00:00 is
+	// year*13+month = 25611 = 0b110010000001011
+	// day = 1 = 0b00001
+	// hour = 0 = 0b00000
+	// minute = 0 = 0b000000
+	// second = 0 = 0b000000
+	// integer value = 0b1100100000010110000100000000000000000 = 107420450816
+	if intPart < 107420450816 {
+		return formatBeforeUnixZeroTime(year, month, day, hour, minute, second, int(frac), int(dec)), n, nil
+	}
+
 	return fracTime{
 		Time: time.Date(year, time.Month(month), day, hour, minute, second, int(frac*1000), time.UTC),
 		Dec:  int(dec),

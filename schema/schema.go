@@ -19,7 +19,7 @@ var HAHealthCheckSchema = "mysql.ha_health_check"
 
 // Different column type
 const (
-	TYPE_NUMBER    = iota + 1 // tinyint, smallint, mediumint, int, bigint, year
+	TYPE_NUMBER    = iota + 1 // tinyint, smallint, int, bigint, year
 	TYPE_FLOAT                // float, double
 	TYPE_ENUM                 // enum
 	TYPE_SET                  // set
@@ -31,6 +31,7 @@ const (
 	TYPE_BIT                  // bit
 	TYPE_JSON                 // json
 	TYPE_DECIMAL              // decimal
+	TYPE_MEDIUM_INT
 )
 
 type TableColumn struct {
@@ -105,6 +106,8 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].Type = TYPE_BIT
 	} else if strings.HasPrefix(columnType, "json") {
 		ta.Columns[index].Type = TYPE_JSON
+	} else if strings.Contains(columnType, "mediumint") {
+		ta.Columns[index].Type = TYPE_MEDIUM_INT
 	} else if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
 		ta.Columns[index].Type = TYPE_NUMBER
 	} else {
