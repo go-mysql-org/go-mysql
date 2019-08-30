@@ -660,3 +660,106 @@ func (_ *testDecodeSuite) TestJsonNull(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rows.Rows[0][3], HasLen, 0)
 }
+
+func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
+	// Table:
+	// mysql> desc t11;
+	// +----------+--------------+------+-----+---------+-------------------+
+	// | Field    | Type         | Null | Key | Default | Extra             |
+	// +----------+--------------+------+-----+---------+-------------------+
+	// | id       | int(11)      | YES  |     | NULL    |                   |
+	// | cfg      | varchar(100) | YES  |     | NULL    |                   |
+	// | cfg_json | json         | YES  |     | NULL    | VIRTUAL GENERATED |
+	// | age      | int(11)      | YES  |     | NULL    |                   |
+	// +----------+--------------+------+-----+---------+-------------------+
+	// mysql> insert into t11(id, cfg) values (1, '{}');
+
+	// test json deserialization
+	// mysql> update t11 set cfg = '{"a":1234}' where id = 1;
+	// mysql> update test set cfg = '{}' where id = 1;
+
+	tableMapEventData := []byte("l\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x03t11\x00\x04\x03\x0f\xf5\x03\x03d\x00\x04\x0f")
+
+	tableMapEvent := new(TableMapEvent)
+	tableMapEvent.tableIDSize = 6
+	err := tableMapEvent.Decode(tableMapEventData)
+	c.Assert(err, IsNil)
+
+	rows := new(RowsEvent)
+	rows.tableIDSize = 6
+	rows.tables = make(map[uint64]*TableMapEvent)
+	rows.tables[tableMapEvent.TableID] = tableMapEvent
+	rows.Version = 2
+
+	data := []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[0][2], DeepEquals, []uint8("{}"))
+
+	// after MySQL 5.7.22
+	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+
+	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{\"a\":1234}"))
+	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+
+	// before MySQL 5.7.22
+	rows.ignoreJSONDecodeErr = true
+	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x01\x00\x0c\x00\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("null"))
+	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+
+	rows.ignoreJSONDecodeErr = false
+	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
+	rows.Rows = nil
+	err = rows.Decode(data)
+	c.Assert(err, IsNil)
+	// this value is wrong in binlog, but can be parsed without error
+	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+}
+
+func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
+	testcases := []struct {
+		data        []byte
+		dec         uint16
+		getFracTime bool
+		expected    string
+	}{
+		{[]byte("\xfe\xf3\xff\x7e\xfb"), 0, true, "9999-12-31 23:59:59"},
+		{[]byte("\x99\x9a\xb8\xf7\xaa"), 0, true, "2016-10-28 15:30:42"},
+		{[]byte("\x99\x02\xc2\x00\x00"), 0, true, "1970-01-01 00:00:00"},
+		{[]byte("\x80\x00\x00\x00\x00"), 0, false, "0000-00-00 00:00:00"},
+		{[]byte("\x80\x00\x02\xf1\x05"), 0, false, "0000-00-01 15:04:05"},
+		{[]byte("\x80\x03\x82\x00\x00"), 0, false, "0001-01-01 00:00:00"},
+		{[]byte("\x80\x03\x82\x00\x00\x0c"), uint16(2), false, "0001-01-01 00:00:00.12"},
+		{[]byte("\x80\x03\x82\x00\x00\x04\xd3"), uint16(4), false, "0001-01-01 00:00:00.1235"},
+		{[]byte("\x80\x03\x82\x00\x00\x01\xe2\x40"), uint16(6), false, "0001-01-01 00:00:00.123456"},
+	}
+	for _, tc := range testcases {
+		value, _, err := decodeDatetime2(tc.data, tc.dec)
+		c.Assert(err, IsNil)
+		switch t := value.(type) {
+		case fracTime:
+			c.Assert(tc.getFracTime, IsTrue)
+			c.Assert(t.String(), Equals, tc.expected)
+		case string:
+			c.Assert(tc.getFracTime, IsFalse)
+			c.Assert(t, Equals, tc.expected)
+		default:
+			c.Errorf("invalid value type: %T", value)
+		}
+	}
+}

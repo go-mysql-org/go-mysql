@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -19,7 +19,7 @@ var HAHealthCheckSchema = "mysql.ha_health_check"
 
 // Different column type
 const (
-	TYPE_NUMBER    = iota + 1 // tinyint, smallint, mediumint, int, bigint, year
+	TYPE_NUMBER    = iota + 1 // tinyint, smallint, int, bigint, year
 	TYPE_FLOAT                // float, double
 	TYPE_ENUM                 // enum
 	TYPE_SET                  // set
@@ -31,6 +31,7 @@ const (
 	TYPE_BIT                  // bit
 	TYPE_JSON                 // json
 	TYPE_DECIMAL              // decimal
+	TYPE_MEDIUM_INT
 )
 
 type TableColumn struct {
@@ -105,6 +106,8 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].Type = TYPE_BIT
 	} else if strings.HasPrefix(columnType, "json") {
 		ta.Columns[index].Type = TYPE_JSON
+	} else if strings.Contains(columnType, "mediumint") {
+		ta.Columns[index].Type = TYPE_MEDIUM_INT
 	} else if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
 		ta.Columns[index].Type = TYPE_NUMBER
 	} else {
@@ -368,7 +371,7 @@ func (ta *Table) fetchPrimaryKeyColumns() error {
 	return nil
 }
 
-// Get primary keys in one row for a table, a table may use multi fields as the PK
+// GetPKValues gets primary keys in one row for a table, a table may use multi fields as the PK
 func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 	indexes := ta.PKColumns
 	if len(indexes) == 0 {
@@ -387,7 +390,7 @@ func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 	return values, nil
 }
 
-// Get term column's value
+// GetColumnValue gets term column's value
 func (ta *Table) GetColumnValue(column string, row []interface{}) (interface{}, error) {
 	index := ta.FindColumn(column)
 	if index == -1 {

@@ -142,7 +142,7 @@ func (s *Server) UnlockTables() error {
 	return err
 }
 
-// Get current binlog filename and position read from master
+// FetchSlaveReadPos gets current binlog filename and position read from master
 func (s *Server) FetchSlaveReadPos() (Position, error) {
 	r, err := s.SlaveStatus()
 	if err != nil {
@@ -152,10 +152,10 @@ func (s *Server) FetchSlaveReadPos() (Position, error) {
 	fname, _ := r.GetStringByName(0, "Master_Log_File")
 	pos, _ := r.GetIntByName(0, "Read_Master_Log_Pos")
 
-	return Position{fname, uint32(pos)}, nil
+	return Position{Name: fname, Pos: uint32(pos)}, nil
 }
 
-// Get current executed binlog filename and position from master
+// FetchSlaveExecutePos gets current executed binlog filename and position from master
 func (s *Server) FetchSlaveExecutePos() (Position, error) {
 	r, err := s.SlaveStatus()
 	if err != nil {
@@ -165,7 +165,7 @@ func (s *Server) FetchSlaveExecutePos() (Position, error) {
 	fname, _ := r.GetStringByName(0, "Relay_Master_Log_File")
 	pos, _ := r.GetIntByName(0, "Exec_Master_Log_Pos")
 
-	return Position{fname, uint32(pos)}, nil
+	return Position{Name: fname, Pos: uint32(pos)}, nil
 }
 
 func (s *Server) MasterPosWait(pos Position, timeout int) error {

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 )
@@ -47,7 +47,7 @@ func main() {
 
 	b := replication.NewBinlogSyncer(cfg)
 
-	pos := mysql.Position{*file, uint32(*pos)}
+	pos := mysql.Position{Name: *file, Pos: uint32(*pos)}
 	if len(*backupPath) > 0 {
 		// Backup will always use RawMode.
 		err := b.StartBackup(*backupPath, pos, 0)

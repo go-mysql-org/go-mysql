@@ -2,9 +2,9 @@ package replication
 
 import (
 	"context"
-	"time"
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
+	"time"
 )
 
 var (
@@ -36,9 +36,9 @@ func (s *BinlogStreamer) GetEvent(ctx context.Context) (*BinlogEvent, error) {
 	}
 }
 
-// Get the binlog event with starttime, if current binlog event timestamp smaller than specify starttime
-// return nil event 
-func (s *BinlogStreamer) GetEventWithStartTime(ctx context.Context,startTime time.Time) (*BinlogEvent, error) {
+// GetEventWithStartTime gets the binlog event with starttime, if current binlog event timestamp smaller than specify starttime
+// return nil event
+func (s *BinlogStreamer) GetEventWithStartTime(ctx context.Context, startTime time.Time) (*BinlogEvent, error) {
 	if s.err != nil {
 		return nil, ErrNeedSyncAgain
 	}
@@ -48,7 +48,7 @@ func (s *BinlogStreamer) GetEventWithStartTime(ctx context.Context,startTime tim
 		if int64(c.Header.Timestamp) >= startUnix {
 			return c, nil
 		}
-		return nil,nil
+		return nil, nil
 	case s.err = <-s.ech:
 		return nil, s.err
 	case <-ctx.Done():

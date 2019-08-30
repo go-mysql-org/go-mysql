@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 )
 
@@ -28,7 +28,7 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 	var n int = 0
 
 	for i := range f {
-		v, isNull, n, err = LengthEnodedString(p[pos:])
+		v, isNull, n, err = LengthEncodedString(p[pos:])
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -63,6 +63,8 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 	return data, nil
 }
 
+// ParseBinary parses the binary format of data
+// see https://dev.mysql.com/doc/internals/en/binary-protocol-value.html
 func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 	data := make([]interface{}, len(f))
 
@@ -109,17 +111,7 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			pos += 2
 			continue
 
-		case MYSQL_TYPE_INT24:
-			if isUnsigned {
-				data[i] = ParseBinaryUint24(p[pos : pos+3])
-			} else {
-				data[i] = ParseBinaryInt24(p[pos : pos+3])
-			}
-			//3 byte
-			pos += 3
-			continue
-
-		case MYSQL_TYPE_LONG:
+		case MYSQL_TYPE_INT24, MYSQL_TYPE_LONG:
 			if isUnsigned {
 				data[i] = ParseBinaryUint32(p[pos : pos+4])
 			} else {
@@ -151,7 +143,7 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			MYSQL_TYPE_BIT, MYSQL_TYPE_ENUM, MYSQL_TYPE_SET, MYSQL_TYPE_TINY_BLOB,
 			MYSQL_TYPE_MEDIUM_BLOB, MYSQL_TYPE_LONG_BLOB, MYSQL_TYPE_BLOB,
 			MYSQL_TYPE_VAR_STRING, MYSQL_TYPE_STRING, MYSQL_TYPE_GEOMETRY:
-			v, isNull, n, err = LengthEnodedString(p[pos:])
+			v, isNull, n, err = LengthEncodedString(p[pos:])
 			pos += n
 			if err != nil {
 				return nil, errors.Trace(err)

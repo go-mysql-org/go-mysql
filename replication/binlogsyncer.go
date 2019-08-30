@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
-	"github.com/satori/go.uuid"
+	"github.com/pingcap/errors"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/client"
 	. "github.com/siddontang/go-mysql/mysql"
@@ -92,6 +93,14 @@ type BinlogSyncerConfig struct {
 	// For MariaDB, binlog_checksum was introduced since MariaDB 5.3, but CRC32 was set as default value since MariaDB 10.2.1 .
 	// https://mariadb.com/kb/en/library/replication-and-binary-log-server-system-variables/#binlog_checksum
 	VerifyChecksum bool
+
+	// DumpCommandFlag is used to send binglog dump command. Default 0, aka BINLOG_DUMP_NEVER_STOP.
+	// For MySQL, BINLOG_DUMP_NEVER_STOP and BINLOG_DUMP_NON_BLOCK are available.
+	// https://dev.mysql.com/doc/internals/en/com-binlog-dump.html#binlog-dump-non-block
+	// For MariaDB, BINLOG_DUMP_NEVER_STOP, BINLOG_DUMP_NON_BLOCK and BINLOG_SEND_ANNOTATE_ROWS_EVENT are available.
+	// https://mariadb.com/kb/en/library/com_binlog_dump/
+	// https://mariadb.com/kb/en/library/annotate_rows_event/
+	DumpCommandFlag uint16
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -192,10 +201,17 @@ func (b *BinlogSyncer) registerSlave() error {
 		b.c.Close()
 	}
 
-	log.Infof("register slave for master server %s:%d", b.cfg.Host, b.cfg.Port)
+	addr := ""
+	if strings.Contains(b.cfg.Host, "/") {
+		addr = b.cfg.Host
+	} else {
+		addr = fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port)
+	}
+
+	log.Infof("register slave for master server %s", addr)
 	var err error
-	b.c, err = client.Connect(fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port), b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
-		c.TLSConfig = b.cfg.TLSConfig
+	b.c, err = client.Connect(addr, b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
+		c.SetTLSConfig(b.cfg.TLSConfig)
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -404,7 +420,7 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p Position) error {
 	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
 	pos += 4
 
-	binary.LittleEndian.PutUint16(data[pos:], BINLOG_DUMP_NEVER_STOP)
+	binary.LittleEndian.PutUint16(data[pos:], b.cfg.DumpCommandFlag)
 	pos += 2
 
 	binary.LittleEndian.PutUint32(data[pos:], b.cfg.ServerID)
@@ -416,7 +432,7 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p Position) error {
 }
 
 func (b *BinlogSyncer) writeBinlogDumpMysqlGTIDCommand(gset GTIDSet) error {
-	p := Position{"", 4}
+	p := Position{Name: "", Pos: 4}
 	gtidData := gset.Encode()
 
 	b.c.ResetSequence()
@@ -472,7 +488,7 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 	}
 
 	// Since we use @slave_connect_state, the file and position here are ignored.
-	return b.writeBinlogDumpCommand(Position{"", 0})
+	return b.writeBinlogDumpCommand(Position{Name: "", Pos: 0})
 }
 
 // localHostname returns the hostname that register slave would register as.
@@ -759,20 +775,10 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 }
 
 func (b *BinlogSyncer) getGtidSet() GTIDSet {
-	var gtidSet GTIDSet
-
 	if b.gset == nil {
 		return nil
 	}
-
-	switch b.cfg.Flavor {
-	case MariaDBFlavor:
-		gtidSet, _ = ParseGTIDSet(MariaDBFlavor, b.gset.String())
-	default:
-		gtidSet, _ = ParseGTIDSet(MySQLFlavor, b.gset.String())
-	}
-
-	return gtidSet
+	return b.gset.Clone()
 }
 
 // LastConnectionID returns last connectionID.

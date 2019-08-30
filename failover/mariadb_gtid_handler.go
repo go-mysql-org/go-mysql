@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -118,7 +118,7 @@ func (h *MariadbGTIDHandler) WaitRelayLogDone(s *Server) error {
 	fname, _ := r.GetStringByName(0, "Master_Log_File")
 	pos, _ := r.GetIntByName(0, "Read_Master_Log_Pos")
 
-	return s.MasterPosWait(Position{fname, uint32(pos)}, 0)
+	return s.MasterPosWait(Position{Name: fname, Pos: uint32(pos)}, 0)
 }
 
 func (h *MariadbGTIDHandler) WaitCatchMaster(s *Server, m *Server) error {

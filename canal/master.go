@@ -13,6 +13,8 @@ type masterInfo struct {
 	pos mysql.Position
 
 	gset mysql.GTIDSet
+
+	timestamp uint32
 }
 
 func (m *masterInfo) Update(pos mysql.Position) {
@@ -20,6 +22,14 @@ func (m *masterInfo) Update(pos mysql.Position) {
 
 	m.Lock()
 	m.pos = pos
+	m.Unlock()
+}
+
+func (m *masterInfo) UpdateTimestamp(ts uint32) {
+	log.Debugf("update master timestamp %d", ts)
+
+	m.Lock()
+	m.timestamp = ts
 	m.Unlock()
 }
 
@@ -38,9 +48,19 @@ func (m *masterInfo) Position() mysql.Position {
 	return m.pos
 }
 
+func (m *masterInfo) Timestamp() uint32 {
+	m.RLock()
+	defer m.RUnlock()
+
+	return m.timestamp
+}
+
 func (m *masterInfo) GTIDSet() mysql.GTIDSet {
 	m.RLock()
 	defer m.RUnlock()
 
-	return m.gset
+	if m.gset == nil {
+		return nil
+	}
+	return m.gset.Clone()
 }
