@@ -73,7 +73,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
 	c.master = &masterInfo{}
-	
+
 	c.delay = new(uint32)
 
 	var err error
@@ -227,8 +227,10 @@ func (c *Canal) run() error {
 	}
 
 	if err := c.runSyncBinlog(); err != nil {
-		log.Errorf("canal start sync binlog err: %v", err)
-		return errors.Trace(err)
+		if errors.Cause(err) != context.Canceled {
+			log.Errorf("canal start sync binlog err: %v", err)
+			return errors.Trace(err)
+		}
 	}
 
 	return nil
@@ -240,11 +242,11 @@ func (c *Canal) Close() {
 	defer c.m.Unlock()
 
 	c.cancel()
+	c.syncer.Close()
 	c.connLock.Lock()
 	c.conn.Close()
 	c.conn = nil
 	c.connLock.Unlock()
-	c.syncer.Close()
 
 	c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
 }

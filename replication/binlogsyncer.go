@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -178,6 +177,18 @@ func (b *BinlogSyncer) close() {
 		b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	}
 
+	// kill last connection id
+	if b.lastConnectionID > 0 {
+		// Use a new connection to kill the binlog syncer
+		// because calling KILL from the same connection
+		// doesn't actually disconnect it.
+		c, err := b.newConnection()
+		if err == nil {
+			b.killConnection(c, b.lastConnectionID)
+			c.Close()
+		}
+	}
+
 	b.wg.Wait()
 
 	if b.c != nil {
@@ -201,18 +212,8 @@ func (b *BinlogSyncer) registerSlave() error {
 		b.c.Close()
 	}
 
-	addr := ""
-	if strings.Contains(b.cfg.Host, "/") {
-		addr = b.cfg.Host
-	} else {
-		addr = fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port)
-	}
-
-	log.Infof("register slave for master server %s", addr)
 	var err error
-	b.c, err = client.Connect(addr, b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
-		c.SetTLSConfig(b.cfg.TLSConfig)
-	})
+	b.c, err = b.newConnection()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -234,15 +235,7 @@ func (b *BinlogSyncer) registerSlave() error {
 
 	// kill last connection id
 	if b.lastConnectionID > 0 {
-		cmd := fmt.Sprintf("KILL %d", b.lastConnectionID)
-		if _, err := b.c.Execute(cmd); err != nil {
-			log.Errorf("kill connection %d error %v", b.lastConnectionID, err)
-			// Unknown thread id
-			if code := ErrorCode(err.Error()); code != ER_NO_SUCH_THREAD {
-				return errors.Trace(err)
-			}
-		}
-		log.Infof("kill last connection id %d", b.lastConnectionID)
+		b.killConnection(b.c, b.lastConnectionID)
 	}
 
 	// save last last connection id for kill
@@ -635,9 +628,15 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 	for {
 		data, err := b.c.ReadPacket()
+		select {
+		case <-b.ctx.Done():
+			s.close()
+			return
+		default:
+		}
+
 		if err != nil {
 			log.Error(err)
-
 			// we meet connection error, should re-connect again with
 			// last nextPos or nextGTID we got.
 			if len(b.nextPos.Name) == 0 && b.gset == nil {
@@ -784,4 +783,29 @@ func (b *BinlogSyncer) getGtidSet() GTIDSet {
 // LastConnectionID returns last connectionID.
 func (b *BinlogSyncer) LastConnectionID() uint32 {
 	return b.lastConnectionID
+}
+
+func (b *BinlogSyncer) newConnection() (*client.Conn, error) {
+	var addr string
+	if b.cfg.Port != 0 {
+		addr = fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port)
+	} else {
+		addr = b.cfg.Host
+	}
+
+	return client.Connect(addr, b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
+		c.SetTLSConfig(b.cfg.TLSConfig)
+	})
+}
+
+func (b *BinlogSyncer) killConnection(conn *client.Conn, id uint32) {
+	cmd := fmt.Sprintf("KILL %d", id)
+	if _, err := conn.Execute(cmd); err != nil {
+		log.Errorf("kill connection %d error %v", id, err)
+		// Unknown thread id
+		if code := ErrorCode(err.Error()); code != ER_NO_SUCH_THREAD {
+			log.Error(errors.Trace(err))
+		}
+	}
+	log.Infof("kill last connection id %d", id)
 }
