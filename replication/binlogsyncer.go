@@ -707,6 +707,11 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	//skip OK byte, 0x00
 	data = data[1:]
 
+	var (
+		currentGTID string
+		err         error
+	)
+
 	needACK := false
 	if b.cfg.SemiSyncEnabled && (data[0] == SemiSyncIndicator) {
 		needACK = (data[1] == 0x01)
@@ -729,27 +734,18 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		b.nextPos.Pos = uint32(event.Position)
 		log.Infof("rotate to %s", b.nextPos)
 	case *GTIDEvent:
-		if b.gset == nil {
-			break
-		}
 		u, _ := uuid.FromBytes(event.SID)
-		err := b.gset.Update(fmt.Sprintf("%s:%d", u.String(), event.GNO))
-		if err != nil {
-			return errors.Trace(err)
-		}
+		currentGTID = fmt.Sprintf("%s:%d", u.String(), event.GNO)
 	case *MariadbGTIDEvent:
-		if b.gset == nil {
-			break
-		}
 		GTID := event.GTID
-		err := b.gset.Update(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
-		if err != nil {
-			return errors.Trace(err)
-		}
+		currentGTID = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
 	case *XIDEvent:
-		event.GSet = b.getGtidSet()
+		event.GSet, err = b.updateGtidSet(currentGTID)
 	case *QueryEvent:
-		event.GSet = b.getGtidSet()
+		event.GSet, err = b.updateGtidSet(currentGTID)
+	}
+	if err != nil {
+		return errors.Trace(err)
 	}
 
 	needStop := false
@@ -778,6 +774,19 @@ func (b *BinlogSyncer) getGtidSet() GTIDSet {
 		return nil
 	}
 	return b.gset.Clone()
+}
+
+func (b *BinlogSyncer) updateGtidSet(gtid string) (GTIDSet, error) {
+	if b.gset == nil {
+		return nil, nil
+	}
+
+	var err error
+	if len(gtid) > 0 {
+		err = b.gset.Update(gtid)
+	}
+
+	return b.gset.Clone(), errors.Trace(err)
 }
 
 // LastConnectionID returns last connectionID.
