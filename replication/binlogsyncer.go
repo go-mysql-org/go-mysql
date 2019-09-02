@@ -83,9 +83,12 @@ type BinlogSyncerConfig struct {
 	// read timeout
 	ReadTimeout time.Duration
 
-	// maximum number of attempts to re-establish a broken connection, zero means no retry, any negative number
-	// means infinite retry.
+	// maximum number of attempts to re-establish a broken connection, zero means infinite retry
+	// will not work if DisableRetrySync is true
 	MaxReconnectAttempts int
+
+	// whether disable  re-sync for broken connection
+	DisableRetrySync bool
 
 	// Only works when MySQL/MariaDB variable binlog_checksum=CRC32.
 	// For MySQL, binlog_checksum was introduced since 5.6.2, but CRC32 was set as default value since 5.6.6 .
@@ -647,8 +650,8 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			}
 
 			for {
-				if b.cfg.MaxReconnectAttempts >= 0 && b.retryCount >= b.cfg.MaxReconnectAttempts {
-					log.Errorf("retry sync exceeded max retries (%d)", b.cfg.MaxReconnectAttempts)
+				if b.cfg.DisableRetrySync {
+					log.Warn("retry sync is disabled")
 					s.closeWithError(err)
 					return
 				}
@@ -659,6 +662,12 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 				case <-time.After(time.Second):
 					b.retryCount++
 					if err = b.retrySync(); err != nil {
+						if b.cfg.MaxReconnectAttempts > 0 && b.retryCount >= b.cfg.MaxReconnectAttempts {
+							log.Errorf("retry sync err: %v, exceeded max retries (%d)", err, b.cfg.MaxReconnectAttempts)
+							s.closeWithError(err)
+							return
+						}
+
 						log.Errorf("retry sync err: %v, wait 1s and retry again", err)
 						continue
 					}
