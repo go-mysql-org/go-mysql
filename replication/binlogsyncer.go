@@ -120,7 +120,7 @@ type BinlogSyncer struct {
 
 	nextPos Position
 
-	gset GTIDSet
+	prevGset, currGset GTIDSet
 
 	running bool
 
@@ -376,7 +376,7 @@ func (b *BinlogSyncer) StartSync(pos Position) (*BinlogStreamer, error) {
 func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 	log.Infof("begin to sync binlog from GTID set %s", gset)
 
-	b.gset = gset
+	b.prevGset = gset
 
 	b.m.Lock()
 	defer b.m.Unlock()
@@ -569,9 +569,9 @@ func (b *BinlogSyncer) retrySync() error {
 
 	b.parser.Reset()
 
-	if b.gset != nil {
-		log.Infof("begin to re-sync from %s", b.gset.String())
-		if err := b.prepareSyncGTID(b.gset); err != nil {
+	if b.prevGset != nil {
+		log.Infof("begin to re-sync from %s", b.prevGset.String())
+		if err := b.prepareSyncGTID(b.prevGset); err != nil {
 			return errors.Trace(err)
 		}
 	} else {
@@ -643,7 +643,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			log.Error(err)
 			// we meet connection error, should re-connect again with
 			// last nextPos or nextGTID we got.
-			if len(b.nextPos.Name) == 0 && b.gset == nil {
+			if len(b.nextPos.Name) == 0 && b.prevGset == nil {
 				// we can't get the correct position, close.
 				s.closeWithError(err)
 				return
@@ -733,33 +733,53 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		// Some events like FormatDescriptionEvent return 0, ignore.
 		b.nextPos.Pos = e.Header.LogPos
 	}
+
+	getCurrentGtidSet := func() GTIDSet {
+		if b.currGset == nil {
+			return nil
+		}
+		return b.currGset.Clone()
+	}
+
+	advanceCurrentGtidSet := func(gtid string) error {
+		if b.currGset == nil {
+			b.currGset = b.prevGset.Clone()
+		}
+		prev := b.currGset.Clone()
+		err := b.currGset.Update(gtid)
+		if err == nil {
+			b.prevGset = prev
+		}
+		return err
+	}
+
 	switch event := e.Event.(type) {
 	case *RotateEvent:
 		b.nextPos.Name = string(event.NextLogName)
 		b.nextPos.Pos = uint32(event.Position)
 		log.Infof("rotate to %s", b.nextPos)
 	case *GTIDEvent:
-		if b.gset == nil {
+		if b.prevGset == nil {
 			break
 		}
 		u, _ := uuid.FromBytes(event.SID)
-		err := b.gset.Update(fmt.Sprintf("%s:%d", u.String(), event.GNO))
+		err := advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), event.GNO))
 		if err != nil {
 			return errors.Trace(err)
 		}
 	case *MariadbGTIDEvent:
-		if b.gset == nil {
+		if b.prevGset == nil {
 			break
 		}
 		GTID := event.GTID
-		err := b.gset.Update(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+		err := advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
 		if err != nil {
 			return errors.Trace(err)
 		}
 	case *XIDEvent:
-		event.GSet = b.getGtidSet()
+		event.GSet = getCurrentGtidSet()
 	case *QueryEvent:
-		event.GSet = b.getGtidSet()
+		event.GSet = getCurrentGtidSet()
 	}
 
 	needStop := false
@@ -781,13 +801,6 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	}
 
 	return nil
-}
-
-func (b *BinlogSyncer) getGtidSet() GTIDSet {
-	if b.gset == nil {
-		return nil
-	}
-	return b.gset.Clone()
 }
 
 // LastConnectionID returns last connectionID.
