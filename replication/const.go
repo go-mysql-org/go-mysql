@@ -40,7 +40,12 @@ const (
 )
 
 const (
-	BINLOG_MARIADB_FL_GROUP_COMMIT_ID uint8 = 0x02
+	BINLOG_MARIADB_FL_STANDALONE      = 1 << iota /*1  - FL_STANDALONE is set when there is no terminating COMMIT event*/
+	BINLOG_MARIADB_FL_GROUP_COMMIT_ID             /*2  - FL_GROUP_COMMIT_ID is set when event group is part of a group commit on the master. Groups with same commit_id are part of the same group commit.*/
+	BINLOG_MARIADB_FL_TRANSACTIONAL               /*4  - FL_TRANSACTIONAL is set for an event group that can be safely rolled back (no MyISAM, eg.).*/
+	BINLOG_MARIADB_FL_ALLOW_PARALLEL              /*8  - FL_ALLOW_PARALLEL reflects the (negation of the) value of @@SESSION.skip_parallel_replication at the time of commit*/
+	BINLOG_MARIADB_FL_WAITED                      /*16 = FL_WAITED is set if a row lock wait (or other wait) is detected during the execution of the transaction*/
+	BINLOG_MARIADB_FL_DDL                         /*32 - FL_DDL is set for event group containing DDL*/
 )
 
 type EventType byte

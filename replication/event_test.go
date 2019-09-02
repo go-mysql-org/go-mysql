@@ -27,3 +27,21 @@ func (_ *testDecodeSuite) TestMariadbGTIDListEvent(c *C) {
 		c.Assert(ev.GTIDs[i].SequenceNumber, Equals, uint64(3+3*i))
 	}
 }
+
+func (_ *testDecodeSuite) TestMariadbGTIDEvent(c *C) {
+	data := []byte{
+		1, 2, 3, 4, 5, 6, 7, 8, // SequenceNumber
+		0x2a, 1, 0x3b, 4, // DomainID
+		0xff,                                           // Flags
+		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, // commitID
+	}
+	ev := MariadbGTIDEvent{}
+	err := ev.Decode(data)
+
+	c.Assert(err, IsNil)
+
+	c.Assert(ev.GTID.SequenceNumber, Equals, uint64(0x0807060504030201))
+	c.Assert(ev.GTID.DomainID, Equals, uint32(0x043b012a))
+	c.Assert(ev.Flags, Equals, byte(0xff))
+	c.Assert(ev.CommitID, Equals, uint64(0x1716151413121110))
+}
