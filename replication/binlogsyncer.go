@@ -83,8 +83,12 @@ type BinlogSyncerConfig struct {
 	// read timeout
 	ReadTimeout time.Duration
 
-	// maximum number of attempts to re-establish a broken connection
+	// maximum number of attempts to re-establish a broken connection, zero or negative number means infinite retry.
+	// this configuration will not work if DisableRetrySync is true
 	MaxReconnectAttempts int
+
+	// whether disable re-sync for broken connection
+	DisableRetrySync bool
 
 	// Only works when MySQL/MariaDB variable binlog_checksum=CRC32.
 	// For MySQL, binlog_checksum was introduced since 5.6.2, but CRC32 was set as default value since 5.6.6 .
@@ -641,6 +645,12 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			// last nextPos or nextGTID we got.
 			if len(b.nextPos.Name) == 0 && b.gset == nil {
 				// we can't get the correct position, close.
+				s.closeWithError(err)
+				return
+			}
+
+			if b.cfg.DisableRetrySync {
+				log.Warn("retry sync is disabled")
 				s.closeWithError(err)
 				return
 			}
