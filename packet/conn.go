@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net"
+	"sync"
 
 	"crypto/rand"
 	"crypto/rsa"
@@ -15,6 +16,29 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
+type BufPool struct {
+	pool *sync.Pool
+}
+
+func NewBufPool() *BufPool {
+	return &BufPool{
+		pool: &sync.Pool{
+			New: func() interface{} {
+				return new(bytes.Buffer)
+			},
+		},
+	}
+}
+
+func (b *BufPool) Get() *bytes.Buffer {
+	return b.pool.Get().(*bytes.Buffer)
+}
+
+func (b *BufPool) Return(buf *bytes.Buffer) {
+	buf.Reset()
+	b.pool.Put(buf)
+}
+
 /*
 	Conn is the base class to handle MySQL protocol.
 */
@@ -24,6 +48,8 @@ type Conn struct {
 	// we removed the buffer reader because it will cause the SSLRequest to block (tls connection handshake won't be
 	// able to read the "Client Hello" data since it has been buffered into the buffer reader)
 
+	bufPool *BufPool
+
 	Sequence uint8
 }
 
@@ -31,17 +57,22 @@ func NewConn(conn net.Conn) *Conn {
 	c := new(Conn)
 
 	c.Conn = conn
+	c.bufPool = NewBufPool()
 
 	return c
 }
 
 func (c *Conn) ReadPacket() ([]byte, error) {
-	var buf bytes.Buffer
+	// Here we use `sync.Pool` to avoid allocate/destroy buffers frequently.
+	buf := c.bufPool.Get()
+	defer c.bufPool.Return(buf)
 
-	if err := c.ReadPacketTo(&buf); err != nil {
+	if err := c.ReadPacketTo(buf); err != nil {
 		return nil, errors.Trace(err)
 	} else {
-		return buf.Bytes(), nil
+		result := make([]byte, buf.Len())
+		copy(result, buf.Bytes())
+		return result, nil
 	}
 }
 
@@ -65,6 +96,11 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	}
 
 	c.Sequence++
+
+	if buf, ok := w.(*bytes.Buffer); ok {
+		// Allocate the buffer with expected length directly instead of call `grow` and migrate data many times.
+		buf.Grow(length)
+	}
 
 	if n, err := io.CopyN(w, c.Conn, int64(length)); err != nil {
 		return ErrBadConn
