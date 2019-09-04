@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"net"
@@ -20,9 +21,13 @@ import (
 */
 type Conn struct {
 	net.Conn
+	br     *bufio.Reader
 
-	// we removed the buffer reader because it will cause the SSLRequest to block (tls connection handshake won't be
-	// able to read the "Client Hello" data since it has been buffered into the buffer reader)
+	// For TLS connection, we read from `net.Conn` directly because the buffer reader will cause the SSLRequest to block
+	// (tls connection handshake won't be able to read the "Client Hello" data since it has been buffered into the
+	// buffer reader).
+	// For normal connection, we read from `br` since it would reduce `syscall.Read` and improve the athroughput.
+	reader io.Reader
 
 	Sequence uint8
 }
@@ -30,7 +35,16 @@ type Conn struct {
 func NewConn(conn net.Conn) *Conn {
 	c := new(Conn)
 
+	c.br = bufio.NewReader(conn)
+	c.reader = c.br
 	c.Conn = conn
+
+	return c
+}
+
+func NewTLSConn(conn net.Conn) *Conn {
+	c := NewConn(conn)
+	c.reader = c.Conn
 
 	return c
 }
@@ -48,7 +62,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 func (c *Conn) ReadPacketTo(w io.Writer) error {
 	header := []byte{0, 0, 0, 0}
 
-	if _, err := io.ReadFull(c.Conn, header); err != nil {
+	if _, err := io.ReadFull(c.reader, header); err != nil {
 		return ErrBadConn
 	}
 
@@ -66,7 +80,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 
 	c.Sequence++
 
-	if n, err := io.CopyN(w, c.Conn, int64(length)); err != nil {
+	if n, err := io.CopyN(w, c.reader, int64(length)); err != nil {
 		return ErrBadConn
 	} else if n != int64(length) {
 		return ErrBadConn

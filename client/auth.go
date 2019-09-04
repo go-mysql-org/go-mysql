@@ -216,7 +216,7 @@ func (c *Conn) writeAuthHandshake() error {
 		}
 
 		currentSequence := c.Sequence
-		c.Conn = packet.NewConn(tlsConn)
+		c.Conn = packet.NewTLSConn(tlsConn)
 		c.Sequence = currentSequence
 	}
 
