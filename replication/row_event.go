@@ -284,6 +284,13 @@ func (e *RowsEvent) Decode(data []byte) error {
 		}
 	}()
 
+	// Pre-allocate memory for rows.
+	rowsLen := e.ColumnCount
+	if e.needBitmap2 {
+		rowsLen += e.ColumnCount
+	}
+	e.Rows = make([][]interface{}, 0, rowsLen)
+
 	for pos < len(data) {
 		if n, err = e.decodeRows(data[pos:], e.Table, e.ColumnBitmap1); err != nil {
 			return errors.Trace(err)
