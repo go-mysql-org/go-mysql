@@ -445,7 +445,7 @@ type MariadbGTIDEvent struct {
 	CommitID uint64
 }
 
-func (e *MariadbGTIDEvent) IsDdl() bool {
+func (e *MariadbGTIDEvent) IsDDL() bool {
 	return (e.Flags & BINLOG_MARIADB_FL_DDL) != 0
 }
 

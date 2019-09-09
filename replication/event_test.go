@@ -43,5 +43,8 @@ func (_ *testDecodeSuite) TestMariadbGTIDEvent(c *C) {
 	c.Assert(ev.GTID.SequenceNumber, Equals, uint64(0x0807060504030201))
 	c.Assert(ev.GTID.DomainID, Equals, uint32(0x043b012a))
 	c.Assert(ev.Flags, Equals, byte(0xff))
+	c.Assert(ev.IsDDL(), Equals, true)
+	c.Assert(ev.IsStandalone(), Equals, true)
+	c.Assert(ev.IsGroupCommit(), Equals, true)
 	c.Assert(ev.CommitID, Equals, uint64(0x1716151413121110))
 }
