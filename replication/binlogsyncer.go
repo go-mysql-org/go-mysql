@@ -385,6 +385,10 @@ func (b *BinlogSyncer) StartSyncGTID(gset GTIDSet) (*BinlogStreamer, error) {
 		return nil, errors.Trace(errSyncRunning)
 	}
 
+	// establishing network connection here and will start getting binlog events from "gset + 1", thus until first
+	// MariadbGTIDEvent/GTIDEvent event is received - we effectively do not have a "current GTID"
+	b.currGset = nil
+
 	if err := b.prepare(); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -608,6 +612,10 @@ func (b *BinlogSyncer) prepareSyncPos(pos Position) error {
 
 func (b *BinlogSyncer) prepareSyncGTID(gset GTIDSet) error {
 	var err error
+
+	// re establishing network connection here and will start getting binlog events from "gset + 1", thus until first
+	// MariadbGTIDEvent/GTIDEvent event is received - we effectively do not have a "current GTID"
+	b.currGset = nil
 
 	if err = b.prepare(); err != nil {
 		return errors.Trace(err)
