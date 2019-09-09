@@ -570,7 +570,12 @@ func (b *BinlogSyncer) retrySync() error {
 	b.parser.Reset()
 
 	if b.prevGset != nil {
-		log.Infof("begin to re-sync from %s", b.prevGset.String())
+		msg := fmt.Sprintf("begin to re-sync from %s", b.prevGset.String())
+		if b.currGset != nil {
+			msg = fmt.Sprintf("%v (last read GTID=%v)", msg, b.currGset)
+		}
+		log.Infof(msg)
+
 		if err := b.prepareSyncGTID(b.prevGset); err != nil {
 			return errors.Trace(err)
 		}
