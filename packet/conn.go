@@ -93,17 +93,11 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 func (c *Conn) ReadPacketTo(w io.Writer) error {
 	header := []byte{0, 0, 0, 0}
 
-	//if _, err := io.ReadFull(c.Conn, header); err != nil {
 	if _, err := io.ReadFull(c.reader, header); err != nil {
 		return ErrBadConn
 	}
 
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
-	// bug fixed: caching_sha2_password will send 0-length payload (the unscrambled password) when the password is empty
-	//if length < 1 {
-	//	return errors.Errorf("invalid payload length %d", length)
-	//}
-
 	sequence := uint8(header[3])
 
 	if sequence != c.Sequence {
@@ -117,7 +111,6 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 		buf.Grow(length)
 	}
 
-	// if n, err := io.CopyN(w, c.Conn, int64(length)); err != nil {
 	if n, err := io.CopyN(w, c.reader, int64(length)); err != nil {
 		return ErrBadConn
 	} else if n != int64(length) {
