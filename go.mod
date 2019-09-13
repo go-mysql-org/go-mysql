@@ -2,6 +2,7 @@ module github.com/siddontang/go-mysql
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/go-sql-driver/mysql v1.4.1
 	github.com/golang/protobuf v1.3.1 // indirect
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.0
