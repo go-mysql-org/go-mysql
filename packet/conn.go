@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"net"
@@ -49,15 +50,29 @@ type Conn struct {
 	// able to read the "Client Hello" data since it has been buffered into the buffer reader)
 
 	bufPool *BufPool
+	br      *bufio.Reader
+	reader  io.Reader
 
 	Sequence uint8
 }
 
 func NewConn(conn net.Conn) *Conn {
 	c := new(Conn)
-
 	c.Conn = conn
+
 	c.bufPool = NewBufPool()
+	c.br = bufio.NewReaderSize(c, 65536) // 64kb
+	c.reader = c.br
+
+	return c
+}
+
+func NewTLSConn(conn net.Conn) *Conn {
+	c := new(Conn)
+	c.Conn = conn
+
+	c.bufPool = NewBufPool()
+	c.reader = c
 
 	return c
 }
@@ -70,8 +85,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 	if err := c.ReadPacketTo(buf); err != nil {
 		return nil, errors.Trace(err)
 	} else {
-		result := make([]byte, buf.Len())
-		copy(result, buf.Bytes())
+		result := append([]byte{}, buf.Bytes()...)
 		return result, nil
 	}
 }
@@ -79,16 +93,11 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 func (c *Conn) ReadPacketTo(w io.Writer) error {
 	header := []byte{0, 0, 0, 0}
 
-	if _, err := io.ReadFull(c.Conn, header); err != nil {
+	if _, err := io.ReadFull(c.reader, header); err != nil {
 		return ErrBadConn
 	}
 
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
-	// bug fixed: caching_sha2_password will send 0-length payload (the unscrambled password) when the password is empty
-	//if length < 1 {
-	//	return errors.Errorf("invalid payload length %d", length)
-	//}
-
 	sequence := uint8(header[3])
 
 	if sequence != c.Sequence {
@@ -102,7 +111,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 		buf.Grow(length)
 	}
 
-	if n, err := io.CopyN(w, c.Conn, int64(length)); err != nil {
+	if n, err := io.CopyN(w, c.reader, int64(length)); err != nil {
 		return ErrBadConn
 	} else if n != int64(length) {
 		return ErrBadConn

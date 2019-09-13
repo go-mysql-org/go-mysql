@@ -42,8 +42,16 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	p := NewInMemoryProvider()
 	p.AddUser(user, password)
 	salt, _ := RandomBuf(20)
+
+	var packetConn *packet.Conn
+	if defaultServer.tlsConfig != nil {
+		packetConn = packet.NewTLSConn(conn)
+	} else {
+		packetConn = packet.NewConn(conn)
+	}
+
 	c := &Conn{
-		Conn:               packet.NewConn(conn),
+		Conn:               packetConn,
 		serverConf:         defaultServer,
 		credentialProvider: p,
 		h:                  h,
@@ -63,9 +71,16 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 
 // NewCustomizedConn: create connection with customized server settings
 func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
+	var packetConn *packet.Conn
+	if serverConf.tlsConfig != nil {
+		packetConn = packet.NewTLSConn(conn)
+	} else {
+		packetConn = packet.NewConn(conn)
+	}
+
 	salt, _ := RandomBuf(20)
 	c := &Conn{
-		Conn:               packet.NewConn(conn),
+		Conn:               packetConn,
 		serverConf:         serverConf,
 		credentialProvider: p,
 		h:                  h,
