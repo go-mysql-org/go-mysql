@@ -57,12 +57,6 @@ func (c *Canal) runSyncBinlog() error {
 		// Update the delay between the Canal and the Master before the handler hooks are called
 		c.updateReplicationDelay(ev)
 
-		savePos = false
-		force = false
-		pos := c.master.Position()
-
-		curPos := pos.Pos
-
 		// If log pos equals zero then the received event is a fake rotate event and
 		// contains only a name of the next binlog file
 		// See https://github.com/mysql/mysql-server/blob/8e797a5d6eb3a87f16498edcb7261a75897babae/sql/rpl_binlog_sender.h#L235
@@ -77,6 +71,11 @@ func (c *Canal) runSyncBinlog() error {
 			continue
 		}
 
+		savePos = false
+		force = false
+		pos := c.master.Position()
+
+		curPos := pos.Pos
 		// next binlog pos
 		pos.Pos = ev.Header.LogPos
 
