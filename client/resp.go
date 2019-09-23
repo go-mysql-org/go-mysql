@@ -317,6 +317,10 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 			break
 		}
 
+		if data[0] == ERR_HEADER {
+			return c.handleErrorPacket(data)
+		}
+
 		result.RowDatas = append(result.RowDatas, data)
 	}
 
