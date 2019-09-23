@@ -143,15 +143,16 @@ func (c *Conn) readAuthData(data []byte, pos int) ([]byte, int, int, error) {
 		}
 		auth = authData
 		authLen = readBytes
-	} else {
+	} else if c.capability&CLIENT_SECURE_CONNECTION != 0 {
 		//auth length and auth
 		authLen = int(data[pos])
 		pos++
 		auth = data[pos : pos+authLen]
-		if authLen == 0 {
-			// skip the next \NUL in case the password is empty
-			pos++
-		}
+	} else {
+		authLen = bytes.IndexByte(data[pos:], 0x00)
+		auth = data[pos : pos+authLen]
+		// account for last NUL
+		authLen++
 	}
 	return auth, authLen, pos, nil
 }
