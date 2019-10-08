@@ -43,7 +43,7 @@ func (t *testSyncerSuite) TestIndexOutOfRange(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testSyncerSuite) TestParseSingleEvent(c *C) {
+func (t *testSyncerSuite) TestParseEvent(c *C) {
 	parser := NewBinlogParser()
 	parser.format = &FormatDescriptionEvent{
 		Version:                0x4,
@@ -69,5 +69,10 @@ func (t *testSyncerSuite) TestParseSingleEvent(c *C) {
 			return nil
 		})
 		c.Assert(err, IsNil)
+
+		e, err2 := parser.Parse(tc.byteData)
+		c.Assert(e.Header.EventType, Equals, STOP_EVENT)
+		c.Assert(e.Header.EventSize, Equals, tc.eventSize)
+		c.Assert(err2, IsNil)
 	}
 }
