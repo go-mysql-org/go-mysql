@@ -34,7 +34,7 @@ func (c *Conn) readInitialHandshake() error {
 	}
 
 	if data[0] == ERR_HEADER {
-		return errors.New("read initial handshake error")
+		return errors.Annotate(c.handleErrorPacket(data), "read initial handshake error")
 	}
 
 	if data[0] < MinProtocolVersion {
