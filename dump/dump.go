@@ -37,6 +37,7 @@ type Dumper struct {
 
 	masterDataSkipped bool
 	maxAllowedPacket  int
+	gtidPurged        string
 	hexBlob           bool
 }
 
@@ -85,6 +86,11 @@ func (d *Dumper) SetErrOut(o io.Writer) {
 // SkipMasterData: In some cloud MySQL, we have no privilege to use `--master-data`.
 func (d *Dumper) SkipMasterData(v bool) {
 	d.masterDataSkipped = v
+}
+
+// SetGtidPurged: none, auto; none for gtid is disabled or "version too low", auto for gtid_mode=on;
+func (d *Dumper) SetGtidPurged(gtid string) {
+	d.gtidPurged = gtid
 }
 
 func (d *Dumper) SetMaxAllowedPacket(i int) {
@@ -141,6 +147,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	if !d.masterDataSkipped {
 		args = append(args, "--master-data")
+	}
+
+	if d.gtidPurged == "auto" {
+		args = append(args, "--set-gtid-purged==%s", d.gtidPurged)
 	}
 
 	if d.maxAllowedPacket > 0 {
@@ -215,6 +225,7 @@ func (d *Dumper) DumpAndParse(h ParseHandler) error {
 
 	done := make(chan error, 1)
 	go func() {
+		// TODO: set_gtid_purged indicate if parse SET @@GLOBAL.GTID_PURGED='c0977f88-3104-11e9-81e1-00505690245b:1-274559' OR NOT;
 		err := Parse(r, h, !d.masterDataSkipped)
 		r.CloseWithError(err)
 		done <- err

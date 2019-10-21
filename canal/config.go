@@ -34,6 +34,9 @@ type DumpConfig struct {
 	// 'FLUSH TABLES WITH READ LOCK'
 	SkipMasterData bool `toml:"skip_master_data"`
 
+	// set --set-gtid-purged none, auto; none for gtid is disabled or "version too low", auto for gtid_mode=on;
+	GtidPurged string `toml:"set_gtid_purged"`
+
 	// Set to change the default max_allowed_packet size
 	MaxAllowedPacketMB int `toml:"max_allowed_packet_mb"`
 
