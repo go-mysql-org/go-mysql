@@ -34,6 +34,9 @@ type DumpConfig struct {
 	// 'FLUSH TABLES WITH READ LOCK'
 	SkipMasterData bool `toml:"skip_master_data"`
 
+	// set --set-gtid-purged none, auto; none for gtid is disabled or "version too low", auto for gtid_mode=on;
+	GtidPurged string `toml:"set_gtid_purged"`
+
 	// Set to change the default max_allowed_packet size
 	MaxAllowedPacketMB int `toml:"max_allowed_packet_mb"`
 
@@ -113,6 +116,8 @@ func NewDefaultConfig() *Config {
 	c.Dump.ExecutionPath = "mysqldump"
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
+	// add default value to disable mysqldump --set-gtid-purged
+	c.Dump.GtidPurged = "none"
 
 	return c
 }

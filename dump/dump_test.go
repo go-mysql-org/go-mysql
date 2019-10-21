@@ -32,10 +32,11 @@ var _ = Suite(&schemaTestSuite{})
 
 func (s *schemaTestSuite) SetUpSuite(c *C) {
 	var err error
-	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, *port), "root", "", "")
+	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, *port), "root", "root", "")
 	c.Assert(err, IsNil)
 
 	s.d, err = NewDumper(*execution, fmt.Sprintf("%s:%d", *host, *port), "root", "")
+	s.d.gtidPurged = "none"
 	c.Assert(err, IsNil)
 	c.Assert(s.d, NotNil)
 
@@ -116,6 +117,10 @@ type testParseHandler struct {
 }
 
 func (h *testParseHandler) BinLog(name string, pos uint64) error {
+	return nil
+}
+
+func (h *testParseHandler) UpdateGtidFromPurged(gtidsets string) (err error) {
 	return nil
 }
 
