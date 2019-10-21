@@ -19,15 +19,24 @@ var (
 type ParseHandler interface {
 	// Parse CHANGE MASTER TO MASTER_LOG_FILE=name, MASTER_LOG_POS=pos;
 	BinLog(name string, pos uint64) error
-
+	UpdateGtidFromPurged(gtidsets string) error
 	Data(schema string, table string, values []string) error
 }
 
+var oneGtidExp *regexp.Regexp
+var mutilGtidStartExp *regexp.Regexp
+var midUuidSet *regexp.Regexp
+var endUuidSet *regexp.Regexp
 var binlogExp *regexp.Regexp
 var useExp *regexp.Regexp
 var valuesExp *regexp.Regexp
 
 func init() {
+	oneGtidExp = regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+)'")
+	mutilGtidStartExp = regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+),")
+	midUuidSet = regexp.MustCompile("(^\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+),")
+	endUuidSet = regexp.MustCompile("(^\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)'")
+
 	binlogExp = regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
 	useExp = regexp.MustCompile("^USE `(.+)`;")
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
@@ -40,6 +49,8 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 
 	var db string
 	var binlogParsed bool
+	var gtidDoneParsed bool
+	var mutilGtidParsed bool
 
 	for {
 		line, err := rb.ReadString('\n')
@@ -54,6 +65,43 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 			return c == '\r' || c == '\n'
 		})
 
+		// parsed gtid set from mysqldump,refer to canal_test.go TestDumperHandler function
+		if parseBinlogPos && !gtidDoneParsed && !binlogParsed {
+			if m := oneGtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+				gset := m[0][1]
+				if err := h.UpdateGtidFromPurged(gset); err != nil {
+					return errors.Trace(err)
+				}
+				gtidDoneParsed = true
+			}
+			if m := mutilGtidStartExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+				gset := m[0][1]
+				if err := h.UpdateGtidFromPurged(gset); err != nil {
+					return errors.Trace(err)
+				}
+				mutilGtidParsed = true
+			}
+
+			if mutilGtidParsed && !gtidDoneParsed {
+				if m := midUuidSet.FindAllStringSubmatch(line, -1); len(m) == 1 {
+					gset := m[0][1]
+					if err := h.UpdateGtidFromPurged(gset); err != nil {
+						return errors.Trace(err)
+					}
+
+				}
+
+				if m := endUuidSet.FindAllStringSubmatch(line, -1); len(m) == 1 {
+					gset := m[0][1]
+					if err := h.UpdateGtidFromPurged(gset); err != nil {
+						return errors.Trace(err)
+					}
+					gtidDoneParsed = true
+				}
+
+			}
+		}
+
 		if parseBinlogPos && !binlogParsed {
 			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
 				name := m[0][1]
@@ -67,6 +115,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 				}
 
 				binlogParsed = true
+				gtidDoneParsed = true
 			}
 		}
 

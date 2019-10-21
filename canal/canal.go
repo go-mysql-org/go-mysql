@@ -120,12 +120,35 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	return c, nil
 }
 
+func (c *Canal) validateSetGtidPurged() error {
+	gtidPuged := strings.ToLower(c.cfg.Dump.GtidPurged)
+	if gtidPuged == "none" {
+		return nil
+	} else if gtidPuged == "auto" {
+		res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "gtid_mode";`)
+		if err != nil {
+			return errors.Trace(err)
+		} else if f, _ := res.GetString(0, 1); f != "ON" {
+			return errors.Errorf("set-gtid-purged: %s, gtid_mode should be ON, but now is %s", c.cfg.Dump.GtidPurged, f)
+		}
+		return nil
+	}
+
+	return errors.Errorf("set_gtid_purged: on OR auto  can be set, current is %s", gtidPuged)
+}
+
 func (c *Canal) prepareDumper() error {
 	var err error
 	dumpPath := c.cfg.Dump.ExecutionPath
 	if len(dumpPath) == 0 {
 		// ignore mysqldump, use binlog only
 		return nil
+	}
+
+	// validate c.cfg.Dump.GtidPurged)
+	err = c.validateSetGtidPurged()
+	if err != nil {
+		return err
 	}
 
 	if c.dumper, err = dump.NewDumper(dumpPath,
@@ -153,6 +176,7 @@ func (c *Canal) prepareDumper() error {
 
 	c.dumper.SetWhere(c.cfg.Dump.Where)
 	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
+	c.dumper.SetGtidPurged(strings.ToLower(c.cfg.Dump.GtidPurged))
 	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
 	c.dumper.SetProtocol(c.cfg.Dump.Protocol)
 	// Use hex blob for mysqldump

@@ -36,6 +36,7 @@ func (s *schemaTestSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	s.d, err = NewDumper(*execution, fmt.Sprintf("%s:%d", *host, *port), "root", "")
+	s.d.gtidPurged = "none"
 	c.Assert(err, IsNil)
 	c.Assert(s.d, NotNil)
 
@@ -116,6 +117,10 @@ type testParseHandler struct {
 }
 
 func (h *testParseHandler) BinLog(name string, pos uint64) error {
+	return nil
+}
+
+func (h *testParseHandler) UpdateGtidFromPurged(gtidsets string) (err error) {
 	return nil
 }
 
