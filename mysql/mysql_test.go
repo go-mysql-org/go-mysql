@@ -1,6 +1,8 @@
 package mysql
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -116,6 +118,30 @@ func (t *mysqlTestSuite) TestMysqlGTIDContain(c *check.C) {
 
 	c.Assert(g2.Contain(g1), check.Equals, true)
 	c.Assert(g1.Contain(g2), check.Equals, false)
+}
+
+func (t *mysqlTestSuite) TestHostnameMd5sum(c *check.C) {
+	// if os.Hostname() lengther than 60, use md5sum instead
+	tbl := []struct {
+		hashStr string
+		sum     int
+	}{
+		{`app-f084ccc2f5dd37da027539dc9d2cb1581c2237d4-1-7ff988bd9f-t2cx7`, 32},
+		{`jianhaiqingxxx`, 14},
+		{`dfmpzqy7wjvwotpadgkiinkl5bjtdkuu.aliyundunwaf.com.dfmpzqy7wjvwotpadgkiinkl5bjtdkuu.aliyundunwaf.com.dfmpzqy7wjvwotpadgkiinkl5bjtdkuu.aliyundunwaf.com.`, 32},
+	}
+	var get int
+	for _, t := range tbl {
+		if len(t.hashStr) > 60 {
+			hasher := md5.New()
+			hasher.Write([]byte(t.hashStr))
+			get = len(hex.EncodeToString(hasher.Sum(nil)))
+		} else {
+			get = len(t.hashStr)
+		}
+		c.Assert(get == t.sum, check.IsTrue)
+	}
+
 }
 
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt8(c *check.C) {

@@ -2,8 +2,10 @@ package replication
 
 import (
 	"context"
+	"crypto/md5"
 	"crypto/tls"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -496,6 +498,12 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset GTIDSet) error {
 func (b *BinlogSyncer) localHostname() string {
 	if len(b.cfg.Localhost) == 0 {
 		h, _ := os.Hostname()
+		// if os.Hostname() lengther than 60, use md5sum instead
+		if len(h) > 60 {
+			hasher := md5.New()
+			hasher.Write([]byte(h))
+			return hex.EncodeToString(hasher.Sum(nil))
+		}
 		return h
 	}
 	return b.cfg.Localhost
