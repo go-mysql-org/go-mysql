@@ -150,7 +150,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 	}
 
 	if d.gtidPurged == "auto" {
-		args = append(args, fmt.Sprintf("--set-gtid-purged==%s", d.gtidPurged))
+		args = append(args, fmt.Sprintf("--set-gtid-purged=%s", d.gtidPurged))
 	}
 
 	if d.maxAllowedPacket > 0 {

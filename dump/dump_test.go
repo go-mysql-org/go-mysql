@@ -15,7 +15,7 @@ import (
 
 // use docker mysql for test
 var host = flag.String("host", "127.0.0.1", "MySQL host")
-var port = flag.Int("port", 13336, "MySQL host")
+var port = flag.Int("port", 3306, "MySQL host")
 
 var execution = flag.String("exec", "mysqldump", "mysqldump execution path")
 
@@ -32,10 +32,11 @@ var _ = Suite(&schemaTestSuite{})
 
 func (s *schemaTestSuite) SetUpSuite(c *C) {
 	var err error
-	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, *port), "root", "root", "")
+	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, *port), "root", "", "")
 	c.Assert(err, IsNil)
 
-	s.d, err = NewDumper(*execution, fmt.Sprintf("%s:%d", *host, *port), "root", "root")
+	s.d, err = NewDumper(*execution, fmt.Sprintf("%s:%d", *host, *port), "root", "")
+	s.d.gtidPurged = "none"
 	c.Assert(err, IsNil)
 	c.Assert(s.d, NotNil)
 
