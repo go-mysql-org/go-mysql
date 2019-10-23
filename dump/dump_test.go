@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/siddontang/go-mysql/mysql"
+
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/client"
 )
@@ -172,6 +174,34 @@ func (s *parserTestSuite) TestUnescape(c *C) {
 		unesacped := unescapeString(t.escaped)
 		c.Assert(unesacped, Equals, t.expected)
 	}
+}
+
+func (s *schemaTestSuite) TestParseGtid(c *C) {
+	tbls := []struct {
+		input    string
+		expected string
+	}{
+		{`SET @@GLOBAL.GTID_PURGED='c0977f88-3104-11e9-81e1-00505690245b:1-274559';`, `c0977f88-3104-11e9-81e1-00505690245b:1-274559`},
+		{`SET @@GLOBAL.GTID_PURGED='071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7,41d816cd-0455-11e9-be42-005056901a22:1-2,5f1eea9e-b1e5-11e8-bc77-005056a221ed:1-144609156,75848cdb-8131-11e7-b6fc-1c1b0de85e7b:1-151378598,780ad602-0456-11e9-8bcd-005056901a22:1-516653148,92809ddd-1e3c-11e9-9d04-00505690f6ab:1-11858565,c59598c7-0467-11e9-bbbe-005056901a22:1-226464969,cbd7809d-0433-11e9-b1cf-00505690543b:1-18233950,cca778e9-8cdf-11e8-94d0-005056a247b1:1-303899574,cf80679b-7695-11e8-8873-1c1b0d9a4ab9:1-12836047,d0951f24-1e21-11e9-bb2e-00505690b730:1-4758092,e7574090-b123-11e8-8bb4-005056a29643:1-12'`,
+			`071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7,41d816cd-0455-11e9-be42-005056901a22:1-2,5f1eea9e-b1e5-11e8-bc77-005056a221ed:1-144609156,75848cdb-8131-11e7-b6fc-1c1b0de85e7b:1-151378598,780ad602-0456-11e9-8bcd-005056901a22:1-516653148,92809ddd-1e3c-11e9-9d04-00505690f6ab:1-11858565,c59598c7-0467-11e9-bbbe-005056901a22:1-226464969,cbd7809d-0433-11e9-b1cf-00505690543b:1-18233950,cca778e9-8cdf-11e8-94d0-005056a247b1:1-303899574,cf80679b-7695-11e8-8873-1c1b0d9a4ab9:1-12836047,d0951f24-1e21-11e9-bb2e-00505690b730:1-4758092,e7574090-b123-11e8-8bb4-005056a29643:1-13`},
+	}
+
+	parseGtid := func(gtidsets string) (gset mysql.GTIDSet, err error) {
+		gset, err = mysql.ParseGTIDSet("mysql", gtidsets)
+		return
+	}
+	for _, t := range tbls {
+		input := t.input
+		expected := t.expected
+		if m := gtidExp.FindAllStringSubmatch(input, -1); len(m) == 1 {
+			gset := m[0][1]
+			gtidSet, err := parseGtid(gset)
+			c.Assert(err, IsNil)
+			c.Assert(gtidSet, NotNil)
+			c.Assert(expected == gset, IsTrue)
+		}
+	}
+
 }
 
 func (s *schemaTestSuite) TestParse(c *C) {

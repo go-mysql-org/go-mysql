@@ -28,7 +28,7 @@ func (h *dumpParseHandler) BinLog(name string, pos uint64) error {
 }
 
 func (h *dumpParseHandler) PurgedGtid(gtidsets string) (err error) {
-	h.gset, err = mysql.ParseGTIDSet(gtidsets, "mysql")
+	h.gset, err = mysql.ParseGTIDSet("mysql", gtidsets)
 	return err
 }
 
