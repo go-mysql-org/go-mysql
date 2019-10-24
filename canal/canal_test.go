@@ -36,9 +36,8 @@ var _ = Suite(&canalTestSuite{})
 
 func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg := NewDefaultConfig()
-	cfg.Addr = fmt.Sprintf("%s:13336", *testHost)
+	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
 	cfg.User = "root"
-	cfg.Password = "root"
 	cfg.HeartbeatPeriod = 200 * time.Millisecond
 	cfg.ReadTimeout = 300 * time.Millisecond
 	cfg.Dump.ExecutionPath = "mysqldump"
