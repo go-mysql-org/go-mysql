@@ -116,6 +116,7 @@ func NewDefaultConfig() *Config {
 	c.Dump.ExecutionPath = "mysqldump"
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
+	c.Dump.GtidPurged = "auto"
 
 	return c
 }
