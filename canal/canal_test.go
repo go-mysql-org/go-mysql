@@ -45,7 +45,6 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
 	cfg.Dump.Where = "id>0"
-	cfg.Dump.GtidPurged = "auto"
 
 	// include & exclude config
 	cfg.IncludeTableRegex = make([]string, 1)
