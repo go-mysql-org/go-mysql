@@ -82,6 +82,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	}()
 }
 
+
 func TestCanalHandler(t *testing.T) {
 	oneGtidExp := regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+)'")
 	mutilGtidStartExp := regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+),")
