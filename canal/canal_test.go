@@ -82,7 +82,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	}()
 }
 
-func (s *canalTestSuite) TestDumperHandler(c *C) {
+func TestCanalHandler(t *testing.T) {
 	oneGtidExp := regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+)'")
 	mutilGtidStartExp := regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+),")
 	midUuidSet := regexp.MustCompile("(^\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+),")
@@ -104,16 +104,16 @@ cbd7809d-0433-11e9-b1cf-00505690543b:1-18233950,
 cca778e9-8cdf-11e8-94d0-005056a247b1:1-303899574,
 cf80679b-7695-11e8-8873-1c1b0d9a4ab9:1-12836047,
 d0951f24-1e21-11e9-bb2e-00505690b730:1-4758092,
-e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7,41d816cd-0455-11e9-be42-005056901a22:1-2,5f1eea9e-b1e5-11e8-bc77-005056a221ed:1-144609156,75848cdb-8131-11e7-b6fc-1c1b0de85e7b:1-151378598,780ad602-0456-11e9-8bcd-005056901a22:1-516653148,92809ddd-1e3c-11e9-9d04-00505690f6ab:1-11858565,c59598c7-0467-11e9-bbbe-005056901a22:1-226464969,cbd7809d-0433-11e9-b1cf-00505690543b:1-18233950,cca778e9-8cdf-11e8-94d0-005056a247b1:1-303899574,cf80679b-7695-11e8-8873-1c1b0d9a4ab9:1-12836047,d0951f24-1e21-11e9-bb2e-00505690b730:1-4758092,e7574090-b123-11e8-8bb4-005056a29643:1-11"},
+e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7,41d816cd-0455-11e9-be42-005056901a22:1-2,5f1eea9e-b1e5-11e8-bc77-005056a221ed:1-144609156,75848cdb-8131-11e7-b6fc-1c1b0de85e7b:1-151378598,780ad602-0456-11e9-8bcd-005056901a22:1-516653148,92809ddd-1e3c-11e9-9d04-00505690f6ab:1-11858565,c59598c7-0467-11e9-bbbe-005056901a22:1-226464969,cbd7809d-0433-11e9-b1cf-00505690543b:1-18233950,cca778e9-8cdf-11e8-94d0-005056a247b1:1-303899574,cf80679b-7695-11e8-8873-1c1b0d9a4ab9:1-12836047,d0951f24-1e21-11e9-bb2e-00505690b730:1-4758092,e7574090-b123-11e8-8bb4-005056a29643:1-12"},
 		{`SET @@GLOBAL.GTID_PURGED='071a84e8-b253-11e8-8472-005056a27e86:1-76,
 2337be48-0456-11e9-bd1c-00505690543b:1-7';`, "071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7"},
-		{`SET @@GLOBAL.GTID_PURGED='c0977f88-3104-11e9-81e1-00505690245b:1-274559';`, "c0977f88-3104-11e9-81e1-00505690245b:1-274559'"},
+		{`SET @@GLOBAL.GTID_PURGED='c0977f88-3104-11e9-81e1-00505690245b:1-274559';`, "c0977f88-3104-11e9-81e1-00505690245b:1-274559"},
 		{`CHANGE MASTER TO MASTER_LOG_FILE='mysql-bin.008995', MASTER_LOG_POS=102052485;`, ""},
 	}
 
-	for _, t := range tbls {
+	for _, tt := range tbls {
 		h := dumpParseHandler{}
-		reader := strings.NewReader(t.input)
+		reader := strings.NewReader(tt.input)
 		newReader := bufio.NewReader(reader)
 		var binlogParsed bool
 		var gtidDoneParsed bool
@@ -182,10 +182,22 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 
 		}
 
-		expectedGtidset, _ := mysql.ParseGTIDSet("mysql", t.expected)
+		if tt.expected == "" {
+			if h.gset != nil {
+				log.Fatalf("expected nil, but get %v", h.gset)
+			}
+			continue
+		}
+		expectedGtidset, err := mysql.ParseGTIDSet("mysql", tt.expected)
+		if err != nil {
+			log.Fatalf("Gtid:%s failed parsed, err: %v", tt.expected, err)
+		}
+		if !expectedGtidset.Equal(h.gset) {
+			log.Fatalf("expected:%v , but get: %v", expectedGtidset, h.gset)
+		}
 
-		c.Assert(expectedGtidset.Equal(h.gset), IsTrue)
-		c.Logf("parsed gtidset: %v", h.gset)
+		//	c.Assert(expectedGtidset.Equal(h.gset), IsTrue)
+		//	c.Logf("parsed gtidset: %v", h.gset)
 	}
 
 }
