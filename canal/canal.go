@@ -134,7 +134,7 @@ func (c *Canal) validateSetGtidPurged() error {
 		return nil
 	}
 
-	return errors.Errorf("set_gtid_purged: on OR auto  can be set, current is %s", gtidPuged)
+	return errors.Errorf("set-gtid-purged: none or auto  can be set, current is %s", gtidPuged)
 }
 
 func (c *Canal) prepareDumper() error {
