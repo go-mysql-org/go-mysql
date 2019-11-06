@@ -53,10 +53,19 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 			vs[i] = []byte{}
 		} else if v[0] != '\'' {
 			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER || tableInfo.Columns[i].Type == schema.TYPE_MEDIUM_INT {
-				n, err := strconv.ParseInt(v, 10, 64)
+				var n interface{}
+				var err error
+
+				if tableInfo.Columns[i].IsUnsigned {
+					n, err = strconv.ParseUint(v, 10, 64)
+				} else {
+					n, err = strconv.ParseInt(v, 10, 64)
+				}
+
 				if err != nil {
 					return fmt.Errorf("parse row %v at %d error %v, int expected", values, i, err)
 				}
+
 				vs[i] = n
 			} else if tableInfo.Columns[i].Type == schema.TYPE_FLOAT {
 				f, err := strconv.ParseFloat(v, 64)
