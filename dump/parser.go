@@ -65,7 +65,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 			return c == '\r' || c == '\n'
 		})
 
-		// parsed gtid set from mysqldump,refer to canal_test.go TestDumperHandler function
+		// parsed gtid set from mysqldump, refer to canal_test.go TestDumperHandler function
 		if parseBinlogPos && !gtidDoneParsed && !binlogParsed {
 			if m := oneGtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
 				gset := m[0][1]

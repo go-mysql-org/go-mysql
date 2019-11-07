@@ -125,16 +125,25 @@ func (c *Canal) validateSetGtidPurged() error {
 	if gtidPuged == "none" {
 		return nil
 	} else if gtidPuged == "auto" {
-		res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "gtid_mode";`)
-		if err != nil {
-			return errors.Trace(err)
-		} else if f, _ := res.GetString(0, 1); f != "ON" {
-			return errors.Errorf("set-gtid-purged: %s, gtid_mode should be ON, but now is %s", c.cfg.Dump.GtidPurged, f)
+		isOn, err := c.GetGtidMode()
+		if !isOn {
+			return err
 		}
 		return nil
 	}
 
-	return errors.Errorf("set-gtid-purged: none or auto  can be set, current is %s", gtidPuged)
+	return errors.Errorf("set-gtid-purged: none or auto can be set, current is %s", gtidPuged)
+}
+
+// if MySQL gtid_mode is on, return true, otherwise false
+func (c *Canal) GetGtidMode() (bool, error) {
+	res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "gtid_mode";`)
+	if err != nil {
+		return false, errors.Trace(err)
+	} else if f, _ := res.GetString(0, 1); strings.ToLower(f) != "on" {
+		return false, errors.Errorf("set-gtid-purged: %s,gtid_mode should be on, but now is %s", c.cfg.Dump.GtidPurged, f)
+	}
+	return true, nil
 }
 
 func (c *Canal) prepareDumper() error {

@@ -195,9 +195,6 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 		if !expectedGtidset.Equal(h.gset) {
 			log.Fatalf("expected:%v , but get: %v", expectedGtidset, h.gset)
 		}
-
-		//	c.Assert(expectedGtidset.Equal(h.gset), IsTrue)
-		//	c.Logf("parsed gtidset: %v", h.gset)
 	}
 
 }
