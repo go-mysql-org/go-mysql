@@ -154,6 +154,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	args = append(args, "--single-transaction")
 	args = append(args, "--skip-lock-tables")
+	args = append(args, "--column-statistics=false")
 
 	// Disable uncessary data
 	args = append(args, "--compact")
