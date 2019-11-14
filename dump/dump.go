@@ -33,6 +33,8 @@ type Dumper struct {
 
 	IgnoreTables map[string][]string
 
+	ExtraOptions []string
+
 	ErrOut io.Writer
 
 	masterDataSkipped bool
@@ -59,6 +61,7 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 	d.Databases = make([]string, 0, 16)
 	d.Charset = DEFAULT_CHARSET
 	d.IgnoreTables = make(map[string][]string)
+	d.ExtraOptions = make([]string, 0, 5)
 	d.masterDataSkipped = false
 
 	d.ErrOut = os.Stderr
@@ -76,6 +79,10 @@ func (d *Dumper) SetProtocol(protocol string) {
 
 func (d *Dumper) SetWhere(where string) {
 	d.Where = where
+}
+
+func (d *Dumper) SetExtraOptions(options []string) {
+	d.ExtraOptions = options
 }
 
 func (d *Dumper) SetErrOut(o io.Writer) {
@@ -183,6 +190,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	if len(d.Where) != 0 {
 		args = append(args, fmt.Sprintf("--where=%s", d.Where))
+	}
+
+	if len(d.ExtraOptions) != 0 {
+		args = append(args, d.ExtraOptions...)
 	}
 
 	if len(d.Tables) == 0 && len(d.Databases) == 0 {
