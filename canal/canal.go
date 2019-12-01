@@ -120,12 +120,15 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	return c, nil
 }
 
+// validateSetGtidPurged: check config parameter set-gtid-purged is supported by MySQL at the moment
+// an error is supposed to return,if set-gtid-purged:auto is set, but MySQL's gtid_mode is off, or GTID is not supported by MySQL server,
+// otherwise, nil is returned.
 func (c *Canal) validateSetGtidPurged() error {
 	gtidPuged := strings.ToLower(c.cfg.Dump.GtidPurged)
 	if gtidPuged == "none" {
 		return nil
 	} else if gtidPuged == "auto" {
-		isOn, err := c.GetGtidMode()
+		isOn, err := c.IsGtidModeEnabled()
 		if !isOn {
 			return err
 		}
@@ -135,12 +138,13 @@ func (c *Canal) validateSetGtidPurged() error {
 	return errors.Errorf("set-gtid-purged: none or auto can be set, current is %s", gtidPuged)
 }
 
-// if MySQL gtid_mode is on, return true, otherwise false
-func (c *Canal) GetGtidMode() (bool, error) {
+// IsGtidModeEnabled: return true when gtid_mode of MySQL set to on, otherwise return false
+func (c *Canal) IsGtidModeEnabled() (bool, error) {
 	res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "gtid_mode";`)
 	if err != nil {
 		return false, errors.Trace(err)
 	} else if f, _ := res.GetString(0, 1); strings.ToLower(f) != "on" {
+		// if MySQL's gtid_mode is set to off or gtid_mode is not supported
 		return false, errors.Errorf("set-gtid-purged: %s,gtid_mode should be on, but now is %s", c.cfg.Dump.GtidPurged, f)
 	}
 	return true, nil

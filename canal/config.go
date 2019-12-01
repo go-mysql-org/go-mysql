@@ -34,7 +34,10 @@ type DumpConfig struct {
 	// 'FLUSH TABLES WITH READ LOCK'
 	SkipMasterData bool `toml:"skip_master_data"`
 
-	// set --set-gtid-purged none, auto; none for gtid is disabled or "version too low", auto for gtid_mode=on;
+	// Only MySQL's GTID is supported, cause mysqldump's parameter is a little different between MySQL and MariaDB
+	// mysqldump of MySQL uses --set-gtid-purged, MariaDB uses --gtid instead.
+	// GtidPurged:auto when MySQL supports GTID,and GtidPurged:none for gtid is disabled,or gtid is not supported,
+	// or you strongly wants file-position replication.
 	GtidPurged string `toml:"set_gtid_purged"`
 
 	// Set to change the default max_allowed_packet size

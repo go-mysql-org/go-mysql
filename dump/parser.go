@@ -19,7 +19,7 @@ var (
 type ParseHandler interface {
 	// Parse CHANGE MASTER TO MASTER_LOG_FILE=name, MASTER_LOG_POS=pos;
 	BinLog(name string, pos uint64) error
-	UpdateGtidFromPurged(gtidsets string) error
+	GtidSet(gtidsets string) error
 	Data(schema string, table string, values []string) error
 }
 
@@ -32,7 +32,12 @@ var useExp *regexp.Regexp
 var valuesExp *regexp.Regexp
 
 func init() {
+	//SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150';
 	oneGtidExp = regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+)'")
+
+	//SET @@GLOBAL.GTID_PURGED='071a84e8-b253-11e8-8472-005056a27e86:1-76,	// start of multi-gtid set
+	//2337be48-0456-11e9-bd1c-00505690543b:1-7,								// middle gtid set
+	//41d816cd-0455-11e9-be42-005056901a22:1-2';   							// end gtid set
 	mutilGtidStartExp = regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+),")
 	midUuidSet = regexp.MustCompile("(^\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+),")
 	endUuidSet = regexp.MustCompile("(^\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)'")
@@ -40,6 +45,36 @@ func init() {
 	binlogExp = regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
 	useExp = regexp.MustCompile("^USE `(.+)`;")
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
+}
+
+// ParseGtidSetFromMysqlDump: Parsing Gtid from mysqldump output,
+// IsMultiGtidSet default false at the very beginning
+func ParseGtidStrFromMysqlDump(line string, IsMultiGtidSet bool) (gtidstr string, IsMultiSetReturned, IsDoneOfGtidParsed bool) {
+	if m := oneGtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+		gtidstr = m[0][1]
+		IsMultiSetReturned = false
+		IsDoneOfGtidParsed = true
+	}
+	if m := mutilGtidStartExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+		gtidstr = m[0][1]
+		IsMultiSetReturned = true
+		IsDoneOfGtidParsed = false
+	}
+
+	if IsMultiGtidSet {
+		if m := midUuidSet.FindAllStringSubmatch(line, -1); len(m) == 1 {
+			gtidstr = m[0][1]
+			IsMultiSetReturned = true
+			IsDoneOfGtidParsed = false
+		}
+		if m := endUuidSet.FindAllStringSubmatch(line, -1); len(m) == 1 {
+			gtidstr = m[0][1]
+			IsMultiSetReturned = true
+			IsDoneOfGtidParsed = true
+		}
+
+	}
+	return gtidstr, IsMultiSetReturned, IsDoneOfGtidParsed
 }
 
 // Parse the dump data with Dumper generate.
@@ -51,7 +86,6 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 	var binlogParsed bool
 	var gtidDoneParsed bool
 	var mutilGtidParsed bool
-
 	for {
 		line, err := rb.ReadString('\n')
 		if err != nil && err != io.EOF {
@@ -66,40 +100,15 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 		})
 
 		// parsed gtid set from mysqldump, refer to canal_test.go TestDumperHandler function
+
+		// begin parsed gtid
 		if parseBinlogPos && !gtidDoneParsed && !binlogParsed {
-			if m := oneGtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-				gset := m[0][1]
-				if err := h.UpdateGtidFromPurged(gset); err != nil {
-					return errors.Trace(err)
-				}
-				gtidDoneParsed = true
+			gtidStr, IsMultiSetReturned, IsDoneOfGtidParsed := ParseGtidStrFromMysqlDump(line, mutilGtidParsed)
+			if err := h.GtidSet(gtidStr); err != nil {
+				return errors.Trace(err)
 			}
-			if m := mutilGtidStartExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-				gset := m[0][1]
-				if err := h.UpdateGtidFromPurged(gset); err != nil {
-					return errors.Trace(err)
-				}
-				mutilGtidParsed = true
-			}
-
-			if mutilGtidParsed && !gtidDoneParsed {
-				if m := midUuidSet.FindAllStringSubmatch(line, -1); len(m) == 1 {
-					gset := m[0][1]
-					if err := h.UpdateGtidFromPurged(gset); err != nil {
-						return errors.Trace(err)
-					}
-
-				}
-
-				if m := endUuidSet.FindAllStringSubmatch(line, -1); len(m) == 1 {
-					gset := m[0][1]
-					if err := h.UpdateGtidFromPurged(gset); err != nil {
-						return errors.Trace(err)
-					}
-					gtidDoneParsed = true
-				}
-
-			}
+			mutilGtidParsed = IsMultiSetReturned
+			gtidDoneParsed = IsDoneOfGtidParsed
 		}
 
 		if parseBinlogPos && !binlogParsed {
