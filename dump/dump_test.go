@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -122,7 +121,6 @@ func (s *schemaTestSuite) TestDump(c *C) {
 }
 
 type testParseHandler struct {
-	gset mysql.GTIDSet
 }
 
 func (h *testParseHandler) BinLog(name string, pos uint64) error {
@@ -130,16 +128,24 @@ func (h *testParseHandler) BinLog(name string, pos uint64) error {
 }
 
 func (h *testParseHandler) GtidSet(gtidsets string) (err error) {
-	if h.gset != nil {
-		err = h.gset.Update(gtidsets)
-	} else {
-		h.gset, err = mysql.ParseGTIDSet("mysql", gtidsets)
-	}
-	return err
+	return nil
 }
 
 func (h *testParseHandler) Data(schema string, table string, values []string) error {
 	return nil
+}
+
+type GtidParseTest struct {
+	gset mysql.GTIDSet
+}
+
+func (h *GtidParseTest) UpdateGtidSet(gtidStr string) (err error) {
+	if h.gset != nil {
+		err = h.gset.Update(gtidStr)
+	} else {
+		h.gset, err = mysql.ParseGTIDSet("mysql", gtidStr)
+	}
+	return err
 }
 
 func TestParseGtidStrFromMysqlDump(t *testing.T) {
@@ -168,9 +174,9 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 	}
 
 	for _, tt := range tbls {
-		h := testParseHandler{nil}
 		reader := strings.NewReader(tt.input)
 		newReader := bufio.NewReader(reader)
+		var gtidParse = new(GtidParseTest)
 		var binlogParsed bool
 		var gtidDoneParsed bool
 		var mutilGtidParsed bool
@@ -178,16 +184,14 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 		for {
 			bytes, _, err := newReader.ReadLine()
 			line := string(bytes)
-			if err != io.EOF {
-				fmt.Println(string(line))
-			} else {
+			if err == io.EOF {
 				break
 			}
 
 			// begin parsed gtid
 			if parseBinlogPos && !gtidDoneParsed && !binlogParsed {
 				gtidStr, IsMultiSetReturned, IsDoneOfGtidParsed := ParseGtidStrFromMysqlDump(line, mutilGtidParsed)
-				if err := h.GtidSet(gtidStr); err != nil {
+				if err := gtidParse.UpdateGtidSet(gtidStr); err != nil {
 					mutilGtidParsed = IsMultiSetReturned
 					gtidDoneParsed = IsDoneOfGtidParsed
 					if err != nil {
@@ -197,16 +201,6 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 
 				if parseBinlogPos && !binlogParsed {
 					if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-						name := m[0][1]
-						pos, err := strconv.ParseUint(m[0][2], 10, 64)
-						if err != nil {
-							errors.Errorf("parse binlog %v err, invalid number", line)
-						}
-
-						if err = h.BinLog(name, pos); err != nil && err != ErrSkip {
-							errors.Trace(err)
-						}
-
 						binlogParsed = true
 						gtidDoneParsed = true
 					}
@@ -216,8 +210,8 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 		}
 
 		if tt.expected == "" {
-			if h.gset != nil && h.gset.String() != "" {
-				log.Fatalf("expected nil, but get %v", h.gset)
+			if gtidParse.gset != nil && gtidParse.gset.String() != "" {
+				log.Fatalf("expected nil, but get %v", gtidParse.gset)
 			}
 			continue
 		}
@@ -225,8 +219,8 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 		if err != nil {
 			log.Fatalf("Gtid:%s failed parsed, err: %v", tt.expected, err)
 		}
-		if !expectedGtidset.Equal(h.gset) {
-			log.Fatalf("expected:%v , but get: %v", expectedGtidset, h.gset)
+		if !expectedGtidset.Equal(gtidParse.gset) {
+			log.Fatalf("expected:%v , but get: %v", expectedGtidset, gtidParse.gset)
 		}
 	}
 
