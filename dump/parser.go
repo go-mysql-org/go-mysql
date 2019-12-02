@@ -104,8 +104,11 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 		// begin parsed gtid
 		if parseBinlogPos && !gtidDoneParsed && !binlogParsed {
 			gtidStr, IsMultiSetReturned, IsDoneOfGtidParsed := ParseGtidStrFromMysqlDump(line, mutilGtidParsed)
-			if err := h.GtidSet(gtidStr); err != nil {
-				return errors.Trace(err)
+
+			if gtidStr != "" {
+				if err := h.GtidSet(gtidStr); err != nil {
+					return errors.Trace(err)
+				}
 			}
 			mutilGtidParsed = IsMultiSetReturned
 			gtidDoneParsed = IsDoneOfGtidParsed
