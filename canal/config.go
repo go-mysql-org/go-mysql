@@ -45,6 +45,9 @@ type DumpConfig struct {
 
 	// Set to change the default protocol to connect with
 	Protocol string `toml:"protocol"`
+
+	// Set extra options
+	ExtraOptions []string `toml:"extra_options"`
 }
 
 type Config struct {
