@@ -95,11 +95,6 @@ func (d *Dumper) SkipMasterData(v bool) {
 	d.masterDataSkipped = v
 }
 
-// SetGtidPurged: none, auto; none for gtid is disabled or "version too low", auto for gtid_mode=on;
-func (d *Dumper) SetGtidPurged(gtid string) {
-	d.gtidPurged = gtid
-}
-
 func (d *Dumper) SetMaxAllowedPacket(i int) {
 	d.maxAllowedPacket = i
 }
