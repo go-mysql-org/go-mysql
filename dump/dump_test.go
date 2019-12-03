@@ -44,7 +44,6 @@ func (s *schemaTestSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	s.d, err = NewDumper(*execution, fmt.Sprintf("%s:%d", *host, *port), "root", "")
-	s.d.gtidPurged = "none"
 	c.Assert(err, IsNil)
 	c.Assert(s.d, NotNil)
 

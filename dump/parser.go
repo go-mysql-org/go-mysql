@@ -23,29 +23,16 @@ type ParseHandler interface {
 	Data(schema string, table string, values []string) error
 }
 
-var oneGtidExp *regexp.Regexp
-var mutilGtidStartExp *regexp.Regexp
-var midUuidSet *regexp.Regexp
-var endUuidSet *regexp.Regexp
 var binlogExp *regexp.Regexp
 var useExp *regexp.Regexp
 var valuesExp *regexp.Regexp
 var gtidExp *regexp.Regexp
 
 func init() {
-	//SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150';
-	oneGtidExp = regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+)'")
-
-	//SET @@GLOBAL.GTID_PURGED='071a84e8-b253-11e8-8472-005056a27e86:1-76,	// start of multi-gtid set
-	//2337be48-0456-11e9-bd1c-00505690543b:1-7,								// middle gtid set
-	//41d816cd-0455-11e9-be42-005056901a22:1-2';   							// end gtid set
-	mutilGtidStartExp = regexp.MustCompile("SET @@GLOBAL.GTID_PURGED='(.+),")
-	midUuidSet = regexp.MustCompile("(^\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+),")
-	endUuidSet = regexp.MustCompile("(^\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)'")
-
 	binlogExp = regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
 	useExp = regexp.MustCompile("^USE `(.+)`;")
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
+	//SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150';
 	gtidExp = regexp.MustCompile("(\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)")
 }
 

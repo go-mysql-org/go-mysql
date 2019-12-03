@@ -14,10 +14,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 )
 
-var (
-	ErrSkip  = errors.New("Handler error, but skipped")
-	testHost = flag.String("host", "127.0.0.1", "MySQL host")
-)
+var testHost = flag.String("host", "127.0.0.1", "MySQL host")
 
 func Test(t *testing.T) {
 	TestingT(t)
