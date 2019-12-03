@@ -39,7 +39,6 @@ type Dumper struct {
 
 	masterDataSkipped bool
 	maxAllowedPacket  int
-	gtidPurged        string
 	hexBlob           bool
 }
 
@@ -151,10 +150,6 @@ func (d *Dumper) Dump(w io.Writer) error {
 		args = append(args, "--master-data")
 	}
 
-	if d.gtidPurged == "auto" {
-		args = append(args, fmt.Sprintf("--set-gtid-purged=%s", d.gtidPurged))
-	}
-
 	if d.maxAllowedPacket > 0 {
 		// mysqldump param should be --max-allowed-packet=%dM not be --max_allowed_packet=%dM
 		args = append(args, fmt.Sprintf("--max-allowed-packet=%dM", d.maxAllowedPacket))
@@ -231,7 +226,6 @@ func (d *Dumper) DumpAndParse(h ParseHandler) error {
 
 	done := make(chan error, 1)
 	go func() {
-		// TODO: set_gtid_purged indicate if parse SET @@GLOBAL.GTID_PURGED='c0977f88-3104-11e9-81e1-00505690245b:1-274559' OR NOT;
 		err := Parse(r, h, !d.masterDataSkipped)
 		r.CloseWithError(err)
 		done <- err
