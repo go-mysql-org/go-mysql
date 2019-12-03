@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/errors"
+
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
 
@@ -150,6 +151,7 @@ func (h *GtidParseTest) UpdateGtidSet(gtidStr string) (err error) {
 
 func TestParseGtidStrFromMysqlDump(t *testing.T) {
 	binlogExp := regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
+	gtidExp := regexp.MustCompile("(\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)")
 	tbls := []struct {
 		input    string
 		expected string
@@ -178,8 +180,6 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 		newReader := bufio.NewReader(reader)
 		var gtidParse = new(GtidParseTest)
 		var binlogParsed bool
-		var gtidDoneParsed bool
-		var mutilGtidParsed bool
 		parseBinlogPos := true
 		for {
 			bytes, _, err := newReader.ReadLine()
@@ -188,25 +188,20 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 				break
 			}
 
-			// begin parsed gtid
-			if parseBinlogPos && !gtidDoneParsed && !binlogParsed {
-				gtidStr, IsMultiSetReturned, IsDoneOfGtidParsed := ParseGtidStrFromMysqlDump(line, mutilGtidParsed)
-				if err := gtidParse.UpdateGtidSet(gtidStr); err != nil {
-					mutilGtidParsed = IsMultiSetReturned
-					gtidDoneParsed = IsDoneOfGtidParsed
-					if err != nil {
-						errors.Errorf("ParseGtidSetFromMysqlDump err: %v", err)
+			if parseBinlogPos && !binlogParsed {
+				if m := gtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+					gtidStr := m[0][1]
+					if gtidStr != "" {
+						if err := gtidParse.UpdateGtidSet(gtidStr); err != nil {
+							errors.Errorf("gtid failed to parsed: %v", err)
+						}
 					}
 				}
-
-				if parseBinlogPos && !binlogParsed {
-					if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-						binlogParsed = true
-						gtidDoneParsed = true
-					}
+				if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+					binlogParsed = true
 				}
-
 			}
+
 		}
 
 		if tt.expected == "" {
@@ -220,7 +215,7 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e
 			log.Fatalf("Gtid:%s failed parsed, err: %v", tt.expected, err)
 		}
 		if !expectedGtidset.Equal(gtidParse.gset) {
-			log.Fatalf("expected:%v , but get: %v", expectedGtidset, gtidParse.gset)
+			log.Fatalf("expected:%v, but get: %v", expectedGtidset, gtidParse.gset)
 		}
 	}
 
