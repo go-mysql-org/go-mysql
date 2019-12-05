@@ -1,18 +1,13 @@
 package dump
 
 import (
-	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
-	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/pingcap/errors"
 
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/mysql"
@@ -121,6 +116,7 @@ func (s *schemaTestSuite) TestDump(c *C) {
 }
 
 type testParseHandler struct {
+	gset mysql.GTIDSet
 }
 
 func (h *testParseHandler) BinLog(name string, pos uint64) error {
@@ -128,7 +124,12 @@ func (h *testParseHandler) BinLog(name string, pos uint64) error {
 }
 
 func (h *testParseHandler) GtidSet(gtidsets string) (err error) {
-	return nil
+	if h.gset != nil {
+		err = h.gset.Update(gtidsets)
+	} else {
+		h.gset, err = mysql.ParseGTIDSet("mysql", gtidsets)
+	}
+	return err
 }
 
 func (h *testParseHandler) Data(schema string, table string, values []string) error {
@@ -148,9 +149,9 @@ func (h *GtidParseTest) UpdateGtidSet(gtidStr string) (err error) {
 	return err
 }
 
-func TestParseGtidStrFromMysqlDump(t *testing.T) {
-	binlogExp := regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
-	gtidExp := regexp.MustCompile("(\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)")
+func TestParse4GtidExp(t *testing.T) {
+	//	binlogExp := regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
+	//	gtidExp := regexp.MustCompile("(\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)")
 	tbls := []struct {
 		input    string
 		expected string
@@ -167,54 +168,35 @@ cbd7809d-0433-11e9-b1cf-00505690543b:1-18233950,
 cca778e9-8cdf-11e8-94d0-005056a247b1:1-303899574,
 cf80679b-7695-11e8-8873-1c1b0d9a4ab9:1-12836047,
 d0951f24-1e21-11e9-bb2e-00505690b730:1-4758092,
-e7574090-b123-11e8-8bb4-005056a29643:1-12'`, "071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7,41d816cd-0455-11e9-be42-005056901a22:1-2,5f1eea9e-b1e5-11e8-bc77-005056a221ed:1-144609156,75848cdb-8131-11e7-b6fc-1c1b0de85e7b:1-151378598,780ad602-0456-11e9-8bcd-005056901a22:1-516653148,92809ddd-1e3c-11e9-9d04-00505690f6ab:1-11858565,c59598c7-0467-11e9-bbbe-005056901a22:1-226464969,cbd7809d-0433-11e9-b1cf-00505690543b:1-18233950,cca778e9-8cdf-11e8-94d0-005056a247b1:1-303899574,cf80679b-7695-11e8-8873-1c1b0d9a4ab9:1-12836047,d0951f24-1e21-11e9-bb2e-00505690b730:1-4758092,e7574090-b123-11e8-8bb4-005056a29643:1-12"},
+e7574090-b123-11e8-8bb4-005056a29643:1-12'
+`, "071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7,41d816cd-0455-11e9-be42-005056901a22:1-2,5f1eea9e-b1e5-11e8-bc77-005056a221ed:1-144609156,75848cdb-8131-11e7-b6fc-1c1b0de85e7b:1-151378598,780ad602-0456-11e9-8bcd-005056901a22:1-516653148,92809ddd-1e3c-11e9-9d04-00505690f6ab:1-11858565,c59598c7-0467-11e9-bbbe-005056901a22:1-226464969,cbd7809d-0433-11e9-b1cf-00505690543b:1-18233950,cca778e9-8cdf-11e8-94d0-005056a247b1:1-303899574,cf80679b-7695-11e8-8873-1c1b0d9a4ab9:1-12836047,d0951f24-1e21-11e9-bb2e-00505690b730:1-4758092,e7574090-b123-11e8-8bb4-005056a29643:1-12"},
 		{`SET @@GLOBAL.GTID_PURGED='071a84e8-b253-11e8-8472-005056a27e86:1-76,
-2337be48-0456-11e9-bd1c-00505690543b:1-7';`, "071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7"},
-		{`SET @@GLOBAL.GTID_PURGED='c0977f88-3104-11e9-81e1-00505690245b:1-274559';`, "c0977f88-3104-11e9-81e1-00505690245b:1-274559"},
+2337be48-0456-11e9-bd1c-00505690543b:1-7';
+`, "071a84e8-b253-11e8-8472-005056a27e86:1-76,2337be48-0456-11e9-bd1c-00505690543b:1-7"},
+		{`SET @@GLOBAL.GTID_PURGED='c0977f88-3104-11e9-81e1-00505690245b:1-274559';
+`, "c0977f88-3104-11e9-81e1-00505690245b:1-274559"},
 		{`CHANGE MASTER TO MASTER_LOG_FILE='mysql-bin.008995', MASTER_LOG_POS=102052485;`, ""},
 	}
 
 	for _, tt := range tbls {
 		reader := strings.NewReader(tt.input)
-		newReader := bufio.NewReader(reader)
-		var gtidParse = new(GtidParseTest)
-		var binlogParsed bool
-		parseBinlogPos := true
-		for {
-			bytes, _, err := newReader.ReadLine()
-			line := string(bytes)
-			if err == io.EOF {
-				break
-			}
+		var handler = new(testParseHandler)
 
-			if parseBinlogPos && !binlogParsed {
-				if m := gtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-					gtidStr := m[0][1]
-					if gtidStr != "" {
-						if err := gtidParse.UpdateGtidSet(gtidStr); err != nil {
-							errors.Errorf("gtid failed to parsed: %v", err)
-						}
-					}
-				}
-				if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-					binlogParsed = true
-				}
-			}
-
-		}
+		Parse(reader, handler, true)
 
 		if tt.expected == "" {
-			if gtidParse.gset != nil && gtidParse.gset.String() != "" {
-				log.Fatalf("expected nil, but get %v", gtidParse.gset)
+			if handler.gset != nil {
+				log.Fatalf("expected nil, but get %v", handler.gset)
+			} else {
+				continue
 			}
-			continue
 		}
 		expectedGtidset, err := mysql.ParseGTIDSet("mysql", tt.expected)
 		if err != nil {
 			log.Fatalf("Gtid:%s failed parsed, err: %v", tt.expected, err)
 		}
-		if !expectedGtidset.Equal(gtidParse.gset) {
-			log.Fatalf("expected:%v, but get: %v", expectedGtidset, gtidParse.gset)
+		if !expectedGtidset.Equal(handler.gset) {
+			log.Fatalf("expected:%v, but get: %v", expectedGtidset, handler.gset)
 		}
 	}
 

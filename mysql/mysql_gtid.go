@@ -9,8 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
 	"github.com/siddontang/go/hack"
 )
 
@@ -395,6 +396,10 @@ func (s *MysqlGTIDSet) Contain(o GTIDSet) bool {
 func (s *MysqlGTIDSet) Equal(o GTIDSet) bool {
 	sub, ok := o.(*MysqlGTIDSet)
 	if !ok {
+		return false
+	}
+
+	if len(sub.Sets) != len(s.Sets) {
 		return false
 	}
 
