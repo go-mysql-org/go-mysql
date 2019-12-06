@@ -9,9 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	uuid "github.com/satori/go.uuid"
-
 	"github.com/pingcap/errors"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go/hack"
 )
 
