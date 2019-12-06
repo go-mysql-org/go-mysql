@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -148,7 +147,7 @@ func (h *GtidParseTest) UpdateGtidSet(gtidStr string) (err error) {
 	return err
 }
 
-func TestParse4GtidExp(t *testing.T) {
+func (s *parserTestSuite) TestParseGtidExp(c *C) {
 	//	binlogExp := regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
 	//	gtidExp := regexp.MustCompile("(\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)")
 	tbls := []struct {
@@ -185,18 +184,14 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'
 
 		if tt.expected == "" {
 			if handler.gset != nil {
-				log.Fatalf("expected nil, but get %v", handler.gset)
+				c.Assert(handler.gset, IsNil)
 			} else {
 				continue
 			}
 		}
 		expectedGtidset, err := mysql.ParseGTIDSet("mysql", tt.expected)
-		if err != nil {
-			log.Fatalf("Gtid:%s failed parsed, err: %v", tt.expected, err)
-		}
-		if !expectedGtidset.Equal(handler.gset) {
-			log.Fatalf("expected:%v, but get: %v", expectedGtidset, handler.gset)
-		}
+		c.Assert(err, IsNil)
+		c.Assert(expectedGtidset.Equal(handler.gset), IsTrue)
 	}
 
 }
