@@ -27,6 +27,15 @@ func (h *dumpParseHandler) BinLog(name string, pos uint64) error {
 	return nil
 }
 
+func (h *dumpParseHandler) GtidSet(gtidsets string) (err error) {
+	if h.gset != nil {
+		err = h.gset.Update(gtidsets)
+	} else {
+		h.gset, err = mysql.ParseGTIDSet("mysql", gtidsets)
+	}
+	return err
+}
+
 func (h *dumpParseHandler) Data(db string, table string, values []string) error {
 	if err := h.c.ctx.Err(); err != nil {
 		return err
@@ -167,6 +176,7 @@ func (c *Canal) dump() error {
 
 	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 	c.master.Update(pos)
+	c.master.UpdateGTIDSet(h.gset)
 	if err := c.eventHandler.OnPosSynced(pos, c.master.GTIDSet(), true); err != nil {
 		return errors.Trace(err)
 	}
