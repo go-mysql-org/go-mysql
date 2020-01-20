@@ -87,6 +87,9 @@ const (
 	GTID_EVENT
 	ANONYMOUS_GTID_EVENT
 	PREVIOUS_GTIDS_EVENT
+	TRANSACTION_CONTEXT_EVENT
+	VIEW_CHANGE_EVENT
+	XA_PREPARE_LOG_EVENT
 )
 
 const (
@@ -179,7 +182,13 @@ func (e EventType) String() string {
 		return "MariadbGTIDEvent"
 	case MARIADB_GTID_LIST_EVENT:
 		return "MariadbGTIDListEvent"
-
+	case TRANSACTION_CONTEXT_EVENT:
+		return "TransactionContextEvent"
+	case VIEW_CHANGE_EVENT:
+		return "ViewChangeEvent"
+	case XA_PREPARE_LOG_EVENT:
+		return "XAPrepareLogEvent"
+		
 	default:
 		return "UnknownEvent"
 	}
