@@ -177,7 +177,7 @@ func ParseUUIDSet(str string) (*UUIDSet, error) {
 
 	// Handle interval
 	for i := 1; i < len(sep); i++ {
-		if in, err := parseInterval(sep[i]); err != nil {
+		if in, err := parseInterval(sep[1]); err != nil {
 			return nil, errors.Trace(err)
 		} else {
 			s.Intervals = append(s.Intervals, in)
