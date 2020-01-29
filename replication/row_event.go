@@ -32,8 +32,17 @@ type TableMapEvent struct {
 	ColumnType  []byte
 	ColumnMeta  []uint16
 
-	//len = (ColumnCount + 7) / 8
-	NullBitmap []byte
+	NullBitmap []byte // len = (ColumnCount + 7) / 8
+
+	// The followings are available only after MySQL-8.0.1, see: `--binlog_row_metadata` and
+	// https://mysqlhighavailability.com/more-metadata-is-written-into-binary-log/
+
+	OptionalMeta []byte
+
+	SignednessBitmap []byte // len = (ColumnCount + 7) / 8
+	ColumnName       [][]byte
+	PrimaryKey       []uint64 // A sequence of column indexes
+	PrimaryKeyPrefix []uint64 // Prefix length 0 means that the whole column value is used
 }
 
 func (e *TableMapEvent) Decode(data []byte) error {
@@ -88,7 +97,16 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	e.NullBitmap = data[pos : pos+nullBitmapSize]
 
-	// TODO: handle optional field meta
+	pos += nullBitmapSize
+
+	e.OptionalMeta = data[pos:]
+	if len(e.OptionalMeta) == 0 {
+		return nil
+	}
+
+	if err = e.decodeOptionalMeta(e.OptionalMeta); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -186,6 +204,68 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 	return nil
 }
 
+func (e *TableMapEvent) decodeOptionalMeta(data []byte) error {
+
+	pos := 0
+	for pos < len(data) {
+
+		// optional metadata fields are stored in Type, Length, Value(TLV) format
+		// Type takes 1 byte. Length is a packed integer value. Values takes Length bytes
+		t := data[pos]
+		pos++
+
+		l, _, n := LengthEncodedInt(data[pos:])
+		pos += n
+
+		v := data[pos : pos+int(l)]
+		pos += int(l)
+
+		switch t {
+		case TABLE_MAP_OPT_META_SIGNEDNESS:
+			e.SignednessBitmap = v
+
+		case TABLE_MAP_OPT_META_COLUMN_NAME:
+			p := 0
+			e.ColumnName = make([][]byte, 0, e.ColumnCount)
+			for p < len(v) {
+				n := int(v[p])
+				p++
+				e.ColumnName = append(e.ColumnName, v[p:p+n])
+				p += n
+			}
+
+			if len(e.ColumnName) != int(e.ColumnCount) {
+				return errors.Errorf("Expect %d column names but got %d", e.ColumnCount, len(e.ColumnName))
+			}
+
+		case TABLE_MAP_OPT_META_SIMPLE_PRIMARY_KEY:
+			p := 0
+			for p < len(v) {
+				i, _, n := LengthEncodedInt(v[p:])
+				e.PrimaryKey = append(e.PrimaryKey, i)
+				e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, 0)
+				p += n
+			}
+
+		case TABLE_MAP_OPT_META_PRIMARY_KEY_WITH_PREFIX:
+			p := 0
+			for p < len(v) {
+				i, _, n := LengthEncodedInt(v[p:])
+				e.PrimaryKey = append(e.PrimaryKey, i)
+				p += n
+				i, _, n = LengthEncodedInt(v[p:])
+				e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, i)
+				p += n
+			}
+
+		default:
+		}
+
+	}
+
+	return nil
+}
+
 func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "TableID: %d\n", e.TableID)
 	fmt.Fprintf(w, "TableID size: %d\n", e.tableIDSize)
@@ -195,6 +275,14 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Column count: %d\n", e.ColumnCount)
 	fmt.Fprintf(w, "Column type: \n%s", hex.Dump(e.ColumnType))
 	fmt.Fprintf(w, "NULL bitmap: \n%s", hex.Dump(e.NullBitmap))
+	fmt.Fprintf(w, "Optional meta: \n%s", hex.Dump(e.OptionalMeta))
+	fmt.Fprintf(w, "Signedness bitmap\n%s", hex.Dump(e.SignednessBitmap))
+	fmt.Fprintf(w, "Column name: \n")
+	for _, name := range e.ColumnName {
+		fmt.Fprintf(w, "  %s\n", name)
+	}
+	fmt.Fprintf(w, "Primary key: %v\n", e.PrimaryKey)
+	fmt.Fprintf(w, "Primary key prefix: %v\n", e.PrimaryKeyPrefix)
 	fmt.Fprintln(w)
 }
 
