@@ -5,21 +5,25 @@ import (
 	"strconv"
 
 	"github.com/pingcap/errors"
+	"github.com/siddontang/go-mysql/utils"
 	"github.com/siddontang/go/hack"
 )
 
 type RowData []byte
 
-func (p RowData) Parse(f []*Field, binary bool) ([]interface{}, error) {
+func (p RowData) Parse(f []*Field, binary bool, dst []FieldValue) ([]FieldValue, error) {
 	if binary {
-		return p.ParseBinary(f)
+		return p.ParseBinary(f, dst)
 	} else {
-		return p.ParseText(f)
+		return p.ParseText(f, dst)
 	}
 }
 
-func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
-	data := make([]interface{}, len(f))
+func (p RowData) ParseText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
+	for len(dst) < len(f) {
+		dst = append(dst, FieldValue{})
+	}
+	data := dst[:len(f)]
 
 	var err error
 	var v []byte
@@ -36,7 +40,7 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 		pos += n
 
 		if isNull {
-			data[i] = nil
+			data[i].Type = FieldValueTypeNull
 		} else {
 			isUnsigned := f[i].Flag&UNSIGNED_FLAG != 0
 
@@ -44,14 +48,18 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 			case MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_INT24,
 				MYSQL_TYPE_LONGLONG, MYSQL_TYPE_YEAR:
 				if isUnsigned {
-					data[i], err = strconv.ParseUint(string(v), 10, 64)
+					data[i].Type = FieldValueTypeUnsigned
+					data[i].Uint64, err = strconv.ParseUint(utils.ByteSliceToString(v), 10, 64)
 				} else {
-					data[i], err = strconv.ParseInt(string(v), 10, 64)
+					data[i].Type = FieldValueTypeSigned
+					data[i].Int64, err = strconv.ParseInt(utils.ByteSliceToString(v), 10, 64)
 				}
 			case MYSQL_TYPE_FLOAT, MYSQL_TYPE_DOUBLE:
-				data[i], err = strconv.ParseFloat(string(v), 64)
+				data[i].Type = FieldValueTypeFloat
+				data[i].Float, err = strconv.ParseFloat(utils.ByteSliceToString(v), 64)
 			default:
-				data[i] = v
+				data[i].Type = FieldValueTypeString
+				data[i].String = append(data[i].String[:0], v...)
 			}
 
 			if err != nil {
@@ -65,8 +73,11 @@ func (p RowData) ParseText(f []*Field) ([]interface{}, error) {
 
 // ParseBinary parses the binary format of data
 // see https://dev.mysql.com/doc/internals/en/binary-protocol-value.html
-func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
-	data := make([]interface{}, len(f))
+func (p RowData) ParseBinary(f []*Field, dst []FieldValue) ([]FieldValue, error) {
+	for len(dst) < len(f) {
+		dst = append(dst, FieldValue{})
+	}
+	data := dst[:len(f)]
 
 	if p[0] != OK_HEADER {
 		return nil, ErrMalformPacket
@@ -82,7 +93,7 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 	var v []byte
 	for i := range data {
 		if nullBitmap[(i+2)/8]&(1<<(uint(i+2)%8)) > 0 {
-			data[i] = nil
+			data[i].Type = FieldValueTypeNull
 			continue
 		}
 
@@ -90,52 +101,69 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 
 		switch f[i].Type {
 		case MYSQL_TYPE_NULL:
-			data[i] = nil
+			data[i].Type = FieldValueTypeNull
 			continue
 
 		case MYSQL_TYPE_TINY:
 			if isUnsigned {
-				data[i] = ParseBinaryUint8(p[pos : pos+1])
+				v := ParseBinaryUint8(p[pos : pos+1])
+				data[i].Type = FieldValueTypeUnsigned
+				data[i].Uint64 = uint64(v)
 			} else {
-				data[i] = ParseBinaryInt8(p[pos : pos+1])
+				v := ParseBinaryInt8(p[pos : pos+1])
+				data[i].Type = FieldValueTypeSigned
+				data[i].Int64 = int64(v)
 			}
 			pos++
 			continue
 
 		case MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
 			if isUnsigned {
-				data[i] = ParseBinaryUint16(p[pos : pos+2])
+				v := ParseBinaryUint16(p[pos : pos+2])
+				data[i].Type = FieldValueTypeUnsigned
+				data[i].Uint64 = uint64(v)
 			} else {
-				data[i] = ParseBinaryInt16(p[pos : pos+2])
+				v := ParseBinaryInt16(p[pos : pos+2])
+				data[i].Type = FieldValueTypeSigned
+				data[i].Int64 = int64(v)
 			}
 			pos += 2
 			continue
 
 		case MYSQL_TYPE_INT24, MYSQL_TYPE_LONG:
 			if isUnsigned {
-				data[i] = ParseBinaryUint32(p[pos : pos+4])
+				v := ParseBinaryUint32(p[pos : pos+4])
+				data[i].Type = FieldValueTypeUnsigned
+				data[i].Uint64 = uint64(v)
 			} else {
-				data[i] = ParseBinaryInt32(p[pos : pos+4])
+				v := ParseBinaryInt32(p[pos : pos+4])
+				data[i].Type = FieldValueTypeSigned
+				data[i].Int64 = int64(v)
 			}
 			pos += 4
 			continue
 
 		case MYSQL_TYPE_LONGLONG:
 			if isUnsigned {
-				data[i] = ParseBinaryUint64(p[pos : pos+8])
+				data[i].Type = FieldValueTypeUnsigned
+				data[i].Uint64 = ParseBinaryUint64(p[pos : pos+8])
 			} else {
-				data[i] = ParseBinaryInt64(p[pos : pos+8])
+				data[i].Type = FieldValueTypeSigned
+				data[i].Int64 = ParseBinaryInt64(p[pos : pos+8])
 			}
 			pos += 8
 			continue
 
 		case MYSQL_TYPE_FLOAT:
-			data[i] = ParseBinaryFloat32(p[pos : pos+4])
+			v := ParseBinaryFloat32(p[pos : pos+4])
+			data[i].Type = FieldValueTypeFloat
+			data[i].Float = float64(v)
 			pos += 4
 			continue
 
 		case MYSQL_TYPE_DOUBLE:
-			data[i] = ParseBinaryFloat64(p[pos : pos+8])
+			data[i].Type = FieldValueTypeFloat
+			data[i].Float = ParseBinaryFloat64(p[pos : pos+8])
 			pos += 8
 			continue
 
@@ -150,12 +178,14 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			}
 
 			if !isNull {
-				data[i] = v
+				data[i].Type = FieldValueTypeString
+				data[i].String = append(data[i].String[:0], v...)
 				continue
 			} else {
-				data[i] = nil
+				data[i].Type = FieldValueTypeNull
 				continue
 			}
+
 		case MYSQL_TYPE_DATE, MYSQL_TYPE_NEWDATE:
 			var num uint64
 			num, isNull, n = LengthEncodedInt(p[pos:])
@@ -163,11 +193,12 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			pos += n
 
 			if isNull {
-				data[i] = nil
+				data[i].Type = FieldValueTypeNull
 				continue
 			}
 
-			data[i], err = FormatBinaryDate(int(num), p[pos:])
+			data[i].Type = FieldValueTypeString
+			data[i].String, err = FormatBinaryDate(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {
@@ -181,11 +212,12 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			pos += n
 
 			if isNull {
-				data[i] = nil
+				data[i].Type = FieldValueTypeNull
 				continue
 			}
 
-			data[i], err = FormatBinaryDateTime(int(num), p[pos:])
+			data[i].Type = FieldValueTypeString
+			data[i].String, err = FormatBinaryDateTime(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {
@@ -199,11 +231,12 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 			pos += n
 
 			if isNull {
-				data[i] = nil
+				data[i].Type = FieldValueTypeNull
 				continue
 			}
 
-			data[i], err = FormatBinaryTime(int(num), p[pos:])
+			data[i].Type = FieldValueTypeString
+			data[i].String, err = FormatBinaryTime(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {
@@ -221,9 +254,37 @@ func (p RowData) ParseBinary(f []*Field) ([]interface{}, error) {
 type Resultset struct {
 	Fields     []*Field
 	FieldNames map[string]int
-	Values     [][]interface{}
+	Values     [][]FieldValue
+
+	RawPkg []byte
 
 	RowDatas []RowData
+}
+
+func (r *Resultset) reset(count int) {
+	r.RawPkg = r.RawPkg[:0]
+
+	r.Fields = r.Fields[:0]
+	r.Values = r.Values[:0]
+	r.RowDatas = r.RowDatas[:0]
+
+	if r.FieldNames != nil {
+		for k := range r.FieldNames {
+			delete(r.FieldNames, k)
+		}
+	} else {
+		r.FieldNames = make(map[string]int)
+	}
+
+	if count == 0 {
+		return
+	}
+
+	if cap(r.Fields) < count {
+		r.Fields = make([]*Field, count)
+	} else {
+		r.Fields = r.Fields[:count]
+	}
 }
 
 func (r *Resultset) RowNumber() int {
@@ -243,7 +304,20 @@ func (r *Resultset) GetValue(row, column int) (interface{}, error) {
 		return nil, errors.Errorf("invalid column index %d", column)
 	}
 
-	return r.Values[row][column], nil
+	val := &r.Values[row][column]
+
+	switch val.Type {
+	case FieldValueTypeUnsigned:
+		return val.Uint64, nil
+	case FieldValueTypeSigned:
+		return val.Int64, nil
+	case FieldValueTypeFloat:
+		return val.Float, nil
+	case FieldValueTypeString:
+		return val.String, nil
+	default: // FieldValueTypeNull
+		return nil, nil
+	}
 }
 
 func (r *Resultset) NameIndex(name string) (int, error) {

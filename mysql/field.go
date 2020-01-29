@@ -23,9 +23,25 @@ type Field struct {
 	DefaultValue       []byte
 }
 
-func (p FieldData) Parse() (f *Field, err error) {
-	f = new(Field)
+type FieldValueType uint8
 
+type FieldValue struct {
+	Type   FieldValueType
+	Uint64 uint64
+	Int64  int64
+	Float  float64
+	String []byte
+}
+
+const (
+	FieldValueTypeNull = iota
+	FieldValueTypeUnsigned
+	FieldValueTypeSigned
+	FieldValueTypeFloat
+	FieldValueTypeString
+)
+
+func (f *Field) Parse(p FieldData) (err error) {
 	f.Data = p
 
 	var n int
@@ -115,6 +131,14 @@ func (p FieldData) Parse() (f *Field, err error) {
 	}
 
 	return
+}
+
+func (p FieldData) Parse() (f *Field, err error) {
+	f = new(Field)
+	if err = f.Parse(p); err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 func (f *Field) Dump() []byte {
