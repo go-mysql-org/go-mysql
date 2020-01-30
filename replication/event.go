@@ -388,12 +388,38 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
 	fmt.Fprintf(w, "LAST_COMMITTED: %d\n", e.LastCommitted)
 	fmt.Fprintf(w, "SEQUENCE_NUMBER: %d\n", e.SequenceNumber)
-	fmt.Fprintf(w, "Immediate commmit timestamp: %d\n", e.ImmediateCommitTimestamp)
-	fmt.Fprintf(w, "Orignal commmit timestamp: %d\n", e.OriginalCommitTimestamp)
+	fmt.Fprintf(w, "Immediate commmit timestamp: %d (%s)\n", e.ImmediateCommitTimestamp, e.fmtTime(e.ImmediateCommitTime()))
+	fmt.Fprintf(w, "Orignal commmit timestamp: %d (%s)\n", e.OriginalCommitTimestamp, e.fmtTime(e.OriginalCommitTime()))
 	fmt.Fprintf(w, "Transaction length: %d\n", e.TransactionLength)
 	fmt.Fprintf(w, "Immediate server version: %d\n", e.ImmediateServerVersion)
 	fmt.Fprintf(w, "Orignal server version: %d\n", e.OriginalServerVersion)
 	fmt.Fprintln(w)
+}
+
+// ImmediateCommitTime returns the commit time of this trx on the immediate server
+// or zero time if not available.
+func (e *GTIDEvent) ImmediateCommitTime() time.Time {
+	return e.microsecTimestamp2Time(e.ImmediateCommitTimestamp)
+}
+
+// OriginalCommitTime returns the commit time of this trx on the original server
+// or zero time if not available.
+func (e *GTIDEvent) OriginalCommitTime() time.Time {
+	return e.microsecTimestamp2Time(e.OriginalCommitTimestamp)
+}
+
+func (e *GTIDEvent) microsecTimestamp2Time(ts uint64) time.Time {
+	if ts == 0 {
+		return time.Time{}
+	}
+	return time.Unix(int64(ts/1000000), int64(ts%1000000)*1000)
+}
+
+func (e *GTIDEvent) fmtTime(t time.Time) string {
+	if t.IsZero() {
+		return "N/A"
+	}
+	return t.Format(time.RFC3339Nano)
 }
 
 type BeginLoadQueryEvent struct {
