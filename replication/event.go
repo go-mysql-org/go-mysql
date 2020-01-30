@@ -20,6 +20,7 @@ const (
 	LogicalTimestampTypeCode   = 2
 	PartLogicalTimestampLength = 8
 	BinlogChecksumLength       = 4
+	UndefinedServerVer         = 999999 // UNDEFINED_SERVER_VERSION
 )
 
 type BinlogEvent struct {
@@ -299,6 +300,18 @@ type GTIDEvent struct {
 	GNO            int64
 	LastCommitted  int64
 	SequenceNumber int64
+
+	// The followings are available only after MySQL-8.0
+
+	ImmediateCommitTimestamp uint64
+	OriginalCommitTimestamp  uint64
+
+	// Total transaction length (including this GTIDEvent), see:
+	// https://mysqlhighavailability.com/taking-advantage-of-new-transaction-length-metadata/
+	TransactionLength uint64
+
+	ImmediateServerVersion uint32
+	OriginalServerVersion  uint32
 }
 
 func (e *GTIDEvent) Decode(data []byte) error {
@@ -309,12 +322,61 @@ func (e *GTIDEvent) Decode(data []byte) error {
 	pos += SidLength
 	e.GNO = int64(binary.LittleEndian.Uint64(data[pos:]))
 	pos += 8
+
 	if len(data) >= 42 {
 		if uint8(data[pos]) == LogicalTimestampTypeCode {
 			pos++
 			e.LastCommitted = int64(binary.LittleEndian.Uint64(data[pos:]))
 			pos += PartLogicalTimestampLength
 			e.SequenceNumber = int64(binary.LittleEndian.Uint64(data[pos:]))
+			pos += 8
+
+			// IMMEDIATE_COMMIT_TIMESTAMP_LENGTH = 7
+			if len(data)-pos < 7 {
+				return nil
+			}
+			e.ImmediateCommitTimestamp = LittleEndianUint64(data[pos : pos+7])
+			pos += 7
+			if (e.ImmediateCommitTimestamp & (uint64(1) << 55)) != 0 {
+				// If the most significant bit set, another 7 byte follows representing OriginalCommitTimestamp
+				e.ImmediateCommitTimestamp &= ^(uint64(1) << 55)
+				e.OriginalCommitTimestamp = LittleEndianUint64(data[pos : pos+7])
+				pos += 7
+
+			} else {
+				// Otherwise OriginalCommitTimestamp == ImmediateCommitTimestamp
+				e.OriginalCommitTimestamp = e.ImmediateCommitTimestamp
+
+			}
+
+			// TRANSACTION_LENGTH_MIN_LENGTH = 1
+			if len(data)-pos < 1 {
+				return nil
+			}
+			var n int
+			e.TransactionLength, _, n = LengthEncodedInt(data[pos:])
+			pos += n
+
+			// IMMEDIATE_SERVER_VERSION_LENGTH = 4
+			e.ImmediateServerVersion = UndefinedServerVer
+			e.OriginalServerVersion = UndefinedServerVer
+			if len(data)-pos < 4 {
+				return nil
+			}
+			e.ImmediateServerVersion = binary.LittleEndian.Uint32(data[pos:])
+			pos += 4
+			if (e.ImmediateServerVersion & (uint32(1) << 31)) != 0 {
+				// If the most significant bit set, another 4 byte follows representing OriginalServerVersion
+				e.ImmediateServerVersion &= ^(uint32(1) << 31)
+				e.OriginalServerVersion = binary.LittleEndian.Uint32(data[pos:])
+				pos += 4
+
+			} else {
+				// Otherwise OriginalServerVersion == ImmediateServerVersion
+				e.OriginalServerVersion = e.ImmediateServerVersion
+
+			}
+
 		}
 	}
 	return nil
@@ -326,6 +388,11 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
 	fmt.Fprintf(w, "LAST_COMMITTED: %d\n", e.LastCommitted)
 	fmt.Fprintf(w, "SEQUENCE_NUMBER: %d\n", e.SequenceNumber)
+	fmt.Fprintf(w, "Immediate commmit timestamp: %d\n", e.ImmediateCommitTimestamp)
+	fmt.Fprintf(w, "Orignal commmit timestamp: %d\n", e.OriginalCommitTimestamp)
+	fmt.Fprintf(w, "Transaction length: %d\n", e.TransactionLength)
+	fmt.Fprintf(w, "Immediate server version: %d\n", e.ImmediateServerVersion)
+	fmt.Fprintf(w, "Orignal server version: %d\n", e.OriginalServerVersion)
 	fmt.Fprintln(w)
 }
 
