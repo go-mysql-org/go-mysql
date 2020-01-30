@@ -335,12 +335,12 @@ func (e *GTIDEvent) Decode(data []byte) error {
 			if len(data)-pos < 7 {
 				return nil
 			}
-			e.ImmediateCommitTimestamp = LittleEndianUint64(data[pos : pos+7])
+			e.ImmediateCommitTimestamp = BytesToUint64(data[pos : pos+7])
 			pos += 7
 			if (e.ImmediateCommitTimestamp & (uint64(1) << 55)) != 0 {
 				// If the most significant bit set, another 7 byte follows representing OriginalCommitTimestamp
 				e.ImmediateCommitTimestamp &= ^(uint64(1) << 55)
-				e.OriginalCommitTimestamp = LittleEndianUint64(data[pos : pos+7])
+				e.OriginalCommitTimestamp = BytesToUint64(data[pos : pos+7])
 				pos += 7
 
 			} else {
