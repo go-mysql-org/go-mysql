@@ -99,12 +99,7 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	pos += nullBitmapSize
 
-	optionalMeta := data[pos:]
-	if len(optionalMeta) == 0 {
-		return nil
-	}
-
-	if err = e.decodeOptionalMeta(optionalMeta); err != nil {
+	if err = e.decodeOptionalMeta(data[pos:]); err != nil {
 		return err
 	}
 
