@@ -339,7 +339,7 @@ func (e *TableMapEvent) Nullable(i int) (available, nullable bool) {
 	if len(e.NullBitmap) == 0 {
 		return
 	}
-	return true, e.NullBitmap[i/8]&(1<<(i%8)) != 0
+	return true, e.NullBitmap[i/8]&(1<<uint(i%8)) != 0
 }
 
 // UnsignedMap returns a map: column index -> unsigned.
@@ -355,7 +355,7 @@ func (e *TableMapEvent) UnsignedMap() map[int]bool {
 		if !IsNumericType(e.ColumnType[i]) {
 			continue
 		}
-		ret[i] = e.SignednessBitmap[p/8]&(1<<(7-p%8)) != 0
+		ret[i] = e.SignednessBitmap[p/8]&(1<<uint(7-p%8)) != 0
 		p++
 	}
 	return ret
