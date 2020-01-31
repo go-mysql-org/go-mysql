@@ -32,14 +32,14 @@ type TableMapEvent struct {
 	ColumnType  []byte
 	ColumnMeta  []uint16
 
-	NullBitmap []byte // len = (ColumnCount + 7) / 8
+	//len = (ColumnCount + 7) / 8
+	NullBitmap []byte
 
 	// The followings are available only after MySQL-8.0.1, see: `--binlog_row_metadata` and
 	// https://mysqlhighavailability.com/more-metadata-is-written-into-binary-log/
 
-	optionalMeta []byte
-
 	SignednessBitmap []byte
+
 	ColumnName       [][]byte
 	PrimaryKey       []uint64 // A sequence of column indexes
 	PrimaryKeyPrefix []uint64 // Prefix length 0 means that the whole column value is used
@@ -99,12 +99,12 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	pos += nullBitmapSize
 
-	e.optionalMeta = data[pos:]
-	if len(e.optionalMeta) == 0 {
+	optionalMeta := data[pos:]
+	if len(optionalMeta) == 0 {
 		return nil
 	}
 
-	if err = e.decodeOptionalMeta(e.optionalMeta); err != nil {
+	if err = e.decodeOptionalMeta(optionalMeta); err != nil {
 		return err
 	}
 
@@ -276,34 +276,60 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Column count: %d\n", e.ColumnCount)
 	fmt.Fprintf(w, "Column type: \n%s", hex.Dump(e.ColumnType))
 	fmt.Fprintf(w, "NULL bitmap: \n%s", hex.Dump(e.NullBitmap))
-	fmt.Fprintf(w, "Optional meta: \n%s", hex.Dump(e.optionalMeta))
+
 	fmt.Fprintf(w, "Signedness bitmap: \n%s", hex.Dump(e.SignednessBitmap))
 	fmt.Fprintf(w, "Primary key: %v\n", e.PrimaryKey)
 	fmt.Fprintf(w, "Primary key prefix: %v\n", e.PrimaryKeyPrefix)
 
-	colNameArr := e.ColumnNameArray()
-	nullArr := e.NullableArray()
-	unsignedArr := e.UnsignedArray()
+	unsignedMap := e.UnsignedMap()
+
+	nameMaxLen := 0
+	for _, name := range e.ColumnName {
+		if len(name) > nameMaxLen {
+			nameMaxLen = len(name)
+		}
+	}
+	nameFmt := "  %s"
+	if nameMaxLen > 0 {
+		nameFmt = fmt.Sprintf("  %%-%ds", nameMaxLen)
+	}
+
+	primaryKey := map[int]struct{}{}
+	for _, pk := range e.PrimaryKey {
+		primaryKey[int(pk)] = struct{}{}
+	}
+
 	fmt.Fprintf(w, "Columns: \n")
 	for i := 0; i < int(e.ColumnCount); i++ {
-		if colNameArr != nil {
-			fmt.Fprintf(w, "  %s", colNameArr[i])
+		if len(e.ColumnName) == 0 {
+			fmt.Fprintf(w, nameFmt, "<n/a>")
 		} else {
-			fmt.Fprintf(w, "  <noname>")
+			fmt.Fprintf(w, nameFmt, e.ColumnName[i])
 		}
 
-		fmt.Fprintf(w, "  type:%d", e.ColumnType[i])
+		fmt.Fprintf(w, "  type=%-3d", e.ColumnType[i])
 
-		if unsignedArr != nil && unsignedArr[i] {
-			fmt.Fprintf(w, " unsigned")
-		}
-
-		if nullArr != nil {
-			if nullArr[i] {
-				fmt.Fprintf(w, "  null")
+		if IsNumericType(e.ColumnType[i]) {
+			if unsignedMap == nil {
+				fmt.Fprintf(w, "  unsigned=<n/a>")
+			} else if unsignedMap[i] {
+				fmt.Fprintf(w, "  unsigned=yes")
 			} else {
-				fmt.Fprintf(w, "  notnull")
+				fmt.Fprintf(w, "  unsigned=no ")
 			}
+		}
+
+		available, nullable := e.Nullable(i)
+		if !available {
+			fmt.Fprintf(w, "  null=<n/a>")
+		} else if nullable {
+			fmt.Fprintf(w, "  null=yes")
+		} else {
+			fmt.Fprintf(w, "  null=no ")
+		}
+
+		if _, ok := primaryKey[i]; ok {
+			fmt.Fprintf(w, "  pri")
 		}
 
 		fmt.Fprintf(w, "\n")
@@ -311,43 +337,27 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
-// NullableArray returns an array of nullablity for each column: true if the column is nullable.
-// It returns nil if not available.
-func (e *TableMapEvent) NullableArray() []bool {
+// Nullable returns the nullablity of the i-th column.
+// If null bits are not available, available is false.
+// i must be in range [0, ColumnCount).
+func (e *TableMapEvent) Nullable(i int) (available, nullable bool) {
 	if len(e.NullBitmap) == 0 {
-		return nil
+		return
 	}
-	ret := make([]bool, e.ColumnCount)
-	for i := 0; i < len(ret); i++ {
-		ret[i] = e.NullBitmap[i/8]&(1<<(i%8)) != 0
-	}
-	return ret
+	return true, e.NullBitmap[i/8]&(1<<(i%8)) != 0
 }
 
-// ColumnNameArray returns an array of column names.
-// It returns nil if not available.
-func (e *TableMapEvent) ColumnNameArray() []string {
-	if len(e.ColumnName) == 0 {
-		return nil
-	}
-	ret := make([]string, e.ColumnCount)
-	for i := 0; i < len(ret); i++ {
-		ret[i] = string(e.ColumnName[i])
-	}
-	return ret
-}
-
-// UnsignedArray returns an array of signedness for each column: true if the column is numeric and it's unsigned.
-// It returns nil if not available.
-func (e *TableMapEvent) UnsignedArray() []bool {
+// UnsignedMap returns a map: column index -> unsigned.
+// Note that only numeric columns will be returned.
+// If signedness bits are not available, nil is returned.
+func (e *TableMapEvent) UnsignedMap() map[int]bool {
 	if len(e.SignednessBitmap) == 0 {
 		return nil
 	}
 	p := 0
-	ret := make([]bool, e.ColumnCount)
-	for i := 0; i < len(ret); i++ {
+	ret := make(map[int]bool)
+	for i := 0; i < int(e.ColumnCount); i++ {
 		if !IsNumericType(e.ColumnType[i]) {
-			ret[i] = false
 			continue
 		}
 		ret[i] = e.SignednessBitmap[p/8]&(1<<(7-p%8)) != 0
