@@ -401,8 +401,6 @@ func (e *TableMapEvent) UnsignedMap() map[int]bool {
 // nil is returned if not available or no character columns at all.
 func (e *TableMapEvent) CollationMap() map[int]uint64 {
 
-	ret := make(map[int]uint64)
-
 	if len(e.DefaultCharset) != 0 {
 		defaultCollation := e.DefaultCharset[0]
 
@@ -413,6 +411,7 @@ func (e *TableMapEvent) CollationMap() map[int]uint64 {
 		}
 
 		p := 0
+		ret := make(map[int]uint64)
 		for i := 0; i < int(e.ColumnCount); i++ {
 			if !IsCharacterType(e.ColumnType[i]) {
 				continue
@@ -432,6 +431,7 @@ func (e *TableMapEvent) CollationMap() map[int]uint64 {
 	if len(e.ColumnCharset) != 0 {
 
 		p := 0
+		ret := make(map[int]uint64)
 		for i := 0; i < int(e.ColumnCount); i++ {
 			if !IsCharacterType(e.ColumnType[i]) {
 				continue
