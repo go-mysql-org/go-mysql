@@ -40,6 +40,13 @@ type TableMapEvent struct {
 
 	SignednessBitmap []byte
 
+	// DefaultCharset[0] is the default collation;
+	// For character columns that have different charset,
+	// (character column index, column collation) pairs follows
+	DefaultCharset []uint64
+	// ColumnCharset contains collation sequence for all character columns
+	ColumnCharset []uint64
+
 	ColumnName       [][]byte
 	PrimaryKey       []uint64 // A sequence of column indexes
 	PrimaryKeyPrefix []uint64 // Prefix length 0 means that the whole column value is used
@@ -219,6 +226,22 @@ func (e *TableMapEvent) decodeOptionalMeta(data []byte) error {
 		case TABLE_MAP_OPT_META_SIGNEDNESS:
 			e.SignednessBitmap = v
 
+		case TABLE_MAP_OPT_META_DEFAULT_CHARSET:
+			p := 0
+			for p < len(v) {
+				c, _, n := LengthEncodedInt(v[p:])
+				p += n
+				e.DefaultCharset = append(e.DefaultCharset, c)
+			}
+
+		case TABLE_MAP_OPT_META_COLUMN_CHARSET:
+			p := 0
+			for p < len(v) {
+				c, _, n := LengthEncodedInt(v[p:])
+				p += n
+				e.ColumnCharset = append(e.ColumnCharset, c)
+			}
+
 		case TABLE_MAP_OPT_META_COLUMN_NAME:
 			p := 0
 			e.ColumnName = make([][]byte, 0, e.ColumnCount)
@@ -273,10 +296,15 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "NULL bitmap: \n%s", hex.Dump(e.NullBitmap))
 
 	fmt.Fprintf(w, "Signedness bitmap: \n%s", hex.Dump(e.SignednessBitmap))
+	fmt.Fprintf(w, "Default charset: %v\n", e.DefaultCharset)
+	fmt.Fprintf(w, "Column charset: %v\n", e.ColumnCharset)
 	fmt.Fprintf(w, "Primary key: %v\n", e.PrimaryKey)
 	fmt.Fprintf(w, "Primary key prefix: %v\n", e.PrimaryKeyPrefix)
 
 	unsignedMap := e.UnsignedMap()
+	fmt.Fprintf(w, "UnsignedMap: %#v\n", unsignedMap)
+	collationMap := e.CollationMap()
+	fmt.Fprintf(w, "CollationMap: %#v\n", collationMap)
 
 	nameMaxLen := 0
 	for _, name := range e.ColumnName {
@@ -305,12 +333,18 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 		fmt.Fprintf(w, "  type=%-3d", e.ColumnType[i])
 
 		if IsNumericType(e.ColumnType[i]) {
-			if unsignedMap == nil {
+			if len(unsignedMap) == 0 {
 				fmt.Fprintf(w, "  unsigned=<n/a>")
 			} else if unsignedMap[i] {
 				fmt.Fprintf(w, "  unsigned=yes")
 			} else {
 				fmt.Fprintf(w, "  unsigned=no ")
+			}
+		} else if IsCharacterType(e.ColumnType[i]) {
+			if len(collationMap) == 0 {
+				fmt.Fprintf(w, "  collation=<n/a>")
+			} else {
+				fmt.Fprintf(w, "  collation=%d ", collationMap[i])
 			}
 		}
 
@@ -344,7 +378,7 @@ func (e *TableMapEvent) Nullable(i int) (available, nullable bool) {
 
 // UnsignedMap returns a map: column index -> unsigned.
 // Note that only numeric columns will be returned.
-// If signedness bits are not available, nil is returned.
+// nil is returned if not available or no numeric columns at all.
 func (e *TableMapEvent) UnsignedMap() map[int]bool {
 	if len(e.SignednessBitmap) == 0 {
 		return nil
@@ -355,10 +389,62 @@ func (e *TableMapEvent) UnsignedMap() map[int]bool {
 		if !IsNumericType(e.ColumnType[i]) {
 			continue
 		}
+
 		ret[i] = e.SignednessBitmap[p/8]&(1<<uint(7-p%8)) != 0
 		p++
 	}
 	return ret
+}
+
+// CollationMap returns a map: column index -> collation id.
+// Note that only character columns will be returned.
+// nil is returned if not available or no character columns at all.
+func (e *TableMapEvent) CollationMap() map[int]uint64 {
+
+	ret := make(map[int]uint64)
+
+	if len(e.DefaultCharset) != 0 {
+		defaultCollation := e.DefaultCharset[0]
+
+		// character column index -> collation
+		collations := make(map[int]uint64)
+		for i := 1; i < len(e.DefaultCharset); i += 2 {
+			collations[int(e.DefaultCharset[i])] = e.DefaultCharset[i+1]
+		}
+
+		p := 0
+		for i := 0; i < int(e.ColumnCount); i++ {
+			if !IsCharacterType(e.ColumnType[i]) {
+				continue
+			}
+
+			if collation, ok := collations[p]; ok {
+				ret[i] = collation
+			} else {
+				ret[i] = defaultCollation
+			}
+			p++
+		}
+
+		return ret
+	}
+
+	if len(e.ColumnCharset) != 0 {
+
+		p := 0
+		for i := 0; i < int(e.ColumnCount); i++ {
+			if !IsCharacterType(e.ColumnType[i]) {
+				continue
+			}
+
+			ret[i] = e.ColumnCharset[p]
+			p++
+		}
+
+		return ret
+	}
+
+	return nil
 }
 
 // RowsEventStmtEndFlag is set in the end of the statement.

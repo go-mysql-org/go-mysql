@@ -385,7 +385,7 @@ func (e *GTIDEvent) Decode(data []byte) error {
 func (e *GTIDEvent) Dump(w io.Writer) {
 	fmtTime := func(t time.Time) string {
 		if t.IsZero() {
-			return "N/A"
+			return "<n/a>"
 		}
 		return t.Format(time.RFC3339Nano)
 	}
