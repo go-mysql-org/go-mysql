@@ -259,8 +259,8 @@ func (e *PreviousGTIDsEvent) Dump(w io.Writer) {
 }
 
 func (e *PreviousGTIDsEvent) decodeUuid(data []byte) string {
-	return fmt.Sprintf("%s-%s-%s-%s-%s",hex.EncodeToString(data[0:4]),hex.EncodeToString(data[5:6]),
-		hex.EncodeToString(data[7:8]),hex.EncodeToString(data[8:9]),hex.EncodeToString(data[10:]))
+	return fmt.Sprintf("%s-%s-%s-%s-%s",hex.EncodeToString(data[0:4]),hex.EncodeToString(data[4:6]),
+		hex.EncodeToString(data[6:8]),hex.EncodeToString(data[8:10]),hex.EncodeToString(data[10:]))
 }
 
 func (e *PreviousGTIDsEvent) decodeInterval(data []byte) uint64 {
