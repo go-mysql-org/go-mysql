@@ -330,7 +330,7 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 			fmt.Fprintf(w, nameFmt, e.ColumnName[i])
 		}
 
-		fmt.Fprintf(w, "  type=%-3d", e.ColumnType[i])
+		fmt.Fprintf(w, "  type=%-3d", e.realType(i))
 
 		if IsNumericType(e.ColumnType[i]) {
 			if len(unsignedMap) == 0 {
@@ -340,7 +340,7 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 			} else {
 				fmt.Fprintf(w, "  unsigned=no ")
 			}
-		} else if IsCharacterType(e.ColumnType[i]) {
+		} else if e.isCharacterField(i) {
 			if len(collationMap) == 0 {
 				fmt.Fprintf(w, "  collation=<n/a>")
 			} else {
@@ -413,7 +413,7 @@ func (e *TableMapEvent) CollationMap() map[int]uint64 {
 		p := 0
 		ret := make(map[int]uint64)
 		for i := 0; i < int(e.ColumnCount); i++ {
-			if !IsCharacterType(e.ColumnType[i]) {
+			if !e.isCharacterField(i) {
 				continue
 			}
 
@@ -433,7 +433,7 @@ func (e *TableMapEvent) CollationMap() map[int]uint64 {
 		p := 0
 		ret := make(map[int]uint64)
 		for i := 0; i < int(e.ColumnCount); i++ {
-			if !IsCharacterType(e.ColumnType[i]) {
+			if !e.isCharacterField(i) {
 				continue
 			}
 
@@ -445,6 +445,54 @@ func (e *TableMapEvent) CollationMap() map[int]uint64 {
 	}
 
 	return nil
+}
+
+// Get the `real_type` of column i. Note that types stored in ColumnType are the `binlog_type`.
+// See: mysql-8.0/sql/rpl_utility.h table_def::type
+// Also see: notes/field_type.md
+func (e *TableMapEvent) realType(i int) byte {
+
+	typ := e.ColumnType[i]
+	meta := e.ColumnMeta[i]
+
+	switch typ {
+	case MYSQL_TYPE_STRING:
+		realTyp := byte(meta >> 8)
+		if realTyp == MYSQL_TYPE_ENUM || realTyp == MYSQL_TYPE_SET {
+			return realTyp
+		}
+
+	case MYSQL_TYPE_DATE:
+		return MYSQL_TYPE_NEWDATE
+
+	}
+
+	return typ
+
+}
+
+// Returns true if the i-th column is numeric field.
+// See: mysql-8.0/sql/log_event.cc is_numeric_field
+func (e *TableMapEvent) isNumericField(i int) bool {
+	return IsNumericType(e.ColumnType[i])
+}
+
+// Returns true if the i-th column is character field.
+// See: mysql-8.0/sql/log_event.cc is_character_field
+func (e *TableMapEvent) isCharacterField(i int) bool {
+	return IsCharacterType(e.realType(i))
+}
+
+// Returns true if the i-th column is enum field.
+// See: mysql-8.0/sql/log_event.cc is_enum_field
+func (e *TableMapEvent) isEnumField(i int) bool {
+	return e.realType(i) == MYSQL_TYPE_ENUM
+}
+
+// Returns true if the i-th column is set field.
+// See: mysql-8.0/sql/log_event.cc is_set_field
+func (e *TableMapEvent) isSetField(i int) bool {
+	return e.realType(i) == MYSQL_TYPE_SET
 }
 
 // RowsEventStmtEndFlag is set in the end of the statement.
