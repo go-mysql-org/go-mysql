@@ -40,7 +40,7 @@ type TableMapEvent struct {
 
 	SignednessBitmap []byte
 
-	// DefaultCharset[0] is the default collation;
+	// DefaultCharset[0] is the default collation of character columns.
 	// For character columns that have different charset,
 	// (character column index, column collation) pairs follows
 	DefaultCharset []uint64
@@ -206,7 +206,7 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 	return nil
 }
 
-func (e *TableMapEvent) decodeOptionalMeta(data []byte) error {
+func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
 
 	pos := 0
 	for pos < len(data) {
@@ -227,53 +227,30 @@ func (e *TableMapEvent) decodeOptionalMeta(data []byte) error {
 			e.SignednessBitmap = v
 
 		case TABLE_MAP_OPT_META_DEFAULT_CHARSET:
-			p := 0
-			for p < len(v) {
-				c, _, n := LengthEncodedInt(v[p:])
-				p += n
-				e.DefaultCharset = append(e.DefaultCharset, c)
+			e.DefaultCharset, err = e.decodeDefaultCharset(v)
+			if err != nil {
+				return err
 			}
 
 		case TABLE_MAP_OPT_META_COLUMN_CHARSET:
-			p := 0
-			for p < len(v) {
-				c, _, n := LengthEncodedInt(v[p:])
-				p += n
-				e.ColumnCharset = append(e.ColumnCharset, c)
+			e.ColumnCharset, err = e.decodeColumnCharset(v)
+			if err != nil {
+				return err
 			}
 
 		case TABLE_MAP_OPT_META_COLUMN_NAME:
-			p := 0
-			e.ColumnName = make([][]byte, 0, e.ColumnCount)
-			for p < len(v) {
-				n := int(v[p])
-				p++
-				e.ColumnName = append(e.ColumnName, v[p:p+n])
-				p += n
-			}
-
-			if len(e.ColumnName) != int(e.ColumnCount) {
-				return errors.Errorf("Expect %d column names but got %d", e.ColumnCount, len(e.ColumnName))
+			if err = e.decodeColumnNames(v); err != nil {
+				return err
 			}
 
 		case TABLE_MAP_OPT_META_SIMPLE_PRIMARY_KEY:
-			p := 0
-			for p < len(v) {
-				i, _, n := LengthEncodedInt(v[p:])
-				e.PrimaryKey = append(e.PrimaryKey, i)
-				e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, 0)
-				p += n
+			if err = e.decodeSimplePrimaryKey(v); err != nil {
+				return err
 			}
 
 		case TABLE_MAP_OPT_META_PRIMARY_KEY_WITH_PREFIX:
-			p := 0
-			for p < len(v) {
-				i, _, n := LengthEncodedInt(v[p:])
-				e.PrimaryKey = append(e.PrimaryKey, i)
-				p += n
-				i, _, n = LengthEncodedInt(v[p:])
-				e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, i)
-				p += n
+			if err = e.decodePrimaryKeyWithPrefix(v); err != nil {
+				return err
 			}
 
 		default:
@@ -282,6 +259,70 @@ func (e *TableMapEvent) decodeOptionalMeta(data []byte) error {
 
 	}
 
+	return nil
+}
+
+func (e *TableMapEvent) decodeDefaultCharset(v []byte) (ret []uint64, err error) {
+	p := 0
+	for p < len(v) {
+		c, _, n := LengthEncodedInt(v[p:])
+		p += n
+		ret = append(ret, c)
+	}
+
+	if len(ret)%2 != 1 {
+		return nil, errors.Errorf("Expect odd item in DefaultCharset but got %d", len(ret))
+	}
+	return
+}
+
+func (e *TableMapEvent) decodeColumnCharset(v []byte) (ret []uint64, err error) {
+	p := 0
+	for p < len(v) {
+		c, _, n := LengthEncodedInt(v[p:])
+		p += n
+		ret = append(ret, c)
+	}
+	return
+}
+
+func (e *TableMapEvent) decodeColumnNames(v []byte) error {
+	p := 0
+	e.ColumnName = make([][]byte, 0, e.ColumnCount)
+	for p < len(v) {
+		n := int(v[p])
+		p++
+		e.ColumnName = append(e.ColumnName, v[p:p+n])
+		p += n
+	}
+
+	if len(e.ColumnName) != int(e.ColumnCount) {
+		return errors.Errorf("Expect %d column names but got %d", e.ColumnCount, len(e.ColumnName))
+	}
+	return nil
+}
+
+func (e *TableMapEvent) decodeSimplePrimaryKey(v []byte) error {
+	p := 0
+	for p < len(v) {
+		i, _, n := LengthEncodedInt(v[p:])
+		e.PrimaryKey = append(e.PrimaryKey, i)
+		e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, 0)
+		p += n
+	}
+	return nil
+}
+
+func (e *TableMapEvent) decodePrimaryKeyWithPrefix(v []byte) error {
+	p := 0
+	for p < len(v) {
+		i, _, n := LengthEncodedInt(v[p:])
+		e.PrimaryKey = append(e.PrimaryKey, i)
+		p += n
+		i, _, n = LengthEncodedInt(v[p:])
+		e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, i)
+		p += n
+	}
 	return nil
 }
 
@@ -464,7 +505,6 @@ func (e *TableMapEvent) realType(i int) byte {
 
 	case MYSQL_TYPE_DATE:
 		return MYSQL_TYPE_NEWDATE
-
 	}
 
 	return typ
