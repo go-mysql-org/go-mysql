@@ -259,37 +259,6 @@ func Uint64ToBytes(n uint64) []byte {
 	}
 }
 
-func BytesToUint64(b []byte) (u uint64) {
-	switch len(b) {
-	case 8:
-		u |= (uint64(b[7]) << 56)
-		fallthrough
-	case 7:
-		u |= (uint64(b[6]) << 48)
-		fallthrough
-	case 6:
-		u |= (uint64(b[5]) << 40)
-		fallthrough
-	case 5:
-		u |= (uint64(b[4]) << 32)
-		fallthrough
-	case 4:
-		u |= (uint64(b[3]) << 24)
-		fallthrough
-	case 3:
-		u |= (uint64(b[2]) << 16)
-		fallthrough
-	case 2:
-		u |= (uint64(b[1]) << 8)
-		fallthrough
-	case 1:
-		u |= uint64(b[0])
-	default:
-		panic(fmt.Errorf("BytesToUint64 byte slice length must be in range [1, 8]"))
-	}
-	return
-}
-
 func FormatBinaryDate(n int, data []byte) ([]byte, error) {
 	switch n {
 	case 0:
