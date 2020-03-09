@@ -35,10 +35,17 @@ type TableMapEvent struct {
 	//len = (ColumnCount + 7) / 8
 	NullBitmap []byte
 
-	// The followings are available only after MySQL-8.0.1, see: `--binlog_row_metadata` and
-	// https://mysqlhighavailability.com/more-metadata-is-written-into-binary-log/
+	/*
+			The followings are available only after MySQL-8.0.1, see: `--binlog_row_metadata` and
+		  https://mysqlhighavailability.com/more-metadata-is-written-into-binary-log/
+	*/
 
+	// SignednessBitmap stores signedness info for numeric columns.
+	// Usually you should use UnsignedMap() instead.
 	SignednessBitmap []byte
+
+	// DefaultCharset/ColumnCharset stores collation info for character columns.
+	// Usually you should use CollationMap() instead.
 
 	// DefaultCharset[0] is the default collation of character columns.
 	// For character columns that have different charset,
@@ -47,9 +54,32 @@ type TableMapEvent struct {
 	// ColumnCharset contains collation sequence for all character columns
 	ColumnCharset []uint64
 
-	ColumnName       [][]byte
-	PrimaryKey       []uint64 // A sequence of column indexes
-	PrimaryKeyPrefix []uint64 // Prefix length 0 means that the whole column value is used
+	// SetStrValue stores values for set columns.
+	// Usually you should use SetStrValueMap() instead.
+	SetStrValue [][][]byte
+
+	// EnumStrValue stores values for enum columns.
+	// Usually you should use EnumStrValueMap() instead.
+	EnumStrValue [][][]byte
+
+	// ColumnName list all column names.
+	ColumnName [][]byte
+
+	// GeometryType stores real type for geometry columns.
+	// Usually you should use GeometryTypeMap() instead.
+	GeometryType []uint64
+
+	// PrimaryKey is a sequence of column indexes of primary key.
+	PrimaryKey []uint64
+
+	// PrimaryKeyPrefix is the prefix length used for each column of primary key.
+	// 0 means that the whole column length is used.
+	PrimaryKeyPrefix []uint64
+
+	// EnumSetDefaultCharset/EnumSetColumnCharset is similar to DefaultCharset/ColumnCharset but for enum/set columns.
+	// Usually you should use EnumSetCollationMap() instead.
+	EnumSetDefaultCharset []uint64
+	EnumSetColumnCharset  []uint64
 }
 
 func (e *TableMapEvent) Decode(data []byte) error {
@@ -233,13 +263,31 @@ func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
 			}
 
 		case TABLE_MAP_OPT_META_COLUMN_CHARSET:
-			e.ColumnCharset, err = e.decodeColumnCharset(v)
+			e.ColumnCharset, err = e.decodeIntSeq(v)
 			if err != nil {
 				return err
 			}
 
 		case TABLE_MAP_OPT_META_COLUMN_NAME:
 			if err = e.decodeColumnNames(v); err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_SET_STR_VALUE:
+			e.SetStrValue, err = e.decodeStrValue(v)
+			if err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_ENUM_STR_VALUE:
+			e.EnumStrValue, err = e.decodeStrValue(v)
+			if err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_GEOMETRY_TYPE:
+			e.GeometryType, err = e.decodeIntSeq(v)
+			if err != nil {
 				return err
 			}
 
@@ -253,35 +301,43 @@ func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
 				return err
 			}
 
-		default:
-			// TODO: other meta
-		}
+		case TABLE_MAP_OPT_META_ENUM_AND_SET_DEFAULT_CHARSET:
+			e.EnumSetDefaultCharset, err = e.decodeDefaultCharset(v)
+			if err != nil {
+				return err
+			}
 
+		case TABLE_MAP_OPT_META_ENUM_AND_SET_COLUMN_CHARSET:
+			e.EnumSetColumnCharset, err = e.decodeIntSeq(v)
+			if err != nil {
+				return err
+			}
+
+		default:
+			// Ignore for future extension
+		}
 	}
 
 	return nil
 }
 
-func (e *TableMapEvent) decodeDefaultCharset(v []byte) (ret []uint64, err error) {
+func (e *TableMapEvent) decodeIntSeq(v []byte) (ret []uint64, err error) {
 	p := 0
 	for p < len(v) {
-		c, _, n := LengthEncodedInt(v[p:])
+		i, _, n := LengthEncodedInt(v[p:])
 		p += n
-		ret = append(ret, c)
-	}
-
-	if len(ret)%2 != 1 {
-		return nil, errors.Errorf("Expect odd item in DefaultCharset but got %d", len(ret))
+		ret = append(ret, i)
 	}
 	return
 }
 
-func (e *TableMapEvent) decodeColumnCharset(v []byte) (ret []uint64, err error) {
-	p := 0
-	for p < len(v) {
-		c, _, n := LengthEncodedInt(v[p:])
-		p += n
-		ret = append(ret, c)
+func (e *TableMapEvent) decodeDefaultCharset(v []byte) (ret []uint64, err error) {
+	ret, err = e.decodeIntSeq(v)
+	if err != nil {
+		return
+	}
+	if len(ret)%2 != 1 {
+		return nil, errors.Errorf("Expect odd item in DefaultCharset but got %d", len(ret))
 	}
 	return
 }
@@ -300,6 +356,25 @@ func (e *TableMapEvent) decodeColumnNames(v []byte) error {
 		return errors.Errorf("Expect %d column names but got %d", e.ColumnCount, len(e.ColumnName))
 	}
 	return nil
+}
+
+func (e *TableMapEvent) decodeStrValue(v []byte) (ret [][][]byte, err error) {
+	p := 0
+	for p < len(v) {
+		nVal, _, n := LengthEncodedInt(v[p:])
+		p += n
+		vals := make([][]byte, 0, int(nVal))
+		for i := 0; i < int(nVal); i++ {
+			val, _, n, err := LengthEncodedString(v[p:])
+			if err != nil {
+				return nil, err
+			}
+			p += n
+			vals = append(vals, val)
+		}
+		ret = append(ret, vals)
+	}
+	return
 }
 
 func (e *TableMapEvent) decodeSimplePrimaryKey(v []byte) error {
@@ -339,13 +414,31 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Signedness bitmap: \n%s", hex.Dump(e.SignednessBitmap))
 	fmt.Fprintf(w, "Default charset: %v\n", e.DefaultCharset)
 	fmt.Fprintf(w, "Column charset: %v\n", e.ColumnCharset)
+	fmt.Fprintf(w, "Set str value: %v\n", e.SetStrValue)
+	fmt.Fprintf(w, "Enum str value: %v\n", e.EnumStrValue)
+	fmt.Fprintf(w, "Geometry type: %v\n", e.GeometryType)
 	fmt.Fprintf(w, "Primary key: %v\n", e.PrimaryKey)
 	fmt.Fprintf(w, "Primary key prefix: %v\n", e.PrimaryKeyPrefix)
+	fmt.Fprintf(w, "Enum/set default charset: %v\n", e.EnumSetDefaultCharset)
+	fmt.Fprintf(w, "Enum/set column charset: %v\n", e.EnumSetColumnCharset)
 
 	unsignedMap := e.UnsignedMap()
 	fmt.Fprintf(w, "UnsignedMap: %#v\n", unsignedMap)
+
 	collationMap := e.CollationMap()
 	fmt.Fprintf(w, "CollationMap: %#v\n", collationMap)
+
+	enumSetCollationMap := e.EnumSetCollationMap()
+	fmt.Fprintf(w, "EnumSetCollationMap: %#v\n", enumSetCollationMap)
+
+	enumStrValueMap := e.EnumStrValueMap()
+	fmt.Fprintf(w, "EnumStrValueMap: %#v\n", enumStrValueMap)
+
+	setStrValueMap := e.SetStrValueMap()
+	fmt.Fprintf(w, "SetStrValueMap: %#v\n", setStrValueMap)
+
+	geometryTypeMap := e.GeometryTypeMap()
+	fmt.Fprintf(w, "GeometryTypeMap: %#v\n", geometryTypeMap)
 
 	nameMaxLen := 0
 	for _, name := range e.ColumnName {
@@ -373,7 +466,7 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 
 		fmt.Fprintf(w, "  type=%-3d", e.realType(i))
 
-		if IsNumericType(e.ColumnType[i]) {
+		if e.IsNumericColumn(i) {
 			if len(unsignedMap) == 0 {
 				fmt.Fprintf(w, "  unsigned=<n/a>")
 			} else if unsignedMap[i] {
@@ -381,11 +474,41 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 			} else {
 				fmt.Fprintf(w, "  unsigned=no ")
 			}
-		} else if e.isCharacterField(i) {
+		} else if e.IsCharacterColumn(i) {
 			if len(collationMap) == 0 {
 				fmt.Fprintf(w, "  collation=<n/a>")
 			} else {
 				fmt.Fprintf(w, "  collation=%d ", collationMap[i])
+			}
+		} else if e.IsEnumColumn(i) {
+			if len(enumStrValueMap) == 0 {
+				fmt.Fprintf(w, "  enum=<n/a>")
+			} else {
+				fmt.Fprintf(w, "  enum=%v", enumStrValueMap[i])
+			}
+
+			if len(enumSetCollationMap) == 0 {
+				fmt.Fprintf(w, "  enum_collation=<n/a>")
+			} else {
+				fmt.Fprintf(w, "  enum_collation=%d", enumSetCollationMap[i])
+			}
+		} else if e.IsSetColumn(i) {
+			if len(setStrValueMap) == 0 {
+				fmt.Fprintf(w, "  set=<n/a>")
+			} else {
+				fmt.Fprintf(w, "  set=%v", setStrValueMap[i])
+			}
+
+			if len(enumSetCollationMap) == 0 {
+				fmt.Fprintf(w, "  set_collation=<n/a>")
+			} else {
+				fmt.Fprintf(w, "  set_collation=%d", enumSetCollationMap[i])
+			}
+		} else if e.IsGeometryColumn(i) {
+			if len(geometryTypeMap) == 0 {
+				fmt.Fprintf(w, "  geometry_type=<n/a>")
+			} else {
+				fmt.Fprintf(w, "  geometry_type=%v", geometryTypeMap[i])
 			}
 		}
 
@@ -427,7 +550,7 @@ func (e *TableMapEvent) UnsignedMap() map[int]bool {
 	p := 0
 	ret := make(map[int]bool)
 	for i := 0; i < int(e.ColumnCount); i++ {
-		if !IsNumericType(e.ColumnType[i]) {
+		if !e.IsNumericColumn(i) {
 			continue
 		}
 
@@ -441,20 +564,31 @@ func (e *TableMapEvent) UnsignedMap() map[int]bool {
 // Note that only character columns will be returned.
 // nil is returned if not available or no character columns at all.
 func (e *TableMapEvent) CollationMap() map[int]uint64 {
+	return e.collationMap(e.IsCharacterColumn, e.DefaultCharset, e.ColumnCharset)
+}
 
-	if len(e.DefaultCharset) != 0 {
-		defaultCollation := e.DefaultCharset[0]
+// EnumSetCollationMap returns a map: column index -> collation id.
+// Note that only enum or set columns will be returned.
+// nil is returned if not available or no enum/set columns at all.
+func (e *TableMapEvent) EnumSetCollationMap() map[int]uint64 {
+	return e.collationMap(e.IsEnumOrSetColumn, e.EnumSetDefaultCharset, e.EnumSetColumnCharset)
+}
+
+func (e *TableMapEvent) collationMap(includeType func(int) bool, defaultCharset, columnCharset []uint64) map[int]uint64 {
+
+	if len(defaultCharset) != 0 {
+		defaultCollation := defaultCharset[0]
 
 		// character column index -> collation
 		collations := make(map[int]uint64)
-		for i := 1; i < len(e.DefaultCharset); i += 2 {
-			collations[int(e.DefaultCharset[i])] = e.DefaultCharset[i+1]
+		for i := 1; i < len(defaultCharset); i += 2 {
+			collations[int(defaultCharset[i])] = defaultCharset[i+1]
 		}
 
 		p := 0
 		ret := make(map[int]uint64)
 		for i := 0; i < int(e.ColumnCount); i++ {
-			if !e.isCharacterField(i) {
+			if !includeType(i) {
 				continue
 			}
 
@@ -469,16 +603,16 @@ func (e *TableMapEvent) CollationMap() map[int]uint64 {
 		return ret
 	}
 
-	if len(e.ColumnCharset) != 0 {
+	if len(columnCharset) != 0 {
 
 		p := 0
 		ret := make(map[int]uint64)
 		for i := 0; i < int(e.ColumnCount); i++ {
-			if !e.isCharacterField(i) {
+			if !includeType(i) {
 				continue
 			}
 
-			ret[i] = e.ColumnCharset[p]
+			ret[i] = columnCharset[p]
 			p++
 		}
 
@@ -486,6 +620,59 @@ func (e *TableMapEvent) CollationMap() map[int]uint64 {
 	}
 
 	return nil
+}
+
+// EnumStrValueMap returns a map: column index -> enum string value.
+// Note that only enum columns will be returned.
+// nil is returned if not available or no enum columns at all.
+func (e *TableMapEvent) EnumStrValueMap() map[int][]string {
+	return e.strValueMap(e.EnumStrValue, e.IsEnumColumn)
+}
+
+// SetStrValueMap returns a map: column index -> set string value.
+// Note that only set columns will be returned.
+// nil is returned if not available or no set columns at all.
+func (e *TableMapEvent) SetStrValueMap() map[int][]string {
+	return e.strValueMap(e.SetStrValue, e.IsSetColumn)
+}
+
+func (e *TableMapEvent) strValueMap(strValue [][][]byte, includeType func(int) bool) map[int][]string {
+	if len(strValue) == 0 {
+		return nil
+	}
+	p := 0
+	ret := make(map[int][]string)
+	for i := 0; i < int(e.ColumnCount); i++ {
+		if !includeType(i) {
+			continue
+		}
+		vals := []string{}
+		for _, val := range strValue[p] {
+			vals = append(vals, string(val))
+		}
+		ret[i] = vals
+	}
+	return ret
+}
+
+// GeometryTypeMap returns a map: column index -> geometry type.
+// Note that only geometry columns will be returned.
+// nil is returned if not available or no geometry columns at all.
+func (e *TableMapEvent) GeometryTypeMap() map[int]uint64 {
+	if len(e.GeometryType) == 0 {
+		return nil
+	}
+	p := 0
+	ret := make(map[int]uint64)
+	for i := 0; i < int(e.ColumnCount); i++ {
+		if !e.IsGeometryColumn(i) {
+			continue
+		}
+
+		ret[i] = e.GeometryType[p]
+		p++
+	}
+	return ret
 }
 
 // Get the `real_type` of column i. Note that types stored in ColumnType are the `binlog_type`.
@@ -498,9 +685,9 @@ func (e *TableMapEvent) realType(i int) byte {
 
 	switch typ {
 	case MYSQL_TYPE_STRING:
-		realTyp := byte(meta >> 8)
-		if realTyp == MYSQL_TYPE_ENUM || realTyp == MYSQL_TYPE_SET {
-			return realTyp
+		rt := byte(meta >> 8)
+		if rt == MYSQL_TYPE_ENUM || rt == MYSQL_TYPE_SET {
+			return rt
 		}
 
 	case MYSQL_TYPE_DATE:
@@ -511,28 +698,40 @@ func (e *TableMapEvent) realType(i int) byte {
 
 }
 
-// Returns true if the i-th column is numeric field.
+// IsNumericColumn returns true if the i-th column is numeric field.
 // See: mysql-8.0/sql/log_event.cc is_numeric_field
-func (e *TableMapEvent) isNumericField(i int) bool {
+func (e *TableMapEvent) IsNumericColumn(i int) bool {
 	return IsNumericType(e.ColumnType[i])
 }
 
-// Returns true if the i-th column is character field.
+// IsCharacterColumn returns true if the i-th column is character field.
 // See: mysql-8.0/sql/log_event.cc is_character_field
-func (e *TableMapEvent) isCharacterField(i int) bool {
+func (e *TableMapEvent) IsCharacterColumn(i int) bool {
 	return IsCharacterType(e.realType(i))
 }
 
-// Returns true if the i-th column is enum field.
+// IsEnumColumn returns true if the i-th column is enum field.
 // See: mysql-8.0/sql/log_event.cc is_enum_field
-func (e *TableMapEvent) isEnumField(i int) bool {
+func (e *TableMapEvent) IsEnumColumn(i int) bool {
 	return e.realType(i) == MYSQL_TYPE_ENUM
 }
 
-// Returns true if the i-th column is set field.
+// IsSetColumn returns true if the i-th column is set field.
 // See: mysql-8.0/sql/log_event.cc is_set_field
-func (e *TableMapEvent) isSetField(i int) bool {
+func (e *TableMapEvent) IsSetColumn(i int) bool {
 	return e.realType(i) == MYSQL_TYPE_SET
+}
+
+// IsEnumOrSetColumn returns true if the i-th column is enum or set field.
+func (e *TableMapEvent) IsEnumOrSetColumn(i int) bool {
+	rt := e.realType(i)
+	return rt == MYSQL_TYPE_ENUM || rt == MYSQL_TYPE_SET
+}
+
+// IsGeometryColumn returns true if the i-th column is geometry field.
+// See: mysql-8.0/sql/log_event.cc is_geometry_field
+func (e *TableMapEvent) IsGeometryColumn(i int) bool {
+	return e.realType(i) == MYSQL_TYPE_GEOMETRY
 }
 
 // RowsEventStmtEndFlag is set in the end of the statement.
