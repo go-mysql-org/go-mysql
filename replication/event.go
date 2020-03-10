@@ -226,31 +226,31 @@ type PreviousGTIDsEvent struct {
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	var previousGTIDSets []string
 	pos := 0
-	uuidCount := binary.LittleEndian.Uint16(data[pos:pos+8])
+	uuidCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 	pos += 8
 
-	for i := uint16(0);i < uuidCount; i++ {
-		uuid := e.decodeUuid(data[pos:pos+16])
+	for i := uint16(0); i < uuidCount; i++ {
+		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
-		sliceCount := binary.LittleEndian.Uint16(data[pos:pos+8])
+		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 		pos += 8
 		var intervals []string
-		for i := uint16(0);i < sliceCount; i++ {
-			start := e.decodeInterval(data[pos:pos+8])
+		for i := uint16(0); i < sliceCount; i++ {
+			start := e.decodeInterval(data[pos : pos+8])
 			pos += 8
-			stop := e.decodeInterval(data[pos:pos+8])
+			stop := e.decodeInterval(data[pos : pos+8])
 			pos += 8
 			interval := ""
 			if stop == start+1 {
-				interval = fmt.Sprintf("%d",start)
-			}else {
-				interval = fmt.Sprintf("%d-%d",start,stop-1)
+				interval = fmt.Sprintf("%d", start)
+			} else {
+				interval = fmt.Sprintf("%d-%d", start, stop-1)
 			}
-			intervals = append(intervals,interval)
+			intervals = append(intervals, interval)
 		}
-		previousGTIDSets = append(previousGTIDSets,fmt.Sprintf("%s:%s",uuid,strings.Join(intervals,":")))
+		previousGTIDSets = append(previousGTIDSets, fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":")))
 	}
-	e.GTIDSets = fmt.Sprintf("%s",strings.Join(previousGTIDSets,","))
+	e.GTIDSets = fmt.Sprintf("%s", strings.Join(previousGTIDSets, ","))
 	return nil
 }
 
@@ -260,8 +260,8 @@ func (e *PreviousGTIDsEvent) Dump(w io.Writer) {
 }
 
 func (e *PreviousGTIDsEvent) decodeUuid(data []byte) string {
-	return fmt.Sprintf("%s-%s-%s-%s-%s",hex.EncodeToString(data[0:4]),hex.EncodeToString(data[4:6]),
-		hex.EncodeToString(data[6:8]),hex.EncodeToString(data[8:10]),hex.EncodeToString(data[10:]))
+	return fmt.Sprintf("%s-%s-%s-%s-%s", hex.EncodeToString(data[0:4]), hex.EncodeToString(data[4:6]),
+		hex.EncodeToString(data[6:8]), hex.EncodeToString(data[8:10]), hex.EncodeToString(data[10:]))
 }
 
 func (e *PreviousGTIDsEvent) decodeInterval(data []byte) uint64 {
@@ -351,15 +351,17 @@ type GTIDEvent struct {
 	LastCommitted  int64
 	SequenceNumber int64
 
-	// The followings are available only after MySQL-8.0
-
+	// ImmediateCommitTimestamp/OriginalCommitTimestamp are introduced in MySQL-8.0.1, see:
+	// https://mysqlhighavailability.com/replication-features-in-mysql-8-0-1/
 	ImmediateCommitTimestamp uint64
 	OriginalCommitTimestamp  uint64
 
-	// Total transaction length (including this GTIDEvent), see:
+	// Total transaction length (including this GTIDEvent), introduced in MySQL-8.0.2, see:
 	// https://mysqlhighavailability.com/taking-advantage-of-new-transaction-length-metadata/
 	TransactionLength uint64
 
+	// ImmediateServerVersion/OriginalServerVersion are introduced in MySQL-8.0.14, see
+	// https://dev.mysql.com/doc/refman/8.0/en/replication-compatibility.html
 	ImmediateServerVersion uint32
 	OriginalServerVersion  uint32
 }
