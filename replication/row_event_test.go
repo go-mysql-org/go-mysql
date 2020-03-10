@@ -763,3 +763,217 @@ func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
 		}
 	}
 }
+
+func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
+	/*
+		CREATE TABLE `_types` (
+			`b_bit` bit(64) NOT NULL DEFAULT b'0',
+
+			`n_boolean` boolean not null default '0',
+			`n_tinyint` tinyint not null default '0',
+			`n_smallint` smallint not null default '0',
+			`n_mediumint` mediumint not null default '0',
+			`n_int` int not null default '0',
+			`n_bigint` bigint not null default '0',
+			`n_decimal` decimal(65,30) not null default '0',
+			`n_float` float not null default '0',
+			`n_double` double not null default '0',
+
+			`nu_tinyint` tinyint unsigned not null default '0',
+			`nu_smallint` smallint unsigned not null default '0',
+			`nu_mediumint` mediumint unsigned not null default '0',
+			`nu_int` int unsigned not null default '0',
+			`nu_bigint` bigint unsigned not null default '0',
+			`nu_decimal` decimal(65,30) unsigned not null default '0',
+			`nu_float` float unsigned not null default '0',
+			`nu_double` double unsigned not null default '0',
+
+			`t_year` year default null,
+			`t_date` date default null,
+			`t_time` time default null,
+			`t_ftime` time(6) default null,
+			`t_datetime` datetime default null,
+			`t_fdatetime` datetime(6) default null,
+			`t_timestamp` timestamp default current_timestamp,
+			`t_ftimestamp` timestamp(6) default current_timestamp(6),
+
+			`c_char` char(255) not null default '',
+			`c_varchar` varchar(255) not null default '',
+			`c_binary` binary(64) not null default '',
+			`c_varbinary` varbinary(64) not null default '',
+			`c_tinyblob` tinyblob,
+			`c_blob` blob,
+			`c_mediumblob` mediumblob,
+			`c_longblob` longblob,
+			`c_tinytext` tinytext,
+			`c_text` text,
+			`c_mediumtext` mediumtext,
+			`c_longtext` longtext,
+
+			`e_enum` enum('a','b') default 'a',
+			`s_set` set('1','2') default '1',
+			`g_geometry` geometry DEFAULT NULL,
+			`j_json` json DEFAULT NULL
+		);
+		insert into _types values ();
+	*/
+	colNames := []string{
+		"b_bit",
+		"n_boolean",
+		"n_tinyint",
+		"n_smallint",
+		"n_mediumint",
+		"n_int",
+		"n_bigint",
+		"n_decimal",
+		"n_float",
+		"n_double",
+		"nu_tinyint",
+		"nu_smallint",
+		"nu_mediumint",
+		"nu_int",
+		"nu_bigint",
+		"nu_decimal",
+		"nu_float",
+		"nu_double",
+		"t_year",
+		"t_date",
+		"t_time",
+		"t_ftime",
+		"t_datetime",
+		"t_fdatetime",
+		"t_timestamp",
+		"t_ftimestamp",
+		"c_char",
+		"c_varchar",
+		"c_binary",
+		"c_varbinary",
+		"c_tinyblob",
+		"c_blob",
+		"c_mediumblob",
+		"c_longblob",
+		"c_tinytext",
+		"c_text",
+		"c_mediumtext",
+		"c_longtext",
+		"e_enum",
+		"s_set",
+		"g_geometry",
+		"j_json",
+	}
+	enumVals := [][]string{{"a", "b"}}
+	setVals := [][]string{{"1", "2"}}
+
+	testcases := []struct {
+		data     []byte
+		hasNames bool
+	}{
+		// mysql 5.7
+		{data: []byte("u\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x00*\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xf5&\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xce\xfc\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\x00\x00\xfc\xc0\xff\x03")},
+		// mysql 8.0
+		{data: []byte("j\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x00*\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xf5&\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xce\xfc\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\x00\x00\xfc\xc3\xff\x03\x01\x03\x00\u007f\x80\x03\f\xe0\xe0??????\xe0\xe0\xe0\xe0\a\x01\x00\x04\xfc\x94\x01\x05b_bit\tn_boolean\tn_tinyint\nn_smallint\vn_mediumint\x05n_int\bn_bigint\tn_decimal\an_float\bn_double\nnu_tinyint\vnu_smallint\fnu_mediumint\x06nu_int\tnu_bigint\nnu_decimal\bnu_float\tnu_double\x06t_year\x06t_date\x06t_time\at_ftime\nt_datetime\vt_fdatetime\vt_timestamp\ft_ftimestamp\x06c_char\tc_varchar\bc_binary\vc_varbinary\nc_tinyblob\x06c_blob\fc_mediumblob\nc_longblob\nc_tinytext\x06c_text\fc_mediumtext\nc_longtext\x06e_enum\x05s_set\ng_geometry\x06j_json\n\x01\xe0\x05\x05\x02\x011\x012\x06\x05\x02\x01a\x01b"), hasNames: true},
+		// mariadb 10.4
+		{data: []byte("\x1b\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x00*\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xfc&\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xce\xfc\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\x00\x00\xfc\xc0\xff\x03")},
+		// mariadb 10.5
+		{data: []byte("\x1a\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x00*\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xfc&\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xce\xfc\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\x00\x00\xfc\xc0\xff\x03\x01\x03\x00\u007f\xc0\x03\x0e\xe0\xe0??????\xe0\xe0\xe0\xe0?.\a\x01\x00\x04\xfc\x94\x01\x05b_bit\tn_boolean\tn_tinyint\nn_smallint\vn_mediumint\x05n_int\bn_bigint\tn_decimal\an_float\bn_double\nnu_tinyint\vnu_smallint\fnu_mediumint\x06nu_int\tnu_bigint\nnu_decimal\bnu_float\tnu_double\x06t_year\x06t_date\x06t_time\at_ftime\nt_datetime\vt_fdatetime\vt_timestamp\ft_ftimestamp\x06c_char\tc_varchar\bc_binary\vc_varbinary\nc_tinyblob\x06c_blob\fc_mediumblob\nc_longblob\nc_tinytext\x06c_text\fc_mediumtext\nc_longtext\x06e_enum\x05s_set\ng_geometry\x06j_json\n\x01\xe0\x05\x05\x02\x011\x012\x06\x05\x02\x01a\x01b"), hasNames: true},
+	}
+
+	for _, tc := range testcases {
+
+		tableMapEvent := new(TableMapEvent)
+		tableMapEvent.tableIDSize = 6
+		err := tableMapEvent.Decode(tc.data)
+		c.Assert(err, IsNil)
+
+		if tc.hasNames {
+			c.Assert(tableMapEvent.ColumnNameString(), DeepEquals, colNames)
+			c.Assert(tableMapEvent.SetStrValueString(), DeepEquals, setVals)
+			c.Assert(tableMapEvent.EnumStrValueString(), DeepEquals, enumVals)
+		} else {
+			c.Assert(tableMapEvent.ColumnNameString(), DeepEquals, []string(nil))
+			c.Assert(tableMapEvent.SetStrValueString(), DeepEquals, [][]string(nil))
+			c.Assert(tableMapEvent.EnumStrValueString(), DeepEquals, [][]string(nil))
+		}
+	}
+
+}
+
+func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
+	/*
+		create table _prim (id2 int, col varchar(30), id1 bigint, primary key (id1, id2));
+	*/
+	case1PrimaryKey := []uint64{2, 0}
+	case1PrimaryKeyPrefix := []uint64{0, 0}
+
+	/*
+		create table _prim2 (col1 int, id1 char(10), col2 int, id2 varchar(20), primary key (id1, id2(10)));
+	*/
+	case2PrimaryKey := []uint64{1, 3}
+	case2PrimaryKeyPrefix := []uint64{0, 10}
+
+	testcases := []struct {
+		data                     []byte
+		expectedPrimaryKey       []uint64
+		expectedPrimaryKeyPrefix []uint64
+	}{
+		{
+			// mysql 5.7, case1
+			data:                     []byte("w\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x05_prim\x00\x03\x03\x0f\b\x02x\x00\x02"),
+			expectedPrimaryKey:       []uint64(nil),
+			expectedPrimaryKeyPrefix: []uint64(nil),
+		},
+		{
+			// mysql 8.0, case1
+			data:                     []byte("l\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x05_prim\x00\x03\x03\x0f\b\x02x\x00\x02\x01\x01\x00\x02\x01\xe0\x04\f\x03id2\x03col\x03id1\b\x02\x02\x00"),
+			expectedPrimaryKey:       case1PrimaryKey,
+			expectedPrimaryKeyPrefix: case1PrimaryKeyPrefix,
+		},
+		{
+			// mariadb 10.4, case1
+			data:                     []byte("\x1c\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x05_prim\x00\x03\x03\x0f\b\x02x\x00\x02"),
+			expectedPrimaryKey:       []uint64(nil),
+			expectedPrimaryKeyPrefix: []uint64(nil),
+		},
+		{
+			// mariadb 10.5, case1
+			data:                     []byte("\x1b\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x05_prim\x00\x03\x03\x0f\b\x02x\x00\x02\x01\x01\x00\x02\x01\xe0\x04\f\x03id2\x03col\x03id1\b\x02\x02\x00"),
+			expectedPrimaryKey:       case1PrimaryKey,
+			expectedPrimaryKeyPrefix: case1PrimaryKeyPrefix,
+		},
+		{
+			// mysql 5.7, case2
+			data:                     []byte("y\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_prim2\x00\x04\x03\xfe\x03\x0f\x04\xfe(P\x00\x05"),
+			expectedPrimaryKey:       []uint64(nil),
+			expectedPrimaryKeyPrefix: []uint64(nil),
+		},
+		{
+			// mysql 8.0, case2
+			data:                     []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_prim2\x00\x04\x03\xfe\x03\x0f\x04\xfe(P\x00\x05\x01\x01\x00\x02\x01\xe0\x04\x12\x04col1\x03id1\x04col2\x03id2\t\x04\x01\x00\x03\n"),
+			expectedPrimaryKey:       case2PrimaryKey,
+			expectedPrimaryKeyPrefix: case2PrimaryKeyPrefix,
+		},
+		{
+			// mariadb 10.4, case2
+			data:                     []byte("\x1d\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_prim2\x00\x04\x03\xfe\x03\x0f\x04\xfe(P\x00\x05"),
+			expectedPrimaryKey:       []uint64(nil),
+			expectedPrimaryKeyPrefix: []uint64(nil),
+		},
+		{
+			// mariadb 10.5, case2
+			data:                     []byte("\x1c\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_prim2\x00\x04\x03\xfe\x03\x0f\x04\xfe(P\x00\x05\x01\x01\x00\x02\x01\xe0\x04\x12\x04col1\x03id1\x04col2\x03id2\t\x04\x01\x00\x03\n"),
+			expectedPrimaryKey:       case2PrimaryKey,
+			expectedPrimaryKeyPrefix: case2PrimaryKeyPrefix,
+		},
+	}
+
+	for _, tc := range testcases {
+
+		tableMapEvent := new(TableMapEvent)
+		tableMapEvent.tableIDSize = 6
+		err := tableMapEvent.Decode(tc.data)
+		c.Assert(err, IsNil)
+		c.Assert(tableMapEvent.PrimaryKey, DeepEquals, tc.expectedPrimaryKey)
+		c.Assert(tableMapEvent.PrimaryKeyPrefix, DeepEquals, tc.expectedPrimaryKeyPrefix)
+	}
+
+}
