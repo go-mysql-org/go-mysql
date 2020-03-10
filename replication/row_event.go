@@ -65,7 +65,7 @@ type TableMapEvent struct {
 
 	// ColumnName list all column names.
 	ColumnName       [][]byte
-	columnNameString []string
+	columnNameString []string // the same as ColumnName in string type, just for reuse
 
 	// GeometryType stores real type for geometry columns.
 	GeometryType []uint64

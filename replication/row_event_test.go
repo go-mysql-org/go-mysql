@@ -764,6 +764,36 @@ func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
 	}
 }
 
+func (_ *testDecodeSuite) TestTableMapNullable(c *C) {
+	/*
+		create table _null (c1 int null, c2 int not null default '2', c3 timestamp default now(), c4 text);
+	*/
+	nullables := []bool{true, false, false, true}
+	testcases := [][]byte{
+		// mysql 5.7
+		[]byte("z\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x05_null\x00\x04\x03\x03\x11\xfc\x02\x00\x02\t"),
+		// mysql 8.0
+		[]byte("z\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x05_null\x00\x04\x03\x03\x11\xfc\x02\x00\x02\t\x01\x01\x00\x02\x01\xe0\x04\f\x02c1\x02c2\x02c3\x02c4"),
+		// mariadb 10.4
+		[]byte("\x1e\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x05_null\x00\x04\x03\x03\x11\xfc\x02\x00\x02\t"),
+		// mariadb 10.5
+		[]byte("\x1d\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x05_null\x00\x04\x03\x03\x11\xfc\x02\x00\x02\t\x01\x01\x00\x02\x01\xe0\x04\f\x02c1\x02c2\x02c3\x02c4"),
+	}
+
+	for _, tc := range testcases {
+		tableMapEvent := new(TableMapEvent)
+		tableMapEvent.tableIDSize = 6
+		err := tableMapEvent.Decode(tc)
+		c.Assert(err, IsNil)
+		c.Assert(int(tableMapEvent.ColumnCount), Equals, len(nullables))
+		for i := 0; i < int(tableMapEvent.ColumnCount); i++ {
+			available, nullable := tableMapEvent.Nullable(i)
+			c.Assert(available, Equals, true)
+			c.Assert(nullable, Equals, nullables[i])
+		}
+	}
+}
+
 func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
 	/*
 		CREATE TABLE `_types` (
@@ -967,7 +997,6 @@ func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.tableIDSize = 6
 		err := tableMapEvent.Decode(tc.data)
