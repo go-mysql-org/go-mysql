@@ -271,6 +271,8 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				ee := &MariadbGTIDEvent{}
 				ee.GTID.ServerID = h.ServerID
 				e = ee
+			case PREVIOUS_GTIDS_EVENT:
+				e = &PreviousGTIDsEvent{}
 			default:
 				e = &GenericEvent{}
 			}
