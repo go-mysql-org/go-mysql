@@ -34,6 +34,52 @@ type TableMapEvent struct {
 
 	//len = (ColumnCount + 7) / 8
 	NullBitmap []byte
+
+	/*
+		The followings are available only after MySQL-8.0.1 or MariaDB-10.5.0
+		see:
+			- https://dev.mysql.com/doc/refman/8.0/en/replication-options-binary-log.html#sysvar_binlog_row_metadata
+			- https://mysqlhighavailability.com/more-metadata-is-written-into-binary-log/
+			- https://jira.mariadb.org/browse/MDEV-20477
+	*/
+
+	// SignednessBitmap stores signedness info for numeric columns.
+	SignednessBitmap []byte
+
+	// DefaultCharset/ColumnCharset stores collation info for character columns.
+
+	// DefaultCharset[0] is the default collation of character columns.
+	// For character columns that have different charset,
+	// (character column index, column collation) pairs follows
+	DefaultCharset []uint64
+	// ColumnCharset contains collation sequence for all character columns
+	ColumnCharset []uint64
+
+	// SetStrValue stores values for set columns.
+	SetStrValue       [][][]byte
+	setStrValueString [][]string
+
+	// EnumStrValue stores values for enum columns.
+	EnumStrValue       [][][]byte
+	enumStrValueString [][]string
+
+	// ColumnName list all column names.
+	ColumnName       [][]byte
+	columnNameString []string // the same as ColumnName in string type, just for reuse
+
+	// GeometryType stores real type for geometry columns.
+	GeometryType []uint64
+
+	// PrimaryKey is a sequence of column indexes of primary key.
+	PrimaryKey []uint64
+
+	// PrimaryKeyPrefix is the prefix length used for each column of primary key.
+	// 0 means that the whole column length is used.
+	PrimaryKeyPrefix []uint64
+
+	// EnumSetDefaultCharset/EnumSetColumnCharset is similar to DefaultCharset/ColumnCharset but for enum/set columns.
+	EnumSetDefaultCharset []uint64
+	EnumSetColumnCharset  []uint64
 }
 
 func (e *TableMapEvent) Decode(data []byte) error {
@@ -88,7 +134,11 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	e.NullBitmap = data[pos : pos+nullBitmapSize]
 
-	// TODO: handle optional field meta
+	pos += nullBitmapSize
+
+	if err = e.decodeOptionalMeta(data[pos:]); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -186,6 +236,171 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 	return nil
 }
 
+func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
+
+	pos := 0
+	for pos < len(data) {
+
+		// optional metadata fields are stored in Type, Length, Value(TLV) format
+		// Type takes 1 byte. Length is a packed integer value. Values takes Length bytes
+		t := data[pos]
+		pos++
+
+		l, _, n := LengthEncodedInt(data[pos:])
+		pos += n
+
+		v := data[pos : pos+int(l)]
+		pos += int(l)
+
+		switch t {
+		case TABLE_MAP_OPT_META_SIGNEDNESS:
+			e.SignednessBitmap = v
+
+		case TABLE_MAP_OPT_META_DEFAULT_CHARSET:
+			e.DefaultCharset, err = e.decodeDefaultCharset(v)
+			if err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_COLUMN_CHARSET:
+			e.ColumnCharset, err = e.decodeIntSeq(v)
+			if err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_COLUMN_NAME:
+			if err = e.decodeColumnNames(v); err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_SET_STR_VALUE:
+			e.SetStrValue, err = e.decodeStrValue(v)
+			if err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_ENUM_STR_VALUE:
+			e.EnumStrValue, err = e.decodeStrValue(v)
+			if err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_GEOMETRY_TYPE:
+			e.GeometryType, err = e.decodeIntSeq(v)
+			if err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_SIMPLE_PRIMARY_KEY:
+			if err = e.decodeSimplePrimaryKey(v); err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_PRIMARY_KEY_WITH_PREFIX:
+			if err = e.decodePrimaryKeyWithPrefix(v); err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_ENUM_AND_SET_DEFAULT_CHARSET:
+			e.EnumSetDefaultCharset, err = e.decodeDefaultCharset(v)
+			if err != nil {
+				return err
+			}
+
+		case TABLE_MAP_OPT_META_ENUM_AND_SET_COLUMN_CHARSET:
+			e.EnumSetColumnCharset, err = e.decodeIntSeq(v)
+			if err != nil {
+				return err
+			}
+
+		default:
+			// Ignore for future extension
+		}
+	}
+
+	return nil
+}
+
+func (e *TableMapEvent) decodeIntSeq(v []byte) (ret []uint64, err error) {
+	p := 0
+	for p < len(v) {
+		i, _, n := LengthEncodedInt(v[p:])
+		p += n
+		ret = append(ret, i)
+	}
+	return
+}
+
+func (e *TableMapEvent) decodeDefaultCharset(v []byte) (ret []uint64, err error) {
+	ret, err = e.decodeIntSeq(v)
+	if err != nil {
+		return
+	}
+	if len(ret)%2 != 1 {
+		return nil, errors.Errorf("Expect odd item in DefaultCharset but got %d", len(ret))
+	}
+	return
+}
+
+func (e *TableMapEvent) decodeColumnNames(v []byte) error {
+	p := 0
+	e.ColumnName = make([][]byte, 0, e.ColumnCount)
+	for p < len(v) {
+		n := int(v[p])
+		p++
+		e.ColumnName = append(e.ColumnName, v[p:p+n])
+		p += n
+	}
+
+	if len(e.ColumnName) != int(e.ColumnCount) {
+		return errors.Errorf("Expect %d column names but got %d", e.ColumnCount, len(e.ColumnName))
+	}
+	return nil
+}
+
+func (e *TableMapEvent) decodeStrValue(v []byte) (ret [][][]byte, err error) {
+	p := 0
+	for p < len(v) {
+		nVal, _, n := LengthEncodedInt(v[p:])
+		p += n
+		vals := make([][]byte, 0, int(nVal))
+		for i := 0; i < int(nVal); i++ {
+			val, _, n, err := LengthEncodedString(v[p:])
+			if err != nil {
+				return nil, err
+			}
+			p += n
+			vals = append(vals, val)
+		}
+		ret = append(ret, vals)
+	}
+	return
+}
+
+func (e *TableMapEvent) decodeSimplePrimaryKey(v []byte) error {
+	p := 0
+	for p < len(v) {
+		i, _, n := LengthEncodedInt(v[p:])
+		e.PrimaryKey = append(e.PrimaryKey, i)
+		e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, 0)
+		p += n
+	}
+	return nil
+}
+
+func (e *TableMapEvent) decodePrimaryKeyWithPrefix(v []byte) error {
+	p := 0
+	for p < len(v) {
+		i, _, n := LengthEncodedInt(v[p:])
+		e.PrimaryKey = append(e.PrimaryKey, i)
+		p += n
+		i, _, n = LengthEncodedInt(v[p:])
+		e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, i)
+		p += n
+	}
+	return nil
+}
+
 func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "TableID: %d\n", e.TableID)
 	fmt.Fprintf(w, "TableID size: %d\n", e.tableIDSize)
@@ -195,7 +410,86 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Column count: %d\n", e.ColumnCount)
 	fmt.Fprintf(w, "Column type: \n%s", hex.Dump(e.ColumnType))
 	fmt.Fprintf(w, "NULL bitmap: \n%s", hex.Dump(e.NullBitmap))
+
+	fmt.Fprintf(w, "Signedness bitmap: \n%s", hex.Dump(e.SignednessBitmap))
+	fmt.Fprintf(w, "Default charset: %v\n", e.DefaultCharset)
+	fmt.Fprintf(w, "Column charset: %v\n", e.ColumnCharset)
+	fmt.Fprintf(w, "Set str value: %v\n", e.SetStrValueString())
+	fmt.Fprintf(w, "Enum str value: %v\n", e.EnumStrValueString())
+	fmt.Fprintf(w, "Column name: %v\n", e.ColumnNameString())
+	fmt.Fprintf(w, "Geometry type: %v\n", e.GeometryType)
+	fmt.Fprintf(w, "Primary key: %v\n", e.PrimaryKey)
+	fmt.Fprintf(w, "Primary key prefix: %v\n", e.PrimaryKeyPrefix)
+	fmt.Fprintf(w, "Enum/set default charset: %v\n", e.EnumSetDefaultCharset)
+	fmt.Fprintf(w, "Enum/set column charset: %v\n", e.EnumSetColumnCharset)
+
 	fmt.Fprintln(w)
+}
+
+// Nullable returns the nullablity of the i-th column.
+// If null bits are not available, available is false.
+// i must be in range [0, ColumnCount).
+func (e *TableMapEvent) Nullable(i int) (available, nullable bool) {
+	if len(e.NullBitmap) == 0 {
+		return
+	}
+	return true, e.NullBitmap[i/8]&(1<<uint(i%8)) != 0
+}
+
+// SetStrValueString returns values for set columns as string slices.
+// nil is returned if not available or no set columns at all.
+func (e *TableMapEvent) SetStrValueString() [][]string {
+	if e.setStrValueString == nil {
+		if len(e.SetStrValue) == 0 {
+			return nil
+		}
+		e.setStrValueString = make([][]string, 0, len(e.SetStrValue))
+		for _, vals := range e.SetStrValue {
+			e.setStrValueString = append(
+				e.setStrValueString,
+				e.bytesSlice2StrSlice(vals),
+			)
+		}
+	}
+	return e.setStrValueString
+}
+
+// EnumStrValueString returns values for enum columns as string slices.
+// nil is returned if not available or no enum columns at all.
+func (e *TableMapEvent) EnumStrValueString() [][]string {
+	if e.enumStrValueString == nil {
+		if len(e.EnumStrValue) == 0 {
+			return nil
+		}
+		e.enumStrValueString = make([][]string, 0, len(e.EnumStrValue))
+		for _, vals := range e.EnumStrValue {
+			e.enumStrValueString = append(
+				e.enumStrValueString,
+				e.bytesSlice2StrSlice(vals),
+			)
+		}
+	}
+	return e.enumStrValueString
+}
+
+// ColumnNameString returns column names as string slice.
+// nil is returned if not available.
+func (e *TableMapEvent) ColumnNameString() []string {
+	if e.columnNameString == nil {
+		e.columnNameString = e.bytesSlice2StrSlice(e.ColumnName)
+	}
+	return e.columnNameString
+}
+
+func (e *TableMapEvent) bytesSlice2StrSlice(src [][]byte) []string {
+	if src == nil {
+		return nil
+	}
+	ret := make([]string, 0, len(src))
+	for _, item := range src {
+		ret = append(ret, string(item))
+	}
+	return ret
 }
 
 // RowsEventStmtEndFlag is set in the end of the statement.
