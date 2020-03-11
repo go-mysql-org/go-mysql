@@ -485,29 +485,29 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 			}
 		}
 		if e.IsEnumColumn(i) {
-			if len(enumStrValueMap) == 0 {
-				fmt.Fprintf(w, "  enum=<n/a>")
-			} else {
-				fmt.Fprintf(w, "  enum=%v", enumStrValueMap[i])
-			}
-
 			if len(enumSetCollationMap) == 0 {
 				fmt.Fprintf(w, "  enum_collation=<n/a>")
 			} else {
 				fmt.Fprintf(w, "  enum_collation=%d", enumSetCollationMap[i])
 			}
+
+			if len(enumStrValueMap) == 0 {
+				fmt.Fprintf(w, "  enum=<n/a>")
+			} else {
+				fmt.Fprintf(w, "  enum=%v", enumStrValueMap[i])
+			}
 		}
 		if e.IsSetColumn(i) {
-			if len(setStrValueMap) == 0 {
-				fmt.Fprintf(w, "  set=<n/a>")
-			} else {
-				fmt.Fprintf(w, "  set=%v", setStrValueMap[i])
-			}
-
 			if len(enumSetCollationMap) == 0 {
 				fmt.Fprintf(w, "  set_collation=<n/a>")
 			} else {
 				fmt.Fprintf(w, "  set_collation=%d", enumSetCollationMap[i])
+			}
+
+			if len(setStrValueMap) == 0 {
+				fmt.Fprintf(w, "  set=<n/a>")
+			} else {
+				fmt.Fprintf(w, "  set=%v", setStrValueMap[i])
 			}
 		}
 		if e.IsGeometryColumn(i) {
