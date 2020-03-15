@@ -250,7 +250,15 @@ func (b *BinlogSyncer) registerSlave() error {
 	if r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM'"); err != nil {
 		return errors.Trace(err)
 	} else {
-		s, _ := r.GetString(0, 1)
+		// if there is a maxscale as binlog server, 
+		// the server do not support the command above,
+		// r.Resultset will be nil here,
+		// set s with "CRC32" as default value to continue.
+		s := "CRC32"
+		if r != nil && r.Resultset != nil {
+			var _ error
+			s, _ = r.GetString(0, 1)
+		}
 		if s != "" {
 			// maybe CRC32 or NONE
 
