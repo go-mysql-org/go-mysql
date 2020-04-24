@@ -33,8 +33,8 @@ const (
 	TYPE_JSON                 // json
 	TYPE_DECIMAL              // decimal
 	TYPE_MEDIUM_INT
-  TYPE_BINARY               // binary, varbinary
-  TYPE_POINT                // coordinates
+	TYPE_BINARY               // binary, varbinary
+	TYPE_POINT                // coordinates
 )
 
 type TableColumn struct {
