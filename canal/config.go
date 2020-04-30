@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"crypto/tls"
 	"io/ioutil"
 	"math/rand"
 	"time"
