@@ -82,7 +82,7 @@ type Config struct {
 	MaxReconnectAttempts int `toml:"max_reconnect_attempts"`
 
 	// Set TLS config
-	TlsConfig *tls.Config
+	TLSConfig *tls.Config
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
