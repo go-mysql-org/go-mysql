@@ -34,6 +34,7 @@ const (
 	TYPE_DECIMAL              // decimal
 	TYPE_MEDIUM_INT
 	TYPE_BINARY               // binary, varbinary
+	TYPE_POINT                // coordinates
 )
 
 type TableColumn struct {
@@ -43,6 +44,7 @@ type TableColumn struct {
 	RawType    string
 	IsAuto     bool
 	IsUnsigned bool
+	IsVirtual  bool
 	EnumValues []string
 	SetValues  []string
 	FixedSize  uint
@@ -118,6 +120,8 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].Type = TYPE_BIT
 	} else if strings.HasPrefix(columnType, "json") {
 		ta.Columns[index].Type = TYPE_JSON
+	} else if strings.Contains(columnType, "point") {
+		ta.Columns[index].Type = TYPE_POINT
 	} else if strings.Contains(columnType, "mediumint") {
 		ta.Columns[index].Type = TYPE_MEDIUM_INT
 	} else if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
@@ -139,6 +143,8 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 
 	if extra == "auto_increment" {
 		ta.Columns[index].IsAuto = true
+	} else if extra == "VIRTUAL GENERATED" {
+		ta.Columns[index].IsVirtual = true
 	}
 }
 
