@@ -2,6 +2,17 @@
 
 A pure go library to handle MySQL network protocol and replication.
 
+## Call for Committer/Maintainer
+
+Sorry that I have no enough time to maintain this project wholly, if you like this project and want to help me improve it continuously, please contact me through email (siddontang@gmail.com).
+
+Requirement: In the email, you should list somethings(including but not limited to below) to make me believe we can work together.
+
++ Your GitHub ID
++ The contributions to go-mysql before, including PRs or Issues. 
++ The reason why you can improve go-mysql.
+ 
+
 ## Replication
 
 Replication package handles MySQL replication protocol like [python-mysql-replication](https://github.com/noplay/python-mysql-replication).
