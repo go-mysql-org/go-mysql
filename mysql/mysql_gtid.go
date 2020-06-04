@@ -419,10 +419,16 @@ func (s *MysqlGTIDSet) Equal(o GTIDSet) bool {
 
 func (s *MysqlGTIDSet) String() string {
 	var buf bytes.Buffer
-	sep := ""
+	sets := make([]string, 0, len(s.Sets))
 	for _, set := range s.Sets {
+		sets = append(sets, set.String())
+	}
+
+	sort.Strings(sets)
+	sep := ""
+	for _, set := range sets {
 		buf.WriteString(sep)
-		buf.WriteString(set.String())
+		buf.WriteString(set)
 		sep = ","
 	}
 
