@@ -62,6 +62,9 @@ func (s *schemaTestSuite) TestSchema(c *C) {
             zfint INT ZEROFILL,
             name_ucs VARCHAR(256) CHARACTER SET ucs2,
             name_utf8 VARCHAR(256) CHARACTER SET utf8,
+            name_char CHAR(10),
+            name_binary BINARY(11),
+            name_varbinary VARBINARY(12),
             PRIMARY KEY(id2, id),
             UNIQUE (id1),
             INDEX name_idx (name)
@@ -74,12 +77,15 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	ta, err := NewTable(s.conn, "test", "schema_test")
 	c.Assert(err, IsNil)
 
-	c.Assert(ta.Columns, HasLen, 12)
+	c.Assert(ta.Columns, HasLen, 15)
 	c.Assert(ta.Indexes, HasLen, 3)
 	c.Assert(ta.PKColumns, DeepEquals, []int{2, 0})
 	c.Assert(ta.Indexes[0].Columns, HasLen, 2)
 	c.Assert(ta.Indexes[0].Name, Equals, "PRIMARY")
 	c.Assert(ta.Indexes[2].Name, Equals, "name_idx")
+	c.Assert(ta.Columns[3].Type, Equals, TYPE_STRING)
+	c.Assert(ta.Columns[3].MaxSize, Equals, uint(256))
+	c.Assert(ta.Columns[3].FixedSize, Equals, uint(0))
 	c.Assert(ta.Columns[4].EnumValues, DeepEquals, []string{"appointing", "serving", "abnormal", "stop", "noaftermarket", "finish", "financial_audit"})
 	c.Assert(ta.Columns[5].SetValues, DeepEquals, []string{"a", "b", "c"})
 	c.Assert(ta.Columns[7].Type, Equals, TYPE_DECIMAL)
@@ -87,7 +93,18 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	c.Assert(ta.Columns[8].IsUnsigned, IsTrue)
 	c.Assert(ta.Columns[9].IsUnsigned, IsTrue)
 	c.Assert(ta.Columns[10].Collation, Matches, "^ucs2.*")
+	c.Assert(ta.Columns[10].MaxSize, Equals, uint(256))
+	c.Assert(ta.Columns[10].FixedSize, Equals, uint(0))
 	c.Assert(ta.Columns[11].Collation, Matches, "^utf8.*")
+	c.Assert(ta.Columns[12].Type, Equals, TYPE_STRING)
+	c.Assert(ta.Columns[12].MaxSize, Equals, uint(10))
+	c.Assert(ta.Columns[12].FixedSize, Equals, uint(10))
+	c.Assert(ta.Columns[13].Type, Equals, TYPE_BINARY)
+	c.Assert(ta.Columns[13].MaxSize, Equals, uint(11))
+	c.Assert(ta.Columns[13].FixedSize, Equals, uint(11))
+	c.Assert(ta.Columns[14].Type, Equals, TYPE_BINARY)
+	c.Assert(ta.Columns[14].MaxSize, Equals, uint(12))
+	c.Assert(ta.Columns[14].FixedSize, Equals, uint(0))
 
 	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, "test", "schema_test")
 	c.Assert(err, IsNil)
