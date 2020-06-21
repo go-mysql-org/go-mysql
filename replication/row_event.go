@@ -741,11 +741,10 @@ func (e *TableMapEvent) GeometryTypeMap() map[int]uint64 {
 func (e *TableMapEvent) realType(i int) byte {
 
 	typ := e.ColumnType[i]
-	meta := e.ColumnMeta[i]
 
 	switch typ {
 	case MYSQL_TYPE_STRING:
-		rtyp := byte(meta >> 8)
+		rtyp := byte(e.ColumnMeta[i] >> 8)
 		if rtyp == MYSQL_TYPE_ENUM || rtyp == MYSQL_TYPE_SET {
 			return rtyp
 		}
@@ -776,6 +775,9 @@ func (e *TableMapEvent) IsNumericColumn(i int) bool {
 
 }
 
+// IsCharacterColumn returns true if the column type is considered as character type.
+// Note that JSON/GEOMETRY types are treated as character type in mariadb.
+// (JSON is an alias for LONGTEXT in mariadb: https://mariadb.com/kb/en/json-data-type/)
 func (e *TableMapEvent) IsCharacterColumn(i int) bool {
 
 	switch e.realType(i) {
