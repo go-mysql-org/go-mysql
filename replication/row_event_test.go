@@ -1006,3 +1006,184 @@ func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
 	}
 
 }
+
+func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
+
+	/*
+		CREATE TABLE `_types` (
+			`b_bit` bit(64) NOT NULL DEFAULT b'0',
+
+			`n_boolean` boolean not null default '0',
+			`n_tinyint` tinyint not null default '0',
+			`n_smallint` smallint not null default '0',
+			`n_mediumint` mediumint not null default '0',
+			`n_int` int not null default '0',
+			`n_bigint` bigint not null default '0',
+			`n_decimal` decimal(65,30) not null default '0',
+			`n_float` float not null default '0',
+			`n_double` double not null default '0',
+
+			`nu_tinyint` tinyint unsigned not null default '0',
+			`nu_smallint` smallint unsigned not null default '0',
+			`nu_mediumint` mediumint unsigned not null default '0',
+			`nu_int` int unsigned not null default '0',
+			`nu_bigint` bigint unsigned not null default '0',
+			`nu_decimal` decimal(65,30) unsigned not null default '0',
+			`nu_float` float unsigned not null default '0',
+			`nu_double` double unsigned not null default '0',
+
+			`t_year` year default null,
+			`t_date` date default null,
+			`t_time` time default null,
+			`t_ftime` time(6) default null,
+			`t_datetime` datetime default null,
+			`t_fdatetime` datetime(6) default null,
+			`t_timestamp` timestamp default current_timestamp,
+			`t_ftimestamp` timestamp(6) default current_timestamp(6),
+
+			`c_char` char(255) collate gbk_chinese_ci not null default '',  -- collate id: 28
+			`c_varchar` varchar(255) not null default '',
+			`c_binary` binary(64) not null default '',
+			`c_varbinary` varbinary(64) not null default '',
+			`c_tinyblob` tinyblob,
+			`c_blob` blob,
+			`c_mediumblob` mediumblob,
+			`c_longblob` longblob,
+			`c_tinytext` tinytext,
+			`c_text` text,
+			`c_mediumtext` mediumtext,
+			`c_longtext` longtext,
+
+			`e_enum` enum('a','b') default 'a',
+			`s_set` set('1','2') default '1',
+			`g_geometry` geometry default null,
+			`j_json` json default null,
+
+			`s_set2` set('3','4') collate gbk_chinese_ci default '4',
+			`e_enum2` enum('c','d') collate gbk_chinese_ci default 'd',
+			`g_geometrycollection` geometrycollection default null,
+			`g_multipolygon` multipolygon default null,
+			`g_multilinestring` multilinestring default null,
+			`g_multipoint` multipoint default null,
+			`g_polygon` polygon default null,
+			`g_linestring` linestring default null,
+			`g_point` point default null
+		);
+	*/
+
+	unsignedMap := map[int]bool{}
+	for i := 1; i <= 9; i++ {
+		unsignedMap[i] = false
+	}
+	for i := 10; i <= 17; i++ {
+		unsignedMap[i] = true
+	}
+
+	// collation id | collatation
+	//     28       | gbk_chinese_ci
+	//     46       | utf8mb4_bin
+	//     63       | binary
+	//     224      | utf8mb4_unicode_ci
+	mysqlCollationMap := map[int]uint64{
+		26: 28, 27: 224, 28: 63, 29: 63, // (var)char/(var)binary
+		30: 63, 31: 63, 32: 63, 33: 63, // blobs
+		34: 224, 35: 224, 36: 224, 37: 224, // texts
+	}
+	// NOTE: mariadb treat json/geometry as character fields
+	mariadbCollationMap := map[int]uint64{
+		26: 28, 27: 224, 28: 63, 29: 63, // (var)char/(var)binary
+		30: 63, 31: 63, 32: 63, 33: 63, // blobs
+		34: 224, 35: 224, 36: 224, 37: 224, // texts
+		40: 63,                                                 // geometry
+		41: 46,                                                 // json
+		44: 63, 45: 63, 46: 63, 47: 63, 48: 63, 49: 63, 50: 63, // geometry
+	}
+
+	enumSetCollationMap := map[int]uint64{
+		38: 224, 39: 224, 42: 28, 43: 28,
+	}
+
+	enumStrValueMap := map[int][]string{
+		38: []string{"a", "b"},
+		43: []string{"c", "d"},
+	}
+
+	setStrValueMap := map[int][]string{
+		39: []string{"1", "2"},
+		42: []string{"3", "4"},
+	}
+
+	geometryTypeMap := map[int]uint64{
+		40: 0,
+		44: 7, 45: 6, 46: 5, 47: 4, 48: 3, 49: 2, 50: 1,
+	}
+
+	testcases := []struct {
+		flavor              string
+		data                []byte
+		unsignedMap         map[int]bool
+		collationMap        map[int]uint64
+		enumSetCollationMap map[int]uint64
+		enumStrValueMap     map[int][]string
+		setStrValueMap      map[int][]string
+		geometryTypeMap     map[int]uint64
+	}{
+		{
+			flavor:              "mysql", // mysql 8.0
+			data:                []byte("e\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x003\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xf5\xfe\xfe\xff\xff\xff\xff\xff\xff\xff1\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xee\xfe\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\xf8\x01\xf7\x01\x04\x04\x04\x04\x04\x04\x04\x00\x00\xfc\xc3\xff\xff\a\x01\x03\x00\u007f\x80\x03\f\x1c\xe0??????\xe0\xe0\xe0\xe0\a\b\x00\a\x06\x05\x04\x03\x02\x01\x04\xfc\x05\x02\x05b_bit\tn_boolean\tn_tinyint\nn_smallint\vn_mediumint\x05n_int\bn_bigint\tn_decimal\an_float\bn_double\nnu_tinyint\vnu_smallint\fnu_mediumint\x06nu_int\tnu_bigint\nnu_decimal\bnu_float\tnu_double\x06t_year\x06t_date\x06t_time\at_ftime\nt_datetime\vt_fdatetime\vt_timestamp\ft_ftimestamp\x06c_char\tc_varchar\bc_binary\vc_varbinary\nc_tinyblob\x06c_blob\fc_mediumblob\nc_longblob\nc_tinytext\x06c_text\fc_mediumtext\nc_longtext\x06e_enum\x05s_set\ng_geometry\x06j_json\x06s_set2\ae_enum2\x14g_geometrycollection\x0eg_multipolygon\x11g_multilinestring\fg_multipoint\tg_polygon\fg_linestring\ag_point\v\x04\xe0\xe0\x1c\x1c\x05\n\x02\x011\x012\x02\x013\x014\x06\n\x02\x01a\x01b\x02\x01c\x01d"),
+			unsignedMap:         unsignedMap,
+			collationMap:        mysqlCollationMap,
+			enumSetCollationMap: enumSetCollationMap,
+			enumStrValueMap:     enumStrValueMap,
+			setStrValueMap:      setStrValueMap,
+			geometryTypeMap:     geometryTypeMap,
+		},
+		{
+			flavor:              "mariadb", // mariadb 10.5
+			data:                []byte("\x1e\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x003\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xfc\xfe\xfe\xff\xff\xff\xff\xff\xff\xff1\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xee\xfe\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\xf8\x01\xf7\x01\x04\x04\x04\x04\x04\x04\x04\x00\x00\xfc\xc0\xff\xff\a\x01\x03\x00\u007f\xc0\x02\x0f?\x00\x1c\x01\xe0\b\xe0\t\xe0\n\xe0\v\xe0\r.\a\b\x00\a\x06\x05\x04\x03\x02\x01\x04\xfc\x05\x02\x05b_bit\tn_boolean\tn_tinyint\nn_smallint\vn_mediumint\x05n_int\bn_bigint\tn_decimal\an_float\bn_double\nnu_tinyint\vnu_smallint\fnu_mediumint\x06nu_int\tnu_bigint\nnu_decimal\bnu_float\tnu_double\x06t_year\x06t_date\x06t_time\at_ftime\nt_datetime\vt_fdatetime\vt_timestamp\ft_ftimestamp\x06c_char\tc_varchar\bc_binary\vc_varbinary\nc_tinyblob\x06c_blob\fc_mediumblob\nc_longblob\nc_tinytext\x06c_text\fc_mediumtext\nc_longtext\x06e_enum\x05s_set\ng_geometry\x06j_json\x06s_set2\ae_enum2\x14g_geometrycollection\x0eg_multipolygon\x11g_multilinestring\fg_multipoint\tg_polygon\fg_linestring\ag_point\v\x04\xe0\xe0\x1c\x1c\x05\n\x02\x011\x012\x02\x013\x014\x06\n\x02\x01a\x01b\x02\x01c\x01d"),
+			unsignedMap:         unsignedMap,
+			collationMap:        mariadbCollationMap,
+			enumSetCollationMap: enumSetCollationMap,
+			enumStrValueMap:     enumStrValueMap,
+			setStrValueMap:      setStrValueMap,
+			geometryTypeMap:     geometryTypeMap,
+		},
+		{
+			flavor:              "mysql", // mysql 5.7
+			data:                []byte("q\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x003\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xf5\xfe\xfe\xff\xff\xff\xff\xff\xff\xff1\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xee\xfe\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\xf8\x01\xf7\x01\x04\x04\x04\x04\x04\x04\x04\x00\x00\xfc\xc0\xff\xff\a"),
+			unsignedMap:         nil,
+			collationMap:        nil,
+			enumSetCollationMap: nil,
+			enumStrValueMap:     nil,
+			setStrValueMap:      nil,
+			geometryTypeMap:     nil,
+		},
+		{
+			flavor:              "mariadb", // mariadb 10.4
+			data:                []byte("\x1a\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x003\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xfc\xfe\xfe\xff\xff\xff\xff\xff\xff\xff1\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xee\xfe\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\xf8\x01\xf7\x01\x04\x04\x04\x04\x04\x04\x04\x00\x00\xfc\xc0\xff\xff\a"),
+			unsignedMap:         nil,
+			collationMap:        nil,
+			enumSetCollationMap: nil,
+			enumStrValueMap:     nil,
+			setStrValueMap:      nil,
+			geometryTypeMap:     nil,
+		},
+	}
+
+	for _, tc := range testcases {
+
+		tableMapEvent := new(TableMapEvent)
+		tableMapEvent.flavor = tc.flavor
+		tableMapEvent.tableIDSize = 6
+		err := tableMapEvent.Decode(tc.data)
+		c.Assert(err, IsNil)
+		c.Assert(tableMapEvent.UnsignedMap(), DeepEquals, tc.unsignedMap)
+		c.Assert(tableMapEvent.CollationMap(), DeepEquals, tc.collationMap)
+		c.Assert(tableMapEvent.EnumSetCollationMap(), DeepEquals, tc.enumSetCollationMap)
+		c.Assert(tableMapEvent.EnumStrValueMap(), DeepEquals, tc.enumStrValueMap)
+		c.Assert(tableMapEvent.SetStrValueMap(), DeepEquals, tc.setStrValueMap)
+		c.Assert(tableMapEvent.GeometryTypeMap(), DeepEquals, tc.geometryTypeMap)
+
+	}
+
+}

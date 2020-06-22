@@ -19,6 +19,9 @@ var (
 )
 
 type BinlogParser struct {
+	// "mysql" or "mariadb", if not set, use "mysql" by default
+	flavor string
+
 	format *FormatDescriptionEvent
 
 	tables map[uint64]*TableMapEvent
@@ -200,6 +203,10 @@ func (p *BinlogParser) SetVerifyChecksum(verify bool) {
 	p.verifyChecksum = verify
 }
 
+func (p *BinlogParser) SetFlavor(flavor string) {
+	p.flavor = flavor
+}
+
 func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
 	h := new(EventHeader)
 	err := h.Decode(data)
@@ -234,7 +241,9 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 			case XID_EVENT:
 				e = &XIDEvent{}
 			case TABLE_MAP_EVENT:
-				te := &TableMapEvent{}
+				te := &TableMapEvent{
+					flavor: p.flavor,
+				}
 				if p.format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {
 					te.tableIDSize = 4
 				} else {
