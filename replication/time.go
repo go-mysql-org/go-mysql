@@ -50,6 +50,13 @@ func formatBeforeUnixZeroTime(year, month, day, hour, minute, second, frac, dec 
 	return s[0 : len(s)-(6-dec)]
 }
 
+func microSecTimestampToTime(ts uint64) time.Time {
+	if ts == 0 {
+		return time.Time{}
+	}
+	return time.Unix(int64(ts/1000000), int64(ts%1000000)*1000)
+}
+
 func init() {
 	fracTimeFormat = make([]string, 7)
 	fracTimeFormat[0] = "2006-01-02 15:04:05"

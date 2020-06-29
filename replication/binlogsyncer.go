@@ -148,6 +148,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 
 	b.cfg = cfg
 	b.parser = NewBinlogParser()
+	b.parser.SetFlavor(cfg.Flavor)
 	b.parser.SetRawMode(b.cfg.RawModeEnabled)
 	b.parser.SetParseTime(b.cfg.ParseTime)
 	b.parser.SetTimestampStringLocation(b.cfg.TimestampStringLocation)

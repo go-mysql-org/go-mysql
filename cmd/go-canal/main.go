@@ -56,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(*ignoreTables) == 0 {
+	if len(*ignoreTables) > 0 {
 		subs := strings.Split(*ignoreTables, ",")
 		for _, sub := range subs {
 			if seps := strings.Split(sub, "."); len(seps) == 2 {

@@ -46,7 +46,7 @@ func (p RowData) ParseText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
 
 			switch f[i].Type {
 			case MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_INT24,
-				MYSQL_TYPE_LONGLONG, MYSQL_TYPE_YEAR:
+				MYSQL_TYPE_LONGLONG, MYSQL_TYPE_LONG, MYSQL_TYPE_YEAR:
 				if isUnsigned {
 					data[i].Type = FieldValueTypeUnsigned
 					data[i].Uint64, err = strconv.ParseUint(utils.ByteSliceToString(v), 10, 64)

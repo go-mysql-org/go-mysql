@@ -188,7 +188,7 @@ func (e EventType) String() string {
 		return "ViewChangeEvent"
 	case XA_PREPARE_LOG_EVENT:
 		return "XAPrepareLogEvent"
-		
+
 	default:
 		return "UnknownEvent"
 	}
@@ -201,4 +201,19 @@ const (
 	//  BINLOG_CHECKSUM_ALG_ENUM_END,  // the cut line: valid alg range is [1, 0x7f].
 	BINLOG_CHECKSUM_ALG_UNDEF byte = 255 // special value to tag undetermined yet checksum
 	// or events from checksum-unaware servers
+)
+
+// These are TABLE_MAP_EVENT's optional metadata field type, from: libbinlogevents/include/rows_event.h
+const (
+	TABLE_MAP_OPT_META_SIGNEDNESS byte = iota + 1
+	TABLE_MAP_OPT_META_DEFAULT_CHARSET
+	TABLE_MAP_OPT_META_COLUMN_CHARSET
+	TABLE_MAP_OPT_META_COLUMN_NAME
+	TABLE_MAP_OPT_META_SET_STR_VALUE
+	TABLE_MAP_OPT_META_ENUM_STR_VALUE
+	TABLE_MAP_OPT_META_GEOMETRY_TYPE
+	TABLE_MAP_OPT_META_SIMPLE_PRIMARY_KEY
+	TABLE_MAP_OPT_META_PRIMARY_KEY_WITH_PREFIX
+	TABLE_MAP_OPT_META_ENUM_AND_SET_DEFAULT_CHARSET
+	TABLE_MAP_OPT_META_ENUM_AND_SET_COLUMN_CHARSET
 )
