@@ -238,7 +238,9 @@ func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 		return nil, ErrMalformPacket
 	}
 
-	result := NewResult(int(count))
+	result := &Result{
+		Resultset: NewResultset(int(count)),
+	}
 
 	if err := c.readResultColumns(result); err != nil {
 		return nil, errors.Trace(err)
