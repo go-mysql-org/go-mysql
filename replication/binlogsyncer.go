@@ -104,6 +104,8 @@ type BinlogSyncerConfig struct {
 	// https://mariadb.com/kb/en/library/com_binlog_dump/
 	// https://mariadb.com/kb/en/library/annotate_rows_event/
 	DumpCommandFlag uint16
+
+	Option func(*client.Conn) error
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -221,6 +223,12 @@ func (b *BinlogSyncer) registerSlave() error {
 	b.c, err = b.newConnection()
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	if b.cfg.Option != nil {
+		if err = b.cfg.Option(b.c); err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	if len(b.cfg.Charset) != 0 {
