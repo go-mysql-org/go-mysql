@@ -166,13 +166,29 @@ r, _ := conn.Execute(`insert into table (id, name) values (1, "abc")`)
 
 // Get last insert id
 println(r.InsertId)
+// Or affected rows count
+println(r.AffectedRows)
 
 // Select
-r, _ := conn.Execute(`select id, name from table where id = 1`)
+r, err := conn.Execute(`select id, name from table where id = 1`)
+
+// Close result for reuse memory (it's not necessary but very useful)
+defer r.Close()
 
 // Handle resultset
 v, _ := r.GetInt(0, 0)
-v, _ = r.GetIntByName(0, "id") 
+v, _ = r.GetIntByName(0, "id")
+
+// Direct access to fields
+for _, row := range r.Values {
+    for _, val := range row {
+	    _ = val.Value() // interface{}
+        // or
+        if val.Type == mysql.FieldValueTypeFloat {
+        	_ = val.AsFloat64() // float64
+        }
+    }   
+}
 ```
 
 Tested MySQL versions for the client include:
