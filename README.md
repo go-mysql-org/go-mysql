@@ -155,7 +155,7 @@ conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test")
 // Or to use SSL/TLS connection if MySQL server supports TLS
 //conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.UseSSL(true)})
 
-// or to set your own client-side certificates for identity verification for security
+// Or to set your own client-side certificates for identity verification for security
 //tlsConfig := NewClientTLSConfig(caPem, certPem, keyPem, false, "your-server-name")
 //conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.SetTLSConfig(tlsConfig)})
 
@@ -182,7 +182,7 @@ v, _ = r.GetIntByName(0, "id")
 // Direct access to fields
 for _, row := range r.Values {
     for _, val := range row {
-	    _ = val.Value() // interface{}
+	_ = val.Value() // interface{}
         // or
         if val.Type == mysql.FieldValueTypeFloat {
         	_ = val.AsFloat64() // float64
