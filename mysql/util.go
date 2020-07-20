@@ -2,15 +2,15 @@ package mysql
 
 import (
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"runtime"
 	"strings"
 
-	"crypto/rsa"
-	"crypto/sha256"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 )
