@@ -15,6 +15,7 @@ import (
 
 	"github.com/pingcap/errors"
 	. "github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/utils"
 )
 
 type BufPool struct {
@@ -53,6 +54,10 @@ type Conn struct {
 	br      *bufio.Reader
 	reader  io.Reader
 
+	copyNBuf []byte
+
+	header [4]byte
+
 	Sequence uint8
 }
 
@@ -64,6 +69,8 @@ func NewConn(conn net.Conn) *Conn {
 	c.br = bufio.NewReaderSize(c, 65536) // 64kb
 	c.reader = c.br
 
+	c.copyNBuf = make([]byte, 16*1024)
+
 	return c
 }
 
@@ -74,31 +81,60 @@ func NewTLSConn(conn net.Conn) *Conn {
 	c.bufPool = NewBufPool()
 	c.reader = c
 
+	c.copyNBuf = make([]byte, 16*1024)
+
 	return c
 }
 
 func (c *Conn) ReadPacket() ([]byte, error) {
+	return c.ReadPacketReuseMem(nil)
+}
+
+func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 	// Here we use `sync.Pool` to avoid allocate/destroy buffers frequently.
-	buf := c.bufPool.Get()
-	defer c.bufPool.Return(buf)
+	buf := utils.BytesBufferGet()
+	defer utils.BytesBufferPut(buf)
 
 	if err := c.ReadPacketTo(buf); err != nil {
 		return nil, errors.Trace(err)
 	} else {
-		result := append([]byte{}, buf.Bytes()...)
+		result := append(dst, buf.Bytes()...)
 		return result, nil
 	}
 }
 
-func (c *Conn) ReadPacketTo(w io.Writer) error {
-	header := []byte{0, 0, 0, 0}
+func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err error) {
+	for n > 0 {
+		bcap := cap(c.copyNBuf)
+		if int64(bcap) > n {
+			bcap = int(n)
+		}
+		buf := c.copyNBuf[:bcap]
 
-	if _, err := io.ReadFull(c.reader, header); err != nil {
+		rd, err := io.ReadAtLeast(src, buf, bcap)
+		n -= int64(rd)
+
+		if err != nil {
+			return written, errors.Trace(err)
+		}
+
+		wr, err := dst.Write(buf)
+		written += int64(wr)
+		if err != nil {
+			return written, errors.Trace(err)
+		}
+	}
+
+	return written, nil
+}
+
+func (c *Conn) ReadPacketTo(w io.Writer) error {
+	if _, err := io.ReadFull(c.reader, c.header[:4]); err != nil {
 		return errors.Wrapf(ErrBadConn, "io.ReadFull(header) failed. err %v", err)
 	}
 
-	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
-	sequence := uint8(header[3])
+	length := int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16)
+	sequence := uint8(c.header[3])
 
 	if sequence != c.Sequence {
 		return errors.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
@@ -111,7 +147,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 		buf.Grow(length)
 	}
 
-	if n, err := io.CopyN(w, c.reader, int64(length)); err != nil {
+	if n, err := c.copyN(w, c.reader, int64(length)); err != nil {
 		return errors.Wrapf(ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, n, length)
 	} else if n != int64(length) {
 		return errors.Wrapf(ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", n, length)
