@@ -104,6 +104,10 @@ type BinlogSyncerConfig struct {
 	// https://mariadb.com/kb/en/library/com_binlog_dump/
 	// https://mariadb.com/kb/en/library/annotate_rows_event/
 	DumpCommandFlag uint16
+
+	//Option function is used to set outside of BinlogSyncerConfig， between mysql connection and COM_REGISTER_SLAVE
+	//For MariaDB: slave_gtid_ignore_duplicates、skip_replication、slave_until_gtid
+	Option func(*client.Conn) error
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -221,6 +225,12 @@ func (b *BinlogSyncer) registerSlave() error {
 	b.c, err = b.newConnection()
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	if b.cfg.Option != nil {
+		if err = b.cfg.Option(b.c); err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	if len(b.cfg.Charset) != 0 {
