@@ -23,18 +23,18 @@ You can use it as a MySQL slave to sync binlog from master then do something, li
 
 ```go
 import (
-    "github.com/siddontang/go-mysql/replication"
-    "os"
+	"github.com/siddontang/go-mysql/replication"
+	"os"
 )
 // Create a binlog syncer with a unique server id, the server id must be different from other MySQL's. 
 // flavor is mysql or mariadb
 cfg := replication.BinlogSyncerConfig {
-    ServerID: 100,
-    Flavor:   "mysql",
-    Host:     "127.0.0.1",
-    Port:     3306,
-    User:     "root",
-    Password: "",
+	ServerID: 100,
+	Flavor:   "mysql",
+	Host:     "127.0.0.1",
+	Port:     3306,
+	User:     "root",
+	Password: "",
 }
 syncer := replication.NewBinlogSyncer(cfg)
 
@@ -47,23 +47,23 @@ streamer, _ := syncer.StartSync(mysql.Position{binlogFile, binlogPos})
 // the mariadb GTID set likes this "0-1-100"
 
 for {
-    ev, _ := streamer.GetEvent(context.Background())
-    // Dump event
-    ev.Dump(os.Stdout)
+	ev, _ := streamer.GetEvent(context.Background())
+	// Dump event
+	ev.Dump(os.Stdout)
 }
 
 // or we can use a timeout context
 for {
-    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-    ev, err := s.GetEvent(ctx)
-    cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ev, err := s.GetEvent(ctx)
+	cancel()
 
-    if err == context.DeadlineExceeded {
-        // meet timeout
-        continue
-    }
+	if err == context.DeadlineExceeded {
+		// meet timeout
+		continue
+	}
 
-    ev.Dump(os.Stdout)
+	ev.Dump(os.Stdout)
 }
 ```
 
@@ -117,16 +117,16 @@ cfg.Dump.Tables = []string{"canal_test"}
 c, err := NewCanal(cfg)
 
 type MyEventHandler struct {
-    DummyEventHandler
+	DummyEventHandler
 }
 
 func (h *MyEventHandler) OnRow(e *RowsEvent) error {
-    log.Infof("%s %v\n", e.Action, e.Rows)
-    return nil
+	log.Infof("%s %v\n", e.Action, e.Rows)
+	return nil
 }
 
 func (h *MyEventHandler) String() string {
-    return "MyEventHandler"
+	return "MyEventHandler"
 }
 
 // Register a handler to handle RowsEvent
@@ -146,7 +146,7 @@ Client package supports a simple MySQL connection driver which you can use it to
 
 ```go
 import (
-    "github.com/siddontang/go-mysql/client"
+	"github.com/siddontang/go-mysql/client"
 )
 
 // Connect MySQL at 127.0.0.1:3306, with user root, an empty password and database test
@@ -155,7 +155,7 @@ conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test")
 // Or to use SSL/TLS connection if MySQL server supports TLS
 //conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.UseSSL(true)})
 
-// or to set your own client-side certificates for identity verification for security
+// Or to set your own client-side certificates for identity verification for security
 //tlsConfig := NewClientTLSConfig(caPem, certPem, keyPem, false, "your-server-name")
 //conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.SetTLSConfig(tlsConfig)})
 
@@ -166,13 +166,29 @@ r, _ := conn.Execute(`insert into table (id, name) values (1, "abc")`)
 
 // Get last insert id
 println(r.InsertId)
+// Or affected rows count
+println(r.AffectedRows)
 
 // Select
-r, _ := conn.Execute(`select id, name from table where id = 1`)
+r, err := conn.Execute(`select id, name from table where id = 1`)
+
+// Close result for reuse memory (it's not necessary but very useful)
+defer r.Close()
 
 // Handle resultset
 v, _ := r.GetInt(0, 0)
-v, _ = r.GetIntByName(0, "id") 
+v, _ = r.GetIntByName(0, "id")
+
+// Direct access to fields
+for _, row := range r.Values {
+	for _, val := range row {
+		_ = val.Value() // interface{}
+		// or
+		if val.Type == mysql.FieldValueTypeFloat {
+			_ = val.AsFloat64() // float64
+		}
+	}   
+}
 ```
 
 Tested MySQL versions for the client include:
@@ -191,8 +207,8 @@ so that most MySQL clients should be able to connect to the Server without modif
 
 ```go
 import (
-    "github.com/siddontang/go-mysql/server"
-    "net"
+	"github.com/siddontang/go-mysql/server"
+	"net"
 )
 
 l, _ := net.Listen("tcp", "127.0.0.1:4000")
@@ -204,7 +220,7 @@ c, _ := l.Accept()
 conn, _ := server.NewConn(c, "root", "", server.EmptyHandler{})
 
 for {
-    conn.HandleCommand()
+	conn.HandleCommand()
 }
 ``` 
 
@@ -243,16 +259,16 @@ Driver is the package that you can use go-mysql with go database/sql like other 
 package main
 
 import (
-    "database/sql"
+	"database/sql"
 
-    _ "github.com/siddontang/go-mysql/driver"
+	_ "github.com/siddontang/go-mysql/driver"
 )
 
 func main() {
-    // dsn format: "user:password@addr?dbname"
-    dsn := "root@127.0.0.1:3306?test"
-    db, _ := sql.Open(dsn)
-    db.Close()
+	// dsn format: "user:password@addr?dbname"
+	dsn := "root@127.0.0.1:3306?test"
+	db, _ := sql.Open(dsn)
+	db.Close()
 }
 ```
 
