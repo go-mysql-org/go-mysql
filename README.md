@@ -107,20 +107,18 @@ You must use ROW format for binlog, full binlog row image is preferred, because 
 A simple example:
 
 ```go
-cfg := NewDefaultConfig()
-cfg.Addr = "127.0.0.1:3306"
-cfg.User = "root"
-// We only care table canal_test in test db
-cfg.Dump.TableDB = "test"
-cfg.Dump.Tables = []string{"canal_test"}
+package main
 
-c, err := NewCanal(cfg)
+import (
+	"github.com/siddontang/go-log/log"
+	"github.com/siddontang/go-mysql/canal"
+)
 
 type MyEventHandler struct {
-	DummyEventHandler
+	canal.DummyEventHandler
 }
 
-func (h *MyEventHandler) OnRow(e *RowsEvent) error {
+func (h *MyEventHandler) OnRow(e *canal.RowsEvent) error {
 	log.Infof("%s %v\n", e.Action, e.Rows)
 	return nil
 }
@@ -129,11 +127,25 @@ func (h *MyEventHandler) String() string {
 	return "MyEventHandler"
 }
 
-// Register a handler to handle RowsEvent
-c.SetEventHandler(&MyEventHandler{})
+func main() {
+	cfg := canal.NewDefaultConfig()
+	cfg.Addr = "127.0.0.1:3306"
+	cfg.User = "root"
+	// We only care table canal_test in test db
+	cfg.Dump.TableDB = "test"
+	cfg.Dump.Tables = []string{"canal_test"}
 
-// Start canal
-c.Run()
+	c, err := canal.NewCanal(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Register a handler to handle RowsEvent
+	c.SetEventHandler(&MyEventHandler{})
+
+	// Start canal
+	c.Run()
+}
 ```
 
 You can see [go-mysql-elasticsearch](https://github.com/siddontang/go-mysql-elasticsearch) for how to sync MySQL data into Elasticsearch. 
