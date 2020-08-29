@@ -77,9 +77,12 @@ type Config struct {
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool `toml:"semi_sync_enabled"`
 
-	// Set to change the maximum number of attempts to re-establish a broken
-	// connection
+	// maximum number of attempts to re-establish a broken connection, zero or negative number means infinite retry.
+	// this configuration will not work if DisableRetrySync is true
 	MaxReconnectAttempts int `toml:"max_reconnect_attempts"`
+
+	// whether disable re-sync for broken connection
+	DisableRetrySync bool `toml:"disable_retry_sync"`
 
 	// Set TLS config
 	TLSConfig *tls.Config

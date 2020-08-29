@@ -846,7 +846,8 @@ type RowsEvent struct {
 	ColumnBitmap2 []byte
 
 	//rows: invalid: int64, float64, bool, []byte, string
-	Rows [][]interface{}
+	Rows           [][]interface{}
+	SkippedColumns [][]int
 
 	parseTime               bool
 	timestampStringLocation *time.Location
@@ -907,6 +908,7 @@ func (e *RowsEvent) Decode(data []byte) error {
 	if e.needBitmap2 {
 		rowsLen += e.ColumnCount
 	}
+	e.SkippedColumns = make([][]int, 0, rowsLen)
 	e.Rows = make([][]interface{}, 0, rowsLen)
 
 	for pos < len(data) {
@@ -932,6 +934,7 @@ func isBitSet(bitmap []byte, i int) bool {
 
 func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte) (int, error) {
 	row := make([]interface{}, e.ColumnCount)
+	skips := make([]int, 0)
 
 	pos := 0
 
@@ -953,6 +956,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 	var err error
 	for i := 0; i < int(e.ColumnCount); i++ {
 		if !isBitSet(bitmap, i) {
+			skips = append(skips, i)
 			continue
 		}
 
@@ -973,6 +977,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 	}
 
 	e.Rows = append(e.Rows, row)
+	e.SkippedColumns = append(e.SkippedColumns, skips)
 	return pos, nil
 }
 
