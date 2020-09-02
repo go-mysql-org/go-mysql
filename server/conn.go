@@ -4,10 +4,15 @@ import (
 	"net"
 	"sync/atomic"
 
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/packet"
 	"github.com/siddontang/go/sync2"
+	. "github.com/space307/go-mysql/mysql"
+	"github.com/space307/go-mysql/packet"
 )
+
+//Authentificator custom auth
+type Authentificator interface {
+	UserPass(string) (string, error)
+}
 
 /*
    Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
@@ -22,7 +27,7 @@ type Conn struct {
 	status         uint16
 	salt           []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
 
-	credentialProvider  CredentialProvider
+	credentialProvider  Authentificator
 	user                string
 	password            string
 	cachingSha2FullAuth bool
@@ -38,9 +43,7 @@ type Conn struct {
 var baseConnID uint32 = 10000
 
 // NewConn: create connection with default server settings
-func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
-	p := NewInMemoryProvider()
-	p.AddUser(user, password)
+func NewConn(conn net.Conn, auth Authentificator, h Handler) (*Conn, error) {
 	salt, _ := RandomBuf(20)
 
 	var packetConn *packet.Conn
@@ -53,7 +56,7 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	c := &Conn{
 		Conn:               packetConn,
 		serverConf:         defaultServer,
-		credentialProvider: p,
+		credentialProvider: auth,
 		h:                  h,
 		connectionID:       atomic.AddUint32(&baseConnID, 1),
 		stmts:              make(map[uint32]*Stmt),
@@ -70,7 +73,7 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 }
 
 // NewCustomizedConn: create connection with customized server settings
-func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
+func NewCustomizedConn(conn net.Conn, serverConf *Server, auth Authentificator, h Handler) (*Conn, error) {
 	var packetConn *packet.Conn
 	if serverConf.tlsConfig != nil {
 		packetConn = packet.NewTLSConn(conn)
@@ -82,7 +85,7 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, 
 	c := &Conn{
 		Conn:               packetConn,
 		serverConf:         serverConf,
-		credentialProvider: p,
+		credentialProvider: auth,
 		h:                  h,
 		connectionID:       atomic.AddUint32(&baseConnID, 1),
 		stmts:              make(map[uint32]*Stmt),

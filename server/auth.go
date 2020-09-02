@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/space307/go-mysql/mysql"
 )
 
 var ErrAccessDenied = errors.New("access denied")
@@ -51,12 +51,9 @@ func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) err
 }
 
 func (c *Conn) acquirePassword() error {
-	password, found, err := c.credentialProvider.GetCredential(c.user)
+	password, err := c.credentialProvider.UserPass(c.user)
 	if err != nil {
 		return err
-	}
-	if !found {
-		return NewDefaultError(ER_NO_SUCH_USER, c.user, c.RemoteAddr().String())
 	}
 	c.password = password
 	return nil
@@ -142,7 +139,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 		return ErrAccessDenied
 	}
 	// the caching of 'caching_sha2_password' in MySQL, see: https://dev.mysql.com/worklog/task/?id=9591
-	if _, ok := c.credentialProvider.(*InMemoryProvider); ok {
+	if _, ok := c.credentialProvider.(Authentificator); ok {
 		// since we have already kept the password in memory and calculate the scramble is not that high of cost, we eliminate
 		// the caching part. So our server will never ask the client to do a full authentication via RSA key exchange and it appears
 		// like the auth will always hit the cache.

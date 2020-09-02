@@ -1,25 +1,29 @@
 package main
 
 import (
+	"crypto/tls"
+	"errors"
 	"net"
+	"time"
 
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/server"
-	"github.com/siddontang/go-mysql/test_util/test_keys"
-
-	"crypto/tls"
-	"time"
+	"github.com/space307/go-mysql/mysql"
+	"github.com/space307/go-mysql/server"
+	"github.com/space307/go-mysql/test_util/test_keys"
 )
 
 type RemoteThrottleProvider struct {
-	*server.InMemoryProvider
 	delay int // in milliseconds
 }
 
-func (m *RemoteThrottleProvider) GetCredential(username string) (password string, found bool, err error) {
+func (m *RemoteThrottleProvider) UserPass(user string) (string, error) {
 	time.Sleep(time.Millisecond * time.Duration(m.delay))
-	return m.InMemoryProvider.GetCredential(username)
+	switch user {
+	case "root":
+		return "123", nil
+	default:
+		return "", errors.New("user is not found")
+	}
 }
 
 func main() {
@@ -27,8 +31,7 @@ func main() {
 	// user either the in-memory credential provider or the remote credential provider (you can implement your own)
 	//inMemProvider := server.NewInMemoryProvider()
 	//inMemProvider.AddUser("root", "123")
-	remoteProvider := &RemoteThrottleProvider{server.NewInMemoryProvider(), 10 + 50}
-	remoteProvider.AddUser("root", "123")
+	remoteProvider := &RemoteThrottleProvider{10 + 50}
 	var tlsConf = server.NewServerTLSConfig(test_keys.CaPem, test_keys.CertPem, test_keys.KeyPem, tls.VerifyClientCertIfGiven)
 	for {
 		c, _ := l.Accept()

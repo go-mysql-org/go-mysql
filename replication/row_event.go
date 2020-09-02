@@ -12,8 +12,8 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
-	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
+	. "github.com/space307/go-mysql/mysql"
 )
 
 var errMissingTableMapEvent = errors.New("invalid table id, no corresponding table map event")

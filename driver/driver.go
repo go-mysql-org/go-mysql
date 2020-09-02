@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/client"
-	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
+	"github.com/space307/go-mysql/client"
+	"github.com/space307/go-mysql/mysql"
 )
 
 type driver struct {

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
+	. "github.com/space307/go-mysql/mysql"
 )
 
 type Handler interface {

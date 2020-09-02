@@ -14,8 +14,8 @@ import (
 	"encoding/pem"
 
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/utils"
+	. "github.com/space307/go-mysql/mysql"
+	"github.com/space307/go-mysql/utils"
 )
 
 type BufPool struct {

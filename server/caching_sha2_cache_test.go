@@ -13,8 +13,8 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/test_util/test_keys"
+	"github.com/space307/go-mysql/mysql"
+	"github.com/space307/go-mysql/test_util/test_keys"
 )
 
 var delay = 50
@@ -25,8 +25,7 @@ var delay = 50
 func TestCachingSha2Cache(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
-	remoteProvider.AddUser(*testUser, *testPassword)
+	remoteProvider := &RemoteThrottleProvider{delay + 50}
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// no TLS
@@ -42,8 +41,7 @@ func TestCachingSha2Cache(t *testing.T) {
 func TestCachingSha2CacheTLS(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
-	remoteProvider.AddUser(*testUser, *testPassword)
+	remoteProvider := &RemoteThrottleProvider{delay + 50}
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// TLS
@@ -57,18 +55,22 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 }
 
 type RemoteThrottleProvider struct {
-	*InMemoryProvider
 	delay int // in milliseconds
 }
 
-func (m *RemoteThrottleProvider) GetCredential(username string) (password string, found bool, err error) {
+func (m *RemoteThrottleProvider) UserPass(user string) (string, error) {
 	time.Sleep(time.Millisecond * time.Duration(m.delay))
-	return m.InMemoryProvider.GetCredential(username)
+	switch user {
+	case *testUser:
+		return *testPassword, nil
+	default:
+		return "", errors.New("user is not found")
+	}
 }
 
 type cacheTestSuite struct {
 	server       *Server
-	credProvider CredentialProvider
+	credProvider Authentificator
 	tlsPara      string
 
 	db *sql.DB

@@ -6,8 +6,8 @@ import (
 	"math"
 
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
+	. "github.com/space307/go-mysql/mysql"
 )
 
 const (

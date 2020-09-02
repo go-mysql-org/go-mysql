@@ -2,7 +2,7 @@ package failover
 
 import (
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/space307/go-mysql/mysql"
 )
 
 // Failover will do below things after the master down

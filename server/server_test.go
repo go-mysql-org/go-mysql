@@ -14,8 +14,8 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/test_util/test_keys"
+	"github.com/space307/go-mysql/mysql"
+	"github.com/space307/go-mysql/test_util/test_keys"
 )
 
 var testAddr = flag.String("addr", "127.0.0.1:4000", "MySQL proxy server address")
@@ -55,19 +55,32 @@ func prepareServerConf() []*Server {
 	return servers
 }
 
+type mockUserProvider struct {
+	delay int // in milliseconds
+}
+
+func (m *mockUserProvider) UserPass(user string) (string, error) {
+	time.Sleep(time.Millisecond * time.Duration(m.delay))
+	switch user {
+	case *testUser:
+		return *testPassword, nil
+	default:
+		return "", errors.New("user is not found")
+	}
+}
+
 func Test(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
 	// general tests
-	inMemProvider := NewInMemoryProvider()
-	inMemProvider.AddUser(*testUser, *testPassword)
+	mockProvider := &mockUserProvider{3}
 
 	servers := prepareServerConf()
 	//no TLS
 	for _, svr := range servers {
 		Suite(&serverTestSuite{
 			server:       svr,
-			credProvider: inMemProvider,
+			credProvider: mockProvider,
 			tlsPara:      "false",
 		})
 	}
@@ -77,7 +90,7 @@ func Test(t *testing.T) {
 		if svr.tlsConfig != nil {
 			Suite(&serverTestSuite{
 				server:       svr,
-				credProvider: inMemProvider,
+				credProvider: mockProvider,
 				tlsPara:      "skip-verify",
 			})
 		}
@@ -88,7 +101,7 @@ func Test(t *testing.T) {
 
 type serverTestSuite struct {
 	server       *Server
-	credProvider CredentialProvider
+	credProvider Authentificator
 
 	tlsPara string
 

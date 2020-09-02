@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/space307/go-mysql/mysql"
 )
 
 var ErrTableNotExist = errors.New("table is not exist")
@@ -33,8 +33,8 @@ const (
 	TYPE_JSON                 // json
 	TYPE_DECIMAL              // decimal
 	TYPE_MEDIUM_INT
-	TYPE_BINARY               // binary, varbinary
-	TYPE_POINT                // coordinates
+	TYPE_BINARY // binary, varbinary
+	TYPE_POINT  // coordinates
 )
 
 type TableColumn struct {
@@ -162,7 +162,7 @@ func getSizeFromColumnType(columnType string) uint {
 		return 0
 	}
 
-	i, err := strconv.Atoi(columnType[startIndex+1:endIndex])
+	i, err := strconv.Atoi(columnType[startIndex+1 : endIndex])
 	if err != nil || i < 0 {
 		return 0
 	}
