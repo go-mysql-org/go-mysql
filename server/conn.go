@@ -4,14 +4,10 @@ import (
 	"net"
 	"sync/atomic"
 
+	. "github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/packet"
 	"github.com/siddontang/go/sync2"
-	. "github.com/space307/go-mysql/mysql"
-	"github.com/space307/go-mysql/packet"
 )
-
-type Authentificator interface {
-	UserPass(string) (string, error)
-}
 
 /*
    Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
@@ -39,11 +35,12 @@ type Conn struct {
 
 var baseConnID uint32 = 10000
 
-func NewConn(conn net.Conn, auth Authentificator, h Handler) (*Conn, error) {
+func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
 	c := new(Conn)
 
 	c.h = h
-	
+
+	c.user = user
 	c.Conn = packet.NewConn(conn)
 
 	c.connectionID = atomic.AddUint32(&baseConnID, 1)
@@ -54,7 +51,7 @@ func NewConn(conn net.Conn, auth Authentificator, h Handler) (*Conn, error) {
 
 	c.closed.Set(false)
 
-	if err := c.handshake(auth); err != nil {
+	if err := c.handshake(password); err != nil {
 		c.Close()
 		return nil, err
 	}
@@ -62,12 +59,12 @@ func NewConn(conn net.Conn, auth Authentificator, h Handler) (*Conn, error) {
 	return c, nil
 }
 
-func (c *Conn) handshake(auth Authentificator) error {
+func (c *Conn) handshake(password string) error {
 	if err := c.writeInitialHandshake(); err != nil {
 		return err
 	}
 
-	if err := c.readHandshakeResponse(auth); err != nil {
+	if err := c.readHandshakeResponse(password); err != nil {
 		c.writeError(err)
 
 		return err

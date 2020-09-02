@@ -7,7 +7,7 @@ import (
 	"net"
 
 	"github.com/juju/errors"
-	. "github.com/space307/go-mysql/mysql"
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 /*

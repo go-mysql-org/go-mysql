@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	. "github.com/space307/go-mysql/mysql"
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 func (c *Conn) writeInitialHandshake() error {
@@ -58,7 +58,7 @@ func (c *Conn) writeInitialHandshake() error {
 	return c.WritePacket(data)
 }
 
-func (c *Conn) readHandshakeResponse(authenticator Authentificator) error {
+func (c *Conn) readHandshakeResponse(password string) error {
 	data, err := c.ReadPacket()
 
 	if err != nil {
@@ -85,9 +85,8 @@ func (c *Conn) readHandshakeResponse(authenticator Authentificator) error {
 	user := string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
 	pos += len(user) + 1
 
-	password, err := authenticator.UserPass(user)
-	if err != nil {
-		return err
+	if c.user != user {
+		return NewDefaultError(ER_NO_SUCH_USER, user, c.RemoteAddr().String())
 	}
 
 	//auth length and auth
@@ -100,8 +99,6 @@ func (c *Conn) readHandshakeResponse(authenticator Authentificator) error {
 	if !bytes.Equal(auth, checkAuth) {
 		return NewDefaultError(ER_ACCESS_DENIED_ERROR, c.RemoteAddr().String(), c.user, "Yes")
 	}
-
-	c.user = user
 
 	pos += authLen
 
