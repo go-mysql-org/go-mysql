@@ -41,6 +41,8 @@ func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, head
 	return e
 }
 
+const maxMediumintUnsigned int32 = 16777215
+
 func (r *RowsEvent) handleUnsigned() {
 	// Handle Unsigned Columns here, for binlog replication, we can't know the integer is unsigned or not,
 	// so we use int type but this may cause overflow outside sometimes, so we must convert to the really .
@@ -50,18 +52,24 @@ func (r *RowsEvent) handleUnsigned() {
 	}
 
 	for i := 0; i < len(r.Rows); i++ {
-		for _, index := range r.Table.UnsignedColumns {
-			switch t := r.Rows[i][index].(type) {
+		for _, columnIdx := range r.Table.UnsignedColumns {
+			switch value := r.Rows[i][columnIdx].(type) {
 			case int8:
-				r.Rows[i][index] = uint8(t)
+				r.Rows[i][columnIdx] = uint8(value)
 			case int16:
-				r.Rows[i][index] = uint16(t)
+				r.Rows[i][columnIdx] = uint16(value)
 			case int32:
-				r.Rows[i][index] = uint32(t)
+				// problem with mediumint is that it's a 3-byte type. There is no compatible golang type to match that.
+				// So to convert from negative to positive we'd need to convert the value manually
+				if value < 0 && r.Table.Columns[columnIdx].Type == schema.TYPE_MEDIUM_INT {
+					r.Rows[i][columnIdx] = uint32(maxMediumintUnsigned + value + 1)
+				} else {
+					r.Rows[i][columnIdx] = uint32(value)
+				}
 			case int64:
-				r.Rows[i][index] = uint64(t)
+				r.Rows[i][columnIdx] = uint64(value)
 			case int:
-				r.Rows[i][index] = uint(t)
+				r.Rows[i][columnIdx] = uint(value)
 			default:
 				// nothing to do
 			}

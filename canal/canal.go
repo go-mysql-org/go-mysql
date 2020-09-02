@@ -9,9 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/dump"
@@ -27,6 +29,7 @@ type Canal struct {
 
 	cfg *Config
 
+	parser     *parser.Parser
 	master     *masterInfo
 	dumper     *dump.Dumper
 	dumped     bool
@@ -46,6 +49,8 @@ type Canal struct {
 	includeTableRegex []*regexp.Regexp
 	excludeTableRegex []*regexp.Regexp
 
+	delay *uint32
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -62,12 +67,14 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	c.dumpDoneCh = make(chan struct{})
 	c.eventHandler = &DummyEventHandler{}
-
+	c.parser = parser.New()
 	c.tables = make(map[string]*schema.Table)
 	if c.cfg.DiscardNoMetaRowEvent {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
 	c.master = &masterInfo{}
+
+	c.delay = new(uint32)
 
 	var err error
 
@@ -147,6 +154,8 @@ func (c *Canal) prepareDumper() error {
 	c.dumper.SetWhere(c.cfg.Dump.Where)
 	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
 	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
+	c.dumper.SetProtocol(c.cfg.Dump.Protocol)
+	c.dumper.SetExtraOptions(c.cfg.Dump.ExtraOptions)
 	// Use hex blob for mysqldump
 	c.dumper.SetHexBlob(true)
 
@@ -163,6 +172,10 @@ func (c *Canal) prepareDumper() error {
 	}
 
 	return nil
+}
+
+func (c *Canal) GetDelay() uint32 {
+	return atomic.LoadUint32(c.delay)
 }
 
 // Run will first try to dump all data from MySQL master `mysqldump`,
@@ -215,8 +228,10 @@ func (c *Canal) run() error {
 	}
 
 	if err := c.runSyncBinlog(); err != nil {
-		log.Errorf("canal start sync binlog err: %v", err)
-		return errors.Trace(err)
+		if errors.Cause(err) != context.Canceled {
+			log.Errorf("canal start sync binlog err: %v", err)
+			return errors.Trace(err)
+		}
 	}
 
 	return nil
@@ -224,18 +239,17 @@ func (c *Canal) run() error {
 
 func (c *Canal) Close() {
 	log.Infof("closing canal")
-
 	c.m.Lock()
 	defer c.m.Unlock()
 
 	c.cancel()
+	c.syncer.Close()
 	c.connLock.Lock()
 	c.conn.Close()
 	c.conn = nil
 	c.connLock.Unlock()
-	c.syncer.Close()
 
-	c.eventHandler.OnPosSynced(c.master.Position(), true)
+	c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
@@ -367,7 +381,7 @@ func (c *Canal) ClearTableCache(db []byte, table []byte) {
 	c.tableLock.Unlock()
 }
 
-// Check MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
+// CheckBinlogRowImage checks MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
 func (c *Canal) CheckBinlogRowImage(image string) error {
 	// need to check MySQL binlog row image? full, minimal or noblob?
 	// now only log
@@ -399,16 +413,20 @@ func (c *Canal) checkBinlogRowFormat() error {
 
 func (c *Canal) prepareSyncer() error {
 	cfg := replication.BinlogSyncerConfig{
-		ServerID:        c.cfg.ServerID,
-		Flavor:          c.cfg.Flavor,
-		User:            c.cfg.User,
-		Password:        c.cfg.Password,
-		Charset:         c.cfg.Charset,
-		HeartbeatPeriod: c.cfg.HeartbeatPeriod,
-		ReadTimeout:     c.cfg.ReadTimeout,
-		UseDecimal:      c.cfg.UseDecimal,
-		ParseTime:       c.cfg.ParseTime,
-		SemiSyncEnabled: c.cfg.SemiSyncEnabled,
+		ServerID:                c.cfg.ServerID,
+		Flavor:                  c.cfg.Flavor,
+		User:                    c.cfg.User,
+		Password:                c.cfg.Password,
+		Charset:                 c.cfg.Charset,
+		HeartbeatPeriod:         c.cfg.HeartbeatPeriod,
+		ReadTimeout:             c.cfg.ReadTimeout,
+		UseDecimal:              c.cfg.UseDecimal,
+		ParseTime:               c.cfg.ParseTime,
+		SemiSyncEnabled:         c.cfg.SemiSyncEnabled,
+		MaxReconnectAttempts:    c.cfg.MaxReconnectAttempts,
+		DisableRetrySync:        c.cfg.DisableRetrySync,
+		TimestampStringLocation: c.cfg.TimestampStringLocation,
+		TLSConfig:               c.cfg.TLSConfig,
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {
@@ -437,11 +455,16 @@ func (c *Canal) prepareSyncer() error {
 func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
-
+	argF := make([]func(*client.Conn), 0)
+	if c.cfg.TLSConfig != nil {
+		argF = append(argF, func(conn *client.Conn) {
+			conn.SetTLSConfig(c.cfg.TLSConfig)
+		})
+	}
 	retryNum := 3
 	for i := 0; i < retryNum; i++ {
 		if c.conn == nil {
-			c.conn, err = client.Connect(c.cfg.Addr, c.cfg.User, c.cfg.Password, "")
+			c.conn, err = client.Connect(c.cfg.Addr, c.cfg.User, c.cfg.Password, "", argF...)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}

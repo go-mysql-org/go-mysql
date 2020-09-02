@@ -1,12 +1,13 @@
 package canal
 
 import (
+	"crypto/tls"
 	"io/ioutil"
 	"math/rand"
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -36,6 +37,12 @@ type DumpConfig struct {
 
 	// Set to change the default max_allowed_packet size
 	MaxAllowedPacketMB int `toml:"max_allowed_packet_mb"`
+
+	// Set to change the default protocol to connect with
+	Protocol string `toml:"protocol"`
+
+	// Set extra options
+	ExtraOptions []string `toml:"extra_options"`
 }
 
 type Config struct {
@@ -65,8 +72,20 @@ type Config struct {
 	UseDecimal bool `toml:"use_decimal"`
 	ParseTime  bool `toml:"parse_time"`
 
+	TimestampStringLocation *time.Location
+
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool `toml:"semi_sync_enabled"`
+
+	// maximum number of attempts to re-establish a broken connection, zero or negative number means infinite retry.
+	// this configuration will not work if DisableRetrySync is true
+	MaxReconnectAttempts int `toml:"max_reconnect_attempts"`
+
+	// whether disable re-sync for broken connection
+	DisableRetrySync bool `toml:"disable_retry_sync"`
+
+	// Set TLS config
+	TLSConfig *tls.Config
 }
 
 func NewConfigWithFile(name string) (*Config, error) {

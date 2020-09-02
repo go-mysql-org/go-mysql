@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
 	. "github.com/siddontang/go-mysql/mysql"
 )
@@ -20,6 +20,7 @@ type Dumper struct {
 	Addr     string
 	User     string
 	Password string
+	Protocol string
 
 	// Will override Databases
 	Tables  []string
@@ -31,6 +32,8 @@ type Dumper struct {
 	Charset string
 
 	IgnoreTables map[string][]string
+
+	ExtraOptions []string
 
 	ErrOut io.Writer
 
@@ -58,6 +61,7 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 	d.Databases = make([]string, 0, 16)
 	d.Charset = DEFAULT_CHARSET
 	d.IgnoreTables = make(map[string][]string)
+	d.ExtraOptions = make([]string, 0, 5)
 	d.masterDataSkipped = false
 
 	d.ErrOut = os.Stderr
@@ -69,15 +73,23 @@ func (d *Dumper) SetCharset(charset string) {
 	d.Charset = charset
 }
 
+func (d *Dumper) SetProtocol(protocol string) {
+	d.Protocol = protocol
+}
+
 func (d *Dumper) SetWhere(where string) {
 	d.Where = where
+}
+
+func (d *Dumper) SetExtraOptions(options []string) {
+	d.ExtraOptions = options
 }
 
 func (d *Dumper) SetErrOut(o io.Writer) {
 	d.ErrOut = o
 }
 
-// In some cloud MySQL, we have no privilege to use `--master-data`.
+// SkipMasterData: In some cloud MySQL, we have no privilege to use `--master-data`.
 func (d *Dumper) SkipMasterData(v bool) {
 	d.masterDataSkipped = v
 }
@@ -143,6 +155,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 		args = append(args, fmt.Sprintf("--max-allowed-packet=%dM", d.maxAllowedPacket))
 	}
 
+	if d.Protocol != "" {
+		args = append(args, fmt.Sprintf("--protocol=%s", d.Protocol))
+	}
+
 	args = append(args, "--single-transaction")
 	args = append(args, "--skip-lock-tables")
 
@@ -156,7 +172,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	// Multi row is easy for us to parse the data
 	args = append(args, "--skip-extended-insert")
-
+	args = append(args, "--skip-tz-utc")
 	if d.hexBlob {
 		// Use hex for the binary type
 		args = append(args, "--hex-blob")
@@ -174,6 +190,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	if len(d.Where) != 0 {
 		args = append(args, fmt.Sprintf("--where=%s", d.Where))
+	}
+
+	if len(d.ExtraOptions) != 0 {
+		args = append(args, d.ExtraOptions...)
 	}
 
 	if len(d.Tables) == 0 && len(d.Databases) == 0 {
@@ -200,7 +220,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 	return cmd.Run()
 }
 
-// Dump MySQL and parse immediately
+// DumpAndParse: Dump MySQL and parse immediately
 func (d *Dumper) DumpAndParse(h ParseHandler) error {
 	r, w := io.Pipe()
 

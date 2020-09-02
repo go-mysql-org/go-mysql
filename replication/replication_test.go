@@ -369,6 +369,12 @@ func (t *testSyncerSuite) TestMariadbGTIDSync(c *C) {
 	t.testSync(c, s)
 }
 
+func (t *testSyncerSuite) TestMariadbAnnotateRows(c *C) {
+	t.setupTest(c, mysql.MariaDBFlavor)
+	t.b.cfg.DumpCommandFlag = BINLOG_SEND_ANNOTATE_ROWS_EVENT
+	t.testPositionSync(c)
+}
+
 func (t *testSyncerSuite) TestMysqlSemiPositionSync(c *C) {
 	t.setupTest(c, mysql.MySQLFlavor)
 

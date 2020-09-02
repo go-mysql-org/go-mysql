@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/juju/errors"
-	"github.com/satori/go.uuid"
+	"github.com/pingcap/errors"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go/hack"
 )
 
@@ -108,7 +108,7 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 	return n
 }
 
-// Return true if sub in s
+// Contain returns true if sub in s
 func (s IntervalSlice) Contain(sub IntervalSlice) bool {
 	j := 0
 	for i := 0; i < len(sub); i++ {
@@ -398,6 +398,10 @@ func (s *MysqlGTIDSet) Equal(o GTIDSet) bool {
 		return false
 	}
 
+	if len(sub.Sets) != len(s.Sets) {
+		return false
+	}
+
 	for key, set := range sub.Sets {
 		o, ok := s.Sets[key]
 		if !ok {
@@ -414,11 +418,25 @@ func (s *MysqlGTIDSet) Equal(o GTIDSet) bool {
 }
 
 func (s *MysqlGTIDSet) String() string {
+	// there is only one element in gtid set
+	if len(s.Sets) == 1 {
+		for _, set := range s.Sets {
+			return set.String()
+		}
+	}
+
+	// sort multi set
 	var buf bytes.Buffer
-	sep := ""
+	sets := make([]string, 0, len(s.Sets))
 	for _, set := range s.Sets {
+		sets = append(sets, set.String())
+	}
+	sort.Strings(sets)
+	
+	sep := ""
+	for _, set := range sets {
 		buf.WriteString(sep)
-		buf.WriteString(set.String())
+		buf.WriteString(set)
 		sep = ","
 	}
 
@@ -430,7 +448,7 @@ func (s *MysqlGTIDSet) Encode() []byte {
 
 	binary.Write(&buf, binary.LittleEndian, uint64(len(s.Sets)))
 
-	for i, _ := range s.Sets {
+	for i := range s.Sets {
 		s.Sets[i].encode(&buf)
 	}
 

@@ -11,8 +11,8 @@ import (
 type Handler interface {
 	//handle COM_INIT_DB command, you can check whether the dbName is valid, or other.
 	UseDB(dbName string) error
-	//handle COM_QUERY comamnd, like SELECT, INSERT, UPDATE, etc...
-	//If Result has a Resultset (SELECT, SHOW, etc...), we will send this as the repsonse, otherwise, we will send Result
+	//handle COM_QUERY command, like SELECT, INSERT, UPDATE, etc...
+	//If Result has a Resultset (SELECT, SHOW, etc...), we will send this as the response, otherwise, we will send Result
 	HandleQuery(query string) (*Result, error)
 	//handle COM_FILED_LIST command
 	HandleFieldList(table string, fieldWildcard string) ([]*Field, error)

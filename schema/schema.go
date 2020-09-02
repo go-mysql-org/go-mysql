@@ -7,9 +7,10 @@ package schema
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -19,11 +20,11 @@ var HAHealthCheckSchema = "mysql.ha_health_check"
 
 // Different column type
 const (
-	TYPE_NUMBER    = iota + 1 // tinyint, smallint, mediumint, int, bigint, year
+	TYPE_NUMBER    = iota + 1 // tinyint, smallint, int, bigint, year
 	TYPE_FLOAT                // float, double
 	TYPE_ENUM                 // enum
 	TYPE_SET                  // set
-	TYPE_STRING               // other
+	TYPE_STRING               // char, varchar, etc.
 	TYPE_DATETIME             // datetime
 	TYPE_TIMESTAMP            // timestamp
 	TYPE_DATE                 // date
@@ -31,6 +32,9 @@ const (
 	TYPE_BIT                  // bit
 	TYPE_JSON                 // json
 	TYPE_DECIMAL              // decimal
+	TYPE_MEDIUM_INT
+	TYPE_BINARY               // binary, varbinary
+	TYPE_POINT                // coordinates
 )
 
 type TableColumn struct {
@@ -40,8 +44,11 @@ type TableColumn struct {
 	RawType    string
 	IsAuto     bool
 	IsUnsigned bool
+	IsVirtual  bool
 	EnumValues []string
 	SetValues  []string
+	FixedSize  uint
+	MaxSize    uint
 }
 
 type Index struct {
@@ -93,6 +100,14 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 				")"),
 			"'", "", -1),
 			",")
+	} else if strings.HasPrefix(columnType, "binary") {
+		ta.Columns[index].Type = TYPE_BINARY
+		size := getSizeFromColumnType(columnType)
+		ta.Columns[index].MaxSize = size
+		ta.Columns[index].FixedSize = size
+	} else if strings.HasPrefix(columnType, "varbinary") {
+		ta.Columns[index].Type = TYPE_BINARY
+		ta.Columns[index].MaxSize = getSizeFromColumnType(columnType)
 	} else if strings.HasPrefix(columnType, "datetime") {
 		ta.Columns[index].Type = TYPE_DATETIME
 	} else if strings.HasPrefix(columnType, "timestamp") {
@@ -105,10 +120,20 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].Type = TYPE_BIT
 	} else if strings.HasPrefix(columnType, "json") {
 		ta.Columns[index].Type = TYPE_JSON
+	} else if strings.Contains(columnType, "point") {
+		ta.Columns[index].Type = TYPE_POINT
+	} else if strings.Contains(columnType, "mediumint") {
+		ta.Columns[index].Type = TYPE_MEDIUM_INT
 	} else if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
 		ta.Columns[index].Type = TYPE_NUMBER
+	} else if strings.HasPrefix(columnType, "char") {
+		ta.Columns[index].Type = TYPE_STRING
+		size := getSizeFromColumnType(columnType)
+		ta.Columns[index].FixedSize = size
+		ta.Columns[index].MaxSize = size
 	} else {
 		ta.Columns[index].Type = TYPE_STRING
+		ta.Columns[index].MaxSize = getSizeFromColumnType(columnType)
 	}
 
 	if strings.Contains(columnType, "unsigned") || strings.Contains(columnType, "zerofill") {
@@ -118,7 +143,30 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 
 	if extra == "auto_increment" {
 		ta.Columns[index].IsAuto = true
+	} else if extra == "VIRTUAL GENERATED" {
+		ta.Columns[index].IsVirtual = true
 	}
+}
+
+func getSizeFromColumnType(columnType string) uint {
+	startIndex := strings.Index(columnType, "(")
+	if startIndex < 0 {
+		return 0
+	}
+
+	// we are searching for the first () and there may not be any closing
+	// brackets before the opening, so no need search at the offset from the
+	// opening ones
+	endIndex := strings.Index(columnType, ")")
+	if startIndex < 0 || endIndex < 0 || startIndex > endIndex {
+		return 0
+	}
+
+	i, err := strconv.Atoi(columnType[startIndex+1:endIndex])
+	if err != nil || i < 0 {
+		return 0
+	}
+	return uint(i)
 }
 
 func (ta *Table) FindColumn(name string) int {
@@ -368,7 +416,7 @@ func (ta *Table) fetchPrimaryKeyColumns() error {
 	return nil
 }
 
-// Get primary keys in one row for a table, a table may use multi fields as the PK
+// GetPKValues gets primary keys in one row for a table, a table may use multi fields as the PK
 func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 	indexes := ta.PKColumns
 	if len(indexes) == 0 {
@@ -387,7 +435,7 @@ func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 	return values, nil
 }
 
-// Get term column's value
+// GetColumnValue gets term column's value
 func (ta *Table) GetColumnValue(column string, row []interface{}) (interface{}, error) {
 	index := ta.FindColumn(column)
 	if index == -1 {
