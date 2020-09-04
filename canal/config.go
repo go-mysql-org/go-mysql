@@ -22,7 +22,7 @@ type DumpConfig struct {
 
 	Databases []string `toml:"dbs"`
 
-	// Ignore table format is db.table
+	// Ignore table format is db,table 
 	IgnoreTables []string `toml:"ignore_tables"`
 
 	// Dump only selected records. Quotes are mandatory
