@@ -227,12 +227,21 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 	return nil, fmt.Errorf("field list error")
 }
 
-func (c *Conn) SetAutoCommit() error {
-	if !c.IsAutoCommit() {
+func (c *Conn) SetAutoCommit(autocommit bool) error {
+	if autocommit == c.IsAutoCommit() {
+		return nil
+	}
+
+	if autocommit {
 		if _, err := c.exec("SET AUTOCOMMIT = 1"); err != nil {
 			return errors.Trace(err)
 		}
+	} else {
+		if _, err := c.exec("SET AUTOCOMMIT = 0"); err != nil {
+			return errors.Trace(err)
+		}
 	}
+
 	return nil
 }
 
