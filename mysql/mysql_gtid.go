@@ -292,7 +292,7 @@ func (s *UUIDSet) Decode(data []byte) error {
 func (s *UUIDSet) Clone() *UUIDSet {
 	clone := new(UUIDSet)
 
-	clone.SID, _ = uuid.FromString(s.SID.String())
+	copy(clone.SID.Bytes(), s.SID.Bytes())
 	clone.Intervals = s.Intervals.Normalize()
 
 	return clone
