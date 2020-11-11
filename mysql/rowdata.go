@@ -75,6 +75,40 @@ func (p RowData) ParseText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
 	return data, nil
 }
 
+func (p RowData) ParsePureText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
+	data := dst[:len(f)]
+
+	var err error
+	var isNull bool
+	var pos int = 0
+	var n int = 0
+
+	for i := range f {
+		data[i].str, isNull, n, err = LengthEncodedString(p[pos:])
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		pos += n
+
+		if isNull {
+			data[i].Type = FieldValueTypeNull
+			data[i].str = nil
+		} else {
+			switch f[i].Type {
+			case MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_INT24,
+				MYSQL_TYPE_LONGLONG, MYSQL_TYPE_LONG, MYSQL_TYPE_YEAR,
+				MYSQL_TYPE_FLOAT, MYSQL_TYPE_DOUBLE:
+				data[i].Type = FieldValueTypeSigned
+			default:
+				data[i].Type = FieldValueTypeString
+			}
+		}
+	}
+
+	return data, nil
+}
+
 // ParseBinary parses the binary format of data
 // see https://dev.mysql.com/doc/internals/en/binary-protocol-value.html
 func (p RowData) ParseBinary(f []*Field, dst []FieldValue) ([]FieldValue, error) {

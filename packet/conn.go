@@ -15,7 +15,6 @@ import (
 
 	"github.com/pingcap/errors"
 	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/utils"
 )
 
 type BufPool struct {
@@ -92,14 +91,26 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 
 func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 	// Here we use `sync.Pool` to avoid allocate/destroy buffers frequently.
-	buf := utils.BytesBufferGet()
-	defer utils.BytesBufferPut(buf)
+	//buf := utils.BytesBufferGet()
+	//defer utils.BytesBufferPut(buf)
+	buf := new(bytes.Buffer)
 
 	if err := c.ReadPacketTo(buf); err != nil {
 		return nil, errors.Trace(err)
 	} else {
 		result := append(dst, buf.Bytes()...)
 		return result, nil
+	}
+}
+
+func (c *Conn) ReadPacketReuseMemNoCopy() (*bytes.Buffer, error) {
+	// Here we use `sync.Pool` to avoid allocate/destroy buffers frequently.
+	//buf := utils.BytesBufferGet()
+	buf := new(bytes.Buffer)
+	if err := c.ReadPacketTo(buf); err != nil {
+		return nil, errors.Trace(err)
+	} else {
+		return buf, nil
 	}
 }
 

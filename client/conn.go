@@ -272,3 +272,11 @@ func (c *Conn) exec(query string) (*Result, error) {
 
 	return c.readResult(false)
 }
+
+func (c *Conn) execRows(query string) (*Rows, error) {
+	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return c.readSqlRows(false)
+}
