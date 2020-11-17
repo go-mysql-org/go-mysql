@@ -17,6 +17,9 @@ type Resultset struct {
 	RawPkg []byte
 
 	RowDatas []RowData
+
+	// In the case of multiple queries, we will have there a chaining list of separated Resultset
+	Next *Resultset
 }
 
 var (
