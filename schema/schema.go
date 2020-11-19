@@ -334,27 +334,28 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 	currentName := ""
 
 	var unusedVal interface{}
-	unused := &unusedVal
 
 	for r.Next() {
 		var indexName, colName string
 		var cardinality interface{}
-
-		err := r.Scan(
-			&unused,
-			&unused,
-			&indexName,
-			&unused,
-			&colName,
-			&unused,
-			&cardinality,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-		)
+		cols, err := r.Columns()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		values := make([]interface{}, len(cols))
+		for i := 0; i < len(cols); i++ {
+			switch i {
+			case 2:
+				values[i] = &indexName
+			case 4:
+				values[i] = &colName
+			case 6:
+				values[i] = &cardinality
+			default:
+				values[i] = &unusedVal
+			}
+		}
+		err = r.Scan(values...)
 		if err != nil {
 			return errors.Trace(err)
 		}
