@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"github.com/pingcap/errors"
 	. "github.com/siddontang/go-mysql/mysql"
@@ -40,7 +41,7 @@ func (c *Conn) Query(command string, args ...interface{}) (*Rows, error) {
 	}
 }
 
-func (c *Rows) Start() error {
+func (c *Rows) Start(ctx context.Context) error {
 
 	//var data []byte
 	result := c.Result
@@ -49,32 +50,38 @@ func (c *Rows) Start() error {
 	}()
 	go c.KeepParsing()
 	for {
-		bf, err := c.ReadPacketReuseMemNoCopy()
-		if err != nil {
-			c.err = err
-			return err
-		}
-		data := bf.Bytes()
-
-		// EOF Packet
-		if c.isEOFPacket(data) {
-			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				//result.Warnings = binary.LittleEndian.Uint16(data[1:])
-				//todo add strict_mode, warning will be treat as error
-				result.Status = binary.LittleEndian.Uint16(data[3:])
-				c.status = result.Status
-			}
+		select {
+		case <-ctx.Done():
 			return nil
+		default:
+			bf, err := c.ReadPacketReuseMemNoCopy()
+			if err != nil {
+				c.err = err
+				return err
+			}
+			data := bf.Bytes()
+
+			// EOF Packet
+			if c.isEOFPacket(data) {
+				if c.capability&CLIENT_PROTOCOL_41 > 0 {
+					//result.Warnings = binary.LittleEndian.Uint16(data[1:])
+					//todo add strict_mode, warning will be treat as error
+					result.Status = binary.LittleEndian.Uint16(data[3:])
+					c.status = result.Status
+				}
+				return nil
+			}
+
+			if data[0] == ERR_HEADER {
+				c.err = c.handleErrorPacket(data)
+				return c.err
+			}
+			c.RawBytesBufferChan <- bf
+			if c.err != nil {
+				return c.err
+			}
 		}
 
-		if data[0] == ERR_HEADER {
-			c.err = c.handleErrorPacket(data)
-			return c.err
-		}
-		c.RawBytesBufferChan <- bf
-		if c.err != nil {
-			return c.err
-		}
 	}
 }
 
