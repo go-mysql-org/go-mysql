@@ -1419,11 +1419,10 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 	intPart := int64(0)
 	frac := int64(0)
 	switch dec {
-	case 1:
-	case 2:
+	case 1, 2:
 		intPart = int64(BFixedLengthInt(data[0:3])) - TIMEF_INT_OFS
 		frac = int64(data[3])
-		if intPart < 0 && frac > 0 {
+		if intPart < 0 && frac != 0 {
 			/*
 			   Negative values are stored with reverse fractional part order,
 			   for binary sort compatibility.
@@ -1445,11 +1444,10 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 			frac -= 0x100 /* -(0x100 - frac) */
 		}
 		tmp = intPart<<24 + frac*10000
-	case 3:
-	case 4:
+	case 3, 4:
 		intPart = int64(BFixedLengthInt(data[0:3])) - TIMEF_INT_OFS
 		frac = int64(binary.BigEndian.Uint16(data[3:5]))
-		if intPart < 0 && frac > 0 {
+		if intPart < 0 && frac != 0 {
 			/*
 			   Fix reverse fractional part order: "0x10000 - frac".
 			   See comments for FSP=1 and FSP=2 above.
@@ -1459,9 +1457,9 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 		}
 		tmp = intPart<<24 + frac*100
 
-	case 5:
-	case 6:
+	case 5, 6:
 		tmp = int64(BFixedLengthInt(data[0:6])) - TIMEF_OFS
+		return timeFormat(tmp, n)
 	default:
 		intPart = int64(BFixedLengthInt(data[0:3])) - TIMEF_INT_OFS
 		tmp = intPart << 24
@@ -1471,6 +1469,10 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 		return "00:00:00", n, nil
 	}
 
+	return timeFormat(tmp, n)
+}
+
+func timeFormat(tmp int64, n int) (string, int, error) {
 	hms := int64(0)
 	sign := ""
 	if tmp < 0 {
