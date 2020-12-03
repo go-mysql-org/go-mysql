@@ -239,12 +239,7 @@ func (c *Canal) updateTable(db, table string) (err error) {
 	return
 }
 func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
-	var newDelay uint32
-	now := uint32(time.Now().Unix())
-	if now >= ev.Header.Timestamp {
-		newDelay = now - ev.Header.Timestamp
-	}
-	atomic.StoreUint32(c.delay, newDelay)
+	atomic.StoreUint32(c.lastEventTimestamp, ev.Header.Timestamp)
 }
 
 func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
