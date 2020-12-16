@@ -25,6 +25,7 @@ type Conn struct {
 	credentialProvider  CredentialProvider
 	user                string
 	password            string
+	db                  string
 	cachingSha2FullAuth bool
 
 	h Handler
@@ -138,6 +139,10 @@ func (c *Conn) Closed() bool {
 
 func (c *Conn) GetUser() string {
 	return c.user
+}
+
+func (c *Conn) GetDatabase() string {
+	return c.db
 }
 
 func (c *Conn) ConnectionID() uint32 {
