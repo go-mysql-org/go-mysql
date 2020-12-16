@@ -69,8 +69,8 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	return c, nil
 }
 
-// NewCustomizedConn: create connection with customized server settings
-func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
+// MakeConn creates a new server side connection without performing the handshake.
+func MakeConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) *Conn {
 	var packetConn *packet.Conn
 	if serverConf.tlsConfig != nil {
 		packetConn = packet.NewTLSConn(conn)
@@ -90,6 +90,13 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, 
 	}
 	c.closed.Set(false)
 
+	return c
+}
+
+// NewCustomizedConn: create connection with customized server settings
+func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
+	c := MakeConn(conn, serverConf, p, h)
+
 	if err := c.handshake(); err != nil {
 		c.Close()
 		return nil, err
@@ -99,19 +106,19 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, 
 }
 
 func (c *Conn) handshake() error {
-	if err := c.writeInitialHandshake(); err != nil {
+	if err := c.WriteInitialHandshake(); err != nil {
 		return err
 	}
 
-	if err := c.readHandshakeResponse(); err != nil {
+	if err := c.ReadHandshakeResponse(); err != nil {
 		if err == ErrAccessDenied {
 			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.LocalAddr().String(), "Yes")
 		}
-		c.writeError(err)
+		c.WriteError(err)
 		return err
 	}
 
-	if err := c.writeOK(nil); err != nil {
+	if err := c.WriteOK(nil); err != nil {
 		return err
 	}
 

@@ -9,7 +9,7 @@ import (
 	. "github.com/siddontang/go-mysql/mysql"
 )
 
-func (c *Conn) readHandshakeResponse() error {
+func (c *Conn) ReadHandshakeResponse() error {
 	data, pos, err := c.readFirstPart()
 	if err != nil {
 		return err
