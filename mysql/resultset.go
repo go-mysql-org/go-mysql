@@ -19,7 +19,8 @@ type Resultset struct {
 	RowDatas []RowData
 
 	// In the case of multiple queries, we will have there a chaining list of separated Resultset
-	Next *Resultset
+	Next   *Resultset
+	filled bool
 }
 
 var (
@@ -268,4 +269,8 @@ func (r *Resultset) GetStringByName(row int, name string) (string, error) {
 	} else {
 		return r.GetString(row, column)
 	}
+}
+
+func (r *Resultset) IsFilled() bool {
+	return r.filled
 }

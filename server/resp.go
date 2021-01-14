@@ -182,11 +182,18 @@ func (c *Conn) writeValue(value interface{}) error {
 	case *Result:
 		if v != nil && v.Resultset != nil {
 			for rs := v.Resultset; rs != nil; rs = rs.Next {
+				var err error
+
 				if rs.Next != nil {
 					c.status |= SERVER_MORE_RESULTS_EXISTS
 				}
 
-				err := c.writeResultset(rs)
+				if !rs.IsFilled() {
+					err = c.writeOK(v)
+				} else {
+					err = c.writeResultset(rs)
+				}
+
 				c.status &= ^SERVER_MORE_RESULTS_EXISTS
 
 				if err != nil {
