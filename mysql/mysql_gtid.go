@@ -421,7 +421,7 @@ func (s *MysqlGTIDSet) String() string {
 	// there is only one element in gtid set
 	if len(s.Sets) == 1 {
 		for _, set := range s.Sets {
-			return set.String()
+			return strings.TrimSpace(set.String())
 		}
 	}
 
@@ -429,7 +429,7 @@ func (s *MysqlGTIDSet) String() string {
 	var buf bytes.Buffer
 	sets := make([]string, 0, len(s.Sets))
 	for _, set := range s.Sets {
-		sets = append(sets, set.String())
+		sets = append(sets, strings.TrimSpace(set.String()))
 	}
 	sort.Strings(sets)
 	
