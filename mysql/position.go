@@ -2,7 +2,6 @@ package mysql
 
 import (
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -37,22 +36,42 @@ func CompareBinlogFileName(a, b string) int {
 	// sometimes it's convenient to construct a `Position` literal with no `Name`
 	if a == "" && b == "" {
 		return 0
+	} else if a == "" {
+		return -1
+	} else if b == "" {
+		return 1
 	}
-	if a == "" {
+
+	splitBinlogName := func(n string) (string, int) {
+		// mysqld appends a numeric extension to the binary log base name to generate binary log file names
+		// ...
+		// If you supply an extension in the log name (for example, --log-bin=base_name.extension),
+		// the extension is silently removed and ignored.
+		// ref: https://dev.mysql.com/doc/refman/8.0/en/binary-log.html
+		parts := strings.Split(n, ".")
+		if len(parts) != 2 {
+			panic(fmt.Sprintf("binlog file %s doesn't contain one dot", a))
+		}
+		seq, err := strconv.Atoi(parts[1])
+		if err != nil {
+			panic(fmt.Sprintf("binlog file %s doesn't contain numeric extension", err))
+		}
+		return parts[0], seq
+	}
+
+	aBase, aSeq := splitBinlogName(a)
+	bBase, bSeq := splitBinlogName(b)
+
+	// try keeping backward compatibility
+	if aBase > bBase {
+		return 1
+	} else if aBase < bBase {
 		return -1
 	}
-	if b == "" {
-		return 1
-	}
 
-	// mysqld appends a numeric extension to the binary log base name to generate binary log file names
-	// ref: https://dev.mysql.com/doc/refman/8.0/en/binary-log.html
-	aNum, _ := strconv.Atoi(strings.TrimLeft(filepath.Ext(a)[1:], "0"))
-	bNum, _ := strconv.Atoi(strings.TrimLeft(filepath.Ext(b)[1:], "0"))
-
-	if aNum > bNum {
+	if aSeq > bSeq {
 		return 1
-	} else if aNum < bNum {
+	} else if aSeq < bSeq {
 		return -1
 	} else {
 		return 0
