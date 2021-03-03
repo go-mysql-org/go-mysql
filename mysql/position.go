@@ -48,21 +48,22 @@ func CompareBinlogFileName(a, b string) int {
 		// If you supply an extension in the log name (for example, --log-bin=base_name.extension),
 		// the extension is silently removed and ignored.
 		// ref: https://dev.mysql.com/doc/refman/8.0/en/binary-log.html
-		parts := strings.Split(n, ".")
-		if len(parts) != 2 {
-			panic(fmt.Sprintf("binlog file %s doesn't contain one dot", a))
+		i := strings.LastIndexByte(n, '.')
+		if i == -1 {
+			// try keeping backward compatibility
+			return n, 0
 		}
-		seq, err := strconv.Atoi(parts[1])
+
+		seq, err := strconv.Atoi(n[i+1:])
 		if err != nil {
 			panic(fmt.Sprintf("binlog file %s doesn't contain numeric extension", err))
 		}
-		return parts[0], seq
+		return n[:i], seq
 	}
 
 	aBase, aSeq := splitBinlogName(a)
 	bBase, bSeq := splitBinlogName(b)
 
-	// try keeping backward compatibility
 	if aBase > bBase {
 		return 1
 	} else if aBase < bBase {
