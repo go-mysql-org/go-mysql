@@ -34,6 +34,17 @@ func (p Position) String() string {
 }
 
 func CompareBinlogFileName(a, b string) int {
+	// sometimes it's convenient to construct a `Position` literal with no `Name`
+	if a == "" && b == "" {
+		return 0
+	}
+	if a == "" {
+		return -1
+	}
+	if b == "" {
+		return 1
+	}
+
 	// mysqld appends a numeric extension to the binary log base name to generate binary log file names
 	// ref: https://dev.mysql.com/doc/refman/8.0/en/binary-log.html
 	aNum, _ := strconv.Atoi(strings.TrimLeft(filepath.Ext(a)[1:], "0"))

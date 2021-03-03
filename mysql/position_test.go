@@ -12,6 +12,14 @@ var _ = check.Suite(&positionCompareSuite{})
 func (t *positionCompareSuite) TestPosCompare(c *check.C) {
 	ascendingPositions := []Position{
 		{
+			"",
+			4,
+		},
+		{
+			"",
+			100,
+		},
+		{
 			"mysql-bin.000001",
 			4,
 		},
