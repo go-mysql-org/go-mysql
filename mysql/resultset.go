@@ -29,7 +29,7 @@ var (
 
 func NewResultset(fieldsCount int) *Resultset {
 	r := resultsetPool.Get().(*Resultset)
-	r.reset(fieldsCount)
+	r.Reset(fieldsCount)
 	return r
 }
 
@@ -37,7 +37,7 @@ func (r *Resultset) returnToPool() {
 	resultsetPool.Put(r)
 }
 
-func (r *Resultset) reset(fieldsCount int) {
+func (r *Resultset) Reset(fieldsCount int) {
 	r.RawPkg = r.RawPkg[:0]
 
 	r.Fields = r.Fields[:0]
