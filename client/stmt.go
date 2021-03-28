@@ -10,9 +10,8 @@ import (
 )
 
 type Stmt struct {
-	conn  *Conn
-	id    uint32
-	query string
+	conn *Conn
+	id   uint32
 
 	params  int
 	columns int
