@@ -232,7 +232,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 		// If we only dump some tables, the dump data will not have database name
 		// which makes us hard to parse, so here we add it manually.
 
-		w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
+		_, err := w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
+		if err != nil {
+			return fmt.Errorf(`could not write USE command: %w`, err)
+		}
 	}
 
 	log.Infof("exec mysqldump with %v", args)
@@ -251,12 +254,12 @@ func (d *Dumper) DumpAndParse(h ParseHandler) error {
 	done := make(chan error, 1)
 	go func() {
 		err := Parse(r, h, !d.masterDataSkipped)
-		r.CloseWithError(err)
+		_ = r.CloseWithError(err)
 		done <- err
 	}()
 
 	err := d.Dump(w)
-	w.CloseWithError(err)
+	_ = w.CloseWithError(err)
 
 	err = <-done
 

@@ -180,7 +180,8 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'
 		reader := strings.NewReader(tt.input)
 		var handler = new(testParseHandler)
 
-		Parse(reader, handler, true)
+		err := Parse(reader, handler, true)
+		c.Assert(err, IsNil)
 
 		if tt.expected == "" {
 			if handler.gset != nil {

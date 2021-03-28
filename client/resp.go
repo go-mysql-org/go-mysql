@@ -142,7 +142,7 @@ func (c *Conn) handleAuthResult() error {
 				}
 			}
 		} else {
-			errors.Errorf("invalid packet")
+			return errors.Errorf("invalid packet %x", data[0])
 		}
 	} else if c.authPluginName == AUTH_SHA256_PASSWORD {
 		if len(data) == 0 {

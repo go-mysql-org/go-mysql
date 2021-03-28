@@ -183,7 +183,10 @@ func (b *BinlogSyncer) close() {
 	b.cancel()
 
 	if b.c != nil {
-		b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		err := b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		if err != nil {
+			log.Warnf(`could not set read deadline: %s`, err)
+		}
 	}
 
 	// kill last connection id
@@ -234,17 +237,19 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	if len(b.cfg.Charset) != 0 {
-		b.c.SetCharset(b.cfg.Charset)
+		if err = b.c.SetCharset(b.cfg.Charset); err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	//set read timeout
 	if b.cfg.ReadTimeout > 0 {
-		b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
+		_ = b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
 	}
 
 	if b.cfg.RecvBufferSize > 0 {
 		if tcp, ok := b.c.Conn.Conn.(*net.TCPConn); ok {
-			tcp.SetReadBuffer(b.cfg.RecvBufferSize)
+			_ = tcp.SetReadBuffer(b.cfg.RecvBufferSize)
 		}
 	}
 
@@ -707,7 +712,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 		//set read timeout
 		if b.cfg.ReadTimeout > 0 {
-			b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
+			_ = b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
 		}
 
 		// Reset retry count on successful packet receieve

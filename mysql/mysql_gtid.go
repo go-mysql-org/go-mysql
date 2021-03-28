@@ -232,14 +232,14 @@ func (s *UUIDSet) String() string {
 }
 
 func (s *UUIDSet) encode(w io.Writer) {
-	w.Write(s.SID.Bytes())
+	_, _ = w.Write(s.SID.Bytes())
 	n := int64(len(s.Intervals))
 
-	binary.Write(w, binary.LittleEndian, n)
+	_ = binary.Write(w, binary.LittleEndian, n)
 
 	for _, i := range s.Intervals {
-		binary.Write(w, binary.LittleEndian, i.Start)
-		binary.Write(w, binary.LittleEndian, i.Stop)
+		_ = binary.Write(w, binary.LittleEndian, i.Start)
+		_ = binary.Write(w, binary.LittleEndian, i.Stop)
 	}
 }
 
@@ -448,7 +448,7 @@ func (s *MysqlGTIDSet) String() string {
 func (s *MysqlGTIDSet) Encode() []byte {
 	var buf bytes.Buffer
 
-	binary.Write(&buf, binary.LittleEndian, uint64(len(s.Sets)))
+	_ = binary.Write(&buf, binary.LittleEndian, uint64(len(s.Sets)))
 
 	for i := range s.Sets {
 		s.Sets[i].encode(&buf)
