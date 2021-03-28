@@ -32,8 +32,10 @@ func parseInterval(str string) (i Interval, err error) {
 		i.Stop = i.Start + 1
 	case 2:
 		i.Start, err = strconv.ParseInt(p[0], 10, 64)
-		i.Stop, err = strconv.ParseInt(p[1], 10, 64)
-		i.Stop = i.Stop + 1
+		if err == nil {
+			i.Stop, err = strconv.ParseInt(p[1], 10, 64)
+			i.Stop++
+		}
 	default:
 		err = errors.Errorf("invalid interval format, must n[-n]")
 	}
@@ -432,7 +434,7 @@ func (s *MysqlGTIDSet) String() string {
 		sets = append(sets, set.String())
 	}
 	sort.Strings(sets)
-	
+
 	sep := ""
 	for _, set := range sets {
 		buf.WriteString(sep)

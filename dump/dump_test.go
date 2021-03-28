@@ -268,7 +268,7 @@ func (s *parserTestSuite) TestParseValue(c *C) {
 	c.Assert(values, HasLen, 4)
 
 	str = `123,'\Z#÷QÎx£. Æ‘ÇoPâÅ_\r—\\','','qn\'`
-	values, err = parseValues(str)
+	_, err = parseValues(str)
 	c.Assert(err, NotNil)
 }
 

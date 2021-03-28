@@ -101,6 +101,10 @@ func (c *Conn) handleAuthResult() error {
 		}
 		c.authPluginName = switchToPlugin
 		auth, addNull, err := c.genAuthResponse(data)
+		if err != nil {
+			return err
+		}
+
 		if err = c.WriteAuthSwitchPacket(auth, addNull); err != nil {
 			return err
 		}

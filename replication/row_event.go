@@ -1097,11 +1097,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		if i32 == 0 {
 			v = "00:00:00"
 		} else {
-			sign := ""
-			if i32 < 0 {
-				sign = "-"
-			}
-			v = fmt.Sprintf("%s%02d:%02d:%02d", sign, i32/10000, (i32%10000)/100, i32%100)
+			v = fmt.Sprintf("%02d:%02d:%02d", i32/10000, (i32%10000)/100, i32%100)
 		}
 	case MYSQL_TYPE_TIME2:
 		v, n, err = decodeTime2(data, meta)
