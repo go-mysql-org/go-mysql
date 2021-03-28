@@ -2,16 +2,28 @@
 
 A pure go library to handle MySQL network protocol and replication.
 
-## Call for Committer/Maintainer
+## This repo is abandoned
 
-Sorry that I have no enough time to maintain this project wholly, if you like this project and want to help me improve it continuously, please contact me through email (siddontang@gmail.com).
+tl;dr. Use [fork](https://github.com/atercattus/go-mysql), Luke!
+___
 
-Requirement: In the email, you should list somethings(including but not limited to below) to make me believe we can work together.
+Unfortunately, this repo has been abandoned for two reasons:
+1. Travis-ci what used here doesn't work any more. But I have no rights to remove this check. So I cannot add new code and work with your PRs;
+2. siddontang can do it, but he didn't respond to my request.
 
-+ Your GitHub ID
-+ The contributions to go-mysql before, including PRs or Issues. 
-+ The reason why you can improve go-mysql.
- 
+So I had to move all activity from this repo to fork https://github.com/atercattus/go-mysql, when I replaced travis-ci with github actions.
+This fork we use at [VK.COM](https://github.com/VKCOM) now.
+
+Due to the nature of our tasks, this fork is focused on:
+1. Minimization of memory usage and high performance (we have tens of thousands of QPS to our MySQL databases). E.g. [A lot of memory allocation optimizations](https://github.com/siddontang/go-mysql/pull/466), [Streaming of SELECT responses](https://github.com/atercattus/go-mysql/pull/3), connection pool (will be published soon);
+2. Implementation for client and fake server. Some features like replication and dumping will be kept, but no longer actively maintained. If you need these features, it's up to you to improve them (by sending a PR).
+
+To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`
+replace github.com/siddontang/go-mysql => github.com/atercattus/go-mysql v1.1.1
+
+v.1.1.1 - is the last tag in repo, feel free to choose what you want.
+
+Stay tuned for future updates on the fork!
 
 ## Replication
 
