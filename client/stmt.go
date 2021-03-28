@@ -54,7 +54,7 @@ func (s *Stmt) write(args ...interface{}) error {
 	//NULL-bitmap, length: (num-params+7)
 	nullBitmap := make([]byte, (paramsNum+7)>>3)
 
-	var length int = int(1 + 4 + 1 + 4 + ((paramsNum + 7) >> 3) + 1 + (paramsNum << 1))
+	length := 1 + 4 + 1 + 4 + ((paramsNum + 7) >> 3) + 1 + (paramsNum << 1)
 
 	var newParamBoundFlag byte = 0
 
@@ -90,11 +90,11 @@ func (s *Stmt) write(args ...interface{}) error {
 		case uint16:
 			paramTypes[i<<1] = MYSQL_TYPE_SHORT
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint16ToBytes(uint16(v))
+			paramValues[i] = Uint16ToBytes(v)
 		case uint32:
 			paramTypes[i<<1] = MYSQL_TYPE_LONG
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint32ToBytes(uint32(v))
+			paramValues[i] = Uint32ToBytes(v)
 		case uint:
 			paramTypes[i<<1] = MYSQL_TYPE_LONGLONG
 			paramTypes[(i<<1)+1] = 0x80
@@ -102,7 +102,7 @@ func (s *Stmt) write(args ...interface{}) error {
 		case uint64:
 			paramTypes[i<<1] = MYSQL_TYPE_LONGLONG
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint64ToBytes(uint64(v))
+			paramValues[i] = Uint64ToBytes(v)
 		case bool:
 			paramTypes[i<<1] = MYSQL_TYPE_TINY
 			if v {

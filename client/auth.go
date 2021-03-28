@@ -46,7 +46,7 @@ func (c *Conn) readInitialHandshake() error {
 	pos := 1 + bytes.IndexByte(data[1:], 0x00) + 1
 
 	// connection id length is 4
-	c.connectionID = uint32(binary.LittleEndian.Uint32(data[pos : pos+4]))
+	c.connectionID = binary.LittleEndian.Uint32(data[pos : pos+4])
 	pos += 4
 
 	c.salt = []byte{}
@@ -199,7 +199,7 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Charset [1 byte]
 	// use default collation id 33 here, is utf-8
-	data[12] = byte(DEFAULT_COLLATION_ID)
+	data[12] = DEFAULT_COLLATION_ID
 
 	// SSL Connection Request Packet
 	// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::SSLRequest

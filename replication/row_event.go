@@ -145,7 +145,7 @@ func (e *TableMapEvent) Decode(data []byte) error {
 }
 
 func bitmapByteSize(columnCount int) int {
-	return int(columnCount+7) / 8
+	return (columnCount + 7) / 8
 }
 
 // see mysql sql/log_event.h
@@ -1007,7 +1007,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 
 			if b0&0x30 != 0x30 {
 				length = int(uint16(b1) | (uint16((b0&0x30)^0x30) << 4))
-				tp = byte(b0 | 0x30)
+				tp = b0 | 0x30
 			} else {
 				length = int(meta & 0xFF)
 				tp = b0
@@ -1050,7 +1050,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		n = int(nbits+7) / 8
 
 		//use int64 for bit
-		v, err = decodeBit(data, int(nbits), int(n))
+		v, err = decodeBit(data, int(nbits), n)
 	case MYSQL_TYPE_TIMESTAMP:
 		n = 4
 		t := binary.LittleEndian.Uint32(data)
@@ -1167,7 +1167,7 @@ func decodeString(data []byte, length int) (v string, n int) {
 	if length < 256 {
 		length = int(data[0])
 
-		n = int(length) + 1
+		n = length + 1
 		v = hack.String(data[1:n])
 	} else {
 		length = int(binary.LittleEndian.Uint16(data[0:]))
@@ -1194,9 +1194,9 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 
 func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (interface{}, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
-	integral := (precision - decimals)
-	uncompIntegral := int(integral / digitsPerInteger)
-	uncompFractional := int(decimals / digitsPerInteger)
+	integral := precision - decimals
+	uncompIntegral := integral / digitsPerInteger
+	uncompFractional := decimals / digitsPerInteger
 	compIntegral := integral - (uncompIntegral * digitsPerInteger)
 	compFractional := decimals - (uncompFractional * digitsPerInteger)
 

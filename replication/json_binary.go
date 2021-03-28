@@ -149,7 +149,7 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 	count := d.decodeCount(data, isSmall)
 	size := d.decodeCount(data[offsetSize:], isSmall)
 
-	if d.isDataShort(data, int(size)) {
+	if d.isDataShort(data, size) {
 		// Before MySQL 5.7.22, json type generated column may have invalid value,
 		// bug ref: https://bugs.mysql.com/bug.php?id=88791
 		// As generated column value is not used in replication, we can just ignore

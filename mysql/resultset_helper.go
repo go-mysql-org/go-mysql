@@ -17,7 +17,7 @@ func formatTextValue(value interface{}) ([]byte, error) {
 	case int32:
 		return strconv.AppendInt(nil, int64(v), 10), nil
 	case int64:
-		return strconv.AppendInt(nil, int64(v), 10), nil
+		return strconv.AppendInt(nil, v, 10), nil
 	case int:
 		return strconv.AppendInt(nil, int64(v), 10), nil
 	case uint8:
@@ -27,13 +27,13 @@ func formatTextValue(value interface{}) ([]byte, error) {
 	case uint32:
 		return strconv.AppendUint(nil, uint64(v), 10), nil
 	case uint64:
-		return strconv.AppendUint(nil, uint64(v), 10), nil
+		return strconv.AppendUint(nil, v, 10), nil
 	case uint:
 		return strconv.AppendUint(nil, uint64(v), 10), nil
 	case float32:
 		return strconv.AppendFloat(nil, float64(v), 'f', -1, 64), nil
 	case float64:
-		return strconv.AppendFloat(nil, float64(v), 'f', -1, 64), nil
+		return strconv.AppendFloat(nil, v, 'f', -1, 64), nil
 	case []byte:
 		return v, nil
 	case string:
@@ -64,7 +64,7 @@ func formatBinaryValue(value interface{}) ([]byte, error) {
 	case uint32:
 		return Uint64ToBytes(uint64(v)), nil
 	case uint64:
-		return Uint64ToBytes(uint64(v)), nil
+		return Uint64ToBytes(v), nil
 	case uint:
 		return Uint64ToBytes(uint64(v)), nil
 	case float32:

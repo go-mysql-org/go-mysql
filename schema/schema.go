@@ -393,7 +393,7 @@ func toUint64(i interface{}) uint64 {
 	case uint32:
 		return uint64(i)
 	case uint64:
-		return uint64(i)
+		return i
 	}
 
 	return 0
