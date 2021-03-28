@@ -60,7 +60,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 
 		if parseBinlogPos && !binlogParsed {
 			// parsed gtid set from mysqldump
-			// gtid comes before binlog file-positon
+			// gtid comes before binlog file-position
 			if m := gtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
 				gtidStr := m[0][1]
 				if gtidStr != "" {
@@ -106,7 +106,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 }
 
 func parseValues(str string) ([]string, error) {
-	// values are seperated by comma, but we can not split using comma directly
+	// values are separated by comma, but we can not split using comma directly
 	// string is enclosed by single quote
 
 	// a simple implementation, may be more robust later.
