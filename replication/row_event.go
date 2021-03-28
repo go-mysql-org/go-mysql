@@ -1159,7 +1159,8 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	default:
 		err = fmt.Errorf("unsupport type %d in binlog and don't know how to handle", tp)
 	}
-	return
+
+	return v, n, err
 }
 
 func decodeString(data []byte, length int) (v string, n int) {
