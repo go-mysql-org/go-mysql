@@ -84,7 +84,6 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			if _, err = f.Write(BinLogFileHeader); err != nil {
 				return errors.Trace(err)
 			}
-
 		}
 
 		if n, err := f.Write(e.RawData); err != nil {

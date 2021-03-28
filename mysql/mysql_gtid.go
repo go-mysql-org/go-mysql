@@ -320,7 +320,6 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 		} else {
 			s.AddSet(set)
 		}
-
 	}
 	return s, nil
 }
@@ -416,7 +415,6 @@ func (s *MysqlGTIDSet) Equal(o GTIDSet) bool {
 	}
 
 	return true
-
 }
 
 func (s *MysqlGTIDSet) String() string {

@@ -320,7 +320,6 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	}
 
 	return ta.fetchPrimaryKeyColumns()
-
 }
 
 func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {

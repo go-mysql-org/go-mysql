@@ -289,7 +289,6 @@ func (s *clientTestSuite) TestStmt_Select(c *C) {
 
 	e, _ = result.GetStringByName(0, "e")
 	c.Assert(e, Equals, "test1")
-
 }
 
 func (s *clientTestSuite) TestStmt_NULL(c *C) {

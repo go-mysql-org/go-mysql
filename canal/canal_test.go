@@ -283,8 +283,8 @@ func TestDropTableExp(t *testing.T) {
 		}
 	}
 }
-func TestWithoutSchemeExp(t *testing.T) {
 
+func TestWithoutSchemeExp(t *testing.T) {
 	cases := []replication.QueryEvent{
 		replication.QueryEvent{
 			Schema: []byte("test"),

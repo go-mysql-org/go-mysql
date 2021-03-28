@@ -92,7 +92,6 @@ func (c *Conn) writePrepare(s *Stmt) error {
 		if err := c.writeEOF(); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }

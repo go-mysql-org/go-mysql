@@ -913,7 +913,6 @@ func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.tableIDSize = 6
 		err := tableMapEvent.Decode(tc.data)
@@ -929,7 +928,6 @@ func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
 			c.Assert(tableMapEvent.EnumStrValueString(), DeepEquals, [][]string(nil))
 		}
 	}
-
 }
 
 func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
@@ -1008,11 +1006,9 @@ func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
 		c.Assert(tableMapEvent.PrimaryKey, DeepEquals, tc.expectedPrimaryKey)
 		c.Assert(tableMapEvent.PrimaryKeyPrefix, DeepEquals, tc.expectedPrimaryKeyPrefix)
 	}
-
 }
 
 func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
-
 	/*
 		CREATE TABLE `_types` (
 			`b_bit` bit(64) NOT NULL DEFAULT b'0',
@@ -1175,7 +1171,6 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.flavor = tc.flavor
 		tableMapEvent.tableIDSize = 6
@@ -1187,7 +1182,5 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 		c.Assert(tableMapEvent.EnumStrValueMap(), DeepEquals, tc.enumStrValueMap)
 		c.Assert(tableMapEvent.SetStrValueMap(), DeepEquals, tc.setStrValueMap)
 		c.Assert(tableMapEvent.GeometryTypeMap(), DeepEquals, tc.geometryTypeMap)
-
 	}
-
 }

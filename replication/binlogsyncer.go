@@ -283,7 +283,6 @@ func (b *BinlogSyncer) registerSlave() error {
 			// if _, err = b.c.Execute(`SET @master_binlog_checksum=@@global.binlog_checksum`); err != nil {
 			// 	return errors.Trace(err)
 			// }
-
 		}
 	}
 

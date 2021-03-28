@@ -238,10 +238,8 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 }
 
 func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
-
 	pos := 0
 	for pos < len(data) {
-
 		// optional metadata fields are stored in Type, Length, Value(TLV) format
 		// Type takes 1 byte. Length is a packed integer value. Values takes Length bytes
 		t := data[pos]
@@ -637,7 +635,6 @@ func (e *TableMapEvent) EnumSetCollationMap() map[int]uint64 {
 }
 
 func (e *TableMapEvent) collationMap(includeType func(int) bool, defaultCharset, columnCharset []uint64) map[int]uint64 {
-
 	if len(defaultCharset) != 0 {
 		defaultCollation := defaultCharset[0]
 
@@ -666,7 +663,6 @@ func (e *TableMapEvent) collationMap(includeType func(int) bool, defaultCharset,
 	}
 
 	if len(columnCharset) != 0 {
-
 		p := 0
 		ret := make(map[int]uint64)
 		for i := 0; i < int(e.ColumnCount); i++ {
@@ -739,7 +735,6 @@ func (e *TableMapEvent) GeometryTypeMap() map[int]uint64 {
 //   Table_map_log_event::print_columns in mysql-8.0/sql/log_event.cc and mariadb-10.5/sql/log_event_client.cc
 
 func (e *TableMapEvent) realType(i int) byte {
-
 	typ := e.ColumnType[i]
 
 	switch typ {
@@ -757,7 +752,6 @@ func (e *TableMapEvent) realType(i int) byte {
 }
 
 func (e *TableMapEvent) IsNumericColumn(i int) bool {
-
 	switch e.realType(i) {
 	case MYSQL_TYPE_TINY,
 		MYSQL_TYPE_SHORT,
@@ -772,14 +766,12 @@ func (e *TableMapEvent) IsNumericColumn(i int) bool {
 	default:
 		return false
 	}
-
 }
 
 // IsCharacterColumn returns true if the column type is considered as character type.
 // Note that JSON/GEOMETRY types are treated as character type in mariadb.
 // (JSON is an alias for LONGTEXT in mariadb: https://mariadb.com/kb/en/json-data-type/)
 func (e *TableMapEvent) IsCharacterColumn(i int) bool {
-
 	switch e.realType(i) {
 	case MYSQL_TYPE_STRING,
 		MYSQL_TYPE_VAR_STRING,
@@ -796,7 +788,6 @@ func (e *TableMapEvent) IsCharacterColumn(i int) bool {
 	default:
 		return false
 	}
-
 }
 
 func (e *TableMapEvent) IsEnumColumn(i int) bool {

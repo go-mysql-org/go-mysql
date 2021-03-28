@@ -395,11 +395,9 @@ func (e *GTIDEvent) Decode(data []byte) error {
 				e.ImmediateCommitTimestamp &= ^(uint64(1) << 55)
 				e.OriginalCommitTimestamp = FixedLengthInt(data[pos : pos+7])
 				pos += 7
-
 			} else {
 				// Otherwise OriginalCommitTimestamp == ImmediateCommitTimestamp
 				e.OriginalCommitTimestamp = e.ImmediateCommitTimestamp
-
 			}
 
 			// TRANSACTION_LENGTH_MIN_LENGTH = 1
@@ -423,13 +421,10 @@ func (e *GTIDEvent) Decode(data []byte) error {
 				e.ImmediateServerVersion &= ^(uint32(1) << 31)
 				e.OriginalServerVersion = binary.LittleEndian.Uint32(data[pos:])
 				pos += 4
-
 			} else {
 				// Otherwise OriginalServerVersion == ImmediateServerVersion
 				e.OriginalServerVersion = e.ImmediateServerVersion
-
 			}
-
 		}
 	}
 	return nil

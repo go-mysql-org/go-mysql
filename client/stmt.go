@@ -109,7 +109,6 @@ func (s *Stmt) write(args ...interface{}) error {
 				paramValues[i] = []byte{1}
 			} else {
 				paramValues[i] = []byte{0}
-
 			}
 		case float32:
 			paramTypes[i<<1] = MYSQL_TYPE_FLOAT

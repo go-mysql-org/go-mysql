@@ -194,7 +194,6 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'
 		c.Assert(err, IsNil)
 		c.Assert(expectedGtidset.Equal(handler.gset), IsTrue)
 	}
-
 }
 
 func (s *parserTestSuite) TestParseFindTable(c *C) {

@@ -452,7 +452,6 @@ func (d *jsonBinaryDecoder) decodeDateTime(data []byte) interface{} {
 	frac := v % (1 << 24)
 
 	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, minute, second, frac)
-
 }
 
 func (d *jsonBinaryDecoder) decodeCount(data []byte, isSmall bool) int {

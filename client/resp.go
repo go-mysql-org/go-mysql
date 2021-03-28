@@ -173,7 +173,6 @@ func (c *Conn) readAuthResult() ([]byte, string, error) {
 	// see: https://insidemysql.com/preparing-your-community-connector-for-mysql-8-part-2-sha256/
 	// packet indicator
 	switch data[0] {
-
 	case OK_HEADER:
 		_, err := c.handleOKPacket(data)
 		return nil, "", err
