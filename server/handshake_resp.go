@@ -131,7 +131,7 @@ func (c *Conn) readPluginName(data []byte, pos int) int {
 func (c *Conn) readAuthData(data []byte, pos int) ([]byte, int, int, error) {
 	// prevent 'panic: runtime error: index out of range' error
 	if pos > len(data)-1 {
-		return nil, 0, 0, errors.New("bad handshake")
+		return nil, 0, 0, NewDefaultError(ER_HANDSHAKE_ERROR)
 	}
 
 	// length encoded data
