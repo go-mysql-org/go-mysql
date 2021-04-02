@@ -1,151 +1,16 @@
 package dump
 
 import (
-	"bytes"
-	"flag"
-	"fmt"
-	"io/ioutil"
-	"os"
 	"strings"
-	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/client"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-// use docker mysql for test
-var host = flag.String("host", "127.0.0.1", "MySQL host")
-var port = flag.Int("port", 3306, "MySQL host")
-
-var execution = flag.String("exec", "mysqldump", "mysqldump execution path")
-
-func Test(t *testing.T) {
-	TestingT(t)
+type parserTestSuite struct {
 }
 
-type schemaTestSuite struct {
-	conn *client.Conn
-	d    *Dumper
-}
-
-var _ = Suite(&schemaTestSuite{})
-
-func (s *schemaTestSuite) SetUpSuite(c *C) {
-	var err error
-	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, *port), "root", "", "")
-	c.Assert(err, IsNil)
-
-	s.d, err = NewDumper(*execution, fmt.Sprintf("%s:%d", *host, *port), "root", "")
-	c.Assert(err, IsNil)
-	c.Assert(s.d, NotNil)
-
-	s.d.SetCharset("utf8")
-	s.d.SetErrOut(os.Stderr)
-
-	_, err = s.conn.Execute("CREATE DATABASE IF NOT EXISTS test1")
-	c.Assert(err, IsNil)
-
-	_, err = s.conn.Execute("CREATE DATABASE IF NOT EXISTS test2")
-	c.Assert(err, IsNil)
-
-	str := `CREATE TABLE IF NOT EXISTS test%d.t%d (
-			id int AUTO_INCREMENT,
-			name varchar(256),
-			PRIMARY KEY(id)
-			) ENGINE=INNODB`
-	_, err = s.conn.Execute(fmt.Sprintf(str, 1, 1))
-	c.Assert(err, IsNil)
-
-	_, err = s.conn.Execute(fmt.Sprintf(str, 2, 1))
-	c.Assert(err, IsNil)
-
-	_, err = s.conn.Execute(fmt.Sprintf(str, 1, 2))
-	c.Assert(err, IsNil)
-
-	_, err = s.conn.Execute(fmt.Sprintf(str, 2, 2))
-	c.Assert(err, IsNil)
-
-	str = `INSERT INTO test%d.t%d (name) VALUES ("a"), ("b"), ("\\"), ("''")`
-
-	_, err = s.conn.Execute(fmt.Sprintf(str, 1, 1))
-	c.Assert(err, IsNil)
-
-	_, err = s.conn.Execute(fmt.Sprintf(str, 2, 1))
-	c.Assert(err, IsNil)
-
-	_, err = s.conn.Execute(fmt.Sprintf(str, 1, 2))
-	c.Assert(err, IsNil)
-
-	_, err = s.conn.Execute(fmt.Sprintf(str, 2, 2))
-	c.Assert(err, IsNil)
-}
-
-func (s *schemaTestSuite) TearDownSuite(c *C) {
-	if s.conn != nil {
-		_, err := s.conn.Execute("DROP DATABASE IF EXISTS test1")
-		c.Assert(err, IsNil)
-
-		_, err = s.conn.Execute("DROP DATABASE IF EXISTS test2")
-		c.Assert(err, IsNil)
-
-		s.conn.Close()
-	}
-}
-
-func (s *schemaTestSuite) TestDump(c *C) {
-	// Using mysql 5.7 can't work, error:
-	// 	mysqldump: Error 1412: Table definition has changed,
-	// 	please retry transaction when dumping table `test_replication` at row: 0
-	// err := s.d.Dump(ioutil.Discard)
-	// c.Assert(err, IsNil)
-
-	s.d.AddDatabases("test1", "test2")
-
-	s.d.AddIgnoreTables("test1", "t2")
-
-	err := s.d.Dump(ioutil.Discard)
-	c.Assert(err, IsNil)
-
-	s.d.AddTables("test1", "t1")
-
-	err = s.d.Dump(ioutil.Discard)
-	c.Assert(err, IsNil)
-}
-
-type testParseHandler struct {
-	gset mysql.GTIDSet
-}
-
-func (h *testParseHandler) BinLog(name string, pos uint64) error {
-	return nil
-}
-
-func (h *testParseHandler) GtidSet(gtidsets string) (err error) {
-	if h.gset != nil {
-		err = h.gset.Update(gtidsets)
-	} else {
-		h.gset, err = mysql.ParseGTIDSet("mysql", gtidsets)
-	}
-	return err
-}
-
-func (h *testParseHandler) Data(schema string, table string, values []string) error {
-	return nil
-}
-
-type GtidParseTest struct {
-	gset mysql.GTIDSet
-}
-
-func (h *GtidParseTest) UpdateGtidSet(gtidStr string) (err error) {
-	if h.gset != nil {
-		err = h.gset.Update(gtidStr)
-	} else {
-		h.gset, err = mysql.ParseGTIDSet("mysql", gtidStr)
-	}
-	return err
-}
+var _ = Suite(&parserTestSuite{})
 
 func (s *parserTestSuite) TestParseGtidExp(c *C) {
 	//	binlogExp := regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
@@ -217,11 +82,6 @@ func (s *parserTestSuite) TestParseFindTable(c *C) {
 	}
 }
 
-type parserTestSuite struct {
-}
-
-var _ = Suite(&parserTestSuite{})
-
 func (s *parserTestSuite) TestUnescape(c *C) {
 	tbl := []struct {
 		escaped  string
@@ -245,20 +105,6 @@ func (s *parserTestSuite) TestUnescape(c *C) {
 		unesacped := unescapeString(t.escaped)
 		c.Assert(unesacped, Equals, t.expected)
 	}
-}
-
-func (s *schemaTestSuite) TestParse(c *C) {
-	var buf bytes.Buffer
-
-	s.d.Reset()
-
-	s.d.AddDatabases("test1", "test2")
-
-	err := s.d.Dump(&buf)
-	c.Assert(err, IsNil)
-
-	err = Parse(&buf, new(testParseHandler), true)
-	c.Assert(err, IsNil)
 }
 
 func (s *parserTestSuite) TestParseValue(c *C) {
