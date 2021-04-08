@@ -2,16 +2,29 @@
 
 A pure go library to handle MySQL network protocol and replication.
 
-## Call for Committer/Maintainer
+![semver](https://img.shields.io/github/v/tag/go-mysql-org/go-mysql)
+![example workflow](https://github.com/go-mysql-org/go-mysql/actions/workflows/ci.yml/badge.svg)
+![gomod version](https://img.shields.io/github/go-mod/go-version/go-mysql-org/go-mysql/master)
 
-Sorry that I have no enough time to maintain this project wholly, if you like this project and want to help me improve it continuously, please contact me through email (siddontang@gmail.com).
+## How to migrate to this repo
+To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
+```
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.1.1
+```
 
-Requirement: In the email, you should list somethings(including but not limited to below) to make me believe we can work together.
+v.1.1.1 - is the last tag in repo, feel free to choose what you want.
 
-+ Your GitHub ID
-+ The contributions to go-mysql before, including PRs or Issues. 
-+ The reason why you can improve go-mysql.
- 
+## Changelog
+This repo uses [Changelog](CHANGELOG.md).
+
+---
+# Content
+* [Slave replication](#replication)
+* [Incremental dumping](#canal)
+* [Client](#client)
+* [Fake server](#server)
+* [Failover](#failover)
+* [database/sql like driver](#driver)
 
 ## Replication
 
@@ -208,6 +221,27 @@ Tested MySQL versions for the client include:
 - 5.6.x
 - 5.7.x
 - 8.0.x
+
+### Example for SELECT streaming (v.1.1.1)
+You can use also streaming for large SELECT responses.
+The callback function will be called for every result row without storing the whole resultset in memory.
+`result.Fields` will be filled before the first callback call.
+
+```go
+// ...
+var result mysql.Result
+err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
+    for idx, val := range row {
+    	field := result.Fields[idx]
+    	// You must not save FieldValue.AsString() value after this callback is done.
+    	// Copy it if you need.
+    	// ...
+    }
+    return false, nil
+})
+
+// ...
+```
 
 ## Server
 

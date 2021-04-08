@@ -591,7 +591,7 @@ var MySQLErrName = map[uint16]string{
 	ER_BINLOG_PURGE_EMFILE:                           "Too many files opened, please execute the command again",
 	ER_EVENT_CANNOT_CREATE_IN_THE_PAST:               "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation.",
 	ER_EVENT_CANNOT_ALTER_IN_THE_PAST:                "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future.",
-	ER_SLAVE_INCIDENT:                                "The incident %s occured on the master. Message: %-.64s",
+	ER_SLAVE_INCIDENT:                                "The incident %s occurred on the master. Message: %-.64s",
 	ER_NO_PARTITION_FOR_GIVEN_VALUE_SILENT:           "Table has no partition for some existing values",
 	ER_BINLOG_UNSAFE_STATEMENT:                       "Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. %s",
 	ER_SLAVE_FATAL_ERROR:                             "Fatal error: %s",

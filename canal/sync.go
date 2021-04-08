@@ -227,7 +227,7 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 		}
 		ns = []*node{n}
 	}
-	return
+	return ns
 }
 
 func (c *Canal) updateTable(db, table string) (err error) {
