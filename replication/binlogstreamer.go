@@ -2,9 +2,10 @@ package replication
 
 import (
 	"context"
+	"time"
+
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
-	"time"
 )
 
 var (
