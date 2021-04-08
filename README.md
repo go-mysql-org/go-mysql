@@ -197,6 +197,27 @@ Tested MySQL versions for the client include:
 - 5.7.x
 - 8.0.x
 
+### Example for SELECT streaming (v.1.1.1)
+You can use also streaming for large SELECT responses.
+The callback function will be called for every result row without storing the whole resultset in memory.
+`result.Fields` will be filled before the first callback call.
+
+```go
+// ...
+var result mysql.Result
+err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
+    for idx, val := range row {
+    	field := result.Fields[idx]
+    	// You must not save FieldValue.AsString() value after this callback is done.
+    	// Copy it if you need.
+    	// ...
+    }
+    return false, nil
+})
+
+// ...
+```
+
 ## Server
 
 Server package supplies a framework to implement a simple MySQL server which can handle the packets from the MySQL client. 
