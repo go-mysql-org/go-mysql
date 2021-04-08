@@ -50,7 +50,6 @@ func (_ *testDecodeSuite) TestMariadbGTIDEvent(c *C) {
 }
 
 func (_ *testDecodeSuite) TestGTIDEventMysql8NewFields(c *C) {
-
 	testcases := []struct {
 		data                           []byte
 		expectImmediateCommitTimestamp uint64
@@ -97,5 +96,4 @@ func (_ *testDecodeSuite) TestGTIDEventMysql8NewFields(c *C) {
 		c.Assert(ev.ImmediateServerVersion, Equals, tc.expectImmediateServerVersion)
 		c.Assert(ev.OriginalServerVersion, Equals, tc.expectOriginalServerVersion)
 	}
-
 }

@@ -309,7 +309,7 @@ func (t *testSyncerSuite) testPositionSync(c *C) {
 
 	// Test re-sync.
 	time.Sleep(100 * time.Millisecond)
-	t.b.c.SetReadDeadline(time.Now().Add(time.Millisecond))
+	_ = t.b.c.SetReadDeadline(time.Now().Add(time.Millisecond))
 	time.Sleep(100 * time.Millisecond)
 
 	t.testSync(c, s)

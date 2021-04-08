@@ -114,7 +114,7 @@ func RandomBuf(size int) ([]byte, error) {
 
 	// avoid to generate '\0'
 	for i, b := range buf {
-		if uint8(b) == 0 {
+		if b == 0 {
 			buf[i] = '0'
 		}
 	}

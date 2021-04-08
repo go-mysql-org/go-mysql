@@ -16,8 +16,8 @@ var password = flag.String("password", "", "MySQL password")
 var execution = flag.String("exec", "mysqldump", "mysqldump execution path")
 var output = flag.String("o", "", "dump output, empty for stdout")
 
-var dbs = flag.String("dbs", "", "dump databases, seperated by comma")
-var tables = flag.String("tables", "", "dump tables, seperated by comma, will overwrite dbs")
+var dbs = flag.String("dbs", "", "dump databases, separated by comma")
+var tables = flag.String("tables", "", "dump tables, separated by comma, will overwrite dbs")
 var tableDB = flag.String("table_db", "", "database for dump tables")
 var ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be database.table format, separated by comma")
 
