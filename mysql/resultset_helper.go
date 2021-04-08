@@ -17,7 +17,7 @@ func formatTextValue(value interface{}) ([]byte, error) {
 	case int32:
 		return strconv.AppendInt(nil, int64(v), 10), nil
 	case int64:
-		return strconv.AppendInt(nil, int64(v), 10), nil
+		return strconv.AppendInt(nil, v, 10), nil
 	case int:
 		return strconv.AppendInt(nil, int64(v), 10), nil
 	case uint8:
@@ -27,13 +27,13 @@ func formatTextValue(value interface{}) ([]byte, error) {
 	case uint32:
 		return strconv.AppendUint(nil, uint64(v), 10), nil
 	case uint64:
-		return strconv.AppendUint(nil, uint64(v), 10), nil
+		return strconv.AppendUint(nil, v, 10), nil
 	case uint:
 		return strconv.AppendUint(nil, uint64(v), 10), nil
 	case float32:
 		return strconv.AppendFloat(nil, float64(v), 'f', -1, 64), nil
 	case float64:
-		return strconv.AppendFloat(nil, float64(v), 'f', -1, 64), nil
+		return strconv.AppendFloat(nil, v, 'f', -1, 64), nil
 	case []byte:
 		return v, nil
 	case string:
@@ -64,7 +64,7 @@ func formatBinaryValue(value interface{}) ([]byte, error) {
 	case uint32:
 		return Uint64ToBytes(uint64(v)), nil
 	case uint64:
-		return Uint64ToBytes(uint64(v)), nil
+		return Uint64ToBytes(v), nil
 	case uint:
 		return Uint64ToBytes(uint64(v)), nil
 	case float32:
@@ -146,7 +146,10 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 			}
 			if r.Fields[j] == nil {
 				r.Fields[j] = &Field{Name: hack.Slice(names[j]), Type: typ}
-				formatField(r.Fields[j], value)
+				err = formatField(r.Fields[j], value)
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
 			} else if typ != r.Fields[j].Type {
 				// we got another type in the same column. in general, we treat it as an error, except
 				// the case, when old value was null, and the new one isn't null, so we can update
@@ -154,7 +157,10 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 				oldIsNull, newIsNull := r.Fields[j].Type == MYSQL_TYPE_NULL, typ == MYSQL_TYPE_NULL
 				if oldIsNull && !newIsNull { // old is null, new isn't, update type info.
 					r.Fields[j].Type = typ
-					formatField(r.Fields[j], value)
+					err = formatField(r.Fields[j], value)
+					if err != nil {
+						return nil, errors.Trace(err)
+					}
 				} else if !oldIsNull && !newIsNull { // different non-null types, that's an error.
 					return nil, errors.Errorf("row types aren't consistent")
 				}
