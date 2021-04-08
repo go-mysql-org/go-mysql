@@ -80,7 +80,7 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 		offset = 4
 	} else if offset > 4 {
 		//  FORMAT_DESCRIPTION event should be read by default always (despite that fact passed offset may be higher than 4)
-		if _, err = f.Seek(4, os.SEEK_SET); err != nil {
+		if _, err = f.Seek(4, io.SeekStart); err != nil {
 			return errors.Errorf("seek %s to %d error %v", name, offset, err)
 		}
 
@@ -89,7 +89,7 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 		}
 	}
 
-	if _, err = f.Seek(offset, os.SEEK_SET); err != nil {
+	if _, err = f.Seek(offset, io.SeekStart); err != nil {
 		return errors.Errorf("seek %s to %d error %v", name, offset, err)
 	}
 
@@ -157,7 +157,6 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 }
 
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
-
 	for {
 		if atomic.LoadUint32(&p.stopProcessing) == 1 {
 			break

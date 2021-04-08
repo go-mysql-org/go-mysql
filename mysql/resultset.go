@@ -27,9 +27,9 @@ var (
 	}
 )
 
-func NewResultset(resultsetCount int) *Resultset {
+func NewResultset(fieldsCount int) *Resultset {
 	r := resultsetPool.Get().(*Resultset)
-	r.reset(resultsetCount)
+	r.Reset(fieldsCount)
 	return r
 }
 
@@ -37,7 +37,7 @@ func (r *Resultset) returnToPool() {
 	resultsetPool.Put(r)
 }
 
-func (r *Resultset) reset(count int) {
+func (r *Resultset) Reset(fieldsCount int) {
 	r.RawPkg = r.RawPkg[:0]
 
 	r.Fields = r.Fields[:0]
@@ -52,14 +52,14 @@ func (r *Resultset) reset(count int) {
 		r.FieldNames = make(map[string]int)
 	}
 
-	if count == 0 {
+	if fieldsCount == 0 {
 		return
 	}
 
-	if cap(r.Fields) < count {
-		r.Fields = make([]*Field, count)
+	if cap(r.Fields) < fieldsCount {
+		r.Fields = make([]*Field, fieldsCount)
 	} else {
-		r.Fields = r.Fields[:count]
+		r.Fields = r.Fields[:fieldsCount]
 	}
 }
 
@@ -142,7 +142,7 @@ func (r *Resultset) GetUint(row, column int) (uint64, error) {
 	case uint32:
 		return uint64(v), nil
 	case uint64:
-		return uint64(v), nil
+		return v, nil
 	case float32:
 		return uint64(v), nil
 	case float64:
