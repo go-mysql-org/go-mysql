@@ -1,6 +1,7 @@
 package dump
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -40,6 +41,9 @@ type Dumper struct {
 	masterDataSkipped bool
 	maxAllowedPacket  int
 	hexBlob           bool
+
+	// see detectColumnStatisticsParamSupported
+	isColumnStatisticsParamSupported bool
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
@@ -63,10 +67,26 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 	d.IgnoreTables = make(map[string][]string)
 	d.ExtraOptions = make([]string, 0, 5)
 	d.masterDataSkipped = false
+	d.isColumnStatisticsParamSupported = d.detectColumnStatisticsParamSupported()
 
 	d.ErrOut = os.Stderr
 
 	return d, nil
+}
+
+// New mysqldump versions try to send queries to information_schema.COLUMN_STATISTICS table which does not exist in old MySQL (<5.x).
+// And we got error: "Unknown table 'COLUMN_STATISTICS' in information_schema (1109)".
+//
+// mysqldump may not send this query if it is started with parameter --column-statistics.
+// But this parameter exists only for versions >=8.0.2 (https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-2.html).
+//
+// For environments where the version of mysql-server and mysqldump differs, we try to check this parameter and use it if available.
+func (d *Dumper) detectColumnStatisticsParamSupported() bool {
+	out, err := exec.Command(d.ExecutionPath, `--help`).CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(out, []byte(`--column-statistics`))
 }
 
 func (d *Dumper) SetCharset(charset string) {
@@ -194,6 +214,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	if len(d.ExtraOptions) != 0 {
 		args = append(args, d.ExtraOptions...)
+	}
+
+	if d.isColumnStatisticsParamSupported {
+		args = append(args, `--column-statistics=0`)
 	}
 
 	if len(d.Tables) == 0 && len(d.Databases) == 0 {
