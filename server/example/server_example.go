@@ -44,7 +44,11 @@ func main() {
 			}
 
 			for {
-				conn.HandleCommand()
+				err = conn.HandleCommand()
+				if err != nil {
+					log.Errorf(`Could not handle command: %v`, err)
+					return
+				}
 			}
 		}()
 	}

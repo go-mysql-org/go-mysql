@@ -130,7 +130,7 @@ func (f *Field) Parse(p FieldData) (err error) {
 		f.DefaultValue = p[pos:(pos + int(f.DefaultValueLength))]
 	}
 
-	return
+	return nil
 }
 
 func (p FieldData) Parse() (f *Field, err error) {

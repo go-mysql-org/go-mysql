@@ -1,0 +1,45 @@
+name: runTestsAndLinters
+on: [push, pull_request]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go: [ 1.16, 1.15 ]
+    name: Tests Go ${{ matrix.go }}
+    runs-on: ubuntu-18.04
+
+    steps:
+      - name: Setup MySQL
+        run: |
+          echo -n "mysql -V: " ; mysql -V
+          echo -n "mysqldump -V: " ; mysqldump -V
+
+          echo -e '[mysqld]\nserver-id=1\nlog-bin=mysql\nbinlog-format=row\ngtid-mode=ON\nenforce_gtid_consistency=ON\n' | sudo tee /etc/mysql/conf.d/replication.cnf
+          sudo service mysql start
+          sudo mysql -h 127.0.0.1 -uroot -proot -e "use mysql; update user set authentication_string=PASSWORD('') where User='root'; update user set plugin='mysql_native_password'; FLUSH PRIVILEGES;"
+          # create ssl/rsa files for mysql ssl support
+          sudo mysql_ssl_rsa_setup --uid=mysql
+          mysql -e "CREATE DATABASE IF NOT EXISTS test;" -uroot
+          mysql -e "SHOW VARIABLES LIKE 'log_bin'" -uroot
+      - name: Prepare for Go
+        run: |
+          sudo apt-get install -y make gcc
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Checkout code
+        uses: actions/checkout@v1
+      - name: Run tests
+        run: go test ./...
+
+  golangci:
+    name: golangci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: latest
