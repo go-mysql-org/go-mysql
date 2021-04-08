@@ -108,7 +108,7 @@ func (s *failoverTestSuite) testFailover(c *C, h Handler, m *Server, s1 *Server,
 	err = s2.StopSlaveIOThread()
 	c.Assert(err, IsNil)
 
-	id = s.checkInsert(c, m, "b")
+	_ = s.checkInsert(c, m, "b")
 	id = s.checkInsert(c, m, "c")
 
 	err = h.WaitCatchMaster(s1, m)
@@ -138,7 +138,7 @@ func (s *failoverTestSuite) testFailover(c *C, h Handler, m *Server, s1 *Server,
 	c.Assert(err, IsNil)
 
 	m, s1 = s1, m
-	id = s.checkInsert(c, m, "d")
+	_ = s.checkInsert(c, m, "d")
 
 	err = h.WaitCatchMaster(s1, m)
 	c.Assert(err, IsNil)
@@ -153,8 +153,9 @@ func (s *failoverTestSuite) testFailover(c *C, h Handler, m *Server, s1 *Server,
 	err = s2.StopSlaveIOThread()
 	c.Assert(err, IsNil)
 
-	id = s.checkInsert(c, m, "e")
+	_ = s.checkInsert(c, m, "e")
 	err = h.WaitCatchMaster(s1, m)
+	c.Assert(err, IsNil)
 
 	best, err = h.FindBestSlaves([]*Server{s1, s2})
 	c.Assert(err, IsNil)

@@ -180,7 +180,8 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'
 		reader := strings.NewReader(tt.input)
 		var handler = new(testParseHandler)
 
-		Parse(reader, handler, true)
+		err := Parse(reader, handler, true)
+		c.Assert(err, IsNil)
 
 		if tt.expected == "" {
 			if handler.gset != nil {
@@ -193,7 +194,6 @@ e7574090-b123-11e8-8bb4-005056a29643:1-12'
 		c.Assert(err, IsNil)
 		c.Assert(expectedGtidset.Equal(handler.gset), IsTrue)
 	}
-
 }
 
 func (s *parserTestSuite) TestParseFindTable(c *C) {
@@ -268,7 +268,7 @@ func (s *parserTestSuite) TestParseValue(c *C) {
 	c.Assert(values, HasLen, 4)
 
 	str = `123,'\Z#÷QÎx£. Æ‘ÇoPâÅ_\r—\\','','qn\'`
-	values, err = parseValues(str)
+	_, err = parseValues(str)
 	c.Assert(err, NotNil)
 }
 

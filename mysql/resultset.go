@@ -142,7 +142,7 @@ func (r *Resultset) GetUint(row, column int) (uint64, error) {
 	case uint32:
 		return uint64(v), nil
 	case uint64:
-		return uint64(v), nil
+		return v, nil
 	case float32:
 		return uint64(v), nil
 	case float64:

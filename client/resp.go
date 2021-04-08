@@ -101,6 +101,10 @@ func (c *Conn) handleAuthResult() error {
 		}
 		c.authPluginName = switchToPlugin
 		auth, addNull, err := c.genAuthResponse(data)
+		if err != nil {
+			return err
+		}
+
 		if err = c.WriteAuthSwitchPacket(auth, addNull); err != nil {
 			return err
 		}
@@ -138,7 +142,7 @@ func (c *Conn) handleAuthResult() error {
 				}
 			}
 		} else {
-			errors.Errorf("invalid packet")
+			return errors.Errorf("invalid packet %x", data[0])
 		}
 	} else if c.authPluginName == AUTH_SHA256_PASSWORD {
 		if len(data) == 0 {
@@ -169,7 +173,6 @@ func (c *Conn) readAuthResult() ([]byte, string, error) {
 	// see: https://insidemysql.com/preparing-your-community-connector-for-mysql-8-part-2-sha256/
 	// packet indicator
 	switch data[0] {
-
 	case OK_HEADER:
 		_, err := c.handleOKPacket(data)
 		return nil, "", err

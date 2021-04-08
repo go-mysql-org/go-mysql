@@ -20,7 +20,7 @@ func ParseBinaryUint16(data []byte) uint16 {
 }
 
 func ParseBinaryInt24(data []byte) int32 {
-	u32 := uint32(ParseBinaryUint24(data))
+	u32 := ParseBinaryUint24(data)
 	if u32&0x00800000 != 0 {
 		u32 |= 0xFF000000
 	}
