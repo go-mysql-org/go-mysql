@@ -234,10 +234,12 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetClone(c *check.C) {
 }
 
 func (t *mariaDBTestSuite) TestMariaDBGTIDSetSortedString(c *check.C) {
-	gtidSetStr := "2-2-2,1-1-1,3-2-1"
-	sorted := "1-1-1,2-2-2,3-2-1"
+	cases := [][]string{{"", ""}, {"1-1-1", "1-1-1"},
+		{"2-2-2,1-1-1,3-2-1", "1-1-1,2-2-2,3-2-1"}}
 
-	gtidSet, err := ParseMariadbGTIDSet(gtidSetStr)
-	c.Assert(err, check.IsNil)
-	c.Assert(gtidSet.String(), check.Equals, sorted)
+	for _, strs := range cases {
+		gtidSet, err := ParseMariadbGTIDSet(strs[0])
+		c.Assert(err, check.IsNil)
+		c.Assert(gtidSet.String(), check.Equals, strs[1])
+	}
 }

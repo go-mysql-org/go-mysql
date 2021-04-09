@@ -9,7 +9,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go/hack"
 )
 
 // MariadbGTID represent mariadb gtid, [domain ID]-[server-id]-[sequence]
@@ -158,26 +157,13 @@ func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 }
 
 func (s *MariadbGTIDSet) String() string {
-	if len(s.Sets) == 1 {
-		for _, set := range s.Sets {
-			return set.String()
-		}
-	}
-
-	var buf bytes.Buffer
 	sets := make([]string, 0, len(s.Sets))
 	for _, set := range s.Sets {
 		sets = append(sets, set.String())
 	}
 	sort.Strings(sets)
 
-	sep := ""
-	for _, set := range sets {
-		buf.WriteString(sep)
-		buf.WriteString(set)
-		sep = ","
-	}
-	return hack.String(buf.Bytes())
+	return strings.Join(sets, ",")
 }
 
 // Encode encodes mariadb gtid set
