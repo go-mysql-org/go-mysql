@@ -232,3 +232,14 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetClone(c *check.C) {
 		c.Assert(gtidSet.Clone(), check.DeepEquals, gtidSet)
 	}
 }
+
+func (t *mariaDBTestSuite) TestMariaDBGTIDSetSortedString(c *check.C) {
+	cases := [][]string{{"", ""}, {"1-1-1", "1-1-1"},
+		{"2-2-2,1-1-1,3-2-1", "1-1-1,2-2-2,3-2-1"}}
+
+	for _, strs := range cases {
+		gtidSet, err := ParseMariadbGTIDSet(strs[0])
+		c.Assert(err, check.IsNil)
+		c.Assert(gtidSet.String(), check.Equals, strs[1])
+	}
+}
