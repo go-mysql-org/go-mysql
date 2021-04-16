@@ -113,15 +113,9 @@ func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 	if str == "" {
 		return s, nil
 	}
-
-	sp := strings.Split(str, ",")
-
-	//todo, handle redundant same uuid
-	for i := 0; i < len(sp); i++ {
-		err := s.Update(sp[i])
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
+	err := s.Update(str)
+	if err != nil {
+		return nil, err
 	}
 	return s, nil
 }
@@ -147,13 +141,19 @@ func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 
 // Update updates mariadb gtid set
 func (s *MariadbGTIDSet) Update(GTIDStr string) error {
-	gtid, err := ParseMariadbGTID(GTIDStr)
-	if err != nil {
-		return err
+	sp := strings.Split(GTIDStr, ",")
+	//todo, handle redundant same uuid
+	for i := 0; i < len(sp); i++ {
+		gtid, err := ParseMariadbGTID(sp[i])
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = s.AddSet(gtid)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
-
-	err = s.AddSet(gtid)
-	return errors.Trace(err)
+	return nil
 }
 
 func (s *MariadbGTIDSet) String() string {

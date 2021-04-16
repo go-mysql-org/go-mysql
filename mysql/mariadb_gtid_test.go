@@ -152,6 +152,7 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
 		{false, "1-2-2", map[uint32]string{1: "1-2-2", 2: "2-2-2"}},
 		{false, "1-2-1", map[uint32]string{1: "1-2-1", 2: "2-2-2"}},
 		{false, "3-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1"}},
+		{false, "3-2-1,4-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1", 4: "4-2-1"}},
 	}
 
 	for _, cs := range cases {
