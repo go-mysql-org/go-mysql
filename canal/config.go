@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/pingcap/errors"
 )
 
 type DumpConfig struct {

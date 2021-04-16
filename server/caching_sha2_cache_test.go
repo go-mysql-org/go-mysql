@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 )
 
 var delay = 50

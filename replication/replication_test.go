@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
-	uuid "github.com/satori/go.uuid"
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	. "github.com/pingcap/check"
+	uuid "github.com/satori/go.uuid"
 )
 
 // Use docker mysql to test, mysql is 3306, mariadb is 3316

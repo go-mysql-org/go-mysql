@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 )

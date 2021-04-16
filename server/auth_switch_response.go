@@ -9,8 +9,8 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	"github.com/pingcap/errors"
 	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/pingcap/errors"
 )
 
 func (c *Conn) handleAuthSwitchResponse() error {

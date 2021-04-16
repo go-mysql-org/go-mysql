@@ -13,9 +13,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 
-	"github.com/pingcap/errors"
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
+	"github.com/pingcap/errors"
 )
 
 type BufPool struct {

@@ -124,7 +124,7 @@ package main
 
 import (
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/canal"
+	"github.com/go-mysql-org/go-mysql/canal"
 )
 
 type MyEventHandler struct {
