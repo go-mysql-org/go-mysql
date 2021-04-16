@@ -36,7 +36,7 @@ You can use it as a MySQL slave to sync binlog from master then do something, li
 
 ```go
 import (
-	"github.com/siddontang/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"os"
 )
 // Create a binlog syncer with a unique server id, the server id must be different from other MySQL's. 
@@ -120,20 +120,18 @@ You must use ROW format for binlog, full binlog row image is preferred, because 
 A simple example:
 
 ```go
-cfg := NewDefaultConfig()
-cfg.Addr = "127.0.0.1:3306"
-cfg.User = "root"
-// We only care table canal_test in test db
-cfg.Dump.TableDB = "test"
-cfg.Dump.Tables = []string{"canal_test"}
+package main
 
-c, err := NewCanal(cfg)
+import (
+	"github.com/siddontang/go-log/log"
+	"github.com/go-mysql-org/go-mysql/canal"
+)
 
 type MyEventHandler struct {
-	DummyEventHandler
+	canal.DummyEventHandler
 }
 
-func (h *MyEventHandler) OnRow(e *RowsEvent) error {
+func (h *MyEventHandler) OnRow(e *canal.RowsEvent) error {
 	log.Infof("%s %v\n", e.Action, e.Rows)
 	return nil
 }
@@ -142,11 +140,25 @@ func (h *MyEventHandler) String() string {
 	return "MyEventHandler"
 }
 
-// Register a handler to handle RowsEvent
-c.SetEventHandler(&MyEventHandler{})
+func main() {
+	cfg := canal.NewDefaultConfig()
+	cfg.Addr = "127.0.0.1:3306"
+	cfg.User = "root"
+	// We only care table canal_test in test db
+	cfg.Dump.TableDB = "test"
+	cfg.Dump.Tables = []string{"canal_test"}
 
-// Start canal
-c.Run()
+	c, err := canal.NewCanal(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Register a handler to handle RowsEvent
+	c.SetEventHandler(&MyEventHandler{})
+
+	// Start canal
+	c.Run()
+}
 ```
 
 You can see [go-mysql-elasticsearch](https://github.com/siddontang/go-mysql-elasticsearch) for how to sync MySQL data into Elasticsearch. 
@@ -159,7 +171,7 @@ Client package supports a simple MySQL connection driver which you can use it to
 
 ```go
 import (
-	"github.com/siddontang/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/client"
 )
 
 // Connect MySQL at 127.0.0.1:3306, with user root, an empty password and database test
@@ -241,7 +253,7 @@ so that most MySQL clients should be able to connect to the Server without modif
 
 ```go
 import (
-	"github.com/siddontang/go-mysql/server"
+	"github.com/go-mysql-org/go-mysql/server"
 	"net"
 )
 
@@ -295,7 +307,7 @@ package main
 import (
 	"database/sql"
 
-	_ "github.com/siddontang/go-mysql/driver"
+	_ "github.com/go-mysql-org/go-mysql/driver"
 )
 
 func main() {
