@@ -3,12 +3,12 @@ package mysql
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go/hack"
 )
 
 // MariadbGTID represent mariadb gtid, [domain ID]-[server-id]-[sequence]
@@ -157,7 +157,13 @@ func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 }
 
 func (s *MariadbGTIDSet) String() string {
-	return hack.String(s.Encode())
+	sets := make([]string, 0, len(s.Sets))
+	for _, set := range s.Sets {
+		sets = append(sets, set.String())
+	}
+	sort.Strings(sets)
+
+	return strings.Join(sets, ",")
 }
 
 // Encode encodes mariadb gtid set
