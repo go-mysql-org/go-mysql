@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/dump"
+	"github.com/go-mysql-org/go-mysql/dump"
 )
 
 var addr = flag.String("addr", "127.0.0.1:3306", "MySQL addr")

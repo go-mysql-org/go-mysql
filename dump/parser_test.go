@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 type parserTestSuite struct {

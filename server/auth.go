@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var ErrAccessDenied = errors.New("access denied")

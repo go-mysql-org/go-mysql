@@ -7,7 +7,7 @@ import (
 	"os"
 
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/client"
 )
 
 type schemaTestSuite struct {

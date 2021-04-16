@@ -4,7 +4,7 @@ import (
 	"strconv"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/utils"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 type RowData []byte
