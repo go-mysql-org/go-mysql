@@ -1,4 +1,4 @@
-module github.com/siddontang/go-mysql
+module github.com/go-mysql-org/go-mysql
 
 go 1.16
 
