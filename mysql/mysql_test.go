@@ -222,5 +222,4 @@ func (t *mysqlTestSuite) TestMysqlUUIDClone(c *check.C) {
 
 	clone := us.Clone()
 	c.Assert(clone.String(), check.Equals, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
-
 }
