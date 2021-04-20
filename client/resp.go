@@ -242,7 +242,24 @@ func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectP
 	}
 
 	if firstPkgBuf[0] == OK_HEADER {
-		return ErrMalformPacket // Streaming allowed only for SELECT queries
+		// https://dev.mysql.com/doc/internals/en/com-query-response.html
+		// 14.6.4.1 COM_QUERY Response
+		// If the number of columns in the resultset is 0, this is a OK_Packet.
+
+		okResult, err := c.handleOKPacket(firstPkgBuf)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		result.Status = okResult.Status
+		result.AffectedRows = okResult.AffectedRows
+		result.InsertId = okResult.InsertId
+		if result.Resultset == nil {
+			result.Resultset = NewResultset(0)
+		} else {
+			result.Reset(0)
+		}
+		return nil
 	} else if firstPkgBuf[0] == ERR_HEADER {
 		return c.handleErrorPacket(append([]byte{}, firstPkgBuf...))
 	} else if firstPkgBuf[0] == LocalInFile_HEADER {
