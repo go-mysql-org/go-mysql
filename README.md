@@ -12,7 +12,7 @@ To change the used package in your repo it's enough to add this `replace` direct
 replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.1.2
 ```
 
-v.1.1.2 - is the last tag in repo, feel free to choose what you want.
+v1.1.2 - is the last tag in repo, feel free to choose what you want.
 
 ## Changelog
 This repo uses [Changelog](CHANGELOG.md).
