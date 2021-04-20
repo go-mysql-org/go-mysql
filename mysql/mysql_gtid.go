@@ -294,7 +294,7 @@ func (s *UUIDSet) Decode(data []byte) error {
 func (s *UUIDSet) Clone() *UUIDSet {
 	clone := new(UUIDSet)
 
-	clone.SID, _ = uuid.FromString(s.SID.String())
+	copy(clone.SID[:], s.SID[:])
 	clone.Intervals = s.Intervals.Normalize()
 
 	return clone
@@ -363,13 +363,13 @@ func (s *MysqlGTIDSet) AddSet(set *UUIDSet) {
 }
 
 func (s *MysqlGTIDSet) Update(GTIDStr string) error {
-	uuidSet, err := ParseUUIDSet(GTIDStr)
+	gtidSet, err := ParseMysqlGTIDSet(GTIDStr)
 	if err != nil {
 		return err
 	}
-
-	s.AddSet(uuidSet)
-
+	for _, uuidSet := range gtidSet.(*MysqlGTIDSet).Sets {
+		s.AddSet(uuidSet)
+	}
 	return nil
 }
 

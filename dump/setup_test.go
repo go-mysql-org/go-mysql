@@ -4,8 +4,8 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 // use docker mysql for test

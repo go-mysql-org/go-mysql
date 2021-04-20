@@ -9,7 +9,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
