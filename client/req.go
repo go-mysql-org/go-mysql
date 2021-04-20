@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/siddontang/go-mysql/utils"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 func (c *Conn) writeCommand(command byte) error {
