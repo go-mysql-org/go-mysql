@@ -34,7 +34,7 @@ type valueExpr struct {
 	ast.TexprNode
 }
 
-func newValueExpr(_ interface{}) ast.ValueExpr                      { return &valueExpr{} }
+func newValueExpr(_ interface{}, _ string, _ string) ast.ValueExpr  { return &valueExpr{} }
 func (ve *valueExpr) SetValue(val interface{})                      {}
 func (ve *valueExpr) GetValue() interface{}                         { return nil }
 func (ve *valueExpr) GetDatumString() string                        { return "" }
