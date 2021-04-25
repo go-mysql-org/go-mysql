@@ -39,7 +39,7 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 	var n int
 	var pos = 1
 
-	r := new(Result)
+	r := &Result{Resultset: &Resultset{}}
 
 	r.AffectedRows, _, n = LengthEncodedInt(data[pos:])
 	pos += n
