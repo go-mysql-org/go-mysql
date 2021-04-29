@@ -5,13 +5,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
-	"github.com/siddontang/go-mysql/schema"
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -227,7 +227,7 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 		}
 		ns = []*node{n}
 	}
-	return
+	return ns
 }
 
 func (c *Canal) updateTable(db, table string) (err error) {

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/test_util/test_keys"
 
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var testHost = flag.String("host", "127.0.0.1", "MySQL server host")
@@ -289,7 +289,6 @@ func (s *clientTestSuite) TestStmt_Select(c *C) {
 
 	e, _ = result.GetStringByName(0, "e")
 	c.Assert(e, Equals, "test1")
-
 }
 
 func (s *clientTestSuite) TestStmt_NULL(c *C) {
@@ -309,11 +308,13 @@ func (s *clientTestSuite) TestStmt_NULL(c *C) {
 
 	str = `select * from mixer_test_stmt where id = ?`
 	stmt, err = s.c.Prepare(str)
-	defer stmt.Close()
-
 	c.Assert(err, IsNil)
 
+	defer stmt.Close()
+
 	result, err = stmt.Execute(2)
+	c.Assert(err, IsNil)
+
 	b, err := result.IsNullByName(0, "id")
 	c.Assert(err, IsNil)
 	c.Assert(b, Equals, false)

@@ -11,8 +11,9 @@ import (
 	"unicode"
 
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
-	. "github.com/siddontang/go-mysql/mysql"
+	uuid "github.com/satori/go.uuid"
+
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 const (
@@ -100,7 +101,7 @@ func (h *EventHeader) Decode(data []byte) error {
 }
 
 func (h *EventHeader) Dump(w io.Writer) {
-	fmt.Fprintf(w, "=== %s ===\n", EventType(h.EventType))
+	fmt.Fprintf(w, "=== %s ===\n", h.EventType)
 	fmt.Fprintf(w, "Date: %s\n", time.Unix(int64(h.Timestamp), 0).Format(TimeFormat))
 	fmt.Fprintf(w, "Log position: %d\n", h.LogPos)
 	fmt.Fprintf(w, "Event size: %d\n", h.EventSize)
@@ -309,7 +310,7 @@ func (e *QueryEvent) Decode(data []byte) error {
 	e.ExecutionTime = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
-	schemaLength := uint8(data[pos])
+	schemaLength := data[pos]
 	pos++
 
 	e.ErrorCode = binary.LittleEndian.Uint16(data[pos:])
@@ -368,7 +369,7 @@ type GTIDEvent struct {
 
 func (e *GTIDEvent) Decode(data []byte) error {
 	pos := 0
-	e.CommitFlag = uint8(data[pos])
+	e.CommitFlag = data[pos]
 	pos++
 	e.SID = data[pos : pos+SidLength]
 	pos += SidLength
@@ -376,7 +377,7 @@ func (e *GTIDEvent) Decode(data []byte) error {
 	pos += 8
 
 	if len(data) >= 42 {
-		if uint8(data[pos]) == LogicalTimestampTypeCode {
+		if data[pos] == LogicalTimestampTypeCode {
 			pos++
 			e.LastCommitted = int64(binary.LittleEndian.Uint64(data[pos:]))
 			pos += PartLogicalTimestampLength
@@ -394,11 +395,9 @@ func (e *GTIDEvent) Decode(data []byte) error {
 				e.ImmediateCommitTimestamp &= ^(uint64(1) << 55)
 				e.OriginalCommitTimestamp = FixedLengthInt(data[pos : pos+7])
 				pos += 7
-
 			} else {
 				// Otherwise OriginalCommitTimestamp == ImmediateCommitTimestamp
 				e.OriginalCommitTimestamp = e.ImmediateCommitTimestamp
-
 			}
 
 			// TRANSACTION_LENGTH_MIN_LENGTH = 1
@@ -422,13 +421,10 @@ func (e *GTIDEvent) Decode(data []byte) error {
 				e.ImmediateServerVersion &= ^(uint32(1) << 31)
 				e.OriginalServerVersion = binary.LittleEndian.Uint32(data[pos:])
 				pos += 4
-
 			} else {
 				// Otherwise OriginalServerVersion == ImmediateServerVersion
 				e.OriginalServerVersion = e.ImmediateServerVersion
-
 			}
-
 		}
 	}
 	return nil
@@ -510,7 +506,7 @@ func (e *ExecuteLoadQueryEvent) Decode(data []byte) error {
 	e.ExecutionTime = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
-	e.SchemaLength = uint8(data[pos])
+	e.SchemaLength = data[pos]
 	pos++
 
 	e.ErrorCode = binary.LittleEndian.Uint16(data[pos:])
@@ -528,7 +524,7 @@ func (e *ExecuteLoadQueryEvent) Decode(data []byte) error {
 	e.EndPos = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
-	e.DupHandlingFlags = uint8(data[pos])
+	e.DupHandlingFlags = data[pos]
 
 	return nil
 }
@@ -601,7 +597,7 @@ func (e *MariadbGTIDEvent) Decode(data []byte) error {
 	pos += 8
 	e.GTID.DomainID = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
-	e.Flags = uint8(data[pos])
+	e.Flags = data[pos]
 	pos += 1
 
 	if (e.Flags & BINLOG_MARIADB_FL_GROUP_COMMIT_ID) > 0 {

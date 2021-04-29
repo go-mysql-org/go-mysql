@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 var (
@@ -33,8 +33,9 @@ func init() {
 	useExp = regexp.MustCompile("^USE `(.+)`;")
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
 	// The pattern will only match MySQL GTID, as you know SET GLOBAL gtid_slave_pos='0-1-4' is used for MariaDB.
-	//SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150';
-	gtidExp = regexp.MustCompile("(\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)")
+	// SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150';
+	// https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-concepts.html
+	gtidExp = regexp.MustCompile(`(\w{8}(-\w{4}){3}-\w{12}(:\d+-\d+)+)`)
 }
 
 // Parse the dump data with Dumper generate.
@@ -60,7 +61,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 
 		if parseBinlogPos && !binlogParsed {
 			// parsed gtid set from mysqldump
-			// gtid comes before binlog file-positon
+			// gtid comes before binlog file-position
 			if m := gtidExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
 				gtidStr := m[0][1]
 				if gtidStr != "" {
@@ -106,7 +107,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 }
 
 func parseValues(str string) ([]string, error) {
-	// values are seperated by comma, but we can not split using comma directly
+	// values are separated by comma, but we can not split using comma directly
 	// string is enclosed by single quote
 
 	// a simple implementation, may be more robust later.

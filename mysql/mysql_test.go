@@ -102,9 +102,33 @@ func (t *mysqlTestSuite) TestMysqlUpdate(c *check.C) {
 	g1, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57")
 	c.Assert(err, check.IsNil)
 
-	g1.Update("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58")
+	err = g1.Update("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58")
+	c.Assert(err, check.IsNil)
 
 	c.Assert(strings.ToUpper(g1.String()), check.Equals, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58")
+
+	g1, err = ParseMysqlGTIDSet(`
+		519CE70F-A893-11E9-A95A-B32DC65A7026:1-1154661,
+		5C9CA52B-9F11-11E9-8EAF-3381EC1CC790:1-244,
+		802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1-1221371,
+		F2B50559-A891-11E9-B646-884FF0CA2043:1-479261
+	`)
+	c.Assert(err, check.IsNil)
+
+	err = g1.Update(`
+		802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1221110-1221371,
+		F2B50559-A891-11E9-B646-884FF0CA2043:478509-479266
+	`)
+	c.Assert(err, check.IsNil)
+
+	g2, err := ParseMysqlGTIDSet(`
+		519CE70F-A893-11E9-A95A-B32DC65A7026:1-1154661,
+		5C9CA52B-9F11-11E9-8EAF-3381EC1CC790:1-244,
+		802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1-1221371,
+		F2B50559-A891-11E9-B646-884FF0CA2043:1-479266
+	`)
+	c.Assert(err, check.IsNil)
+	c.Assert(g2.Equal(g1), check.IsTrue)
 }
 
 func (t *mysqlTestSuite) TestMysqlGTIDContain(c *check.C) {
@@ -189,4 +213,13 @@ func (t *mysqlTestSuite) TestMysqlNullDecode(c *check.C) {
 
 	c.Assert(isNull, check.IsTrue)
 	c.Assert(n, check.Equals, 1)
+}
+
+func (t *mysqlTestSuite) TestMysqlUUIDClone(c *check.C) {
+	us, err := ParseUUIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
+	c.Assert(err, check.IsNil)
+	c.Assert(us.String(), check.Equals, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
+
+	clone := us.Clone()
+	c.Assert(clone.String(), check.Equals, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
 }

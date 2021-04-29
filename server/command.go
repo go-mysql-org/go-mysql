@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
 
@@ -110,10 +110,14 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			return r
 		}
 	case COM_STMT_CLOSE:
-		c.handleStmtClose(data)
+		if err := c.handleStmtClose(data); err != nil {
+			return err
+		}
 		return noResponse{}
 	case COM_STMT_SEND_LONG_DATA:
-		c.handleStmtSendLongData(data)
+		if err := c.handleStmtSendLongData(data); err != nil {
+			return err
+		}
 		return noResponse{}
 	case COM_STMT_RESET:
 		if r, err := c.handleStmtReset(data); err != nil {

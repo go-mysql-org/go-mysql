@@ -4,8 +4,8 @@ import (
 	"net"
 	"sync/atomic"
 
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/packet"
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/siddontang/go/sync2"
 )
 
@@ -107,7 +107,7 @@ func (c *Conn) handshake() error {
 		if err == ErrAccessDenied {
 			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.LocalAddr().String(), "Yes")
 		}
-		c.writeError(err)
+		_ = c.writeError(err)
 		return err
 	}
 

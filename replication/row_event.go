@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
-	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
 
@@ -145,7 +145,7 @@ func (e *TableMapEvent) Decode(data []byte) error {
 }
 
 func bitmapByteSize(columnCount int) int {
-	return int(columnCount+7) / 8
+	return (columnCount + 7) / 8
 }
 
 // see mysql sql/log_event.h
@@ -238,10 +238,8 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 }
 
 func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
-
 	pos := 0
 	for pos < len(data) {
-
 		// optional metadata fields are stored in Type, Length, Value(TLV) format
 		// Type takes 1 byte. Length is a packed integer value. Values takes Length bytes
 		t := data[pos]
@@ -637,7 +635,6 @@ func (e *TableMapEvent) EnumSetCollationMap() map[int]uint64 {
 }
 
 func (e *TableMapEvent) collationMap(includeType func(int) bool, defaultCharset, columnCharset []uint64) map[int]uint64 {
-
 	if len(defaultCharset) != 0 {
 		defaultCollation := defaultCharset[0]
 
@@ -666,7 +663,6 @@ func (e *TableMapEvent) collationMap(includeType func(int) bool, defaultCharset,
 	}
 
 	if len(columnCharset) != 0 {
-
 		p := 0
 		ret := make(map[int]uint64)
 		for i := 0; i < int(e.ColumnCount); i++ {
@@ -739,7 +735,6 @@ func (e *TableMapEvent) GeometryTypeMap() map[int]uint64 {
 //   Table_map_log_event::print_columns in mysql-8.0/sql/log_event.cc and mariadb-10.5/sql/log_event_client.cc
 
 func (e *TableMapEvent) realType(i int) byte {
-
 	typ := e.ColumnType[i]
 
 	switch typ {
@@ -757,7 +752,6 @@ func (e *TableMapEvent) realType(i int) byte {
 }
 
 func (e *TableMapEvent) IsNumericColumn(i int) bool {
-
 	switch e.realType(i) {
 	case MYSQL_TYPE_TINY,
 		MYSQL_TYPE_SHORT,
@@ -772,14 +766,12 @@ func (e *TableMapEvent) IsNumericColumn(i int) bool {
 	default:
 		return false
 	}
-
 }
 
 // IsCharacterColumn returns true if the column type is considered as character type.
 // Note that JSON/GEOMETRY types are treated as character type in mariadb.
 // (JSON is an alias for LONGTEXT in mariadb: https://mariadb.com/kb/en/json-data-type/)
 func (e *TableMapEvent) IsCharacterColumn(i int) bool {
-
 	switch e.realType(i) {
 	case MYSQL_TYPE_STRING,
 		MYSQL_TYPE_VAR_STRING,
@@ -796,7 +788,6 @@ func (e *TableMapEvent) IsCharacterColumn(i int) bool {
 	default:
 		return false
 	}
-
 }
 
 func (e *TableMapEvent) IsEnumColumn(i int) bool {
@@ -1007,7 +998,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 
 			if b0&0x30 != 0x30 {
 				length = int(uint16(b1) | (uint16((b0&0x30)^0x30) << 4))
-				tp = byte(b0 | 0x30)
+				tp = b0 | 0x30
 			} else {
 				length = int(meta & 0xFF)
 				tp = b0
@@ -1050,7 +1041,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		n = int(nbits+7) / 8
 
 		//use int64 for bit
-		v, err = decodeBit(data, int(nbits), int(n))
+		v, err = decodeBit(data, int(nbits), n)
 	case MYSQL_TYPE_TIMESTAMP:
 		n = 4
 		t := binary.LittleEndian.Uint32(data)
@@ -1097,11 +1088,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		if i32 == 0 {
 			v = "00:00:00"
 		} else {
-			sign := ""
-			if i32 < 0 {
-				sign = "-"
-			}
-			v = fmt.Sprintf("%s%02d:%02d:%02d", sign, i32/10000, (i32%10000)/100, i32%100)
+			v = fmt.Sprintf("%02d:%02d:%02d", i32/10000, (i32%10000)/100, i32%100)
 		}
 	case MYSQL_TYPE_TIME2:
 		v, n, err = decodeTime2(data, meta)
@@ -1163,14 +1150,15 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	default:
 		err = fmt.Errorf("unsupport type %d in binlog and don't know how to handle", tp)
 	}
-	return
+
+	return v, n, err
 }
 
 func decodeString(data []byte, length int) (v string, n int) {
 	if length < 256 {
 		length = int(data[0])
 
-		n = int(length) + 1
+		n = length + 1
 		v = hack.String(data[1:n])
 	} else {
 		length = int(binary.LittleEndian.Uint16(data[0:]))
@@ -1197,9 +1185,9 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 
 func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (interface{}, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
-	integral := (precision - decimals)
-	uncompIntegral := int(integral / digitsPerInteger)
-	uncompFractional := int(decimals / digitsPerInteger)
+	integral := precision - decimals
+	uncompIntegral := integral / digitsPerInteger
+	uncompFractional := decimals / digitsPerInteger
 	compIntegral := integral - (uncompIntegral * digitsPerInteger)
 	compFractional := decimals - (uncompFractional * digitsPerInteger)
 

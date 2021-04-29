@@ -1,0 +1,28 @@
+linters:
+  disable-all: true
+  enable:
+    # All code is ready for:
+    - deadcode
+    - errcheck
+    - staticcheck
+    - structcheck
+    - typecheck
+    - unused
+    - varcheck
+    - misspell
+    - nolintlint
+    - goimports
+    - nakedret
+    - unconvert
+    - whitespace
+    # ToDo:
+    #- gosimple
+    #- govet
+    #- ineffassign
+    #- gocritic
+    #- golint
+linters-settings:
+  nolintlint:
+    allow-unused: false
+    allow-leading-space: false
+    require-specific: true

@@ -32,8 +32,10 @@ func parseInterval(str string) (i Interval, err error) {
 		i.Stop = i.Start + 1
 	case 2:
 		i.Start, err = strconv.ParseInt(p[0], 10, 64)
-		i.Stop, err = strconv.ParseInt(p[1], 10, 64)
-		i.Stop = i.Stop + 1
+		if err == nil {
+			i.Stop, err = strconv.ParseInt(p[1], 10, 64)
+			i.Stop++
+		}
 	default:
 		err = errors.Errorf("invalid interval format, must n[-n]")
 	}
@@ -230,14 +232,14 @@ func (s *UUIDSet) String() string {
 }
 
 func (s *UUIDSet) encode(w io.Writer) {
-	w.Write(s.SID.Bytes())
+	_, _ = w.Write(s.SID.Bytes())
 	n := int64(len(s.Intervals))
 
-	binary.Write(w, binary.LittleEndian, n)
+	_ = binary.Write(w, binary.LittleEndian, n)
 
 	for _, i := range s.Intervals {
-		binary.Write(w, binary.LittleEndian, i.Start)
-		binary.Write(w, binary.LittleEndian, i.Stop)
+		_ = binary.Write(w, binary.LittleEndian, i.Start)
+		_ = binary.Write(w, binary.LittleEndian, i.Stop)
 	}
 }
 
@@ -292,7 +294,7 @@ func (s *UUIDSet) Decode(data []byte) error {
 func (s *UUIDSet) Clone() *UUIDSet {
 	clone := new(UUIDSet)
 
-	clone.SID, _ = uuid.FromString(s.SID.String())
+	copy(clone.SID[:], s.SID[:])
 	clone.Intervals = s.Intervals.Normalize()
 
 	return clone
@@ -318,7 +320,6 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 		} else {
 			s.AddSet(set)
 		}
-
 	}
 	return s, nil
 }
@@ -362,13 +363,13 @@ func (s *MysqlGTIDSet) AddSet(set *UUIDSet) {
 }
 
 func (s *MysqlGTIDSet) Update(GTIDStr string) error {
-	uuidSet, err := ParseUUIDSet(GTIDStr)
+	gtidSet, err := ParseMysqlGTIDSet(GTIDStr)
 	if err != nil {
 		return err
 	}
-
-	s.AddSet(uuidSet)
-
+	for _, uuidSet := range gtidSet.(*MysqlGTIDSet).Sets {
+		s.AddSet(uuidSet)
+	}
 	return nil
 }
 
@@ -414,7 +415,6 @@ func (s *MysqlGTIDSet) Equal(o GTIDSet) bool {
 	}
 
 	return true
-
 }
 
 func (s *MysqlGTIDSet) String() string {
@@ -432,7 +432,7 @@ func (s *MysqlGTIDSet) String() string {
 		sets = append(sets, strings.TrimSpace(set.String()))
 	}
 	sort.Strings(sets)
-	
+
 	sep := ""
 	for _, set := range sets {
 		buf.WriteString(sep)
@@ -446,7 +446,7 @@ func (s *MysqlGTIDSet) String() string {
 func (s *MysqlGTIDSet) Encode() []byte {
 	var buf bytes.Buffer
 
-	binary.Write(&buf, binary.LittleEndian, uint64(len(s.Sets)))
+	_ = binary.Write(&buf, binary.LittleEndian, uint64(len(s.Sets)))
 
 	for i := range s.Sets {
 		s.Sets[i].encode(&buf)
