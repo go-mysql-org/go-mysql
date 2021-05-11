@@ -2,6 +2,7 @@ package canal
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -140,6 +141,10 @@ func (c *Canal) runSyncBinlog() error {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
+			// ignore transaction
+			if string(e.Query) == "BEGIN" || strings.Index(string(e.Query), "SAVEPOINT") == 0 {
+				continue
+			}
 			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 			if err != nil {
 				log.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
