@@ -1,3 +1,8 @@
+### Tag v1.2.0 (2021.05.16)
+* Fix a rare bug in Conn.readResultStreaming. [#573](https://github.com/go-mysql-org/go-mysql/pull/573) ([atercattus](https://github.com/atercattus))
+* Fix tag. [#575](https://github.com/go-mysql-org/go-mysql/pull/575) ([atercattus](https://github.com/atercattus))
+* Update dependency. [#576](https://github.com/go-mysql-org/go-mysql/pull/576) ([Ehco1996](https://github.com/Ehco1996))
+
 ### Tag v1.1.2 (2021.04.20)
 * Fix canal test in readme. [#516](https://github.com/go-mysql-org/go-mysql/pull/516) ([gaojijun](https://github.com/gaojijun))
 * UUID clone. [#522](https://github.com/go-mysql-org/go-mysql/pull/522) ([lance6716](https://github.com/lance6716))
