@@ -9,11 +9,12 @@ import (
 	"strconv"
 	"time"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go/hack"
+
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var errMissingTableMapEvent = errors.New("invalid table id, no corresponding table map event")
@@ -846,7 +847,7 @@ type RowsEvent struct {
 	ignoreJSONDecodeErr     bool
 }
 
-func (e *RowsEvent) Decode(data []byte) error {
+func (e *RowsEvent) Decode(data []byte) (err2 error) {
 	pos := 0
 	e.TableID = FixedLengthInt(data[0:e.tableIDSize])
 	pos += e.tableIDSize
@@ -890,7 +891,9 @@ func (e *RowsEvent) Decode(data []byte) error {
 	// ... repeat rows until event-end
 	defer func() {
 		if r := recover(); r != nil {
-			log.Fatalf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v\n%s", r, data, e, e.Table, Pstack())
+			errStr := fmt.Sprintf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v", r, data, e, e.Table)
+			log.Errorf("%s\n%s", errStr, Pstack())
+			err2 = errors.Trace(errors.New(errStr))
 		}
 	}()
 
