@@ -9,10 +9,10 @@ A pure go library to handle MySQL network protocol and replication.
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
 ```
-replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.2.0
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.2.1
 ```
 
-v1.2.0 - is the last tag in repo, feel free to choose what you want.
+v1.2.1 - is the last tag in repo, feel free to choose what you want.
 
 ## Changelog
 This repo uses [Changelog](CHANGELOG.md).
