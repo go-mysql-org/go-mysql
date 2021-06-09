@@ -1,3 +1,6 @@
+### Tag v1.2.1 (2021.05.27)
+* Prevent panic on malformed auth data. [#557](https://github.com/go-mysql-org/go-mysql/pull/557) ([timvaillancourt](https://github.com/timvaillancourt))
+
 ### Tag v1.2.0 (2021.05.16)
 * Fix a rare bug in Conn.readResultStreaming. [#573](https://github.com/go-mysql-org/go-mysql/pull/573) ([atercattus](https://github.com/atercattus))
 * Fix tag. [#575](https://github.com/go-mysql-org/go-mysql/pull/575) ([atercattus](https://github.com/atercattus))
