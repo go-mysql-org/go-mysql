@@ -243,6 +243,21 @@ err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &r
 // ...
 ```
 
+### Example for connection pool (v.1.3.0)
+
+```go
+import (
+    "github.com/go-mysql-org/go-mysql/client"
+)
+
+pool := client.NewPool(log.Debugf, 100, 400, 5, "127.0.0.1:3306", `root`, ``, `test`)
+// ...
+conn, _ := pool.GetConn(ctx)
+defer pool.PutConn(conn)
+
+conn.Execute() / conn.Begin() / etc...
+```
+
 ## Server
 
 Server package supplies a framework to implement a simple MySQL server which can handle the packets from the MySQL client. 
