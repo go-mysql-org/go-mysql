@@ -222,7 +222,7 @@ Tested MySQL versions for the client include:
 - 5.7.x
 - 8.0.x
 
-### Example for SELECT streaming (v.1.1.1)
+### Example for SELECT streaming (v1.1.1)
 You can use also streaming for large SELECT responses.
 The callback function will be called for every result row without storing the whole resultset in memory.
 `result.Fields` will be filled before the first callback call.
@@ -243,7 +243,7 @@ err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &r
 // ...
 ```
 
-### Example for connection pool (v.1.3.0)
+### Example for connection pool (v1.3.0)
 
 ```go
 import (
