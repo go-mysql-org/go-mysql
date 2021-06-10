@@ -1,3 +1,7 @@
+### Tag v1.3.0 (2021.06.10)
+* Init Resultset in Result when handling ddl statement. [#578](https://github.com/go-mysql-org/go-mysql/pull/578) ([romberli](https://github.com/romberli))
+* Add pool for client connections. [#584](https://github.com/go-mysql-org/go-mysql/pull/584) ([atercattus](https://github.com/atercattus))
+
 ### Tag v1.2.1 (2021.05.27)
 * Prevent panic on malformed auth data. [#557](https://github.com/go-mysql-org/go-mysql/pull/557) ([timvaillancourt](https://github.com/timvaillancourt))
 
