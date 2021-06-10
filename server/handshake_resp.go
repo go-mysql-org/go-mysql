@@ -128,10 +128,15 @@ func (c *Conn) readPluginName(data []byte, pos int) int {
 	return pos
 }
 
-func (c *Conn) readAuthData(data []byte, pos int) ([]byte, int, int, error) {
+func (c *Conn) readAuthData(data []byte, pos int) (auth []byte, authLen int, newPos int, err error) {
+	// prevent 'panic: runtime error: index out of range' error
+	defer func() {
+		if recover() != nil {
+			err = NewDefaultError(ER_HANDSHAKE_ERROR)
+		}
+	}()
+
 	// length encoded data
-	var auth []byte
-	var authLen int
 	if c.capability&CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA != 0 {
 		authData, isNULL, readBytes, err := LengthEncodedString(data[pos:])
 		if err != nil {
@@ -144,7 +149,7 @@ func (c *Conn) readAuthData(data []byte, pos int) ([]byte, int, int, error) {
 		auth = authData
 		authLen = readBytes
 	} else if c.capability&CLIENT_SECURE_CONNECTION != 0 {
-		//auth length and auth
+		// auth length and auth
 		authLen = int(data[pos])
 		pos++
 		auth = data[pos : pos+authLen]

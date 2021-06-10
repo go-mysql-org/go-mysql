@@ -9,10 +9,10 @@ A pure go library to handle MySQL network protocol and replication.
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
 ```
-replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.1.2
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.2.1
 ```
 
-v1.1.2 - is the last tag in repo, feel free to choose what you want.
+v1.2.1 - is the last tag in repo, feel free to choose what you want.
 
 ## Changelog
 This repo uses [Changelog](CHANGELOG.md).
@@ -222,7 +222,7 @@ Tested MySQL versions for the client include:
 - 5.7.x
 - 8.0.x
 
-### Example for SELECT streaming (v.1.1.1)
+### Example for SELECT streaming (v1.1.1)
 You can use also streaming for large SELECT responses.
 The callback function will be called for every result row without storing the whole resultset in memory.
 `result.Fields` will be filled before the first callback call.
@@ -241,6 +241,21 @@ err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &r
 })
 
 // ...
+```
+
+### Example for connection pool (v1.3.0)
+
+```go
+import (
+    "github.com/go-mysql-org/go-mysql/client"
+)
+
+pool := client.NewPool(log.Debugf, 100, 400, 5, "127.0.0.1:3306", `root`, ``, `test`)
+// ...
+conn, _ := pool.GetConn(ctx)
+defer pool.PutConn(conn)
+
+conn.Execute() / conn.Begin() / etc...
 ```
 
 ## Server

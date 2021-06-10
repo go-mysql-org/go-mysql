@@ -1184,3 +1184,26 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 		c.Assert(tableMapEvent.GeometryTypeMap(), DeepEquals, tc.geometryTypeMap)
 	}
 }
+
+func (_ *testDecodeSuite) TestInvalidEvent(c *C) {
+	data := "@\x01\x00\x00\x00\x00\x01\x00\x02\xff\xfc\x01\x00\x00\x00\x00B\x14U\x16\x8ew"
+	table := &TableMapEvent{
+		tableIDSize: 6,
+		TableID:     0x140,
+		Flags:       0x1,
+		Schema:      []uint8{0x74, 0x65, 0x73, 0x74},
+		Table:       []uint8{0x74},
+		ColumnCount: 0x2,
+		ColumnType:  []uint8{0x3, 0xc},
+		ColumnMeta:  []uint16{0x0, 0x0},
+		NullBitmap:  []uint8{0x2}}
+
+	e2 := &RowsEvent{
+		Version:     1,
+		tableIDSize: 6,
+	}
+	e2.tables = map[uint64]*TableMapEvent{}
+	e2.tables[0x140] = table
+	err := e2.Decode([]byte(data))
+	c.Assert(err, NotNil)
+}
