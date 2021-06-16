@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -26,5 +27,28 @@ func TestReadAuthData(t *testing.T) {
 	}
 	if readBytes != len(data)-1 {
 		t.Fatalf("expected %d read bytes, got %d", len(data)-1, readBytes)
+	}
+}
+
+func TestDecodeFirstPart(t *testing.T) {
+	data := []byte{141, 174, 255, 1, 0, 0, 0, 1, 8}
+
+	c := &Conn{}
+
+	result, pos, err := c.decodeFirstPart(data)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !bytes.Equal(result, data) {
+		t.Fatal("expected same data, got something else")
+	}
+	if pos != 32 {
+		t.Fatalf("unexpected pos, got %d", pos)
+	}
+	if c.capability != 33533581 {
+		t.Fatalf("unexpected capability, got %d", c.capability)
+	}
+	if c.charset != 8 {
+		t.Fatalf("unexpected capability, got %d", c.capability)
 	}
 }

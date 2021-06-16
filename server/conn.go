@@ -17,6 +17,7 @@ type Conn struct {
 
 	serverConf     *Server
 	capability     uint32
+	charset        uint8
 	authPluginName string
 	connectionID   uint32
 	status         uint16
@@ -131,6 +132,14 @@ func (c *Conn) Closed() bool {
 
 func (c *Conn) GetUser() string {
 	return c.user
+}
+
+func (c *Conn) Capability() uint32 {
+	return c.capability
+}
+
+func (c *Conn) Charset() uint8 {
+	return c.charset
 }
 
 func (c *Conn) ConnectionID() uint32 {
