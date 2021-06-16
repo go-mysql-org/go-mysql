@@ -50,6 +50,10 @@ func (c *Conn) readFirstPart() ([]byte, int, error) {
 		return nil, 0, err
 	}
 
+	return c.decodeFirstPart(data)
+}
+
+func (c *Conn) decodeFirstPart(data []byte) ([]byte, int, error) {
 	pos := 0
 
 	// check CLIENT_PROTOCOL_41
@@ -67,8 +71,8 @@ func (c *Conn) readFirstPart() ([]byte, int, error) {
 	//skip max packet size
 	pos += 4
 
-	//charset, skip, if you want to use another charset, use set names
-	//c.collation = CollationId(data[pos])
+	// connection's default character set as defined
+	c.charset = data[pos]
 	pos++
 
 	//skip reserved 23[00]
