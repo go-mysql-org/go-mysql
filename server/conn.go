@@ -111,7 +111,7 @@ func (c *Conn) handshake() error {
 			if errors.Is(err, ErrAccessDeniedNoPassword) {
 				usingPasswd = ER_NO
 			}
-			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.LocalAddr().String(), usingPasswd)
+			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), usingPasswd)
 		}
 		_ = c.writeError(err)
 		return err
