@@ -94,7 +94,7 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 }
 
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, password string) error {
-	if bytes.Equal(CalcPassword(c.salt, []byte(c.password)), clientAuthData) {
+	if bytes.Equal(CalcPassword(c.salt, []byte(password)), clientAuthData) {
 		return nil
 	}
 	return errAccessDenied(password)
