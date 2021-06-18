@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"net"
 	"sync/atomic"
 
@@ -105,8 +106,12 @@ func (c *Conn) handshake() error {
 	}
 
 	if err := c.readHandshakeResponse(); err != nil {
-		if err == ErrAccessDenied {
-			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.LocalAddr().String(), "Yes")
+		if errors.Is(err, ErrAccessDenied) {
+			usingPasswd := ER_YES
+			if errors.Is(err, ErrAccessDeniedNoPassword) {
+				usingPasswd = ER_NO
+			}
+			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), usingPasswd)
 		}
 		_ = c.writeError(err)
 		return err
