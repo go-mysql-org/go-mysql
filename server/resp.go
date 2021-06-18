@@ -170,11 +170,14 @@ func (c *Conn) writeFieldList(fs []*Field) error {
 }
 
 type noResponse struct{}
+type eofResponse struct{}
 
 func (c *Conn) writeValue(value interface{}) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
+	case eofResponse:
+		return c.writeEOF()
 	case error:
 		return c.writeError(v)
 	case nil:
