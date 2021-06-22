@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	uuid "github.com/satori/go.uuid"
-	"github.com/siddontang/go-mysql/client"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 // Use docker mysql to test, mysql is 3306, mariadb is 3316
@@ -309,7 +309,7 @@ func (t *testSyncerSuite) testPositionSync(c *C) {
 
 	// Test re-sync.
 	time.Sleep(100 * time.Millisecond)
-	t.b.c.SetReadDeadline(time.Now().Add(time.Millisecond))
+	_ = t.b.c.SetReadDeadline(time.Now().Add(time.Millisecond))
 	time.Sleep(100 * time.Millisecond)
 
 	t.testSync(c, s)

@@ -1,0 +1,43 @@
+### Tag v1.3.0 (2021.06.10)
+* Init Resultset in Result when handling ddl statement. [#578](https://github.com/go-mysql-org/go-mysql/pull/578) ([romberli](https://github.com/romberli))
+* Add pool for client connections. [#584](https://github.com/go-mysql-org/go-mysql/pull/584) ([atercattus](https://github.com/atercattus))
+
+### Tag v1.2.1 (2021.05.27)
+* Prevent panic on malformed auth data. [#557](https://github.com/go-mysql-org/go-mysql/pull/557) ([timvaillancourt](https://github.com/timvaillancourt))
+
+### Tag v1.2.0 (2021.05.16)
+* Fix a rare bug in Conn.readResultStreaming. [#573](https://github.com/go-mysql-org/go-mysql/pull/573) ([atercattus](https://github.com/atercattus))
+* Fix tag. [#575](https://github.com/go-mysql-org/go-mysql/pull/575) ([atercattus](https://github.com/atercattus))
+* Update dependency. [#576](https://github.com/go-mysql-org/go-mysql/pull/576) ([Ehco1996](https://github.com/Ehco1996))
+
+### Tag v1.1.2 (2021.04.20)
+* Fix canal test in readme. [#516](https://github.com/go-mysql-org/go-mysql/pull/516) ([gaojijun](https://github.com/gaojijun))
+* UUID clone. [#522](https://github.com/go-mysql-org/go-mysql/pull/522) ([lance6716](https://github.com/lance6716))
+* Sort mariadb gtid set. [#545](https://github.com/go-mysql-org/go-mysql/pull/545) ([zeminzhou](https://github.com/zeminzhou))
+* Mysql: use numeric comparison for binlog filename. [#547](https://github.com/go-mysql-org/go-mysql/pull/547) ([lance6716](https://github.com/lance6716))
+* Fix MySQL spell. [#549](https://github.com/go-mysql-org/go-mysql/pull/549) ([igoso](https://github.com/igoso))
+* Update README.md and CHANGELOG.md. [#564](https://github.com/go-mysql-org/go-mysql/pull/564) ([atercattus](https://github.com/atercattus))
+* Update method now may receive strings with GTID sets. [#569](https://github.com/go-mysql-org/go-mysql/pull/569) ([mialinx](https://github.com/mialinx))
+* Change module name from siddontang/go-mysql to go-mysql-org/go-mysql. [#571](https://github.com/go-mysql-org/go-mysql/pull/571) ([lance6716](https://github.com/lance6716))
+* Fix a bug that not cloned to original memory. [#572](https://github.com/go-mysql-org/go-mysql/pull/572) ([lance6716](https://github.com/lance6716))
+* Update README.md for a new tag. [#574](https://github.com/go-mysql-org/go-mysql/pull/574) ([atercattus](https://github.com/atercattus))
+
+### Tag v1.1.1 (2021.04.08)
+* Restructured dump/ tests. [#563](https://github.com/go-mysql-org/go-mysql/pull/563) ([atercattus](https://github.com/atercattus))
+* Replace magic numbers in canal/canal_test.go by constants. [#562](https://github.com/go-mysql-org/go-mysql/pull/562) ([atercattus](https://github.com/atercattus))
+* Fix parsing GTIDs from mysqlpdump. [#561](https://github.com/go-mysql-org/go-mysql/pull/561) ([dobegor](https://github.com/dobegor))
+* Streaming of SELECT responses. `client/Conn.ExecuteSelectStreaming()` added. [#560](https://github.com/go-mysql-org/go-mysql/pull/560) ([atercattus](https://github.com/atercattus))
+* Migation from travis.ci to github actions. [#559](https://github.com/go-mysql-org/go-mysql/pull/559) ([atercattus](https://github.com/atercattus))
+* Output sorted mysql gtid. [#500](https://github.com/go-mysql-org/go-mysql/pull/500) ([zr-hebo](https://github.com/zr-hebo))
+* Add skipped columns information. [#505](https://github.com/go-mysql-org/go-mysql/pull/505) ([laskoviymishka](https://github.com/laskoviymishka))
+* Feat: support disable retry sync for canal. [#507](https://github.com/go-mysql-org/go-mysql/pull/507) ([everpcpc](https://github.com/everpcpc))
+* Update README.md. [#511](https://github.com/go-mysql-org/go-mysql/pull/511) ([TennyZhuang](https://github.com/TennyZhuang))
+* Add function to extend replication options. [#508](https://github.com/go-mysql-org/go-mysql/pull/508) ([wefen](https://github.com/wefen))
+
+### Tag v1.1.0 (2020.07.17)
+* Update .travis.yml (go 1.14 and tip). [#510](https://github.com/go-mysql-org/go-mysql/pull/510) ([atercattus](https://github.com/atercattus))
+* Update README.md. [#509](https://github.com/go-mysql-org/go-mysql/pull/509) ([atercattus](https://github.com/atercattus))
+* A lot of memory allocation optimizations. Changed public API for `mysql/Resultset` type. [#466](https://github.com/go-mysql-org/go-mysql/pull/466) ([atercattus](https://github.com/atercattus))
+
+### Tag v1.0.0 (2020.07.17)
+Add SemVer

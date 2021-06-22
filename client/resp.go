@@ -7,9 +7,9 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/utils"
 	"github.com/siddontang/go/hack"
 )
 
@@ -39,7 +39,7 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 	var n int
 	var pos = 1
 
-	r := new(Result)
+	r := &Result{Resultset: &Resultset{}}
 
 	r.AffectedRows, _, n = LengthEncodedInt(data[pos:])
 	pos += n
@@ -101,6 +101,10 @@ func (c *Conn) handleAuthResult() error {
 		}
 		c.authPluginName = switchToPlugin
 		auth, addNull, err := c.genAuthResponse(data)
+		if err != nil {
+			return err
+		}
+
 		if err = c.WriteAuthSwitchPacket(auth, addNull); err != nil {
 			return err
 		}
@@ -138,7 +142,7 @@ func (c *Conn) handleAuthResult() error {
 				}
 			}
 		} else {
-			errors.Errorf("invalid packet")
+			return errors.Errorf("invalid packet %x", data[0])
 		}
 	} else if c.authPluginName == AUTH_SHA256_PASSWORD {
 		if len(data) == 0 {
@@ -169,7 +173,6 @@ func (c *Conn) readAuthResult() ([]byte, string, error) {
 	// see: https://insidemysql.com/preparing-your-community-connector-for-mysql-8-part-2-sha256/
 	// packet indicator
 	switch data[0] {
-
 	case OK_HEADER:
 		_, err := c.handleOKPacket(data)
 		return nil, "", err
@@ -230,6 +233,42 @@ func (c *Conn) readResult(binary bool) (*Result, error) {
 	return c.readResultset(firstPkgBuf, binary)
 }
 
+func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectPerRowCallback) error {
+	firstPkgBuf, err := c.ReadPacketReuseMem(utils.ByteSliceGet(16)[:0])
+	defer utils.ByteSlicePut(firstPkgBuf)
+
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if firstPkgBuf[0] == OK_HEADER {
+		// https://dev.mysql.com/doc/internals/en/com-query-response.html
+		// 14.6.4.1 COM_QUERY Response
+		// If the number of columns in the resultset is 0, this is a OK_Packet.
+
+		okResult, err := c.handleOKPacket(firstPkgBuf)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		result.Status = okResult.Status
+		result.AffectedRows = okResult.AffectedRows
+		result.InsertId = okResult.InsertId
+		if result.Resultset == nil {
+			result.Resultset = NewResultset(0)
+		} else {
+			result.Reset(0)
+		}
+		return nil
+	} else if firstPkgBuf[0] == ERR_HEADER {
+		return c.handleErrorPacket(append([]byte{}, firstPkgBuf...))
+	} else if firstPkgBuf[0] == LocalInFile_HEADER {
+		return ErrMalformPacket
+	}
+
+	return c.readResultsetStreaming(firstPkgBuf, binary, result, perRowCb)
+}
+
 func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 	// column count
 	count, _, n := LengthEncodedInt(data)
@@ -251,6 +290,31 @@ func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 	}
 
 	return result, nil
+}
+
+func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, perRowCb SelectPerRowCallback) error {
+	columnCount, _, n := LengthEncodedInt(data)
+
+	if n-len(data) != 0 {
+		return ErrMalformPacket
+	}
+
+	if result.Resultset == nil {
+		result.Resultset = NewResultset(int(columnCount))
+	} else {
+		// Reuse memory if can
+		result.Reset(int(columnCount))
+	}
+
+	if err := c.readResultColumns(result); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err := c.readResultRowsStreaming(result, binary, perRowCb); err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 func (c *Conn) readResultColumns(result *Result) (err error) {
@@ -334,6 +398,50 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 	for i := range result.Values {
 		result.Values[i], err = result.RowDatas[i].Parse(result.Fields, isBinary, result.Values[i])
 
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Conn) readResultRowsStreaming(result *Result, isBinary bool, perRowCb SelectPerRowCallback) (err error) {
+	var (
+		data []byte
+		row  []FieldValue
+	)
+
+	for {
+		data, err = c.ReadPacketReuseMem(data[:0])
+		if err != nil {
+			return
+		}
+
+		// EOF Packet
+		if c.isEOFPacket(data) {
+			if c.capability&CLIENT_PROTOCOL_41 > 0 {
+				// result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				// todo add strict_mode, warning will be treat as error
+				result.Status = binary.LittleEndian.Uint16(data[3:])
+				c.status = result.Status
+			}
+
+			break
+		}
+
+		if data[0] == ERR_HEADER {
+			return c.handleErrorPacket(data)
+		}
+
+		// Parse this row
+		row, err = RowData(data).Parse(result.Fields, isBinary, row)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		// Send the row to "userland" code
+		err = perRowCb(row)
 		if err != nil {
 			return errors.Trace(err)
 		}

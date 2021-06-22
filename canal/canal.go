@@ -12,14 +12,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/dump"
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/client"
-	"github.com/siddontang/go-mysql/dump"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
-	"github.com/siddontang/go-mysql/schema"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
@@ -249,7 +249,7 @@ func (c *Canal) Close() {
 	c.conn = nil
 	c.connLock.Unlock()
 
-	c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
+	_ = c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {

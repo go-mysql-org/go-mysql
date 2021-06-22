@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/siddontang/go-mysql/canal"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/canal"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var host = flag.String("host", "127.0.0.1", "MySQL host")
@@ -23,8 +23,8 @@ var flavor = flag.String("flavor", "mysql", "Flavor: mysql or mariadb")
 var serverID = flag.Int("server-id", 101, "Unique Server ID")
 var mysqldump = flag.String("mysqldump", "mysqldump", "mysqldump execution path")
 
-var dbs = flag.String("dbs", "test", "dump databases, seperated by comma")
-var tables = flag.String("tables", "", "dump tables, seperated by comma, will overwrite dbs")
+var dbs = flag.String("dbs", "test", "dump databases, separated by comma")
+var tables = flag.String("tables", "", "dump tables, separated by comma, will overwrite dbs")
 var tableDB = flag.String("table_db", "test", "database for dump tables")
 var ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be database.table format, separated by comma")
 
@@ -89,8 +89,7 @@ func main() {
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
-		os.Kill,
-		os.Interrupt,
+		syscall.SIGINT,
 		syscall.SIGHUP,
 		syscall.SIGINT,
 		syscall.SIGTERM,

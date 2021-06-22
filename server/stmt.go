@@ -6,8 +6,8 @@ import (
 	"math"
 	"strconv"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 )
 
 var paramFieldData []byte
@@ -67,7 +67,7 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	if s.Params > 0 {
 		for i := 0; i < s.Params; i++ {
 			data = data[0:4]
-			data = append(data, []byte(paramFieldData)...)
+			data = append(data, paramFieldData...)
 
 			if err := c.WritePacket(data); err != nil {
 				return errors.Trace(err)
@@ -82,7 +82,7 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	if s.Columns > 0 {
 		for i := 0; i < s.Columns; i++ {
 			data = data[0:4]
-			data = append(data, []byte(columnFieldData)...)
+			data = append(data, columnFieldData...)
 
 			if err := c.WritePacket(data); err != nil {
 				return errors.Trace(err)
@@ -92,7 +92,6 @@ func (c *Conn) writePrepare(s *Stmt) error {
 		if err := c.writeEOF(); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -195,7 +194,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			}
 
 			if isUnsigned {
-				args[i] = uint8(paramValues[pos])
+				args[i] = paramValues[pos]
 			} else {
 				args[i] = int8(paramValues[pos])
 			}
@@ -209,7 +208,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			}
 
 			if isUnsigned {
-				args[i] = uint16(binary.LittleEndian.Uint16(paramValues[pos : pos+2]))
+				args[i] = binary.LittleEndian.Uint16(paramValues[pos : pos+2])
 			} else {
 				args[i] = int16(binary.LittleEndian.Uint16(paramValues[pos : pos+2]))
 			}
@@ -222,7 +221,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			}
 
 			if isUnsigned {
-				args[i] = uint32(binary.LittleEndian.Uint32(paramValues[pos : pos+4]))
+				args[i] = binary.LittleEndian.Uint32(paramValues[pos : pos+4])
 			} else {
 				args[i] = int32(binary.LittleEndian.Uint32(paramValues[pos : pos+4]))
 			}
@@ -247,7 +246,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 				return ErrMalformPacket
 			}
 
-			args[i] = float32(math.Float32frombits(binary.LittleEndian.Uint32(paramValues[pos : pos+4])))
+			args[i] = math.Float32frombits(binary.LittleEndian.Uint32(paramValues[pos : pos+4]))
 			pos += 4
 			continue
 

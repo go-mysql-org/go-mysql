@@ -2,12 +2,14 @@ package replication
 
 import (
 	"context"
-	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
 	"os"
 	"sync"
 	"time"
+
+	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {

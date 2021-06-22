@@ -9,8 +9,8 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 )
 
 func (c *Conn) handleAuthSwitchResponse() error {
@@ -25,7 +25,7 @@ func (c *Conn) handleAuthSwitchResponse() error {
 			return err
 		}
 		if !bytes.Equal(CalcPassword(c.salt, []byte(c.password)), authData) {
-			return ErrAccessDenied
+			return errAccessDenied(c.password)
 		}
 		return nil
 
@@ -82,7 +82,7 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 		if bytes.Equal(authData, []byte(c.password)) {
 			return nil
 		}
-		return ErrAccessDenied
+		return errAccessDenied(c.password)
 	} else {
 		// client either request for the public key or send the encrypted password
 		if len(authData) == 1 && authData[0] == 0x02 {
@@ -111,7 +111,7 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 		if bytes.Equal(plain, dbytes) {
 			return nil
 		}
-		return ErrAccessDenied
+		return errAccessDenied(c.password)
 	}
 }
 

@@ -3,7 +3,7 @@ package mysql
 import (
 	"encoding/binary"
 
-	"github.com/siddontang/go-mysql/utils"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 type FieldData []byte
@@ -130,7 +130,7 @@ func (f *Field) Parse(p FieldData) (err error) {
 		f.DefaultValue = p[pos:(pos + int(f.DefaultValueLength))]
 	}
 
-	return
+	return nil
 }
 
 func (p FieldData) Parse() (f *Field, err error) {

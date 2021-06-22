@@ -6,9 +6,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/packet"
 )
 
 const defaultAuthPluginName = AUTH_NATIVE_PASSWORD
@@ -46,7 +46,7 @@ func (c *Conn) readInitialHandshake() error {
 	pos := 1 + bytes.IndexByte(data[1:], 0x00) + 1
 
 	// connection id length is 4
-	c.connectionID = uint32(binary.LittleEndian.Uint32(data[pos : pos+4]))
+	c.connectionID = binary.LittleEndian.Uint32(data[pos : pos+4])
 	pos += 4
 
 	c.salt = []byte{}
@@ -106,7 +106,7 @@ func (c *Conn) readInitialHandshake() error {
 // generate auth response data according to auth plugin
 //
 // NOTE: the returned boolean value indicates whether to add a \NUL to the end of data.
-//       it is quite tricky because MySQl server expects different formats of responses in different auth situations.
+//       it is quite tricky because MySQL server expects different formats of responses in different auth situations.
 //       here the \NUL needs to be added when sending back the empty password or cleartext password in 'sha256_password'
 //       authentication.
 func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
@@ -199,7 +199,7 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Charset [1 byte]
 	// use default collation id 33 here, is utf-8
-	data[12] = byte(DEFAULT_COLLATION_ID)
+	data[12] = DEFAULT_COLLATION_ID
 
 	// SSL Connection Request Packet
 	// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::SSLRequest

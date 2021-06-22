@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/packet"
 )
 
 type Conn struct {
@@ -32,6 +32,9 @@ type Conn struct {
 
 	connectionID uint32
 }
+
+// This function will be called for every row in resultset from ExecuteSelectStreaming.
+type SelectPerRowCallback func(row []FieldValue) error
 
 func getNetProto(addr string) string {
 	proto := "tcp"
@@ -163,6 +166,28 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 			return r, err
 		}
 	}
+}
+
+// ExecuteSelectStreaming will call perRowCallback for every row in resultset
+//   WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
+//
+// ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
+//
+// Example:
+//
+// 		var result mysql.Result
+// 		conn.ExecuteSelectStreaming(`SELECT ... LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
+//   		// Use the row as you want.
+//   		// You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
+//   		return nil
+// 		})
+//
+func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback) error {
+	if err := c.writeCommandStr(COM_QUERY, command); err != nil {
+		return errors.Trace(err)
+	}
+
+	return c.readResultStreaming(false, result, perRowCallback)
 }
 
 func (c *Conn) Begin() error {

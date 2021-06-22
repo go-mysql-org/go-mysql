@@ -427,6 +427,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 	//   `c2` decimal(10,0)
 	// ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+	//nolint:misspell
 	// INSERT INTO `t10` (`c2`) VALUES (1);
 	// INSERT INTO `t10` (`c1`, `c2`) VALUES ('{"key1": "value1", "key2": "value2"}', 1);
 	// test json deserialization
@@ -456,6 +457,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 		c.Assert(rows.Rows[0][1], Equals, float64(1))
 	}
 
+	//nolint:misspell
 	longTbls := [][]byte{
 		[]byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc\xd0\n\x00\x00\x00\x01\x00\xcf\n\v\x00\x04\x00\f\x0f\x00text\xbe\x15Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac\x80\x00\x00\x00e"),
 	}
@@ -482,6 +484,7 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 	//   `c2` decimal(10,0)
 	// ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+	//nolint:misspell
 	// INSERT INTO `t10` (`c2`) VALUES (1);
 	// INSERT INTO `t10` (`c1`, `c2`) VALUES ('{"key1": "value1", "key2": "value2"}', 1);
 	// test json deserialization
@@ -511,6 +514,7 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 		c.Assert(rows.Rows[0][1], SimpleDecimalEqualsChecker, decimal.NewFromFloat(1))
 	}
 
+	//nolint:misspell
 	longTbls := [][]byte{
 		[]byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc\xd0\n\x00\x00\x00\x01\x00\xcf\n\v\x00\x04\x00\f\x0f\x00text\xbe\x15Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac\x80\x00\x00\x00e"),
 	}
@@ -909,7 +913,6 @@ func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.tableIDSize = 6
 		err := tableMapEvent.Decode(tc.data)
@@ -925,7 +928,6 @@ func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
 			c.Assert(tableMapEvent.EnumStrValueString(), DeepEquals, [][]string(nil))
 		}
 	}
-
 }
 
 func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
@@ -1004,11 +1006,9 @@ func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
 		c.Assert(tableMapEvent.PrimaryKey, DeepEquals, tc.expectedPrimaryKey)
 		c.Assert(tableMapEvent.PrimaryKeyPrefix, DeepEquals, tc.expectedPrimaryKeyPrefix)
 	}
-
 }
 
 func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
-
 	/*
 		CREATE TABLE `_types` (
 			`b_bit` bit(64) NOT NULL DEFAULT b'0',
@@ -1171,7 +1171,6 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.flavor = tc.flavor
 		tableMapEvent.tableIDSize = 6
@@ -1183,7 +1182,28 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 		c.Assert(tableMapEvent.EnumStrValueMap(), DeepEquals, tc.enumStrValueMap)
 		c.Assert(tableMapEvent.SetStrValueMap(), DeepEquals, tc.setStrValueMap)
 		c.Assert(tableMapEvent.GeometryTypeMap(), DeepEquals, tc.geometryTypeMap)
-
 	}
+}
 
+func (_ *testDecodeSuite) TestInvalidEvent(c *C) {
+	data := "@\x01\x00\x00\x00\x00\x01\x00\x02\xff\xfc\x01\x00\x00\x00\x00B\x14U\x16\x8ew"
+	table := &TableMapEvent{
+		tableIDSize: 6,
+		TableID:     0x140,
+		Flags:       0x1,
+		Schema:      []uint8{0x74, 0x65, 0x73, 0x74},
+		Table:       []uint8{0x74},
+		ColumnCount: 0x2,
+		ColumnType:  []uint8{0x3, 0xc},
+		ColumnMeta:  []uint16{0x0, 0x0},
+		NullBitmap:  []uint8{0x2}}
+
+	e2 := &RowsEvent{
+		Version:     1,
+		tableIDSize: 6,
+	}
+	e2.tables = map[uint64]*TableMapEvent{}
+	e2.tables[0x140] = table
+	err := e2.Decode([]byte(data))
+	c.Assert(err, NotNil)
 }

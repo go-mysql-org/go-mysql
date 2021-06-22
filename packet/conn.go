@@ -13,9 +13,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/utils"
 )
 
 type BufPool struct {
@@ -134,7 +134,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	}
 
 	length := int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16)
-	sequence := uint8(c.header[3])
+	sequence := c.header[3]
 
 	if sequence != c.Sequence {
 		return errors.Errorf("invalid sequence %d != %d", sequence, c.Sequence)

@@ -3,10 +3,10 @@ package main
 import (
 	"net"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/server"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/server"
-	"github.com/siddontang/go-mysql/test_util/test_keys"
 
 	"crypto/tls"
 	"time"
@@ -44,7 +44,11 @@ func main() {
 			}
 
 			for {
-				conn.HandleCommand()
+				err = conn.HandleCommand()
+				if err != nil {
+					log.Errorf(`Could not handle command: %v`, err)
+					return
+				}
 			}
 		}()
 	}

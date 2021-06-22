@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
 )
 
@@ -149,7 +149,7 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 	count := d.decodeCount(data, isSmall)
 	size := d.decodeCount(data[offsetSize:], isSmall)
 
-	if d.isDataShort(data, int(size)) {
+	if d.isDataShort(data, size) {
 		// Before MySQL 5.7.22, json type generated column may have invalid value,
 		// bug ref: https://bugs.mysql.com/bug.php?id=88791
 		// As generated column value is not used in replication, we can just ignore
@@ -452,7 +452,6 @@ func (d *jsonBinaryDecoder) decodeDateTime(data []byte) interface{} {
 	frac := v % (1 << 24)
 
 	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, minute, second, frac)
-
 }
 
 func (d *jsonBinaryDecoder) decodeCount(data []byte, isSmall bool) int {
