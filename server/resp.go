@@ -115,6 +115,29 @@ func (c *Conn) writeAuthMoreDataFastAuth() error {
 	return c.WritePacket(data)
 }
 
+func (c *Conn) writeResultsets(r *Result) error {
+	var err error
+	for res := r; res != nil; res = res.Next {
+		if res.Next != nil {
+			c.status |= SERVER_MORE_RESULTS_EXISTS
+		}
+
+		if res.Resultset == nil {
+			err = c.writeOK(res)
+		} else {
+			err = c.writeResultset(res.Resultset)
+		}
+
+		c.status &= ^SERVER_MORE_RESULTS_EXISTS
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (c *Conn) writeResultset(r *Resultset) error {
 	columnLen := PutLengthEncodedInt(uint64(len(r.Fields)))
 
@@ -183,8 +206,8 @@ func (c *Conn) writeValue(value interface{}) error {
 	case nil:
 		return c.writeOK(nil)
 	case *Result:
-		if v != nil && v.Resultset != nil {
-			return c.writeResultset(v.Resultset)
+		if v != nil {
+			return c.writeResultsets(v)
 		} else {
 			return c.writeOK(v)
 		}

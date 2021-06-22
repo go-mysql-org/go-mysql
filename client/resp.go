@@ -222,15 +222,26 @@ func (c *Conn) readResult(binary bool) (*Result, error) {
 		return nil, errors.Trace(err)
 	}
 
+	var result *Result
 	if firstPkgBuf[0] == OK_HEADER {
-		return c.handleOKPacket(firstPkgBuf)
+		result, err = c.handleOKPacket(firstPkgBuf)
 	} else if firstPkgBuf[0] == ERR_HEADER {
-		return nil, c.handleErrorPacket(append([]byte{}, firstPkgBuf...))
+		err = c.handleErrorPacket(append([]byte{}, firstPkgBuf...))
 	} else if firstPkgBuf[0] == LocalInFile_HEADER {
-		return nil, ErrMalformPacket
+		err = ErrMalformPacket
+	} else {
+		result, err = c.readResultset(firstPkgBuf, binary)
 	}
 
-	return c.readResultset(firstPkgBuf, binary)
+	// if there are more results, chain resultsets of following results to this
+	// result
+	if err == nil && result.Status&SERVER_MORE_RESULTS_EXISTS > 0 {
+		if res, err := c.readResult(binary); err == nil {
+			result.ChainResult(res)
+		}
+	}
+
+	return result, err
 }
 
 func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectPerRowCallback) error {
