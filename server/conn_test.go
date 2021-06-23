@@ -56,3 +56,41 @@ func (t *connTestSuite) TestStatus(c *check.C) {
 	conn.ClearInTransaction()
 	c.Assert(conn.HasStatus(mysql.SERVER_STATUS_IN_TRANS), check.IsFalse)
 }
+
+func (t *connTestSuite) TestCapability(c *check.C) {
+	conn := Conn{}
+
+	caps := []uint32{
+		mysql.CLIENT_LONG_PASSWORD,
+		mysql.CLIENT_FOUND_ROWS,
+		mysql.CLIENT_LONG_FLAG,
+		mysql.CLIENT_CONNECT_WITH_DB,
+		mysql.CLIENT_NO_SCHEMA,
+		mysql.CLIENT_COMPRESS,
+		mysql.CLIENT_ODBC,
+		mysql.CLIENT_LOCAL_FILES,
+		mysql.CLIENT_IGNORE_SPACE,
+		mysql.CLIENT_PROTOCOL_41,
+		mysql.CLIENT_INTERACTIVE,
+		mysql.CLIENT_SSL,
+		mysql.CLIENT_IGNORE_SIGPIPE,
+		mysql.CLIENT_TRANSACTIONS,
+		mysql.CLIENT_RESERVED,
+		mysql.CLIENT_SECURE_CONNECTION,
+		mysql.CLIENT_MULTI_STATEMENTS,
+		mysql.CLIENT_MULTI_RESULTS,
+		mysql.CLIENT_PS_MULTI_RESULTS,
+		mysql.CLIENT_PLUGIN_AUTH,
+		mysql.CLIENT_CONNECT_ATTRS,
+		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
+	}
+
+	for _, cap := range caps {
+		c.Assert(conn.HasCapability(cap), check.IsFalse)
+		conn.SetCapability(cap)
+		c.Assert(conn.HasCapability(cap), check.IsTrue)
+		c.Assert(conn.Capability()&cap > 0, check.IsTrue)
+		conn.UnsetCapability(cap)
+		c.Assert(conn.HasCapability(cap), check.IsFalse)
+	}
+}
