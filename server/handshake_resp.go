@@ -148,7 +148,7 @@ func (c *Conn) readAuthData(data []byte, pos int) (auth []byte, authLen int, new
 		}
 		if isNULL {
 			// no auth length and no auth data, just \NUL, considered invalid auth data, and reject connection as MySQL does
-			return nil, 0, 0, NewDefaultError(ER_ACCESS_DENIED_ERROR, c.RemoteAddr().String(), c.user, MySQLErrName[ER_NO])
+			return nil, 0, 0, NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), MySQLErrName[ER_NO])
 		}
 		auth = authData
 		authLen = readBytes
