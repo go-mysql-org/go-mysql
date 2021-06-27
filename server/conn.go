@@ -107,11 +107,11 @@ func (c *Conn) handshake() error {
 
 	if err := c.readHandshakeResponse(); err != nil {
 		if errors.Is(err, ErrAccessDenied) {
-			usingPasswd := ER_YES
+			var usingPasswd uint16 = ER_YES
 			if errors.Is(err, ErrAccessDeniedNoPassword) {
 				usingPasswd = ER_NO
 			}
-			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), usingPasswd)
+			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), MySQLErrName[usingPasswd])
 		}
 		_ = c.writeError(err)
 		return err
