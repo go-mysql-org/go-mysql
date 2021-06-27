@@ -143,6 +143,18 @@ func (c *Conn) Capability() uint32 {
 	return c.capability
 }
 
+func (c *Conn) SetCapability(cap uint32) {
+	c.capability |= cap
+}
+
+func (c *Conn) UnsetCapability(cap uint32) {
+	c.capability &= ^cap
+}
+
+func (c *Conn) HasCapability(cap uint32) bool {
+	return c.capability&cap > 0
+}
+
 func (c *Conn) Charset() uint8 {
 	return c.charset
 }
@@ -152,17 +164,29 @@ func (c *Conn) ConnectionID() uint32 {
 }
 
 func (c *Conn) IsAutoCommit() bool {
-	return c.status&SERVER_STATUS_AUTOCOMMIT > 0
+	return c.HasStatus(SERVER_STATUS_AUTOCOMMIT)
 }
 
 func (c *Conn) IsInTransaction() bool {
-	return c.status&SERVER_STATUS_IN_TRANS > 0
+	return c.HasStatus(SERVER_STATUS_IN_TRANS)
 }
 
 func (c *Conn) SetInTransaction() {
-	c.status |= SERVER_STATUS_IN_TRANS
+	c.SetStatus(SERVER_STATUS_IN_TRANS)
 }
 
 func (c *Conn) ClearInTransaction() {
-	c.status &= ^SERVER_STATUS_IN_TRANS
+	c.UnsetStatus(SERVER_STATUS_IN_TRANS)
+}
+
+func (c *Conn) SetStatus(status uint16) {
+	c.status |= status
+}
+
+func (c *Conn) UnsetStatus(status uint16) {
+	c.status &= ^status
+}
+
+func (c *Conn) HasStatus(status uint16) bool {
+	return c.status&status > 0
 }
