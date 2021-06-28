@@ -185,7 +185,7 @@ func (c *Conn) writeFieldList(fs []*Field) error {
 type noResponse struct{}
 type eofResponse struct{}
 
-func (c *Conn) writeValue(value interface{}) error {
+func (c *Conn) WriteValue(value interface{}) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
