@@ -182,6 +182,19 @@ func (c *Conn) writeFieldList(fs []*Field) error {
 	return nil
 }
 
+func (c *Conn) writeFieldValues(fv []FieldValue) error {
+	data := make([]byte, 4, 1024)
+	for _, v := range fv {
+		tv, err := FormatTextValue(v.Value())
+		if err != nil {
+			return err
+		}
+		data = append(data, PutLengthEncodedString(tv)...)
+	}
+
+	return c.WritePacket(data)
+}
+
 type noResponse struct{}
 type eofResponse struct{}
 
@@ -203,6 +216,8 @@ func (c *Conn) WriteValue(value interface{}) error {
 		}
 	case []*Field:
 		return c.writeFieldList(v)
+	case []FieldValue:
+		return c.writeFieldValues(v)
 	case *Stmt:
 		return c.writePrepare(v)
 	default:
