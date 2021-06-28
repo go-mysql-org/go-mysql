@@ -116,6 +116,13 @@ func (c *Conn) writeAuthMoreDataFastAuth() error {
 }
 
 func (c *Conn) writeResultset(r *Resultset) error {
+	// for a streaming resultset, that handled rowdata separately in a callback
+	// of type SelectPerRowCallback, we can suffice by ending the stream with
+	// an EOF
+	if r.StreamingDone {
+		return c.writeEOF()
+	}
+
 	columnLen := PutLengthEncodedInt(uint64(len(r.Fields)))
 
 	data := make([]byte, 4, 1024)
@@ -135,6 +142,12 @@ func (c *Conn) writeResultset(r *Resultset) error {
 
 	if err := c.writeEOF(); err != nil {
 		return err
+	}
+
+	// streaming resultsets handle rowdata in a separate callback of type
+	// SelectPerRowCallback so we're done here
+	if r.Streaming {
+		return nil
 	}
 
 	for _, v := range r.RowDatas {

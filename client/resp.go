@@ -306,6 +306,9 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, 
 		result.Reset(int(columnCount))
 	}
 
+	// this is a streaming resultset
+	result.Resultset.Streaming = true
+
 	if err := c.readResultColumns(result); err != nil {
 		return errors.Trace(err)
 	}
@@ -319,6 +322,9 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, 
 	if err := c.readResultRowsStreaming(result, binary, perRowCb); err != nil {
 		return errors.Trace(err)
 	}
+
+	// this resultset is done streaming
+	result.Resultset.StreamingDone = true
 
 	return nil
 }
