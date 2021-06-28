@@ -36,6 +36,9 @@ type Conn struct {
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
 type SelectPerRowCallback func(row []FieldValue) error
 
+// This function will be called once per result from ExecuteSelectStreaming
+type SelectPerResultCallback func(result *Result) error
+
 func getNetProto(addr string) string {
 	proto := "tcp"
 	if strings.Contains(addr, "/") {
@@ -170,6 +173,7 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset
 //   WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
+// When given, perResultCallback will be called once per result
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
 //
@@ -180,14 +184,14 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 //   		// Use the row as you want.
 //   		// You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
 //   		return nil
-// 		})
+// 		}, nil)
 //
-func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback) error {
+func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
 	if err := c.writeCommandStr(COM_QUERY, command); err != nil {
 		return errors.Trace(err)
 	}
 
-	return c.readResultStreaming(false, result, perRowCallback)
+	return c.readResultStreaming(false, result, perRowCallback, perResultCallback)
 }
 
 func (c *Conn) Begin() error {
