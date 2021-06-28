@@ -33,6 +33,14 @@ func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 	return s.conn.readResult(true)
 }
 
+func (s *Stmt) ExecuteSelectStreaming(result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback, args ...interface{}) error {
+	if err := s.write(args...); err != nil {
+		return errors.Trace(err)
+	}
+
+	return s.conn.readResultStreaming(true, result, perRowCb, perResCb)
+}
+
 func (s *Stmt) Close() error {
 	if err := s.conn.writeCommandUint32(COM_STMT_CLOSE, s.id); err != nil {
 		return errors.Trace(err)
