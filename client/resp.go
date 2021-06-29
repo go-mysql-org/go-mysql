@@ -52,8 +52,8 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 		pos += 2
 
 		//todo:strict_mode, check warnings as error
-		//Warnings := binary.LittleEndian.Uint16(data[pos:])
-		//pos += 2
+		r.Warnings = binary.LittleEndian.Uint16(data[pos:])
+		pos += 2
 	} else if c.capability&CLIENT_TRANSACTIONS > 0 {
 		r.Status = binary.LittleEndian.Uint16(data[pos:])
 		c.status = r.Status
@@ -254,6 +254,7 @@ func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectP
 		result.Status = okResult.Status
 		result.AffectedRows = okResult.AffectedRows
 		result.InsertId = okResult.InsertId
+		result.Warnings = okResult.Warnings
 		if result.Resultset == nil {
 			result.Resultset = NewResultset(0)
 		} else {
@@ -332,7 +333,7 @@ func (c *Conn) readResultColumns(result *Result) (err error) {
 		// EOF Packet
 		if c.isEOFPacket(data) {
 			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				//result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				//todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
@@ -373,7 +374,7 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 		// EOF Packet
 		if c.isEOFPacket(data) {
 			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				//result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				//todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
@@ -421,7 +422,7 @@ func (c *Conn) readResultRowsStreaming(result *Result, isBinary bool, perRowCb S
 		// EOF Packet
 		if c.isEOFPacket(data) {
 			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				// result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				// todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
