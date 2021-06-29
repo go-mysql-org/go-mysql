@@ -22,6 +22,7 @@ type Conn struct {
 	authPluginName string
 	connectionID   uint32
 	status         uint16
+	warnings       uint16
 	salt           []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
 
 	credentialProvider  CredentialProvider
@@ -189,4 +190,8 @@ func (c *Conn) UnsetStatus(status uint16) {
 
 func (c *Conn) HasStatus(status uint16) bool {
 	return c.status&status > 0
+}
+
+func (c *Conn) SetWarnings(warnings uint16) {
+	c.warnings = warnings
 }
