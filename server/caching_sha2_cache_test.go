@@ -192,16 +192,16 @@ func (h *testCacheHandler) handleQuery(query string, binary bool) (*mysql.Result
 		if err != nil {
 			return nil, errors.Trace(err)
 		} else {
-			return &mysql.Result{0, 0, 0, r}, nil
+			return &mysql.Result{0, 0, 0, 0, r}, nil
 		}
 	case "insert":
-		return &mysql.Result{0, 1, 0, nil}, nil
+		return &mysql.Result{0, 0, 1, 0, nil}, nil
 	case "delete":
-		return &mysql.Result{0, 0, 1, nil}, nil
+		return &mysql.Result{0, 0, 0, 1, nil}, nil
 	case "update":
-		return &mysql.Result{0, 0, 1, nil}, nil
+		return &mysql.Result{0, 0, 0, 1, nil}, nil
 	case "replace":
-		return &mysql.Result{0, 0, 1, nil}, nil
+		return &mysql.Result{0, 0, 0, 1, nil}, nil
 	default:
 		return nil, fmt.Errorf("invalid query %s", query)
 	}
