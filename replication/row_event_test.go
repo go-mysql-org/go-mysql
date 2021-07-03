@@ -2,7 +2,6 @@ package replication
 
 import (
 	"fmt"
-	"strconv"
 
 	. "github.com/pingcap/check"
 	"github.com/shopspring/decimal"
@@ -327,8 +326,7 @@ func (_ *testDecodeSuite) TestDecodeDecimal(c *C) {
 	}
 	for i, tc := range testcases {
 		value, pos, err := decodeDecimal(tc.Data, tc.Precision, tc.Decimals, false)
-		expectedFloat, _ := strconv.ParseFloat(tc.Expected, 64)
-		c.Assert(value.(float64), DecodeDecimalsEquals, pos, err, expectedFloat, tc.ExpectedPos, tc.ExpectedErr, i)
+		c.Assert(value.(string), DecodeDecimalsEquals, pos, err, tc.Expected, tc.ExpectedPos, tc.ExpectedErr, i)
 
 		value, pos, err = decodeDecimal(tc.Data, tc.Precision, tc.Decimals, true)
 		expectedDecimal, _ := decimal.NewFromString(tc.Expected)
@@ -456,7 +454,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 		rows.Rows = nil
 		err = rows.Decode(tbl)
 		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], Equals, float64(1))
+		c.Assert(rows.Rows[0][1], Equals, "1")
 	}
 
 	//nolint:misspell
@@ -468,7 +466,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 		rows.Rows = nil
 		err = rows.Decode(ltbl)
 		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], Equals, float64(101))
+		c.Assert(rows.Rows[0][1], Equals, "101")
 	}
 }
 func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
@@ -1211,10 +1209,11 @@ func (_ *testDecodeSuite) TestInvalidEvent(c *C) {
 }
 
 type decimalTest struct {
-	num string
+	num      string
 	dumpData []byte
-	meta uint16
+	meta     uint16
 }
+
 var decimalData = []decimalTest{
 	// DECIMAL(40, 16)
 	{
@@ -1286,7 +1285,7 @@ func (_ *testDecodeSuite) BenchmarkUseDecimal(c *C) {
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range decimalData {
-			e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
 		}
 	}
 }
@@ -1296,7 +1295,7 @@ func (_ *testDecodeSuite) BenchmarkNotUseDecimal(c *C) {
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range decimalData {
-			e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
 		}
 	}
 }
@@ -1333,13 +1332,12 @@ var intData = [][]byte{
 	{12, 0, 0, 0},
 }
 
-
 func (_ *testDecodeSuite) BenchmarkInt(c *C) {
 	e := &RowsEvent{}
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range intData {
-			e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0)
+			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0)
 		}
 	}
 }
