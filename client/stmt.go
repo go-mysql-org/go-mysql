@@ -13,8 +13,9 @@ type Stmt struct {
 	conn *Conn
 	id   uint32
 
-	params  int
-	columns int
+	params   int
+	columns  int
+	warnings int
 }
 
 func (s *Stmt) ParamNum() int {
@@ -23,6 +24,10 @@ func (s *Stmt) ParamNum() int {
 
 func (s *Stmt) ColumnNum() int {
 	return s.columns
+}
+
+func (s *Stmt) WarningsNum() int {
+	return s.warnings
 }
 
 func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
@@ -196,7 +201,8 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	pos += 2
 
 	//warnings
-	//warnings = binary.LittleEndian.Uint16(data[pos:])
+	s.warnings = int(binary.LittleEndian.Uint16(data[pos:]))
+	pos += 2
 
 	if s.params > 0 {
 		if err := s.conn.readUntilEOF(); err != nil {
