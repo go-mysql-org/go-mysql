@@ -1172,6 +1172,7 @@ func decodeString(data []byte, length int) (v string, n int) {
 	return
 }
 
+// ref: https://github.com/mysql/mysql-server/blob/a9b0c712de3509d8d08d3ba385d41a4df6348775/strings/decimal.c#L137
 const digitsPerInteger int = 9
 
 var compressedBytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
@@ -1192,7 +1193,7 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 	return
 }
 
-var zeros = [9]byte{48, 48, 48, 48, 48, 48, 48, 48, 48}
+var zeros = [digitsPerInteger]byte{48, 48, 48, 48, 48, 48, 48, 48, 48}
 
 func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (interface{}, int, error) {
 	//see python mysql replication and https://github.com/jeremycole/mysql_binlog
@@ -1244,7 +1245,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 			}
 		} else {
 			toWrite := strconv.FormatUint(uint64(value), 10)
-			res.Write(zeros[:9-len(toWrite)])
+			res.Write(zeros[:digitsPerInteger-len(toWrite)])
 			res.WriteString(toWrite)
 		}
 	}
@@ -1260,7 +1261,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 			value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 			pos += 4
 			toWrite := strconv.FormatUint(uint64(value), 10)
-			res.Write(zeros[:9-len(toWrite)])
+			res.Write(zeros[:digitsPerInteger-len(toWrite)])
 			res.WriteString(toWrite)
 		}
 
