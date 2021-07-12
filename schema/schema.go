@@ -336,25 +336,31 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 	var unusedVal interface{}
 	unused := &unusedVal
 
+	// mysql8.0 have 15 fields;
+	// mysql5.+ have 13 fields;
+	columns, err := r.Columns()
+	if err != nil {
+		return err
+	}
+	fieldCount := len(columns)
+
 	for r.Next() {
 		var indexName, colName string
 		var cardinality interface{}
-
-		err := r.Scan(
-			&unused,
-			&unused,
-			&indexName,
-			&unused,
-			&colName,
-			&unused,
-			&cardinality,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-		)
+		data := make([]interface{}, fieldCount)
+		for i := 0; i < fieldCount; i++ {
+			switch i {
+			case 2:
+				data = append(data, &indexName)
+			case 4:
+				data = append(data, &colName)
+			case 6:
+				data = append(data, &cardinality)
+			default:
+				data = append(data, &unused)
+			}
+		}
+		err := r.Scan(data...)
 		if err != nil {
 			return errors.Trace(err)
 		}
