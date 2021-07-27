@@ -471,6 +471,8 @@ func (pool *Pool) ping(conn *Conn) error {
 	err := conn.Ping()
 	if err != nil {
 		pool.logFunc(`Pool: ping query fail: %s`, err.Error())
+	} else {
+		conn.SetDeadline(time.Time{})
 	}
 	return err
 }
