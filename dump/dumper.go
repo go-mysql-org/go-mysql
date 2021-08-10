@@ -164,7 +164,9 @@ func (d *Dumper) Dump(w io.Writer) error {
 	}
 
 	args = append(args, fmt.Sprintf("--user=%s", d.User))
-	args = append(args, fmt.Sprintf("--password=%s", d.Password))
+	passwordArg := fmt.Sprintf("--password=%s", d.Password)
+	args = append(args, passwordArg)
+	passwordArgIndex := len(args) - 1
 
 	if !d.masterDataSkipped {
 		args = append(args, "--master-data")
@@ -238,7 +240,9 @@ func (d *Dumper) Dump(w io.Writer) error {
 		}
 	}
 
+	args[passwordArgIndex] = "--password=******"
 	log.Infof("exec mysqldump with %v", args)
+	args[passwordArgIndex] = passwordArg
 	cmd := exec.Command(d.ExecutionPath, args...)
 
 	cmd.Stderr = d.ErrOut
