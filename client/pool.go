@@ -466,11 +466,12 @@ func (pool *Pool) startNewConnections(count int) {
 
 func (pool *Pool) ping(conn *Conn) error {
 	deadline := time.Now().Add(100 * time.Millisecond)
-	_ = conn.SetWriteDeadline(deadline)
-	_ = conn.SetReadDeadline(deadline)
+	_ = conn.SetDeadline(deadline)
 	err := conn.Ping()
 	if err != nil {
 		pool.logFunc(`Pool: ping query fail: %s`, err.Error())
+	} else {
+		_ = conn.SetDeadline(time.Time{})
 	}
 	return err
 }
