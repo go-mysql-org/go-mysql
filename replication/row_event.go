@@ -38,11 +38,11 @@ type TableMapEvent struct {
 	NullBitmap []byte
 
 	/*
-		The followings are available only after MySQL-8.0.1 or MariaDB-10.5.0
+		The following are available only after MySQL-8.0.1 or MariaDB-10.5.0
+		By default MySQL and MariaDB do not log the full row metadata.
 		see:
 			- https://dev.mysql.com/doc/refman/8.0/en/replication-options-binary-log.html#sysvar_binlog_row_metadata
-			- https://mysqlhighavailability.com/more-metadata-is-written-into-binary-log/
-			- https://jira.mariadb.org/browse/MDEV-20477
+			- https://mariadb.com/kb/en/replication-and-binary-log-system-variables/#binlog_row_metadata
 	*/
 
 	// SignednessBitmap stores signedness info for numeric columns.
@@ -830,6 +830,16 @@ type RowsEvent struct {
 
 	//lenenc_int
 	ColumnCount uint64
+
+	/*
+		By default MySQL and MariaDB log the full row image.
+		see
+			- https://dev.mysql.com/doc/refman/8.0/en/replication-options-binary-log.html#sysvar_binlog_row_image
+			- https://mariadb.com/kb/en/replication-and-binary-log-system-variables/#binlog_row_image
+
+		ColumnBitmap1, ColumnBitmap2 and SkippedColumns are not set on the full row image.
+	*/
+
 	//len = (ColumnCount + 7) / 8
 	ColumnBitmap1 []byte
 
