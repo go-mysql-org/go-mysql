@@ -340,11 +340,12 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 
 	for r.Next() {
 		var indexName, colName string
+		var noneUnique uint64
 		var cardinality interface{}
 
 		err := r.Scan(
 			&unused,
-			&unused,
+			&noneUnique,
 			&indexName,
 			&unused,
 			&colName,
@@ -368,6 +369,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 
 		c := toUint64(cardinality)
 		currentIndex.AddColumn(colName, c)
+		currentIndex.NoneUnique = noneUnique
 	}
 
 	return ta.fetchPrimaryKeyColumns()
