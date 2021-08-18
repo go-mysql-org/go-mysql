@@ -43,6 +43,9 @@ type DumpConfig struct {
 
 	// Set extra options
 	ExtraOptions []string `toml:"extra_options"`
+
+	// Set to change is binary will be hex
+	hexBlob bool `tomal:"hex_blob"`
 }
 
 type Config struct {

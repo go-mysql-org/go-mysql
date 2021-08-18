@@ -156,8 +156,7 @@ func (c *Canal) prepareDumper() error {
 	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
 	c.dumper.SetProtocol(c.cfg.Dump.Protocol)
 	c.dumper.SetExtraOptions(c.cfg.Dump.ExtraOptions)
-	// Use hex blob for mysqldump
-	c.dumper.SetHexBlob(true)
+	c.dumper.SetHexBlob(c.cfg.Dump.hexBlob)
 
 	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
 		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
