@@ -125,15 +125,7 @@ func (c *Conn) writeResultset(r *Resultset) error {
 		return err
 	}
 
-	for _, v := range r.Fields {
-		data = data[0:4]
-		data = append(data, v.Dump()...)
-		if err := c.WritePacket(data); err != nil {
-			return err
-		}
-	}
-
-	if err := c.writeEOF(); err != nil {
+	if err := c.writeFieldList(r.Fields, data); err != nil {
 		return err
 	}
 
@@ -152,8 +144,10 @@ func (c *Conn) writeResultset(r *Resultset) error {
 	return nil
 }
 
-func (c *Conn) writeFieldList(fs []*Field) error {
-	data := make([]byte, 4, 1024)
+func (c *Conn) writeFieldList(fs []*Field, data []byte) error {
+	if data == nil {
+		data = make([]byte, 4, 1024)
+	}
 
 	for _, v := range fs {
 		data = data[0:4]
@@ -189,7 +183,7 @@ func (c *Conn) writeValue(value interface{}) error {
 			return c.writeOK(v)
 		}
 	case []*Field:
-		return c.writeFieldList(v)
+		return c.writeFieldList(v, nil)
 	case *Stmt:
 		return c.writePrepare(v)
 	default:
