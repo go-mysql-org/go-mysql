@@ -21,7 +21,10 @@ type Conn struct {
 	tlsConfig *tls.Config
 	proto     string
 
+	// server capabilities
 	capability uint32
+	// client-set capabilities only
+	ccaps uint32
 
 	status uint16
 
@@ -118,6 +121,16 @@ func (c *Conn) Ping() error {
 	}
 
 	return nil
+}
+
+// SetCapability enables the use of a specific capability
+func (c *Conn) SetCapability(cap uint32) {
+	c.ccaps |= cap
+}
+
+// UnsetCapability disables the use of a specific capability
+func (c *Conn) UnsetCapability(cap uint32) {
+	c.ccaps &= ^cap
 }
 
 // UseSSL: use default SSL
