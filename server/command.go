@@ -125,6 +125,12 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		} else {
 			return r
 		}
+	case COM_SET_OPTION:
+		if err := c.h.HandleOtherCommand(cmd, data); err != nil {
+			return err
+		}
+
+		return eofResponse{}
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}

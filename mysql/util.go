@@ -142,7 +142,7 @@ func BFixedLengthInt(buf []byte) uint64 {
 
 func LengthEncodedInt(b []byte) (num uint64, isNull bool, n int) {
 	if len(b) == 0 {
-		return 0, true, 1
+		return 0, true, 0
 	}
 
 	switch b[0] {
