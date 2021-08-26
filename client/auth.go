@@ -140,9 +140,18 @@ func (c *Conn) writeAuthHandshake() error {
 	if !authPluginAllowed(c.authPluginName) {
 		return fmt.Errorf("unknow auth plugin name '%s'", c.authPluginName)
 	}
-	// Adjust client capability flags based on server support
+
+	// Set default client capabilities that reflect the abilities of this library
 	capability := CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION |
-		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH | c.capability&CLIENT_LONG_FLAG
+		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH
+	// Adjust client capability flags based on server support
+	capability |= c.capability & CLIENT_LONG_FLAG
+	// Adjust client capability flags on specific client requests
+	// Only flags that would make any sense setting and aren't handled elsewhere
+	// in the library are supported here
+	capability |= c.ccaps&CLIENT_FOUND_ROWS | c.ccaps&CLIENT_IGNORE_SPACE |
+		c.ccaps&CLIENT_MULTI_STATEMENTS | c.ccaps&CLIENT_MULTI_RESULTS |
+		c.ccaps&CLIENT_PS_MULTI_RESULTS | c.ccaps&CLIENT_CONNECT_ATTRS
 
 	// To enable TLS / SSL
 	if c.tlsConfig != nil {
