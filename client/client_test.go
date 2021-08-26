@@ -94,6 +94,41 @@ func (s *clientTestSuite) TestConn_Ping(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (s *clientTestSuite) TestConn_SetCapability(c *C) {
+	caps := []uint32{
+		mysql.CLIENT_LONG_PASSWORD,
+		mysql.CLIENT_FOUND_ROWS,
+		mysql.CLIENT_LONG_FLAG,
+		mysql.CLIENT_CONNECT_WITH_DB,
+		mysql.CLIENT_NO_SCHEMA,
+		mysql.CLIENT_COMPRESS,
+		mysql.CLIENT_ODBC,
+		mysql.CLIENT_LOCAL_FILES,
+		mysql.CLIENT_IGNORE_SPACE,
+		mysql.CLIENT_PROTOCOL_41,
+		mysql.CLIENT_INTERACTIVE,
+		mysql.CLIENT_SSL,
+		mysql.CLIENT_IGNORE_SIGPIPE,
+		mysql.CLIENT_TRANSACTIONS,
+		mysql.CLIENT_RESERVED,
+		mysql.CLIENT_SECURE_CONNECTION,
+		mysql.CLIENT_MULTI_STATEMENTS,
+		mysql.CLIENT_MULTI_RESULTS,
+		mysql.CLIENT_PS_MULTI_RESULTS,
+		mysql.CLIENT_PLUGIN_AUTH,
+		mysql.CLIENT_CONNECT_ATTRS,
+		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
+	}
+
+	for _, cap := range caps {
+		c.Assert(s.c.ccaps&cap > 0, IsFalse)
+		s.c.SetCapability(cap)
+		c.Assert(s.c.ccaps&cap > 0, IsTrue)
+		s.c.UnsetCapability(cap)
+		c.Assert(s.c.ccaps&cap > 0, IsFalse)
+	}
+}
+
 // NOTE for MySQL 5.5 and 5.6, server side has to config SSL to pass the TLS test, otherwise, it will throw error that
 //      MySQL server does not support TLS required by the client. However, for MySQL 5.7 and above, auto generated certificates
 //      are used by default so that manual config is no longer necessary.

@@ -22,7 +22,7 @@ func (c *Conn) writeOK(r *Result) error {
 
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, byte(r.Status), byte(r.Status>>8))
-		data = append(data, 0, 0)
+		data = append(data, byte(r.Warnings), byte(r.Warnings>>8))
 	}
 
 	return c.WritePacket(data)
@@ -55,7 +55,7 @@ func (c *Conn) writeEOF() error {
 
 	data = append(data, EOF_HEADER)
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
-		data = append(data, 0, 0)
+		data = append(data, byte(c.warnings), byte(c.warnings>>8))
 		data = append(data, byte(c.status), byte(c.status>>8))
 	}
 
@@ -170,11 +170,14 @@ func (c *Conn) writeFieldList(fs []*Field) error {
 }
 
 type noResponse struct{}
+type eofResponse struct{}
 
 func (c *Conn) writeValue(value interface{}) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
+	case eofResponse:
+		return c.writeEOF()
 	case error:
 		return c.writeError(v)
 	case nil:
