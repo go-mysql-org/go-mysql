@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"strings"
@@ -22,7 +23,7 @@ var testHost = flag.String("host", "127.0.0.1", "MySQL server host")
 // Hint: use docker-compose to start corresponding MySQL docker containers and add the their ports here
 var testPort = flag.String("port", "3306", "MySQL server port") // choose one or more form 5561,5641,3306,5722,8003,8012,8013, e.g. '3306,5722,8003'
 var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "", "MySQL password")
+var testPassword = flag.String("pass", "1", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
 func Test(t *testing.T) {
@@ -82,6 +83,7 @@ func (s *clientTestSuite) testConn_CreateTable(c *C) {
           e enum("test1", "test2"),
           u tinyint unsigned,
           i tinyint,
+		  j json,
           PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
@@ -180,6 +182,14 @@ func (s *clientTestSuite) TestConn_Insert(c *C) {
 	str := `insert into mixer_test_conn (id, str, f, e) values(1, "a", 3.14, "test1")`
 
 	pkg, err := s.c.Execute(str)
+	c.Assert(err, IsNil)
+	c.Assert(pkg.AffectedRows, Equals, uint64(1))
+}
+
+func (s *clientTestSuite) TestConn_Insert2(c *C) {
+	str := `insert into mixer_test_conn (j) values(?)`
+	j := json.RawMessage(`[]`)
+	pkg, err := s.c.Execute(str, j)
 	c.Assert(err, IsNil)
 	c.Assert(pkg.AffectedRows, Equals, uint64(1))
 }
