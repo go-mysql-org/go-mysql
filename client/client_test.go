@@ -187,9 +187,9 @@ func (s *clientTestSuite) TestConn_Insert(c *C) {
 }
 
 func (s *clientTestSuite) TestConn_Insert2(c *C) {
-	str := `insert into mixer_test_conn (j) values(?)`
+	str := `insert into mixer_test_conn (id, j) values(?, ?)`
 	j := json.RawMessage(`[]`)
-	pkg, err := s.c.Execute(str, j)
+	pkg, err := s.c.Execute(str, []interface{}{2, j}...)
 	c.Assert(err, IsNil)
 	c.Assert(pkg.AffectedRows, Equals, uint64(1))
 }
