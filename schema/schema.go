@@ -145,7 +145,7 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 
 	if extra == "auto_increment" {
 		ta.Columns[index].IsAuto = true
-	} else if extra == "VIRTUAL GENERATED" {
+	} else if extra == "VIRTUAL GENERATED" || extra == "STORED GENERATED" {
 		ta.Columns[index].IsVirtual = true
 	}
 }
