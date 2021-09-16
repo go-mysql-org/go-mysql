@@ -23,7 +23,7 @@ var testHost = flag.String("host", "127.0.0.1", "MySQL server host")
 // Hint: use docker-compose to start corresponding MySQL docker containers and add the their ports here
 var testPort = flag.String("port", "3306", "MySQL server port") // choose one or more form 5561,5641,3306,5722,8003,8012,8013, e.g. '3306,5722,8003'
 var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "1", "MySQL password")
+var testPassword = flag.String("pass", "", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
 func Test(t *testing.T) {
@@ -83,7 +83,7 @@ func (s *clientTestSuite) testConn_CreateTable(c *C) {
           e enum("test1", "test2"),
           u tinyint unsigned,
           i tinyint,
-		  j json,
+          j json,
           PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
