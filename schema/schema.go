@@ -39,18 +39,18 @@ const (
 )
 
 type TableColumn struct {
-	Name              string
-	Type              int
-	Collation         string
-	RawType           string
-	IsAuto            bool
-	IsUnsigned        bool
-	IsVirtual         bool
-	IsStoredGenerated bool
-	EnumValues        []string
-	SetValues         []string
-	FixedSize         uint
-	MaxSize           uint
+	Name       string
+	Type       int
+	Collation  string
+	RawType    string
+	IsAuto     bool
+	IsUnsigned bool
+	IsVirtual  bool
+	IsStored   bool
+	EnumValues []string
+	SetValues  []string
+	FixedSize  uint
+	MaxSize    uint
 }
 
 type Index struct {
@@ -149,7 +149,7 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 	} else if extra == "VIRTUAL GENERATED" {
 		ta.Columns[index].IsVirtual = true
 	} else if extra == "STORED GENERATED" {
-		ta.Columns[index].IsStoredGenerated = true
+		ta.Columns[index].IsStored = true
 	}
 }
 
