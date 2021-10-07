@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -125,6 +126,9 @@ func (s *Stmt) write(args ...interface{}) error {
 			paramTypes[i<<1] = MYSQL_TYPE_STRING
 			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
 		case []byte:
+			paramTypes[i<<1] = MYSQL_TYPE_STRING
+			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
+		case json.RawMessage:
 			paramTypes[i<<1] = MYSQL_TYPE_STRING
 			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
 		default:
