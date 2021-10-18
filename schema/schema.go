@@ -46,6 +46,7 @@ type TableColumn struct {
 	IsAuto     bool
 	IsUnsigned bool
 	IsVirtual  bool
+	IsStored   bool
 	EnumValues []string
 	SetValues  []string
 	FixedSize  uint
@@ -147,6 +148,8 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].IsAuto = true
 	} else if extra == "VIRTUAL GENERATED" {
 		ta.Columns[index].IsVirtual = true
+	} else if extra == "STORED GENERATED" {
+		ta.Columns[index].IsStored = true
 	}
 }
 
