@@ -643,3 +643,19 @@ func (e *MariadbGTIDListEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Lists: %v\n", e.GTIDs)
 	fmt.Fprintln(w)
 }
+
+type IntVarEvent struct {
+	Type  IntVarEventType
+	Value uint64
+}
+
+func (i *IntVarEvent) Decode(data []byte) error {
+	i.Type = IntVarEventType(data[0])
+	i.Value = binary.LittleEndian.Uint64(data[1:])
+	return nil
+}
+
+func (i *IntVarEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "Type: %d\n", i.Type)
+	fmt.Fprintf(w, "Value: %d\n", i.Value)
+}

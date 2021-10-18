@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"strings"
@@ -82,6 +83,7 @@ func (s *clientTestSuite) testConn_CreateTable(c *C) {
           e enum("test1", "test2"),
           u tinyint unsigned,
           i tinyint,
+          j json,
           PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
@@ -180,6 +182,14 @@ func (s *clientTestSuite) TestConn_Insert(c *C) {
 	str := `insert into mixer_test_conn (id, str, f, e) values(1, "a", 3.14, "test1")`
 
 	pkg, err := s.c.Execute(str)
+	c.Assert(err, IsNil)
+	c.Assert(pkg.AffectedRows, Equals, uint64(1))
+}
+
+func (s *clientTestSuite) TestConn_Insert2(c *C) {
+	str := `insert into mixer_test_conn (id, j) values(?, ?)`
+	j := json.RawMessage(`[]`)
+	pkg, err := s.c.Execute(str, []interface{}{2, j}...)
 	c.Assert(err, IsNil)
 	c.Assert(pkg.AffectedRows, Equals, uint64(1))
 }
