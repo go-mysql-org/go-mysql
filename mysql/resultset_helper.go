@@ -123,6 +123,7 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 	r := new(Resultset)
 
 	r.Fields = make([]*Field, len(names))
+	r.filled = true
 
 	var b []byte
 
@@ -189,6 +190,7 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 	r := new(Resultset)
 
 	r.Fields = make([]*Field, len(names))
+	r.filled = true
 
 	var b []byte
 

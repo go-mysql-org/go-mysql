@@ -49,7 +49,7 @@ type Canal struct {
 	includeTableRegex []*regexp.Regexp
 	excludeTableRegex []*regexp.Regexp
 
-	delay *uint32
+	lastEventTimestamp *uint32
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -74,7 +74,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	}
 	c.master = &masterInfo{}
 
-	c.delay = new(uint32)
+	c.lastEventTimestamp = new(uint32)
 
 	var err error
 
@@ -134,7 +134,7 @@ func (c *Canal) prepareDumper() error {
 	}
 
 	if c.dumper == nil {
-		//no mysqldump, use binlog only
+		// no mysqldump, use binlog only
 		return nil
 	}
 
@@ -175,7 +175,7 @@ func (c *Canal) prepareDumper() error {
 }
 
 func (c *Canal) GetDelay() uint32 {
-	return atomic.LoadUint32(c.delay)
+	return uint32(time.Now().Unix()) - atomic.LoadUint32(c.lastEventTimestamp)
 }
 
 // Run will first try to dump all data from MySQL master `mysqldump`,

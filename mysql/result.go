@@ -20,3 +20,17 @@ func (r *Result) Close() {
 		r.Resultset = nil
 	}
 }
+
+func (r *Result) ChainResultSet(rs *Resultset) {
+	if r.Resultset == nil {
+		r.Resultset = rs
+		return
+	}
+
+	var lastRS *Resultset
+
+	for lastRS = r.Resultset; lastRS.Next != nil; lastRS = lastRS.Next {
+	}
+
+	lastRS.Next = rs
+}
