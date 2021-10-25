@@ -22,7 +22,7 @@ func (c *Conn) writeOK(r *Result) error {
 
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, byte(r.Status), byte(r.Status>>8))
-		data = append(data, 0, 0)
+		data = append(data, byte(r.Warnings), byte(r.Warnings>>8))
 	}
 
 	return c.WritePacket(data)
@@ -55,7 +55,7 @@ func (c *Conn) writeEOF() error {
 
 	data = append(data, EOF_HEADER)
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
-		data = append(data, 0, 0)
+		data = append(data, byte(c.warnings), byte(c.warnings>>8))
 		data = append(data, byte(c.status), byte(c.status>>8))
 	}
 
@@ -132,15 +132,7 @@ func (c *Conn) writeResultset(r *Resultset) error {
 		return err
 	}
 
-	for _, v := range r.Fields {
-		data = data[0:4]
-		data = append(data, v.Dump()...)
-		if err := c.WritePacket(data); err != nil {
-			return err
-		}
-	}
-
-	if err := c.writeEOF(); err != nil {
+	if err := c.writeFieldList(r.Fields, data); err != nil {
 		return err
 	}
 
@@ -165,8 +157,10 @@ func (c *Conn) writeResultset(r *Resultset) error {
 	return nil
 }
 
-func (c *Conn) writeFieldList(fs []*Field) error {
-	data := make([]byte, 4, 1024)
+func (c *Conn) writeFieldList(fs []*Field, data []byte) error {
+	if data == nil {
+		data = make([]byte, 4, 1024)
+	}
 
 	for _, v := range fs {
 		data = data[0:4]
@@ -215,7 +209,7 @@ func (c *Conn) WriteValue(value interface{}) error {
 			return c.writeOK(v)
 		}
 	case []*Field:
-		return c.writeFieldList(v)
+		return c.writeFieldList(v, nil)
 	case []FieldValue:
 		return c.writeFieldValues(v)
 	case *Stmt:

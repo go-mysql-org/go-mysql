@@ -281,6 +281,8 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = ee
 			case PREVIOUS_GTIDS_EVENT:
 				e = &PreviousGTIDsEvent{}
+			case INTVAR_EVENT:
+				e = &IntVarEvent{}
 			default:
 				e = &GenericEvent{}
 			}

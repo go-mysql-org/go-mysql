@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"strings"
@@ -82,6 +83,7 @@ func (s *clientTestSuite) testConn_CreateTable(c *C) {
           e enum("test1", "test2"),
           u tinyint unsigned,
           i tinyint,
+          j json,
           PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
@@ -92,6 +94,41 @@ func (s *clientTestSuite) testConn_CreateTable(c *C) {
 func (s *clientTestSuite) TestConn_Ping(c *C) {
 	err := s.c.Ping()
 	c.Assert(err, IsNil)
+}
+
+func (s *clientTestSuite) TestConn_SetCapability(c *C) {
+	caps := []uint32{
+		mysql.CLIENT_LONG_PASSWORD,
+		mysql.CLIENT_FOUND_ROWS,
+		mysql.CLIENT_LONG_FLAG,
+		mysql.CLIENT_CONNECT_WITH_DB,
+		mysql.CLIENT_NO_SCHEMA,
+		mysql.CLIENT_COMPRESS,
+		mysql.CLIENT_ODBC,
+		mysql.CLIENT_LOCAL_FILES,
+		mysql.CLIENT_IGNORE_SPACE,
+		mysql.CLIENT_PROTOCOL_41,
+		mysql.CLIENT_INTERACTIVE,
+		mysql.CLIENT_SSL,
+		mysql.CLIENT_IGNORE_SIGPIPE,
+		mysql.CLIENT_TRANSACTIONS,
+		mysql.CLIENT_RESERVED,
+		mysql.CLIENT_SECURE_CONNECTION,
+		mysql.CLIENT_MULTI_STATEMENTS,
+		mysql.CLIENT_MULTI_RESULTS,
+		mysql.CLIENT_PS_MULTI_RESULTS,
+		mysql.CLIENT_PLUGIN_AUTH,
+		mysql.CLIENT_CONNECT_ATTRS,
+		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
+	}
+
+	for _, cap := range caps {
+		c.Assert(s.c.ccaps&cap > 0, IsFalse)
+		s.c.SetCapability(cap)
+		c.Assert(s.c.ccaps&cap > 0, IsTrue)
+		s.c.UnsetCapability(cap)
+		c.Assert(s.c.ccaps&cap > 0, IsFalse)
+	}
 }
 
 // NOTE for MySQL 5.5 and 5.6, server side has to config SSL to pass the TLS test, otherwise, it will throw error that
@@ -145,6 +182,14 @@ func (s *clientTestSuite) TestConn_Insert(c *C) {
 	str := `insert into mixer_test_conn (id, str, f, e) values(1, "a", 3.14, "test1")`
 
 	pkg, err := s.c.Execute(str)
+	c.Assert(err, IsNil)
+	c.Assert(pkg.AffectedRows, Equals, uint64(1))
+}
+
+func (s *clientTestSuite) TestConn_Insert2(c *C) {
+	str := `insert into mixer_test_conn (id, j) values(?, ?)`
+	j := json.RawMessage(`[]`)
+	pkg, err := s.c.Execute(str, []interface{}{2, j}...)
 	c.Assert(err, IsNil)
 	c.Assert(pkg.AffectedRows, Equals, uint64(1))
 }

@@ -386,7 +386,7 @@ func (c *Canal) CheckBinlogRowImage(image string) error {
 	// need to check MySQL binlog row image? full, minimal or noblob?
 	// now only log
 	if c.cfg.Flavor == mysql.MySQLFlavor {
-		if res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_row_image"`); err != nil {
+		if res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE 'binlog_row_image'`); err != nil {
 			return errors.Trace(err)
 		} else {
 			// MySQL has binlog row image from 5.6, so older will return empty
@@ -401,7 +401,7 @@ func (c *Canal) CheckBinlogRowImage(image string) error {
 }
 
 func (c *Canal) checkBinlogRowFormat() error {
-	res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE "binlog_format";`)
+	res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE 'binlog_format';`)
 	if err != nil {
 		return errors.Trace(err)
 	} else if f, _ := res.GetString(0, 1); f != "ROW" {

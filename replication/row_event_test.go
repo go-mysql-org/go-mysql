@@ -2,10 +2,11 @@ package replication
 
 import (
 	"fmt"
-	"strconv"
 
 	. "github.com/pingcap/check"
 	"github.com/shopspring/decimal"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 type testDecodeSuite struct{}
@@ -325,8 +326,7 @@ func (_ *testDecodeSuite) TestDecodeDecimal(c *C) {
 	}
 	for i, tc := range testcases {
 		value, pos, err := decodeDecimal(tc.Data, tc.Precision, tc.Decimals, false)
-		expectedFloat, _ := strconv.ParseFloat(tc.Expected, 64)
-		c.Assert(value.(float64), DecodeDecimalsEquals, pos, err, expectedFloat, tc.ExpectedPos, tc.ExpectedErr, i)
+		c.Assert(value.(string), DecodeDecimalsEquals, pos, err, tc.Expected, tc.ExpectedPos, tc.ExpectedErr, i)
 
 		value, pos, err = decodeDecimal(tc.Data, tc.Precision, tc.Decimals, true)
 		expectedDecimal, _ := decimal.NewFromString(tc.Expected)
@@ -454,7 +454,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 		rows.Rows = nil
 		err = rows.Decode(tbl)
 		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], Equals, float64(1))
+		c.Assert(rows.Rows[0][1], Equals, "1")
 	}
 
 	//nolint:misspell
@@ -466,7 +466,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 		rows.Rows = nil
 		err = rows.Decode(ltbl)
 		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], Equals, float64(101))
+		c.Assert(rows.Rows[0][1], Equals, "101")
 	}
 }
 func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
@@ -1206,4 +1206,138 @@ func (_ *testDecodeSuite) TestInvalidEvent(c *C) {
 	e2.tables[0x140] = table
 	err := e2.Decode([]byte(data))
 	c.Assert(err, NotNil)
+}
+
+type decimalTest struct {
+	num      string
+	dumpData []byte
+	meta     uint16
+}
+
+var decimalData = []decimalTest{
+	// DECIMAL(40, 16)
+	{
+		"123.4560000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 27, 46, 2, 0, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"0.0000010000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"100000000.0000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 5, 245, 225, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"100000000.0000000200000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 5, 245, 225, 0, 0, 0, 0, 20, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"123456.1234567890000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 1, 226, 64, 7, 91, 205, 21, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"123456234234234757655.1234567890123456",
+		[]byte{128, 0, 123, 27, 49, 148, 250, 13, 254, 30, 23, 7, 91, 205, 21, 0, 1, 226, 64},
+		10256,
+	},
+	{
+		"-123456234234234757655.1234567890123456",
+		[]byte{127, 255, 132, 228, 206, 107, 5, 242, 1, 225, 232, 248, 164, 50, 234, 255, 254, 29, 191},
+		10256,
+	},
+	{
+		"0.0000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		10256,
+	},
+	// DECIMAL(60, 0)
+	{
+		"1000000000000000000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		15360,
+	},
+	{
+		"1",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		15360,
+	},
+	// DECIMAL(30, 30)
+	{
+		"0.100000000000000000000000000000",
+		[]byte{133, 245, 225, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		7710,
+	},
+	{
+		"0.000000000000001000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0, 0, 0},
+		7710,
+	},
+}
+
+func (_ *testDecodeSuite) BenchmarkUseDecimal(c *C) {
+	e := &RowsEvent{useDecimal: true}
+	c.ResetTimer()
+	for i := 0; i < c.N; i++ {
+		for _, d := range decimalData {
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		}
+	}
+}
+
+func (_ *testDecodeSuite) BenchmarkNotUseDecimal(c *C) {
+	e := &RowsEvent{useDecimal: false}
+	c.ResetTimer()
+	for i := 0; i < c.N; i++ {
+		for _, d := range decimalData {
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		}
+	}
+}
+
+func (_ *testDecodeSuite) TestDecimal(c *C) {
+	e := &RowsEvent{useDecimal: true}
+	e2 := &RowsEvent{useDecimal: false}
+	for _, d := range decimalData {
+		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		c.Assert(err, IsNil)
+		// no trailing zero
+		dec, err := decimal.NewFromString(d.num)
+		c.Assert(err, IsNil)
+		c.Assert(dec.Equal(v.(decimal.Decimal)), IsTrue)
+
+		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		c.Assert(err, IsNil)
+		c.Assert(v.(string), Equals, d.num)
+	}
+}
+
+var intData = [][]byte{
+	{1, 0, 0, 0},
+	{2, 0, 0, 0},
+	{3, 0, 0, 0},
+	{4, 0, 0, 0},
+	{5, 0, 0, 0},
+	{6, 0, 0, 0},
+	{7, 0, 0, 0},
+	{8, 0, 0, 0},
+	{9, 0, 0, 0},
+	{10, 0, 0, 0},
+	{11, 0, 0, 0},
+	{12, 0, 0, 0},
+}
+
+func (_ *testDecodeSuite) BenchmarkInt(c *C) {
+	e := &RowsEvent{}
+	c.ResetTimer()
+	for i := 0; i < c.N; i++ {
+		for _, d := range intData {
+			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0)
+		}
+	}
 }

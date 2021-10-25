@@ -46,6 +46,7 @@ type TableColumn struct {
 	IsAuto     bool
 	IsUnsigned bool
 	IsVirtual  bool
+	IsStored   bool
 	EnumValues []string
 	SetValues  []string
 	FixedSize  uint
@@ -56,6 +57,7 @@ type Index struct {
 	Name        string
 	Columns     []string
 	Cardinality []uint64
+	NoneUnique  uint64
 }
 
 type Table struct {
@@ -146,6 +148,8 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].IsAuto = true
 	} else if extra == "VIRTUAL GENERATED" {
 		ta.Columns[index].IsVirtual = true
+	} else if extra == "STORED GENERATED" {
+		ta.Columns[index].IsStored = true
 	}
 }
 
@@ -190,7 +194,7 @@ func (ta *Table) AddIndex(name string) (index *Index) {
 }
 
 func NewIndex(name string) *Index {
-	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8)}
+	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8), 0}
 }
 
 func (idx *Index) AddColumn(name string, cardinality uint64) {
@@ -317,6 +321,7 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 		cardinality, _ := r.GetUint(i, 6)
 		colName, _ := r.GetString(i, 4)
 		currentIndex.AddColumn(colName, cardinality)
+		currentIndex.NoneUnique, _ = r.GetUint(i, 1)
 	}
 
 	return ta.fetchPrimaryKeyColumns()
@@ -338,11 +343,12 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 
 	for r.Next() {
 		var indexName, colName string
+		var noneUnique uint64
 		var cardinality interface{}
 
 		err := r.Scan(
 			&unused,
-			&unused,
+			&noneUnique,
 			&indexName,
 			&unused,
 			&colName,
@@ -366,6 +372,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 
 		c := toUint64(cardinality)
 		currentIndex.AddColumn(colName, c)
+		currentIndex.NoneUnique = noneUnique
 	}
 
 	return ta.fetchPrimaryKeyColumns()
