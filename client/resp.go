@@ -129,6 +129,8 @@ func (c *Conn) handleAuthResult() error {
 		if data[0] == CACHE_SHA2_FAST_AUTH {
 			if _, err = c.readOK(); err == nil {
 				return nil // auth successful
+			} else {
+				return err
 			}
 		} else if data[0] == CACHE_SHA2_FULL_AUTH {
 			// need full authentication
