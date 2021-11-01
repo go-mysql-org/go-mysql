@@ -116,6 +116,13 @@ func (c *Conn) writeAuthMoreDataFastAuth() error {
 }
 
 func (c *Conn) writeResultset(r *Resultset) error {
+	// for a streaming resultset, that handled rowdata separately in a callback
+	// of type SelectPerRowCallback, we can suffice by ending the stream with
+	// an EOF
+	if r.StreamingDone {
+		return c.writeEOF()
+	}
+
 	columnLen := PutLengthEncodedInt(uint64(len(r.Fields)))
 
 	data := make([]byte, 4, 1024)
@@ -127,6 +134,12 @@ func (c *Conn) writeResultset(r *Resultset) error {
 
 	if err := c.writeFieldList(r.Fields, data); err != nil {
 		return err
+	}
+
+	// streaming resultsets handle rowdata in a separate callback of type
+	// SelectPerRowCallback so we're done here
+	if r.Streaming {
+		return nil
 	}
 
 	for _, v := range r.RowDatas {
@@ -163,10 +176,23 @@ func (c *Conn) writeFieldList(fs []*Field, data []byte) error {
 	return nil
 }
 
+func (c *Conn) writeFieldValues(fv []FieldValue) error {
+	data := make([]byte, 4, 1024)
+	for _, v := range fv {
+		tv, err := FormatTextValue(v.Value())
+		if err != nil {
+			return err
+		}
+		data = append(data, PutLengthEncodedString(tv)...)
+	}
+
+	return c.WritePacket(data)
+}
+
 type noResponse struct{}
 type eofResponse struct{}
 
-func (c *Conn) writeValue(value interface{}) error {
+func (c *Conn) WriteValue(value interface{}) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
@@ -184,6 +210,8 @@ func (c *Conn) writeValue(value interface{}) error {
 		}
 	case []*Field:
 		return c.writeFieldList(v, nil)
+	case []FieldValue:
+		return c.writeFieldValues(v)
 	case *Stmt:
 		return c.writePrepare(v)
 	default:

@@ -44,7 +44,7 @@ func (c *Conn) HandleCommand() error {
 
 	v := c.dispatch(data)
 
-	err = c.writeValue(v)
+	err = c.WriteValue(v)
 
 	if c.Conn != nil {
 		c.ResetSequence()

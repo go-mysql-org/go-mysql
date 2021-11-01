@@ -17,6 +17,9 @@ type Resultset struct {
 	RawPkg []byte
 
 	RowDatas []RowData
+
+	Streaming     bool
+	StreamingDone bool
 }
 
 var (
