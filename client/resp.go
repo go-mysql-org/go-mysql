@@ -130,6 +130,8 @@ func (c *Conn) handleAuthResult() error {
 		if data[0] == CACHE_SHA2_FAST_AUTH {
 			if _, err = c.readOK(); err == nil {
 				return nil // auth successful
+			} else {
+				return err
 			}
 		} else if data[0] == CACHE_SHA2_FULL_AUTH {
 			// need full authentication
@@ -234,7 +236,7 @@ func (c *Conn) readResult(binary bool) (*Result, error) {
 	return c.readResultset(firstPkgBuf, binary)
 }
 
-func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectPerRowCallback) error {
+func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback) error {
 	firstPkgBuf, err := c.ReadPacketReuseMem(utils.ByteSliceGet(16)[:0])
 	defer utils.ByteSlicePut(firstPkgBuf)
 
@@ -268,7 +270,7 @@ func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectP
 		return ErrMalformPacket
 	}
 
-	return c.readResultsetStreaming(firstPkgBuf, binary, result, perRowCb)
+	return c.readResultsetStreaming(firstPkgBuf, binary, result, perRowCb, perResCb)
 }
 
 func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
@@ -294,7 +296,7 @@ func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 	return result, nil
 }
 
-func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, perRowCb SelectPerRowCallback) error {
+func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback) error {
 	columnCount, _, n := LengthEncodedInt(data)
 
 	if n-len(data) != 0 {
@@ -308,13 +310,25 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, 
 		result.Reset(int(columnCount))
 	}
 
+	// this is a streaming resultset
+	result.Resultset.Streaming = true
+
 	if err := c.readResultColumns(result); err != nil {
 		return errors.Trace(err)
+	}
+
+	if perResCb != nil {
+		if err := perResCb(result); err != nil {
+			return err
+		}
 	}
 
 	if err := c.readResultRowsStreaming(result, binary, perRowCb); err != nil {
 		return errors.Trace(err)
 	}
+
+	// this resultset is done streaming
+	result.Resultset.StreamingDone = true
 
 	return nil
 }
