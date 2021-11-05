@@ -728,11 +728,10 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			s.closeWithError(err)
 			return
 		case EOF_HEADER:
-			// Refer http://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
-			// In the MySQL client/server protocol, EOF and OK packets serve the same purpose.
-			// Some users told me that they received EOF packet here, but I don't know why.
-			// So we only log a message and retry ReadPacket.
-			log.Info("receive EOF packet, retry ReadPacket")
+			// refer to https://dev.mysql.com/doc/internals/en/com-binlog-dump.html#binlog-dump-non-block
+			// when COM_BINLOG_DUMP command use BINLOG_DUMP_NON_BLOCK flag,
+			// if there is no more event to send an EOF_Packet instead of blocking the connection
+			log.Info("receive EOF packet, no more binlog event now.")
 			continue
 		default:
 			log.Errorf("invalid stream header %c", data[0])
