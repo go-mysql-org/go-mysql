@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -36,6 +37,14 @@ func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 	}
 
 	return s.conn.readResult(true)
+}
+
+func (s *Stmt) ExecuteSelectStreaming(result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback, args ...interface{}) error {
+	if err := s.write(args...); err != nil {
+		return errors.Trace(err)
+	}
+
+	return s.conn.readResultStreaming(true, result, perRowCb, perResCb)
 }
 
 func (s *Stmt) Close() error {
@@ -125,6 +134,9 @@ func (s *Stmt) write(args ...interface{}) error {
 			paramTypes[i<<1] = MYSQL_TYPE_STRING
 			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
 		case []byte:
+			paramTypes[i<<1] = MYSQL_TYPE_STRING
+			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
+		case json.RawMessage:
 			paramTypes[i<<1] = MYSQL_TYPE_STRING
 			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
 		default:

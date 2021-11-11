@@ -21,7 +21,10 @@ type Conn struct {
 	tlsConfig *tls.Config
 	proto     string
 
+	// server capabilities
 	capability uint32
+	// client-set capabilities only
+	ccaps uint32
 
 	status uint16
 
@@ -35,6 +38,9 @@ type Conn struct {
 
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
 type SelectPerRowCallback func(row []FieldValue) error
+
+// This function will be called once per result from ExecuteSelectStreaming
+type SelectPerResultCallback func(result *Result) error
 
 func getNetProto(addr string) string {
 	proto := "tcp"
@@ -120,6 +126,16 @@ func (c *Conn) Ping() error {
 	return nil
 }
 
+// SetCapability enables the use of a specific capability
+func (c *Conn) SetCapability(cap uint32) {
+	c.ccaps |= cap
+}
+
+// UnsetCapability disables the use of a specific capability
+func (c *Conn) UnsetCapability(cap uint32) {
+	c.ccaps &= ^cap
+}
+
 // UseSSL: use default SSL
 // pass to options when connect
 func (c *Conn) UseSSL(insecureSkipVerify bool) {
@@ -170,6 +186,7 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset
 //   WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
+// When given, perResultCallback will be called once per result
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
 //
@@ -180,14 +197,14 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 //   		// Use the row as you want.
 //   		// You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
 //   		return nil
-// 		})
+// 		}, nil)
 //
-func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback) error {
+func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
 	if err := c.writeCommandStr(COM_QUERY, command); err != nil {
 		return errors.Trace(err)
 	}
 
-	return c.readResultStreaming(false, result, perRowCallback)
+	return c.readResultStreaming(false, result, perRowCallback, perResultCallback)
 }
 
 func (c *Conn) Begin() error {

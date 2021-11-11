@@ -8,7 +8,7 @@ import (
 	"github.com/siddontang/go/hack"
 )
 
-func formatTextValue(value interface{}) ([]byte, error) {
+func FormatTextValue(value interface{}) ([]byte, error) {
 	switch v := value.(type) {
 	case int8:
 		return strconv.AppendInt(nil, int64(v), 10), nil
@@ -165,7 +165,7 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 					return nil, errors.Errorf("row types aren't consistent")
 				}
 			}
-			b, err = formatTextValue(value)
+			b, err = FormatTextValue(value)
 
 			if err != nil {
 				return nil, errors.Trace(err)

@@ -237,8 +237,8 @@ err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &r
     	// Copy it if you need.
     	// ...
     }
-    return false, nil
-})
+    return nil
+}, nil)
 
 // ...
 ```
