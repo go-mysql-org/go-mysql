@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/go-mysql-org/go-mysql/utils"
 	"hash/crc32"
 	"io"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 var (
