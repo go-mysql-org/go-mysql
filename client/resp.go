@@ -39,7 +39,6 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 	var n int
 	var pos = 1
 
-	//r := &Result{Resultset: &Resultset{}}
 	r := new(Result) // fix : Malformed packet
 
 	r.AffectedRows, _, n = LengthEncodedInt(data[pos:])
