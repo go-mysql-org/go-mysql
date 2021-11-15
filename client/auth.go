@@ -77,21 +77,25 @@ func (c *Conn) readInitialHandshake() error {
 		c.capability = uint32(binary.LittleEndian.Uint16(data[pos:pos+2]))<<16 | c.capability
 		pos += 2
 
-		// skip auth data len or [00]
+		// auth_data is end with 0x00, min data length is 13 + 8 = 21
+		// ref to https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
+		maxAuthDataLen := 21
+		if c.capability&CLIENT_PLUGIN_AUTH != 0 && int(data[pos]) > maxAuthDataLen {
+			maxAuthDataLen = int(data[pos])
+		}
+
 		// skip reserved (all [00])
 		pos += 10 + 1
 
-		// The documentation is ambiguous about the length.
-		// The official Python library uses the fixed length 12
-		// mysql-proxy also use 12
-		// which is not documented but seems to work.
-		c.salt = append(c.salt, data[pos:pos+12]...)
-		pos += 13
-		// auth plugin
-		if end := bytes.IndexByte(data[pos:], 0x00); end != -1 {
-			c.authPluginName = string(data[pos : pos+end])
-		} else {
-			c.authPluginName = string(data[pos:])
+		// auth_data is end with 0x00, so we need to trim 0x00
+		resetOfAuthDataEndPos := pos + maxAuthDataLen - 8 - 1
+		c.salt = append(c.salt, data[pos:resetOfAuthDataEndPos]...)
+
+		// skip reset of end pos
+		pos = resetOfAuthDataEndPos + 1
+
+		if c.capability&CLIENT_PLUGIN_AUTH != 0 {
+			c.authPluginName = string(data[pos : len(data)-1])
 		}
 	}
 
