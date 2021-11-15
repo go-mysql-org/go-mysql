@@ -77,10 +77,10 @@ func (c *Conn) readInitialHandshake() error {
 		c.capability = uint32(binary.LittleEndian.Uint16(data[pos:pos+2]))<<16 | c.capability
 		pos += 2
 
-		// auth_data is end with 0x00, max data length is 13 + 8 = 21
+		// auth_data is end with 0x00, min data length is 13 + 8 = 21
 		// ref to https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
 		maxAuthDataLen := 21
-		if c.capability&CLIENT_PLUGIN_AUTH != 0 && int(data[pos]) < maxAuthDataLen {
+		if c.capability&CLIENT_PLUGIN_AUTH != 0 && int(data[pos]) > maxAuthDataLen {
 			maxAuthDataLen = int(data[pos])
 		}
 
