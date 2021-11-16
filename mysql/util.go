@@ -8,8 +8,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	mrand "math/rand"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
@@ -107,18 +109,11 @@ func AppendLengthEncodedInteger(b []byte, n uint64) []byte {
 
 func RandomBuf(size int) ([]byte, error) {
 	buf := make([]byte, size)
-
-	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
-		return nil, errors.Trace(err)
+	mrand.Seed(time.Now().UTC().UnixNano())
+	min, max := 30, 127
+	for i := 0; i < size; i++ {
+		buf[i] = byte(min + mrand.Intn(max-min))
 	}
-
-	// avoid to generate '\0'
-	for i, b := range buf {
-		if b == 0 {
-			buf[i] = '0'
-		}
-	}
-
 	return buf, nil
 }
 
