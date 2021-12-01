@@ -24,6 +24,7 @@ func Test(t *testing.T) {
 	segs := strings.Split(*testPort, ",")
 	for _, seg := range segs {
 		Suite(&clientTestSuite{port: seg})
+		Suite(&connTestSuite{port: seg})
 	}
 	TestingT(t)
 }
