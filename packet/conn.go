@@ -99,21 +99,26 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 	}
 
 	readBytes := buf.Bytes()
-	readSize := len(readBytes) + len(dst)
-	result := make([]byte, 0, readSize)
+	readSize := len(readBytes)
+	var result []byte
 	if len(dst) > 0 {
-		result = append(result, dst...)
-		result = append(result, readBytes...)
+		result = append(dst, readBytes...)
+		// if read block is big, do not cache buf any more
+		if readSize > utils.TooBigBlockSize {
+			buf = nil
+		}
 
 	} else {
-		if readSize <= utils.TooBigBlockSize {
-			result = append(result, readBytes...)
-		} else {
+		if readSize > utils.TooBigBlockSize {
 			// if read block is big, use read block as result and do not cache buf any more
 			result = readBytes
 			buf = nil
+
+		} else {
+			result = append(dst, readBytes...)
 		}
 	}
+
 	return result, nil
 }
 
