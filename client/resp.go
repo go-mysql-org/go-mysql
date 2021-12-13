@@ -143,9 +143,9 @@ func (c *Conn) handleAuthResult() error {
 				if err = c.WritePublicKeyAuthPacket(c.password, c.salt); err != nil {
 					return err
 				}
-				if _, err = c.readOK(); err != nil {
-					return err
-				}
+			}
+			if _, err = c.readOK(); err != nil {
+				return err
 			}
 		} else {
 			return errors.Errorf("invalid packet %x", data[0])
