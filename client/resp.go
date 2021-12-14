@@ -7,10 +7,11 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
+
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 func (c *Conn) readUntilEOF() (err error) {
@@ -142,6 +143,9 @@ func (c *Conn) handleAuthResult() error {
 				if err = c.WritePublicKeyAuthPacket(c.password, c.salt); err != nil {
 					return err
 				}
+			}
+			if _, err = c.readOK(); err != nil {
+				return err
 			}
 		} else {
 			return errors.Errorf("invalid packet %x", data[0])
