@@ -107,13 +107,11 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 		if readSize > utils.TooBigBlockSize {
 			buf = nil
 		}
-
 	} else {
 		if readSize > utils.TooBigBlockSize {
 			// if read block is big, use read block as result and do not cache buf any more
 			result = readBytes
 			buf = nil
-
 		} else {
 			result = append(dst, readBytes...)
 		}
