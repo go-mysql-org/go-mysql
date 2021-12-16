@@ -40,7 +40,7 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 	var n int
 	var pos = 1
 
-	r := &Result{Resultset: &Resultset{}}
+	r := new(Result)
 
 	r.AffectedRows, _, n = LengthEncodedInt(data[pos:])
 	pos += n
@@ -128,11 +128,8 @@ func (c *Conn) handleAuthResult() error {
 			return nil // auth already succeeded
 		}
 		if data[0] == CACHE_SHA2_FAST_AUTH {
-			if _, err = c.readOK(); err == nil {
-				return nil // auth successful
-			} else {
-				return err
-			}
+			_, err = c.readOK()
+			return err
 		} else if data[0] == CACHE_SHA2_FULL_AUTH {
 			// need full authentication
 			if c.tlsConfig != nil || c.proto == "unix" {
@@ -144,9 +141,8 @@ func (c *Conn) handleAuthResult() error {
 					return err
 				}
 			}
-			if _, err = c.readOK(); err != nil {
-				return err
-			}
+			_, err = c.readOK()
+			return err
 		} else {
 			return errors.Errorf("invalid packet %x", data[0])
 		}

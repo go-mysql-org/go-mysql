@@ -67,6 +67,9 @@ func (r *Resultset) Reset(fieldsCount int) {
 }
 
 func (r *Resultset) RowNumber() int {
+	if r == nil {
+		return 0
+	}
 	return len(r.Values)
 }
 

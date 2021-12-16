@@ -25,8 +25,10 @@ func (s *clientTestSuite) SetUpSuite(c *C) {
 		c.Fatal(err)
 	}
 
-	_, err = s.c.Execute("CREATE DATABASE IF NOT EXISTS " + *testDB)
+	var result *mysql.Result
+	result, err = s.c.Execute("CREATE DATABASE IF NOT EXISTS " + *testDB)
 	c.Assert(err, IsNil)
+	c.Assert(result.RowNumber() >= 0, IsTrue)
 
 	_, err = s.c.Execute("USE " + *testDB)
 	c.Assert(err, IsNil)
