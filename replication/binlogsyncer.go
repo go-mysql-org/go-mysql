@@ -10,11 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/client"
-	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
+
+	"github.com/go-mysql-org/go-mysql/client"
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var (
@@ -308,6 +309,12 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	if _, err = b.c.ReadOKPacket(); err != nil {
+		return errors.Trace(err)
+	}
+
+	serverUUID := uuid.NewV1()
+	if _, err = b.c.Execute(fmt.Sprintf("SET @slave_uuid = '%s', @replica_uuid = '%s'", serverUUID, serverUUID)); err != nil {
+		log.Errorf("failed to set @slave_uuid = '%s', err: %v", serverUUID, err)
 		return errors.Trace(err)
 	}
 
