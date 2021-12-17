@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/client"
-	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	uuid "github.com/satori/go.uuid"
+
+	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 // Use docker mysql to test, mysql is 3306, mariadb is 3316
@@ -37,7 +38,6 @@ type testSyncerSuite struct {
 var _ = Suite(&testSyncerSuite{})
 
 func (t *testSyncerSuite) SetUpSuite(c *C) {
-
 }
 
 func (t *testSyncerSuite) TearDownSuite(c *C) {
@@ -274,8 +274,8 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 		c.Skip(err.Error())
 	}
 
-	// _, err = t.c.Execute("CREATE DATABASE IF NOT EXISTS test")
-	// c.Assert(err, IsNil)
+	_, err = t.c.Execute("CREATE DATABASE IF NOT EXISTS test")
+	c.Assert(err, IsNil)
 
 	_, err = t.c.Execute("USE test")
 	c.Assert(err, IsNil)
@@ -306,6 +306,12 @@ func (t *testSyncerSuite) testPositionSync(c *C) {
 
 	s, err := t.b.StartSync(mysql.Position{Name: binFile, Pos: uint32(binPos)})
 	c.Assert(err, IsNil)
+
+	// check we have set Slave_UUID
+	r, err = t.c.Execute("SHOW SLAVE HOSTS")
+	c.Assert(err, IsNil)
+	slaveUUID, _ := r.GetString(0, 4)
+	c.Assert(slaveUUID, HasLen, 36)
 
 	// Test re-sync.
 	time.Sleep(100 * time.Millisecond)
