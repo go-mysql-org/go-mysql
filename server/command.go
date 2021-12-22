@@ -44,7 +44,7 @@ func (c *Conn) HandleCommand() error {
 
 	v := c.dispatch(data)
 
-	err = c.writeValue(v)
+	err = c.WriteValue(v)
 
 	if c.Conn != nil {
 		c.ResetSequence()
@@ -125,6 +125,12 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		} else {
 			return r
 		}
+	case COM_SET_OPTION:
+		if err := c.h.HandleOtherCommand(cmd, data); err != nil {
+			return err
+		}
+
+		return eofResponse{}
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}

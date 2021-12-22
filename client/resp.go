@@ -7,10 +7,11 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
+
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 func (c *Conn) readUntilEOF() (err error) {
@@ -52,8 +53,8 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 		pos += 2
 
 		//todo:strict_mode, check warnings as error
-		//Warnings := binary.LittleEndian.Uint16(data[pos:])
-		//pos += 2
+		r.Warnings = binary.LittleEndian.Uint16(data[pos:])
+		pos += 2
 	} else if c.capability&CLIENT_TRANSACTIONS > 0 {
 		r.Status = binary.LittleEndian.Uint16(data[pos:])
 		c.status = r.Status
@@ -127,9 +128,8 @@ func (c *Conn) handleAuthResult() error {
 			return nil // auth already succeeded
 		}
 		if data[0] == CACHE_SHA2_FAST_AUTH {
-			if _, err = c.readOK(); err == nil {
-				return nil // auth successful
-			}
+			_, err = c.readOK()
+			return err
 		} else if data[0] == CACHE_SHA2_FULL_AUTH {
 			// need full authentication
 			if c.tlsConfig != nil || c.proto == "unix" {
@@ -141,6 +141,8 @@ func (c *Conn) handleAuthResult() error {
 					return err
 				}
 			}
+			_, err = c.readOK()
+			return err
 		} else {
 			return errors.Errorf("invalid packet %x", data[0])
 		}
@@ -233,7 +235,7 @@ func (c *Conn) readResult(binary bool) (*Result, error) {
 	return c.readResultset(firstPkgBuf, binary)
 }
 
-func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectPerRowCallback) error {
+func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback) error {
 	firstPkgBuf, err := c.ReadPacketReuseMem(utils.ByteSliceGet(16)[:0])
 	defer utils.ByteSlicePut(firstPkgBuf)
 
@@ -254,6 +256,7 @@ func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectP
 		result.Status = okResult.Status
 		result.AffectedRows = okResult.AffectedRows
 		result.InsertId = okResult.InsertId
+		result.Warnings = okResult.Warnings
 		if result.Resultset == nil {
 			result.Resultset = NewResultset(0)
 		} else {
@@ -266,7 +269,7 @@ func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectP
 		return ErrMalformPacket
 	}
 
-	return c.readResultsetStreaming(firstPkgBuf, binary, result, perRowCb)
+	return c.readResultsetStreaming(firstPkgBuf, binary, result, perRowCb, perResCb)
 }
 
 func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
@@ -292,7 +295,7 @@ func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 	return result, nil
 }
 
-func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, perRowCb SelectPerRowCallback) error {
+func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback) error {
 	columnCount, _, n := LengthEncodedInt(data)
 
 	if n-len(data) != 0 {
@@ -306,13 +309,25 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, 
 		result.Reset(int(columnCount))
 	}
 
+	// this is a streaming resultset
+	result.Resultset.Streaming = true
+
 	if err := c.readResultColumns(result); err != nil {
 		return errors.Trace(err)
+	}
+
+	if perResCb != nil {
+		if err := perResCb(result); err != nil {
+			return err
+		}
 	}
 
 	if err := c.readResultRowsStreaming(result, binary, perRowCb); err != nil {
 		return errors.Trace(err)
 	}
+
+	// this resultset is done streaming
+	result.Resultset.StreamingDone = true
 
 	return nil
 }
@@ -332,7 +347,7 @@ func (c *Conn) readResultColumns(result *Result) (err error) {
 		// EOF Packet
 		if c.isEOFPacket(data) {
 			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				//result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				//todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
@@ -373,7 +388,7 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 		// EOF Packet
 		if c.isEOFPacket(data) {
 			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				//result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				//todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
@@ -421,7 +436,7 @@ func (c *Conn) readResultRowsStreaming(result *Result, isBinary bool, perRowCb S
 		// EOF Packet
 		if c.isEOFPacket(data) {
 			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				// result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				// todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status

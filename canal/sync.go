@@ -223,7 +223,7 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 	case *ast.TruncateTableStmt:
 		n := &node{
 			db:    t.Table.Schema.String(),
-			table: t.Table.Schema.String(),
+			table: t.Table.Name.String(),
 		}
 		ns = []*node{n}
 	}

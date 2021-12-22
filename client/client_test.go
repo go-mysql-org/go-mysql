@@ -1,37 +1,16 @@
 package client
 
 import (
-	"flag"
+	"encoding/json"
 	"fmt"
 	"strings"
-	"testing"
 
-	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 )
-
-var testHost = flag.String("host", "127.0.0.1", "MySQL server host")
-
-// We cover the whole range of MySQL server versions using docker-compose to bind them to different ports for testing.
-// MySQL is constantly updating auth plugin to make it secure:
-// starting from MySQL 8.0.4, a new auth plugin is introduced, causing plain password auth to fail with error:
-// ERROR 1251 (08004): Client does not support authentication protocol requested by server; consider upgrading MySQL client
-// Hint: use docker-compose to start corresponding MySQL docker containers and add the their ports here
-var testPort = flag.String("port", "3306", "MySQL server port") // choose one or more form 5561,5641,3306,5722,8003,8012,8013, e.g. '3306,5722,8003'
-var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "", "MySQL password")
-var testDB = flag.String("db", "test", "MySQL test database")
-
-func Test(t *testing.T) {
-	segs := strings.Split(*testPort, ",")
-	for _, seg := range segs {
-		Suite(&clientTestSuite{port: seg})
-	}
-	TestingT(t)
-}
 
 type clientTestSuite struct {
 	c    *Conn
@@ -46,8 +25,10 @@ func (s *clientTestSuite) SetUpSuite(c *C) {
 		c.Fatal(err)
 	}
 
-	_, err = s.c.Execute("CREATE DATABASE IF NOT EXISTS " + *testDB)
+	var result *mysql.Result
+	result, err = s.c.Execute("CREATE DATABASE IF NOT EXISTS " + *testDB)
 	c.Assert(err, IsNil)
+	c.Assert(result.RowNumber() >= 0, IsTrue)
 
 	_, err = s.c.Execute("USE " + *testDB)
 	c.Assert(err, IsNil)
@@ -82,6 +63,7 @@ func (s *clientTestSuite) testConn_CreateTable(c *C) {
           e enum("test1", "test2"),
           u tinyint unsigned,
           i tinyint,
+          j json,
           PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
@@ -92,6 +74,41 @@ func (s *clientTestSuite) testConn_CreateTable(c *C) {
 func (s *clientTestSuite) TestConn_Ping(c *C) {
 	err := s.c.Ping()
 	c.Assert(err, IsNil)
+}
+
+func (s *clientTestSuite) TestConn_SetCapability(c *C) {
+	caps := []uint32{
+		mysql.CLIENT_LONG_PASSWORD,
+		mysql.CLIENT_FOUND_ROWS,
+		mysql.CLIENT_LONG_FLAG,
+		mysql.CLIENT_CONNECT_WITH_DB,
+		mysql.CLIENT_NO_SCHEMA,
+		mysql.CLIENT_COMPRESS,
+		mysql.CLIENT_ODBC,
+		mysql.CLIENT_LOCAL_FILES,
+		mysql.CLIENT_IGNORE_SPACE,
+		mysql.CLIENT_PROTOCOL_41,
+		mysql.CLIENT_INTERACTIVE,
+		mysql.CLIENT_SSL,
+		mysql.CLIENT_IGNORE_SIGPIPE,
+		mysql.CLIENT_TRANSACTIONS,
+		mysql.CLIENT_RESERVED,
+		mysql.CLIENT_SECURE_CONNECTION,
+		mysql.CLIENT_MULTI_STATEMENTS,
+		mysql.CLIENT_MULTI_RESULTS,
+		mysql.CLIENT_PS_MULTI_RESULTS,
+		mysql.CLIENT_PLUGIN_AUTH,
+		mysql.CLIENT_CONNECT_ATTRS,
+		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
+	}
+
+	for _, cap := range caps {
+		c.Assert(s.c.ccaps&cap > 0, IsFalse)
+		s.c.SetCapability(cap)
+		c.Assert(s.c.ccaps&cap > 0, IsTrue)
+		s.c.UnsetCapability(cap)
+		c.Assert(s.c.ccaps&cap > 0, IsFalse)
+	}
 }
 
 // NOTE for MySQL 5.5 and 5.6, server side has to config SSL to pass the TLS test, otherwise, it will throw error that
@@ -145,6 +162,14 @@ func (s *clientTestSuite) TestConn_Insert(c *C) {
 	str := `insert into mixer_test_conn (id, str, f, e) values(1, "a", 3.14, "test1")`
 
 	pkg, err := s.c.Execute(str)
+	c.Assert(err, IsNil)
+	c.Assert(pkg.AffectedRows, Equals, uint64(1))
+}
+
+func (s *clientTestSuite) TestConn_Insert2(c *C) {
+	str := `insert into mixer_test_conn (id, j) values(?, ?)`
+	j := json.RawMessage(`[]`)
+	pkg, err := s.c.Execute(str, []interface{}{2, j}...)
 	c.Assert(err, IsNil)
 	c.Assert(pkg.AffectedRows, Equals, uint64(1))
 }

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -21,7 +22,10 @@ type Conn struct {
 	tlsConfig *tls.Config
 	proto     string
 
+	// server capabilities
 	capability uint32
+	// client-set capabilities only
+	ccaps uint32
 
 	status uint16
 
@@ -36,6 +40,9 @@ type Conn struct {
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
 type SelectPerRowCallback func(row []FieldValue) error
 
+// This function will be called once per result from ExecuteSelectStreaming
+type SelectPerResultCallback func(result *Result) error
+
 func getNetProto(addr string) string {
 	proto := "tcp"
 	if strings.Contains(addr, "/") {
@@ -49,10 +56,23 @@ func getNetProto(addr string) string {
 func Connect(addr string, user string, password string, dbName string, options ...func(*Conn)) (*Conn, error) {
 	proto := getNetProto(addr)
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	dialer := &net.Dialer{}
+
+	return ConnectWithDialer(ctx, proto, addr, user, password, dbName, dialer.DialContext, options...)
+}
+
+// Dialer connects to the address on the named network using the provided context.
+type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
+
+// Connect to a MySQL server using the given Dialer.
+func ConnectWithDialer(ctx context.Context, network string, addr string, user string, password string, dbName string, dialer Dialer, options ...func(*Conn)) (*Conn, error) {
 	c := new(Conn)
 
 	var err error
-	conn, err := net.DialTimeout(proto, addr, 10*time.Second)
+	conn, err := dialer(ctx, network, addr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -66,9 +86,9 @@ func Connect(addr string, user string, password string, dbName string, options .
 	c.user = user
 	c.password = password
 	c.db = dbName
-	c.proto = proto
+	c.proto = network
 
-	//use default charset here, utf-8
+	// use default charset here, utf-8
 	c.charset = DEFAULT_CHARSET
 
 	// Apply configuration functions.
@@ -118,6 +138,16 @@ func (c *Conn) Ping() error {
 	}
 
 	return nil
+}
+
+// SetCapability enables the use of a specific capability
+func (c *Conn) SetCapability(cap uint32) {
+	c.ccaps |= cap
+}
+
+// UnsetCapability disables the use of a specific capability
+func (c *Conn) UnsetCapability(cap uint32) {
+	c.ccaps &= ^cap
 }
 
 // UseSSL: use default SSL
@@ -170,6 +200,7 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset
 //   WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
+// When given, perResultCallback will be called once per result
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
 //
@@ -180,14 +211,14 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 //   		// Use the row as you want.
 //   		// You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
 //   		return nil
-// 		})
+// 		}, nil)
 //
-func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback) error {
+func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
 	if err := c.writeCommandStr(COM_QUERY, command); err != nil {
 		return errors.Trace(err)
 	}
 
-	return c.readResultStreaming(false, result, perRowCallback)
+	return c.readResultStreaming(false, result, perRowCallback, perResultCallback)
 }
 
 func (c *Conn) Begin() error {
