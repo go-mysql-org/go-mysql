@@ -9,11 +9,12 @@ import (
 	"strconv"
 	"time"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go/hack"
+
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var errMissingTableMapEvent = errors.New("invalid table id, no corresponding table map event")
@@ -1138,7 +1139,11 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		// Refer: https://github.com/shyiko/mysql-binlog-connector-java/blob/master/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L404
 		length = int(FixedLengthInt(data[0:meta]))
 		n = length + int(meta)
-		v, err = e.decodeJsonBinary(data[meta:n])
+		var d []byte
+		d, err = e.decodeJsonBinary(data[meta:n])
+		if err == nil {
+			v = hack.String(d)
+		}
 	case MYSQL_TYPE_GEOMETRY:
 		// MySQL saves Geometry as Blob in binlog
 		// Seem that the binary format is SRID (4 bytes) + WKB, outer can use
