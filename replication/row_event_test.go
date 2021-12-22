@@ -699,22 +699,22 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	rows.Rows = nil
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[0][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[0][2], DeepEquals, "{}")
 
 	// after MySQL 5.7.22
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a")
 	rows.Rows = nil
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+	c.Assert(rows.Rows[1][2], DeepEquals, "{}")
+	c.Assert(rows.Rows[2][2], DeepEquals, "{\"a\":1234}")
 
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
 	rows.Rows = nil
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{\"a\":1234}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[1][2], DeepEquals, "{\"a\":1234}")
+	c.Assert(rows.Rows[2][2], DeepEquals, "{}")
 
 	// before MySQL 5.7.22
 	rows.ignoreJSONDecodeErr = true
@@ -722,8 +722,8 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	rows.Rows = nil
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("null"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+	c.Assert(rows.Rows[1][2], DeepEquals, "null")
+	c.Assert(rows.Rows[2][2], DeepEquals, "{\"a\":1234}")
 
 	rows.ignoreJSONDecodeErr = false
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
@@ -731,8 +731,8 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
 	// this value is wrong in binlog, but can be parsed without error
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[1][2], DeepEquals, "{}")
+	c.Assert(rows.Rows[2][2], DeepEquals, "{}")
 }
 
 func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
