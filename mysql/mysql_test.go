@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -142,6 +143,53 @@ func (t *mysqlTestSuite) TestMysqlGTIDContain(c *check.C) {
 	c.Assert(g1.Contain(g2), check.Equals, false)
 }
 
+func (t *mysqlTestSuite) TestMysqlGTIDAdd(c *check.C) {
+	testCases := []struct {
+		left, right, expected string
+	}{
+		// simple cases works:
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23:28-57"},
+		// summ is associative operation
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23:28-57"},
+	}
+
+	for _, tc := range testCases {
+		m1 := t.mysqlGTIDfromString(c, tc.left)
+		m2 := t.mysqlGTIDfromString(c, tc.right)
+		m1.Add(m2)
+		c.Assert(
+			fmt.Sprintf("%s + %s = %s", tc.left, tc.right, strings.ToUpper(m1.String())),
+			check.Equals,
+			fmt.Sprintf("%s + %s = %s", tc.left, tc.right, tc.expected))
+	}
+}
+
+func (t *mysqlTestSuite) TestMysqlGTIDMinus(c *check.C) {
+	testCases := []struct {
+		left, right, expected string
+	}{
+		// Minuses that doesn't affect original value:
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23"},
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57"},
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-22:24-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23"},
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "ABCDEF12-1234-5678-9012-345678901234:1-1000", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23"},
+		// Minuses that change original value:
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:20-57:60-90", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:20-22:24-57:60-90"},
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:20-57:60-90", "3E11FA47-71CA-11E1-9E33-C80AA9429562:22-70", "3E11FA47-71CA-11E1-9E33-C80AA9429562:20-21:71-90"},
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", ""},
+	}
+
+	for _, tc := range testCases {
+		m1 := t.mysqlGTIDfromString(c, tc.left)
+		m2 := t.mysqlGTIDfromString(c, tc.right)
+		m1.Minus(m2)
+		c.Assert(
+			fmt.Sprintf("%s - %s = %s", tc.left, tc.right, strings.ToUpper(m1.String())),
+			check.Equals,
+			fmt.Sprintf("%s - %s = %s", tc.left, tc.right, tc.expected))
+	}
+}
+
 func (t *mysqlTestSuite) TestMysqlParseBinaryInt8(c *check.C) {
 	i8 := ParseBinaryInt8([]byte{128})
 	c.Assert(i8, check.Equals, int8(-128))
@@ -228,4 +276,11 @@ func (t *mysqlTestSuite) TestMysqlEmptyDecode(c *check.C) {
 	_, isNull, n := LengthEncodedInt(nil)
 	c.Assert(isNull, check.IsTrue)
 	c.Assert(n, check.Equals, 0)
+}
+
+func (t *mysqlTestSuite) mysqlGTIDfromString(c *check.C, gtidStr string) MysqlGTIDSet {
+	gtid, err := ParseMysqlGTIDSet(gtidStr)
+	c.Assert(err, check.IsNil)
+
+	return *gtid.(*MysqlGTIDSet)
 }
