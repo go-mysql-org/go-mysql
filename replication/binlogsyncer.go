@@ -724,7 +724,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 		switch data[0] {
 		case OK_HEADER:
-			if err = b.parseEvent(s, data); err != nil {
+			if err = b.parseEvent(b.nextPos.Name, s, data); err != nil {
 				s.closeWithError(err)
 				return
 			}
@@ -745,7 +745,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	}
 }
 
-func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
+func (b *BinlogSyncer) parseEvent(fileName string, s *BinlogStreamer, data []byte) error {
 	//skip OK byte, 0x00
 	data = data[1:]
 
@@ -756,7 +756,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		data = data[2:]
 	}
 
-	e, err := b.parser.Parse(data)
+	e, err := b.parser.Parse(fileName, data)
 	if err != nil {
 		return errors.Trace(err)
 	}

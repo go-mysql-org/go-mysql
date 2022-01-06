@@ -66,6 +66,7 @@ type EventHeader struct {
 	EventSize uint32
 	LogPos    uint32
 	Flags     uint16
+	FileName  string
 }
 
 func (h *EventHeader) Decode(data []byte) error {
