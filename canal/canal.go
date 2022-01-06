@@ -65,6 +65,10 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
+	if cfg.WaitTimeBetweenConnectionSeconds > 0 {
+		cfg.WaitTimeBetweenConnectionSeconds = time.Duration(5) * time.Second
+	}
+
 	c.dumpDoneCh = make(chan struct{})
 	c.eventHandler = &DummyEventHandler{}
 	c.parser = parser.New()
@@ -192,6 +196,7 @@ func (c *Canal) RunFrom(pos mysql.Position) error {
 	return c.Run()
 }
 
+// Start from selected GTIDSet
 func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
 	c.master.UpdateGTIDSet(set)
 
@@ -238,7 +243,7 @@ func (c *Canal) run() error {
 }
 
 func (c *Canal) Close() {
-	log.Infof("closing canal")
+	log.Debugf("closing canal")
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -413,20 +418,21 @@ func (c *Canal) checkBinlogRowFormat() error {
 
 func (c *Canal) prepareSyncer() error {
 	cfg := replication.BinlogSyncerConfig{
-		ServerID:                c.cfg.ServerID,
-		Flavor:                  c.cfg.Flavor,
-		User:                    c.cfg.User,
-		Password:                c.cfg.Password,
-		Charset:                 c.cfg.Charset,
-		HeartbeatPeriod:         c.cfg.HeartbeatPeriod,
-		ReadTimeout:             c.cfg.ReadTimeout,
-		UseDecimal:              c.cfg.UseDecimal,
-		ParseTime:               c.cfg.ParseTime,
-		SemiSyncEnabled:         c.cfg.SemiSyncEnabled,
-		MaxReconnectAttempts:    c.cfg.MaxReconnectAttempts,
-		DisableRetrySync:        c.cfg.DisableRetrySync,
-		TimestampStringLocation: c.cfg.TimestampStringLocation,
-		TLSConfig:               c.cfg.TLSConfig,
+		ServerID:                         c.cfg.ServerID,
+		Flavor:                           c.cfg.Flavor,
+		User:                             c.cfg.User,
+		Password:                         c.cfg.Password,
+		Charset:                          c.cfg.Charset,
+		HeartbeatPeriod:                  c.cfg.HeartbeatPeriod,
+		ReadTimeout:                      c.cfg.ReadTimeout,
+		UseDecimal:                       c.cfg.UseDecimal,
+		ParseTime:                        c.cfg.ParseTime,
+		SemiSyncEnabled:                  c.cfg.SemiSyncEnabled,
+		MaxReconnectAttempts:             c.cfg.MaxReconnectAttempts,
+		DisableRetrySync:                 c.cfg.DisableRetrySync,
+		TimestampStringLocation:          c.cfg.TimestampStringLocation,
+		TLSConfig:                        c.cfg.TLSConfig,
+		WaitTimeBetweenConnectionSeconds: c.cfg.WaitTimeBetweenConnectionSeconds,
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {

@@ -163,13 +163,13 @@ func (c *Canal) dump() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		log.Infof("skip master data, get current binlog position %v", pos)
+		log.Debugf("skip master data, get current binlog position %v", pos)
 		h.name = pos.Name
 		h.pos = uint64(pos.Pos)
 	}
 
 	start := time.Now()
-	log.Info("try dump MySQL and parse")
+	log.Debug("try dump MySQL and parse")
 	if err := c.dumper.DumpAndParse(h); err != nil {
 		return errors.Trace(err)
 	}
@@ -185,7 +185,7 @@ func (c *Canal) dump() error {
 		c.master.UpdateGTIDSet(h.gset)
 		startPos = h.gset
 	}
-	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
+	log.Debugf("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
 		time.Now().Sub(start).Seconds(), startPos)
 	return nil
 }
@@ -196,12 +196,12 @@ func (c *Canal) tryDump() error {
 	if (len(pos.Name) > 0 && pos.Pos > 0) ||
 		(gset != nil && gset.String() != "") {
 		// we will sync with binlog name and position
-		log.Infof("skip dump, use last binlog replication pos %s or GTID set %v", pos, gset)
+		log.Debugf("skip dump, use last binlog replication pos %s or GTID set %v", pos, gset)
 		return nil
 	}
 
 	if c.dumper == nil {
-		log.Info("skip dump, no mysqldump")
+		log.Debug("skip dump, no mysqldump")
 		return nil
 	}
 

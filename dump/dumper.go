@@ -241,7 +241,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 	}
 
 	args[passwordArgIndex] = "--password=******"
-	log.Infof("exec mysqldump with %v", args)
+	log.Debugf("exec mysqldump with %v", args)
 	args[passwordArgIndex] = passwordArg
 	cmd := exec.Command(d.ExecutionPath, args...)
 

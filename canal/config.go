@@ -81,6 +81,9 @@ type Config struct {
 	// this configuration will not work if DisableRetrySync is true
 	MaxReconnectAttempts int `toml:"max_reconnect_attempts"`
 
+	// WaitTimeBetweenConnectionSeconds is the time to wait before retrying to connect.
+	WaitTimeBetweenConnectionSeconds time.Duration `toml:"max_wait_time_between_connection_seconds"`
+
 	// whether disable re-sync for broken connection
 	DisableRetrySync bool `toml:"disable_retry_sync"`
 

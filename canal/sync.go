@@ -22,7 +22,7 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
 		}
-		log.Infof("start sync binlog at binlog file %v", pos)
+		log.Debugf("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
 		gsetClone := gset.Clone()
@@ -30,7 +30,7 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
 		}
-		log.Infof("start sync binlog at GTID set %v", gsetClone)
+		log.Debugf("start sync binlog at GTID set %v", gsetClone)
 		return s, nil
 	}
 }
@@ -65,7 +65,7 @@ func (c *Canal) runSyncBinlog() error {
 			switch e := ev.Event.(type) {
 			case *replication.RotateEvent:
 				fakeRotateLogName = string(e.NextLogName)
-				log.Infof("received fake rotate event, next log name is %s", e.NextLogName)
+				log.Debugf("received fake rotate event, next log name is %s", e.NextLogName)
 			}
 
 			continue
@@ -92,7 +92,7 @@ func (c *Canal) runSyncBinlog() error {
 		case *replication.RotateEvent:
 			pos.Name = string(e.NextLogName)
 			pos.Pos = uint32(e.Position)
-			log.Infof("rotate binlog to %s", pos)
+			log.Debugf("rotate binlog to %s", pos)
 			savePos = true
 			force = true
 			if err = c.eventHandler.OnRotate(e); err != nil {
@@ -232,7 +232,7 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 
 func (c *Canal) updateTable(db, table string) (err error) {
 	c.ClearTableCache([]byte(db), []byte(table))
-	log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
+	log.Debugf("table structure changed, clear table cache: %s.%s\n", db, table)
 	if err = c.eventHandler.OnTableChanged(db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
 		return errors.Trace(err)
 	}
