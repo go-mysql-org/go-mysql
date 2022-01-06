@@ -270,6 +270,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
 	events := newRowsEvent(t, action, ev.Rows, e.Header)
+	events.Header.Gtid = c.SyncedGTIDSet()
 	return c.eventHandler.OnRow(events)
 }
 

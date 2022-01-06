@@ -67,6 +67,7 @@ type EventHeader struct {
 	LogPos    uint32
 	Flags     uint16
 	FileName  string
+	Gtid      GTIDSet
 }
 
 func (h *EventHeader) Decode(data []byte) error {
