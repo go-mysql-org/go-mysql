@@ -50,7 +50,6 @@ func (_ *testDecodeSuite) TestMariadbGTIDEvent(c *C) {
 }
 
 func (_ *testDecodeSuite) TestGTIDEventMysql8NewFields(c *C) {
-
 	testcases := []struct {
 		data                           []byte
 		expectImmediateCommitTimestamp uint64
@@ -97,5 +96,22 @@ func (_ *testDecodeSuite) TestGTIDEventMysql8NewFields(c *C) {
 		c.Assert(ev.ImmediateServerVersion, Equals, tc.expectImmediateServerVersion)
 		c.Assert(ev.OriginalServerVersion, Equals, tc.expectOriginalServerVersion)
 	}
+}
 
+func (_ *testDecodeSuite) TestIntVarEvent(c *C) {
+	// IntVarEvent Type LastInsertID, Value 13
+	data := []byte{1, 13, 0, 0, 0, 0, 0, 0, 0}
+	ev := IntVarEvent{}
+	err := ev.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(ev.Type, Equals, LAST_INSERT_ID)
+	c.Assert(ev.Value, Equals, uint64(13))
+
+	// IntVarEvent Type InsertID, Value 23
+	data = []byte{2, 23, 0, 0, 0, 0, 0, 0, 0}
+	ev = IntVarEvent{}
+	err = ev.Decode(data)
+	c.Assert(err, IsNil)
+	c.Assert(ev.Type, Equals, INSERT_ID)
+	c.Assert(ev.Value, Equals, uint64(23))
 }

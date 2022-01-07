@@ -9,11 +9,14 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 )
 
-var ErrAccessDenied = errors.New("access denied")
+var (
+	ErrAccessDenied           = errors.New("access denied")
+	ErrAccessDeniedNoPassword = fmt.Errorf("%w without password", ErrAccessDenied)
+)
 
 func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) error {
 	switch authPluginName {
@@ -62,6 +65,14 @@ func (c *Conn) acquirePassword() error {
 	return nil
 }
 
+func errAccessDenied(password string) error {
+	if password == "" {
+		return ErrAccessDeniedNoPassword
+	}
+
+	return ErrAccessDenied
+}
+
 func scrambleValidation(cached, nonce, scramble []byte) bool {
 	// SHA256(SHA256(SHA256(STORED_PASSWORD)), NONCE)
 	crypt := sha256.New()
@@ -83,10 +94,10 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 }
 
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, password string) error {
-	if bytes.Equal(CalcPassword(c.salt, []byte(c.password)), clientAuthData) {
+	if bytes.Equal(CalcPassword(c.salt, []byte(password)), clientAuthData) {
 		return nil
 	}
-	return ErrAccessDenied
+	return errAccessDenied(password)
 }
 
 func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password string) error {
@@ -109,7 +120,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 		if bytes.Equal(clientAuthData, []byte(password)) {
 			return nil
 		}
-		return ErrAccessDenied
+		return errAccessDenied(password)
 	} else {
 		// client should send encrypted password
 		// decrypt
@@ -126,7 +137,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 		if bytes.Equal(plain, dbytes) {
 			return nil
 		}
-		return ErrAccessDenied
+		return errAccessDenied(password)
 	}
 }
 
@@ -153,7 +164,8 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 			// 'fast' auth: write "More data" packet (first byte == 0x01) with the second byte = 0x03
 			return c.writeAuthMoreDataFastAuth()
 		}
-		return ErrAccessDenied
+
+		return errAccessDenied(c.password)
 	}
 	// other type of credential provider, we use the cache
 	cached, ok := c.serverConf.cacheShaPassword.Load(fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
@@ -163,7 +175,8 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 			// 'fast' auth: write "More data" packet (first byte == 0x01) with the second byte = 0x03
 			return c.writeAuthMoreDataFastAuth()
 		}
-		return ErrAccessDenied
+
+		return errAccessDenied(c.password)
 	}
 	// cache miss, do full auth
 	if err := c.writeAuthMoreDataFullAuth(); err != nil {

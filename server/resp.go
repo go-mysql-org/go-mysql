@@ -3,7 +3,7 @@ package server
 import (
 	"fmt"
 
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 func (c *Conn) writeOK(r *Result) error {
@@ -22,7 +22,7 @@ func (c *Conn) writeOK(r *Result) error {
 
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, byte(r.Status), byte(r.Status>>8))
-		data = append(data, 0, 0)
+		data = append(data, byte(r.Warnings), byte(r.Warnings>>8))
 	}
 
 	return c.WritePacket(data)
@@ -55,7 +55,7 @@ func (c *Conn) writeEOF() error {
 
 	data = append(data, EOF_HEADER)
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
-		data = append(data, 0, 0)
+		data = append(data, byte(c.warnings), byte(c.warnings>>8))
 		data = append(data, byte(c.status), byte(c.status>>8))
 	}
 
@@ -116,6 +116,13 @@ func (c *Conn) writeAuthMoreDataFastAuth() error {
 }
 
 func (c *Conn) writeResultset(r *Resultset) error {
+	// for a streaming resultset, that handled rowdata separately in a callback
+	// of type SelectPerRowCallback, we can suffice by ending the stream with
+	// an EOF
+	if r.StreamingDone {
+		return c.writeEOF()
+	}
+
 	columnLen := PutLengthEncodedInt(uint64(len(r.Fields)))
 
 	data := make([]byte, 4, 1024)
@@ -125,16 +132,14 @@ func (c *Conn) writeResultset(r *Resultset) error {
 		return err
 	}
 
-	for _, v := range r.Fields {
-		data = data[0:4]
-		data = append(data, v.Dump()...)
-		if err := c.WritePacket(data); err != nil {
-			return err
-		}
+	if err := c.writeFieldList(r.Fields, data); err != nil {
+		return err
 	}
 
-	if err := c.writeEOF(); err != nil {
-		return err
+	// streaming resultsets handle rowdata in a separate callback of type
+	// SelectPerRowCallback so we're done here
+	if r.Streaming {
+		return nil
 	}
 
 	for _, v := range r.RowDatas {
@@ -152,8 +157,10 @@ func (c *Conn) writeResultset(r *Resultset) error {
 	return nil
 }
 
-func (c *Conn) writeFieldList(fs []*Field) error {
-	data := make([]byte, 4, 1024)
+func (c *Conn) writeFieldList(fs []*Field, data []byte) error {
+	if data == nil {
+		data = make([]byte, 4, 1024)
+	}
 
 	for _, v := range fs {
 		data = data[0:4]
@@ -169,12 +176,28 @@ func (c *Conn) writeFieldList(fs []*Field) error {
 	return nil
 }
 
-type noResponse struct{}
+func (c *Conn) writeFieldValues(fv []FieldValue) error {
+	data := make([]byte, 4, 1024)
+	for _, v := range fv {
+		tv, err := FormatTextValue(v.Value())
+		if err != nil {
+			return err
+		}
+		data = append(data, PutLengthEncodedString(tv)...)
+	}
 
-func (c *Conn) writeValue(value interface{}) error {
+	return c.WritePacket(data)
+}
+
+type noResponse struct{}
+type eofResponse struct{}
+
+func (c *Conn) WriteValue(value interface{}) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
+	case eofResponse:
+		return c.writeEOF()
 	case error:
 		return c.writeError(v)
 	case nil:
@@ -186,7 +209,9 @@ func (c *Conn) writeValue(value interface{}) error {
 			return c.writeOK(v)
 		}
 	case []*Field:
-		return c.writeFieldList(v)
+		return c.writeFieldList(v, nil)
+	case []FieldValue:
+		return c.writeFieldValues(v)
 	case *Stmt:
 		return c.writePrepare(v)
 	default:

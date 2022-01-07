@@ -1,11 +1,12 @@
 package server
 
 import (
+	"errors"
 	"net"
 	"sync/atomic"
 
-	. "github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/packet"
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/siddontang/go/sync2"
 )
 
@@ -17,9 +18,11 @@ type Conn struct {
 
 	serverConf     *Server
 	capability     uint32
+	charset        uint8
 	authPluginName string
 	connectionID   uint32
 	status         uint16
+	warnings       uint16
 	salt           []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
 
 	credentialProvider  CredentialProvider
@@ -104,10 +107,14 @@ func (c *Conn) handshake() error {
 	}
 
 	if err := c.readHandshakeResponse(); err != nil {
-		if err == ErrAccessDenied {
-			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.LocalAddr().String(), "Yes")
+		if errors.Is(err, ErrAccessDenied) {
+			var usingPasswd uint16 = ER_YES
+			if errors.Is(err, ErrAccessDeniedNoPassword) {
+				usingPasswd = ER_NO
+			}
+			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), MySQLErrName[usingPasswd])
 		}
-		c.writeError(err)
+		_ = c.writeError(err)
 		return err
 	}
 
@@ -133,22 +140,58 @@ func (c *Conn) GetUser() string {
 	return c.user
 }
 
+func (c *Conn) Capability() uint32 {
+	return c.capability
+}
+
+func (c *Conn) SetCapability(cap uint32) {
+	c.capability |= cap
+}
+
+func (c *Conn) UnsetCapability(cap uint32) {
+	c.capability &= ^cap
+}
+
+func (c *Conn) HasCapability(cap uint32) bool {
+	return c.capability&cap > 0
+}
+
+func (c *Conn) Charset() uint8 {
+	return c.charset
+}
+
 func (c *Conn) ConnectionID() uint32 {
 	return c.connectionID
 }
 
 func (c *Conn) IsAutoCommit() bool {
-	return c.status&SERVER_STATUS_AUTOCOMMIT > 0
+	return c.HasStatus(SERVER_STATUS_AUTOCOMMIT)
 }
 
 func (c *Conn) IsInTransaction() bool {
-	return c.status&SERVER_STATUS_IN_TRANS > 0
+	return c.HasStatus(SERVER_STATUS_IN_TRANS)
 }
 
 func (c *Conn) SetInTransaction() {
-	c.status |= SERVER_STATUS_IN_TRANS
+	c.SetStatus(SERVER_STATUS_IN_TRANS)
 }
 
 func (c *Conn) ClearInTransaction() {
-	c.status &= ^SERVER_STATUS_IN_TRANS
+	c.UnsetStatus(SERVER_STATUS_IN_TRANS)
+}
+
+func (c *Conn) SetStatus(status uint16) {
+	c.status |= status
+}
+
+func (c *Conn) UnsetStatus(status uint16) {
+	c.status &= ^status
+}
+
+func (c *Conn) HasStatus(status uint16) bool {
+	return c.status&status > 0
+}
+
+func (c *Conn) SetWarnings(warnings uint16) {
+	c.warnings = warnings
 }

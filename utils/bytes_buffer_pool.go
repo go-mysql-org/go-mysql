@@ -5,6 +5,10 @@ import (
 	"sync"
 )
 
+const (
+	TooBigBlockSize = 1024 * 1024 * 4
+)
+
 var (
 	bytesBufferPool = sync.Pool{
 		New: func() interface{} {
@@ -27,6 +31,10 @@ func BytesBufferGet() (data *bytes.Buffer) {
 }
 
 func BytesBufferPut(data *bytes.Buffer) {
+	if data == nil || len(data.Bytes()) > TooBigBlockSize {
+		return
+	}
+
 	select {
 	case bytesBufferChan <- data:
 	default:

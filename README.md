@@ -2,16 +2,29 @@
 
 A pure go library to handle MySQL network protocol and replication.
 
-## Call for Committer/Maintainer
+![semver](https://img.shields.io/github/v/tag/go-mysql-org/go-mysql)
+![example workflow](https://github.com/go-mysql-org/go-mysql/actions/workflows/ci.yml/badge.svg)
+![gomod version](https://img.shields.io/github/go-mod/go-version/go-mysql-org/go-mysql/master)
 
-Sorry that I have no enough time to maintain this project wholly, if you like this project and want to help me improve it continuously, please contact me through email (siddontang@gmail.com).
+## How to migrate to this repo
+To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
+```
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.4.0
+```
 
-Requirement: In the email, you should list somethings(including but not limited to below) to make me believe we can work together.
+v1.4.0 - is the last tag in repo, feel free to choose what you want.
 
-+ Your GitHub ID
-+ The contributions to go-mysql before, including PRs or Issues. 
-+ The reason why you can improve go-mysql.
- 
+## Changelog
+This repo uses [Changelog](CHANGELOG.md).
+
+---
+# Content
+* [Slave replication](#replication)
+* [Incremental dumping](#canal)
+* [Client](#client)
+* [Fake server](#server)
+* [Failover](#failover)
+* [database/sql like driver](#driver)
 
 ## Replication
 
@@ -23,7 +36,7 @@ You can use it as a MySQL slave to sync binlog from master then do something, li
 
 ```go
 import (
-	"github.com/siddontang/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"os"
 )
 // Create a binlog syncer with a unique server id, the server id must be different from other MySQL's. 
@@ -107,20 +120,18 @@ You must use ROW format for binlog, full binlog row image is preferred, because 
 A simple example:
 
 ```go
-cfg := NewDefaultConfig()
-cfg.Addr = "127.0.0.1:3306"
-cfg.User = "root"
-// We only care table canal_test in test db
-cfg.Dump.TableDB = "test"
-cfg.Dump.Tables = []string{"canal_test"}
+package main
 
-c, err := NewCanal(cfg)
+import (
+	"github.com/siddontang/go-log/log"
+	"github.com/go-mysql-org/go-mysql/canal"
+)
 
 type MyEventHandler struct {
-	DummyEventHandler
+	canal.DummyEventHandler
 }
 
-func (h *MyEventHandler) OnRow(e *RowsEvent) error {
+func (h *MyEventHandler) OnRow(e *canal.RowsEvent) error {
 	log.Infof("%s %v\n", e.Action, e.Rows)
 	return nil
 }
@@ -129,11 +140,25 @@ func (h *MyEventHandler) String() string {
 	return "MyEventHandler"
 }
 
-// Register a handler to handle RowsEvent
-c.SetEventHandler(&MyEventHandler{})
+func main() {
+	cfg := canal.NewDefaultConfig()
+	cfg.Addr = "127.0.0.1:3306"
+	cfg.User = "root"
+	// We only care table canal_test in test db
+	cfg.Dump.TableDB = "test"
+	cfg.Dump.Tables = []string{"canal_test"}
 
-// Start canal
-c.Run()
+	c, err := canal.NewCanal(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Register a handler to handle RowsEvent
+	c.SetEventHandler(&MyEventHandler{})
+
+	// Start canal
+	c.Run()
+}
 ```
 
 You can see [go-mysql-elasticsearch](https://github.com/siddontang/go-mysql-elasticsearch) for how to sync MySQL data into Elasticsearch. 
@@ -146,7 +171,7 @@ Client package supports a simple MySQL connection driver which you can use it to
 
 ```go
 import (
-	"github.com/siddontang/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/client"
 )
 
 // Connect MySQL at 127.0.0.1:3306, with user root, an empty password and database test
@@ -197,6 +222,42 @@ Tested MySQL versions for the client include:
 - 5.7.x
 - 8.0.x
 
+### Example for SELECT streaming (v1.1.1)
+You can use also streaming for large SELECT responses.
+The callback function will be called for every result row without storing the whole resultset in memory.
+`result.Fields` will be filled before the first callback call.
+
+```go
+// ...
+var result mysql.Result
+err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
+    for idx, val := range row {
+    	field := result.Fields[idx]
+    	// You must not save FieldValue.AsString() value after this callback is done.
+    	// Copy it if you need.
+    	// ...
+    }
+    return nil
+}, nil)
+
+// ...
+```
+
+### Example for connection pool (v1.3.0)
+
+```go
+import (
+    "github.com/go-mysql-org/go-mysql/client"
+)
+
+pool := client.NewPool(log.Debugf, 100, 400, 5, "127.0.0.1:3306", `root`, ``, `test`)
+// ...
+conn, _ := pool.GetConn(ctx)
+defer pool.PutConn(conn)
+
+conn.Execute() / conn.Begin() / etc...
+```
+
 ## Server
 
 Server package supplies a framework to implement a simple MySQL server which can handle the packets from the MySQL client. 
@@ -207,7 +268,7 @@ so that most MySQL clients should be able to connect to the Server without modif
 
 ```go
 import (
-	"github.com/siddontang/go-mysql/server"
+	"github.com/go-mysql-org/go-mysql/server"
 	"net"
 )
 
@@ -261,7 +322,7 @@ package main
 import (
 	"database/sql"
 
-	_ "github.com/siddontang/go-mysql/driver"
+	_ "github.com/go-mysql-org/go-mysql/driver"
 )
 
 func main() {

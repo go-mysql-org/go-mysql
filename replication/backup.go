@@ -7,8 +7,8 @@ import (
 	"path"
 	"time"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 )
 
 // StartBackup: Like mysqlbinlog remote raw backup
@@ -22,7 +22,9 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 	// Force use raw mode
 	b.parser.SetRawMode(true)
 
-	os.MkdirAll(backupDir, 0755)
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		return errors.Trace(err)
+	}
 
 	s, err := b.StartSync(p)
 	if err != nil {
@@ -82,7 +84,6 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			if _, err = f.Write(BinLogFileHeader); err != nil {
 				return errors.Trace(err)
 			}
-
 		}
 
 		if n, err := f.Write(e.RawData); err != nil {

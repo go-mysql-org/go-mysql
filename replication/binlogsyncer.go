@@ -13,8 +13,9 @@ import (
 	"github.com/pingcap/errors"
 	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/client"
-	. "github.com/siddontang/go-mysql/mysql"
+
+	"github.com/go-mysql-org/go-mysql/client"
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var (
@@ -183,7 +184,10 @@ func (b *BinlogSyncer) close() {
 	b.cancel()
 
 	if b.c != nil {
-		b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		err := b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		if err != nil {
+			log.Warnf(`could not set read deadline: %s`, err)
+		}
 	}
 
 	// kill last connection id
@@ -234,17 +238,19 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	if len(b.cfg.Charset) != 0 {
-		b.c.SetCharset(b.cfg.Charset)
+		if err = b.c.SetCharset(b.cfg.Charset); err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	//set read timeout
 	if b.cfg.ReadTimeout > 0 {
-		b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
+		_ = b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
 	}
 
 	if b.cfg.RecvBufferSize > 0 {
 		if tcp, ok := b.c.Conn.Conn.(*net.TCPConn); ok {
-			tcp.SetReadBuffer(b.cfg.RecvBufferSize)
+			_ = tcp.SetReadBuffer(b.cfg.RecvBufferSize)
 		}
 	}
 
@@ -278,7 +284,6 @@ func (b *BinlogSyncer) registerSlave() error {
 			// if _, err = b.c.Execute(`SET @master_binlog_checksum=@@global.binlog_checksum`); err != nil {
 			// 	return errors.Trace(err)
 			// }
-
 		}
 	}
 
@@ -304,6 +309,12 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	if _, err = b.c.ReadOKPacket(); err != nil {
+		return errors.Trace(err)
+	}
+
+	serverUUID := uuid.NewV1()
+	if _, err = b.c.Execute(fmt.Sprintf("SET @slave_uuid = '%s', @replica_uuid = '%s'", serverUUID, serverUUID)); err != nil {
+		log.Errorf("failed to set @slave_uuid = '%s', err: %v", serverUUID, err)
 		return errors.Trace(err)
 	}
 
@@ -707,7 +718,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 		//set read timeout
 		if b.cfg.ReadTimeout > 0 {
-			b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
+			_ = b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
 		}
 
 		// Reset retry count on successful packet receieve
@@ -724,11 +735,10 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			s.closeWithError(err)
 			return
 		case EOF_HEADER:
-			// Refer http://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
-			// In the MySQL client/server protocol, EOF and OK packets serve the same purpose.
-			// Some users told me that they received EOF packet here, but I don't know why.
-			// So we only log a message and retry ReadPacket.
-			log.Info("receive EOF packet, retry ReadPacket")
+			// refer to https://dev.mysql.com/doc/internals/en/com-binlog-dump.html#binlog-dump-non-block
+			// when COM_BINLOG_DUMP command use BINLOG_DUMP_NON_BLOCK flag,
+			// if there is no more event to send an EOF_Packet instead of blocking the connection
+			log.Info("receive EOF packet, no more binlog event now.")
 			continue
 		default:
 			log.Errorf("invalid stream header %c", data[0])

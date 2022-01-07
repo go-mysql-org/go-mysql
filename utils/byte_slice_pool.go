@@ -31,6 +31,6 @@ func ByteSlicePut(data []byte) {
 	select {
 	case byteSliceChan <- data:
 	default:
-		byteSlicePool.Put(data)
+		byteSlicePool.Put(data) //nolint:staticcheck
 	}
 }

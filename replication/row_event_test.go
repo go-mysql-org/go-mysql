@@ -2,10 +2,11 @@ package replication
 
 import (
 	"fmt"
-	"strconv"
 
 	. "github.com/pingcap/check"
 	"github.com/shopspring/decimal"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 type testDecodeSuite struct{}
@@ -325,8 +326,7 @@ func (_ *testDecodeSuite) TestDecodeDecimal(c *C) {
 	}
 	for i, tc := range testcases {
 		value, pos, err := decodeDecimal(tc.Data, tc.Precision, tc.Decimals, false)
-		expectedFloat, _ := strconv.ParseFloat(tc.Expected, 64)
-		c.Assert(value.(float64), DecodeDecimalsEquals, pos, err, expectedFloat, tc.ExpectedPos, tc.ExpectedErr, i)
+		c.Assert(value.(string), DecodeDecimalsEquals, pos, err, tc.Expected, tc.ExpectedPos, tc.ExpectedErr, i)
 
 		value, pos, err = decodeDecimal(tc.Data, tc.Precision, tc.Decimals, true)
 		expectedDecimal, _ := decimal.NewFromString(tc.Expected)
@@ -427,6 +427,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 	//   `c2` decimal(10,0)
 	// ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+	//nolint:misspell
 	// INSERT INTO `t10` (`c2`) VALUES (1);
 	// INSERT INTO `t10` (`c1`, `c2`) VALUES ('{"key1": "value1", "key2": "value2"}', 1);
 	// test json deserialization
@@ -453,9 +454,10 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 		rows.Rows = nil
 		err = rows.Decode(tbl)
 		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], Equals, float64(1))
+		c.Assert(rows.Rows[0][1], Equals, "1")
 	}
 
+	//nolint:misspell
 	longTbls := [][]byte{
 		[]byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc\xd0\n\x00\x00\x00\x01\x00\xcf\n\v\x00\x04\x00\f\x0f\x00text\xbe\x15Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac\x80\x00\x00\x00e"),
 	}
@@ -464,7 +466,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 		rows.Rows = nil
 		err = rows.Decode(ltbl)
 		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], Equals, float64(101))
+		c.Assert(rows.Rows[0][1], Equals, "101")
 	}
 }
 func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
@@ -482,6 +484,7 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 	//   `c2` decimal(10,0)
 	// ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+	//nolint:misspell
 	// INSERT INTO `t10` (`c2`) VALUES (1);
 	// INSERT INTO `t10` (`c1`, `c2`) VALUES ('{"key1": "value1", "key2": "value2"}', 1);
 	// test json deserialization
@@ -511,6 +514,7 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 		c.Assert(rows.Rows[0][1], SimpleDecimalEqualsChecker, decimal.NewFromFloat(1))
 	}
 
+	//nolint:misspell
 	longTbls := [][]byte{
 		[]byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc\xd0\n\x00\x00\x00\x01\x00\xcf\n\v\x00\x04\x00\f\x0f\x00text\xbe\x15Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac\x80\x00\x00\x00e"),
 	}
@@ -695,22 +699,22 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	rows.Rows = nil
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[0][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[0][2], DeepEquals, "{}")
 
 	// after MySQL 5.7.22
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a")
 	rows.Rows = nil
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+	c.Assert(rows.Rows[1][2], DeepEquals, "{}")
+	c.Assert(rows.Rows[2][2], DeepEquals, "{\"a\":1234}")
 
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
 	rows.Rows = nil
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{\"a\":1234}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[1][2], DeepEquals, "{\"a\":1234}")
+	c.Assert(rows.Rows[2][2], DeepEquals, "{}")
 
 	// before MySQL 5.7.22
 	rows.ignoreJSONDecodeErr = true
@@ -718,8 +722,8 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	rows.Rows = nil
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("null"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+	c.Assert(rows.Rows[1][2], DeepEquals, "null")
+	c.Assert(rows.Rows[2][2], DeepEquals, "{\"a\":1234}")
 
 	rows.ignoreJSONDecodeErr = false
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
@@ -727,8 +731,8 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	err = rows.Decode(data)
 	c.Assert(err, IsNil)
 	// this value is wrong in binlog, but can be parsed without error
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+	c.Assert(rows.Rows[1][2], DeepEquals, "{}")
+	c.Assert(rows.Rows[2][2], DeepEquals, "{}")
 }
 
 func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
@@ -909,7 +913,6 @@ func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.tableIDSize = 6
 		err := tableMapEvent.Decode(tc.data)
@@ -925,7 +928,6 @@ func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
 			c.Assert(tableMapEvent.EnumStrValueString(), DeepEquals, [][]string(nil))
 		}
 	}
-
 }
 
 func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
@@ -1004,11 +1006,9 @@ func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
 		c.Assert(tableMapEvent.PrimaryKey, DeepEquals, tc.expectedPrimaryKey)
 		c.Assert(tableMapEvent.PrimaryKeyPrefix, DeepEquals, tc.expectedPrimaryKeyPrefix)
 	}
-
 }
 
 func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
-
 	/*
 		CREATE TABLE `_types` (
 			`b_bit` bit(64) NOT NULL DEFAULT b'0',
@@ -1171,7 +1171,6 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.flavor = tc.flavor
 		tableMapEvent.tableIDSize = 6
@@ -1183,7 +1182,162 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 		c.Assert(tableMapEvent.EnumStrValueMap(), DeepEquals, tc.enumStrValueMap)
 		c.Assert(tableMapEvent.SetStrValueMap(), DeepEquals, tc.setStrValueMap)
 		c.Assert(tableMapEvent.GeometryTypeMap(), DeepEquals, tc.geometryTypeMap)
-
 	}
+}
 
+func (_ *testDecodeSuite) TestInvalidEvent(c *C) {
+	data := "@\x01\x00\x00\x00\x00\x01\x00\x02\xff\xfc\x01\x00\x00\x00\x00B\x14U\x16\x8ew"
+	table := &TableMapEvent{
+		tableIDSize: 6,
+		TableID:     0x140,
+		Flags:       0x1,
+		Schema:      []uint8{0x74, 0x65, 0x73, 0x74},
+		Table:       []uint8{0x74},
+		ColumnCount: 0x2,
+		ColumnType:  []uint8{0x3, 0xc},
+		ColumnMeta:  []uint16{0x0, 0x0},
+		NullBitmap:  []uint8{0x2}}
+
+	e2 := &RowsEvent{
+		Version:     1,
+		tableIDSize: 6,
+	}
+	e2.tables = map[uint64]*TableMapEvent{}
+	e2.tables[0x140] = table
+	err := e2.Decode([]byte(data))
+	c.Assert(err, NotNil)
+}
+
+type decimalTest struct {
+	num      string
+	dumpData []byte
+	meta     uint16
+}
+
+var decimalData = []decimalTest{
+	// DECIMAL(40, 16)
+	{
+		"123.4560000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 27, 46, 2, 0, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"0.0000010000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"100000000.0000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 5, 245, 225, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"100000000.0000000200000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 5, 245, 225, 0, 0, 0, 0, 20, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"123456.1234567890000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 1, 226, 64, 7, 91, 205, 21, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"123456234234234757655.1234567890123456",
+		[]byte{128, 0, 123, 27, 49, 148, 250, 13, 254, 30, 23, 7, 91, 205, 21, 0, 1, 226, 64},
+		10256,
+	},
+	{
+		"-123456234234234757655.1234567890123456",
+		[]byte{127, 255, 132, 228, 206, 107, 5, 242, 1, 225, 232, 248, 164, 50, 234, 255, 254, 29, 191},
+		10256,
+	},
+	{
+		"0.0000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		10256,
+	},
+	// DECIMAL(60, 0)
+	{
+		"1000000000000000000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		15360,
+	},
+	{
+		"1",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		15360,
+	},
+	// DECIMAL(30, 30)
+	{
+		"0.100000000000000000000000000000",
+		[]byte{133, 245, 225, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		7710,
+	},
+	{
+		"0.000000000000001000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0, 0, 0},
+		7710,
+	},
+}
+
+func (_ *testDecodeSuite) BenchmarkUseDecimal(c *C) {
+	e := &RowsEvent{useDecimal: true}
+	c.ResetTimer()
+	for i := 0; i < c.N; i++ {
+		for _, d := range decimalData {
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		}
+	}
+}
+
+func (_ *testDecodeSuite) BenchmarkNotUseDecimal(c *C) {
+	e := &RowsEvent{useDecimal: false}
+	c.ResetTimer()
+	for i := 0; i < c.N; i++ {
+		for _, d := range decimalData {
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		}
+	}
+}
+
+func (_ *testDecodeSuite) TestDecimal(c *C) {
+	e := &RowsEvent{useDecimal: true}
+	e2 := &RowsEvent{useDecimal: false}
+	for _, d := range decimalData {
+		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		c.Assert(err, IsNil)
+		// no trailing zero
+		dec, err := decimal.NewFromString(d.num)
+		c.Assert(err, IsNil)
+		c.Assert(dec.Equal(v.(decimal.Decimal)), IsTrue)
+
+		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		c.Assert(err, IsNil)
+		c.Assert(v.(string), Equals, d.num)
+	}
+}
+
+var intData = [][]byte{
+	{1, 0, 0, 0},
+	{2, 0, 0, 0},
+	{3, 0, 0, 0},
+	{4, 0, 0, 0},
+	{5, 0, 0, 0},
+	{6, 0, 0, 0},
+	{7, 0, 0, 0},
+	{8, 0, 0, 0},
+	{9, 0, 0, 0},
+	{10, 0, 0, 0},
+	{11, 0, 0, 0},
+	{12, 0, 0, 0},
+}
+
+func (_ *testDecodeSuite) BenchmarkInt(c *C) {
+	e := &RowsEvent{}
+	c.ResetTimer()
+	for i := 0; i < c.N; i++ {
+		for _, d := range intData {
+			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0)
+		}
+	}
 }
