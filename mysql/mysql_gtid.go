@@ -275,8 +275,7 @@ func (s *UUIDSet) MinusInterval(in IntervalSlice) {
 		}
 	}
 
-	s.Intervals = n
-	s.Intervals = s.Intervals.Normalize()
+	s.Intervals = n.Normalize()
 }
 
 func (s *UUIDSet) String() string {

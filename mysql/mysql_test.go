@@ -150,13 +150,16 @@ func (t *mysqlTestSuite) TestMysqlGTIDAdd(c *check.C) {
 		// simple cases works:
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23:28-57"},
 		// summ is associative operation
-		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23:28-57"},
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23:28-57"},
+		// merge intervals:
+		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23-27", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23-57"},
 	}
 
 	for _, tc := range testCases {
 		m1 := t.mysqlGTIDfromString(c, tc.left)
 		m2 := t.mysqlGTIDfromString(c, tc.right)
-		m1.Add(m2)
+		err := m1.Add(m2)
+		c.Assert(err, check.IsNil)
 		c.Assert(
 			fmt.Sprintf("%s + %s = %s", tc.left, tc.right, strings.ToUpper(m1.String())),
 			check.Equals,
@@ -182,7 +185,8 @@ func (t *mysqlTestSuite) TestMysqlGTIDMinus(c *check.C) {
 	for _, tc := range testCases {
 		m1 := t.mysqlGTIDfromString(c, tc.left)
 		m2 := t.mysqlGTIDfromString(c, tc.right)
-		m1.Minus(m2)
+		err := m1.Minus(m2)
+		c.Assert(err, check.IsNil)
 		c.Assert(
 			fmt.Sprintf("%s - %s = %s", tc.left, tc.right, strings.ToUpper(m1.String())),
 			check.Equals,
