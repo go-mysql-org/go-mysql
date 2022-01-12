@@ -252,8 +252,6 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 	default:
 		return nil, fmt.Errorf("invalid query %s", query)
 	}
-
-	return nil, nil
 }
 
 func (h *testHandler) HandleQuery(query string) (*mysql.Result, error) {

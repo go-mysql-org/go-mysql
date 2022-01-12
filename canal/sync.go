@@ -181,8 +181,6 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		}
 	}
-
-	return nil
 }
 
 type node struct {
@@ -298,8 +296,6 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 			}
 		}
 	}
-
-	return nil
 }
 
 func (c *Canal) GetMasterPos() (mysql.Position, error) {

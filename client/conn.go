@@ -263,24 +263,23 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 	var f *Field
 	if data[0] == ERR_HEADER {
 		return nil, c.handleErrorPacket(data)
-	} else {
-		for {
-			if data, err = c.ReadPacket(); err != nil {
-				return nil, errors.Trace(err)
-			}
-
-			// EOF Packet
-			if c.isEOFPacket(data) {
-				return fs, nil
-			}
-
-			if f, err = FieldData(data).Parse(); err != nil {
-				return nil, errors.Trace(err)
-			}
-			fs = append(fs, f)
-		}
 	}
-	return nil, fmt.Errorf("field list error")
+
+	for {
+		if data, err = c.ReadPacket(); err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		// EOF Packet
+		if c.isEOFPacket(data) {
+			return fs, nil
+		}
+
+		if f, err = FieldData(data).Parse(); err != nil {
+			return nil, errors.Trace(err)
+		}
+		fs = append(fs, f)
+	}
 }
 
 func (c *Conn) SetAutoCommit() error {

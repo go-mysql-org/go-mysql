@@ -391,8 +391,6 @@ func (d *jsonBinaryDecoder) decodeOpaque(data []byte) interface{} {
 	default:
 		return hack.String(data)
 	}
-
-	return nil
 }
 
 func (d *jsonBinaryDecoder) decodeDecimal(data []byte) interface{} {

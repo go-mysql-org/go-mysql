@@ -205,8 +205,6 @@ func (h *testCacheHandler) handleQuery(query string, binary bool) (*mysql.Result
 	default:
 		return nil, fmt.Errorf("invalid query %s", query)
 	}
-
-	return nil, nil
 }
 
 func (h *testCacheHandler) HandleQuery(query string) (*mysql.Result, error) {

@@ -134,8 +134,6 @@ func (c *Conn) dispatch(data []byte) interface{} {
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}
-
-	return fmt.Errorf("command %d is not handled correctly", cmd)
 }
 
 type EmptyHandler struct {
