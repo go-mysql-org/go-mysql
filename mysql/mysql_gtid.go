@@ -227,6 +227,57 @@ func (s *UUIDSet) AddInterval(in IntervalSlice) {
 	s.Intervals = s.Intervals.Normalize()
 }
 
+func (s *UUIDSet) MinusInterval(in IntervalSlice) {
+	var n IntervalSlice
+	in = in.Normalize()
+
+	i, j := 0, 0
+	var minuend Interval
+	var subtrahend Interval
+	for j < len(in) && i < len(s.Intervals) {
+		if minuend.Stop != s.Intervals[i].Stop { // `i` changed?
+			minuend = s.Intervals[i]
+		}
+		subtrahend = in[j]
+
+		if minuend.Stop <= subtrahend.Start {
+			// no overlapping
+			n = append(n, minuend)
+			i++
+		} else if minuend.Start >= subtrahend.Stop {
+			// no overlapping
+			j++
+		} else {
+			if minuend.Start < subtrahend.Start && minuend.Stop < subtrahend.Stop {
+				n = append(n, Interval{minuend.Start, subtrahend.Start})
+				i++
+			} else if minuend.Start > subtrahend.Start && minuend.Stop > subtrahend.Stop {
+				minuend = Interval{subtrahend.Stop, minuend.Stop}
+				j++
+			} else if minuend.Start >= subtrahend.Start && minuend.Stop <= subtrahend.Stop {
+				// minuend is completely removed
+				i++
+			} else {
+				n = append(n, Interval{minuend.Start, subtrahend.Start})
+				minuend = Interval{subtrahend.Stop, minuend.Stop}
+				j++
+			}
+		}
+	}
+
+	lastSub := in[len(in)-1]
+	for ; i < len(s.Intervals); i++ {
+		minuend = s.Intervals[i]
+		if minuend.Start < lastSub.Stop {
+			n = append(n, Interval{lastSub.Stop, minuend.Stop})
+		} else {
+			n = append(n, s.Intervals[i])
+		}
+	}
+
+	s.Intervals = n.Normalize()
+}
+
 func (s *UUIDSet) String() string {
 	return hack.String(s.Bytes())
 }
@@ -304,6 +355,8 @@ type MysqlGTIDSet struct {
 	Sets map[string]*UUIDSet
 }
 
+var _ GTIDSet = &MysqlGTIDSet{}
+
 func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 	s := new(MysqlGTIDSet)
 	s.Sets = make(map[string]*UUIDSet)
@@ -362,6 +415,20 @@ func (s *MysqlGTIDSet) AddSet(set *UUIDSet) {
 	}
 }
 
+func (s *MysqlGTIDSet) MinusSet(set *UUIDSet) {
+	if set == nil {
+		return
+	}
+	sid := set.SID.String()
+	uuidSet, ok := s.Sets[sid]
+	if ok {
+		uuidSet.MinusInterval(set.Intervals)
+		if uuidSet.Intervals == nil {
+			delete(s.Sets, sid)
+		}
+	}
+}
+
 func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 	gtidSet, err := ParseMysqlGTIDSet(GTIDStr)
 	if err != nil {
@@ -369,6 +436,20 @@ func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 	}
 	for _, uuidSet := range gtidSet.(*MysqlGTIDSet).Sets {
 		s.AddSet(uuidSet)
+	}
+	return nil
+}
+
+func (s *MysqlGTIDSet) Add(addend MysqlGTIDSet) error {
+	for _, uuidSet := range addend.Sets {
+		s.AddSet(uuidSet)
+	}
+	return nil
+}
+
+func (s *MysqlGTIDSet) Minus(subtrahend MysqlGTIDSet) error {
+	for _, uuidSet := range subtrahend.Sets {
+		s.MinusSet(uuidSet)
 	}
 	return nil
 }
