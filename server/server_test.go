@@ -239,21 +239,33 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 		if err != nil {
 			return nil, errors.Trace(err)
 		} else {
-			return &mysql.Result{0, 0, 0, 0, r}, nil
+			return &mysql.Result{
+				Status:       0,
+				Warnings:     0,
+				InsertId:     0,
+				AffectedRows: 0,
+				Resultset:    r,
+			}, nil
 		}
 	case "insert":
-		return &mysql.Result{0, 0, 1, 0, nil}, nil
-	case "delete":
-		return &mysql.Result{0, 0, 0, 1, nil}, nil
-	case "update":
-		return &mysql.Result{0, 0, 0, 1, nil}, nil
-	case "replace":
-		return &mysql.Result{0, 0, 0, 1, nil}, nil
+		return &mysql.Result{
+			Status:       0,
+			Warnings:     0,
+			InsertId:     1,
+			AffectedRows: 0,
+			Resultset:    nil,
+		}, nil
+	case "delete", "update", "replace":
+		return &mysql.Result{
+			Status:       0,
+			Warnings:     0,
+			InsertId:     0,
+			AffectedRows: 1,
+			Resultset:    nil,
+		}, nil
 	default:
 		return nil, fmt.Errorf("invalid query %s", query)
 	}
-
-	return nil, nil
 }
 
 func (h *testHandler) HandleQuery(query string) (*mysql.Result, error) {

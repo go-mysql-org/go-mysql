@@ -15,9 +15,9 @@ linters:
     - nakedret
     - unconvert
     - whitespace
+    - govet
     # ToDo:
     #- gosimple
-    #- govet
     #- ineffassign
     #- gocritic
     #- golint
@@ -26,3 +26,10 @@ linters-settings:
     allow-unused: false
     allow-leading-space: false
     require-specific: true
+
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+      - lostcancel
+      - shadow
