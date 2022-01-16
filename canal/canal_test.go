@@ -141,8 +141,46 @@ func (s *canalTestSuite) TestCanal(c *C) {
 	s.execute(c, "ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
 	s.execute(c, "INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
 
-	err := s.c.CatchMasterPos(10 * time.Second)
+	err := CatchMasterPos(s.c, 10*time.Second)
 	c.Assert(err, IsNil)
+}
+
+func CatchMasterPos(c *Canal, timeout time.Duration) error {
+	pos, err := c.GetMasterPos()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return WaitUntilPos(c, pos, timeout)
+}
+
+func FlushBinlog(c *Canal) error {
+	_, err := c.Execute("FLUSH BINARY LOGS")
+	return errors.Trace(err)
+}
+
+func WaitUntilPos(c *Canal, pos mysql.Position, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	for {
+		select {
+		case <-timer.C:
+			return errors.Errorf("wait position %v too long > %s", pos, timeout)
+		default:
+			err := FlushBinlog(c)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			curPos := c.master.Position()
+			if curPos.Compare(pos) >= 0 {
+				return nil
+			} else {
+				log.Debugf("master pos is %v, wait catching %v", curPos, pos)
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *canalTestSuite) TestCanalFilter(c *C) {
