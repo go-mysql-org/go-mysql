@@ -22,15 +22,12 @@ func init() {
 }
 
 type Stmt struct {
-	ID    uint32
-	Query string
-
+	Context interface{}
+	Query   string
+	Args    []interface{}
 	Params  int
 	Columns int
-
-	Args []interface{}
-
-	Context interface{}
+	ID      uint32
 }
 
 func (s *Stmt) Rest(params int, columns int, context interface{}) {

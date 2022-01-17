@@ -13,12 +13,12 @@ type User struct {
 }
 
 type Server struct {
-	Addr string
+	conn *client.Conn
 
 	User     User
 	ReplUser User
 
-	conn *client.Conn
+	Addr string
 }
 
 func NewServer(addr string, user User, replUser User) *Server {

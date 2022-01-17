@@ -40,17 +40,17 @@ const (
 
 type TableColumn struct {
 	Name       string
-	Type       int
 	Collation  string
 	RawType    string
-	IsAuto     bool
-	IsUnsigned bool
-	IsVirtual  bool
-	IsStored   bool
 	EnumValues []string
 	SetValues  []string
+	Type       int
 	FixedSize  uint
 	MaxSize    uint
+	IsVirtual  bool
+	IsStored   bool
+	IsAuto     bool
+	IsUnsigned bool
 }
 
 type Index struct {

@@ -26,14 +26,14 @@ var defaultServer = NewDefaultServer()
 // We choose to drop the support for insecure 'mysql_old_password' auth method and require client capability 'CLIENT_PROTOCOL_41' and 'CLIENT_SECURE_CONNECTION'
 // are set. Besides, if 'CLIENT_PLUGIN_AUTH' is not set, we fallback to 'mysql_native_password' auth method.
 type Server struct {
-	serverVersion     string // e.g. "8.0.12"
+	tlsConfig         *tls.Config
+	cacheShaPassword  *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
+	defaultAuthMethod string    // default authentication method, 'mysql_native_password'
+	serverVersion     string    // e.g. "8.0.12"
+	pubKey            []byte
 	protocolVersion   int    // minimal 10
 	capability        uint32 // server capability flag
 	collationId       uint8
-	defaultAuthMethod string // default authentication method, 'mysql_native_password'
-	pubKey            []byte
-	tlsConfig         *tls.Config
-	cacheShaPassword  *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
 }
 
 // NewDefaultServer: New mysql server with default settings.

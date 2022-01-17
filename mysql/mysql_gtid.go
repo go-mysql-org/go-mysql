@@ -159,9 +159,9 @@ func (s IntervalSlice) Compare(o IntervalSlice) int {
 
 // Refer http://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
 type UUIDSet struct {
-	SID uuid.UUID
-
 	Intervals IntervalSlice
+
+	SID uuid.UUID
 }
 
 func ParseUUIDSet(str string) (*UUIDSet, error) {

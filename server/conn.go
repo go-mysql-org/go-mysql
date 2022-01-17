@@ -16,26 +16,22 @@ import (
 type Conn struct {
 	*packet.Conn
 
-	serverConf     *Server
-	capability     uint32
-	charset        uint8
-	authPluginName string
-	connectionID   uint32
-	status         uint16
-	warnings       uint16
-	salt           []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
-
 	credentialProvider  CredentialProvider
-	user                string
+	h                   Handler
+	stmts               map[uint32]*Stmt
+	serverConf          *Server
+	authPluginName      string
 	password            string
+	user                string
+	salt                []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
+	stmtID              uint32
+	closed              sync2.AtomicBool
+	connectionID        uint32
+	capability          uint32
+	warnings            uint16
+	status              uint16
 	cachingSha2FullAuth bool
-
-	h Handler
-
-	stmts  map[uint32]*Stmt
-	stmtID uint32
-
-	closed sync2.AtomicBool
+	charset             uint8
 }
 
 var baseConnID uint32 = 10000

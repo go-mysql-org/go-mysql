@@ -13,11 +13,10 @@ var (
 // fracTime is a help structure wrapping Golang Time.
 type fracTime struct {
 	time.Time
+	timestampStringLocation *time.Location
 
 	// Dec must in [0, 6]
 	Dec int
-
-	timestampStringLocation *time.Location
 }
 
 func (t fracTime) String() string {

@@ -16,25 +16,23 @@ import (
 type Conn struct {
 	*packet.Conn
 
+	tlsConfig *tls.Config
 	user      string
 	password  string
 	db        string
-	tlsConfig *tls.Config
 	proto     string
 
+	charset string
+
+	authPluginName string
+	salt           []byte
 	// server capabilities
 	capability uint32
 	// client-set capabilities only
 	ccaps uint32
 
-	status uint16
-
-	charset string
-
-	salt           []byte
-	authPluginName string
-
 	connectionID uint32
+	status       uint16
 }
 
 // This function will be called for every row in resultset from ExecuteSelectStreaming.

@@ -9,28 +9,27 @@ import (
 type FieldData []byte
 
 type Field struct {
-	Data         FieldData
-	Schema       []byte
-	Table        []byte
-	OrgTable     []byte
-	Name         []byte
-	OrgName      []byte
-	Charset      uint16
-	ColumnLength uint32
-	Type         uint8
-	Flag         uint16
-	Decimal      uint8
-
-	DefaultValueLength uint64
+	Data               FieldData
+	Schema             []byte
+	Table              []byte
+	OrgTable           []byte
+	Name               []byte
+	OrgName            []byte
 	DefaultValue       []byte
+	DefaultValueLength uint64
+	ColumnLength       uint32
+	Flag               uint16
+	Charset            uint16
+	Type               uint8
+	Decimal            uint8
 }
 
 type FieldValueType uint8
 
 type FieldValue struct {
-	Type  FieldValueType
-	value uint64 // Also for int64 and float64
 	str   []byte
+	value uint64 // Also for int64 and float64
+	Type  FieldValueType
 }
 
 const (

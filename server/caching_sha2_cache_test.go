@@ -67,13 +67,11 @@ func (m *RemoteThrottleProvider) GetCredential(username string) (password string
 }
 
 type cacheTestSuite struct {
-	server       *Server
 	credProvider CredentialProvider
+	l            net.Listener
+	server       *Server
+	db           *sql.DB
 	tlsPara      string
-
-	db *sql.DB
-
-	l net.Listener
 }
 
 func (s *cacheTestSuite) SetUpSuite(c *C) {

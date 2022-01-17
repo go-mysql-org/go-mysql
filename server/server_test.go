@@ -87,14 +87,15 @@ func Test(t *testing.T) {
 }
 
 type serverTestSuite struct {
-	server       *Server
 	credProvider CredentialProvider
 
-	tlsPara string
+	l net.Listener
+
+	server *Server
 
 	db *sql.DB
 
-	l net.Listener
+	tlsPara string
 }
 
 func (s *serverTestSuite) SetUpSuite(c *C) {

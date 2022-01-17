@@ -7,6 +7,7 @@ import (
 	"github.com/siddontang/go-log/log"
 )
 
+//nolint:govet // this struct is not optimally aligned, but that adds to the readability
 type masterInfo struct {
 	sync.RWMutex
 

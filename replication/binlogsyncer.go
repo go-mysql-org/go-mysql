@@ -23,6 +23,7 @@ var (
 )
 
 // BinlogSyncerConfig is the configuration for BinlogSyncer.
+//nolint:govet // this struct is not optimally aligned, but that adds to the readability
 type BinlogSyncerConfig struct {
 	// ServerID is the unique ID in cluster.
 	ServerID uint32
@@ -113,28 +114,19 @@ type BinlogSyncerConfig struct {
 
 // BinlogSyncer syncs binlog event from server.
 type BinlogSyncer struct {
-	m sync.RWMutex
-
-	cfg BinlogSyncerConfig
-
-	c *client.Conn
-
-	wg sync.WaitGroup
-
-	parser *BinlogParser
-
-	nextPos Position
-
-	prevGset, currGset GTIDSet
-
-	running bool
-
-	ctx    context.Context
-	cancel context.CancelFunc
-
+	cfg              BinlogSyncerConfig
+	ctx              context.Context
+	prevGset         GTIDSet
+	currGset         GTIDSet
+	c                *client.Conn
+	cancel           context.CancelFunc
+	parser           *BinlogParser
+	nextPos          Position
+	retryCount       int
+	m                sync.RWMutex
+	wg               sync.WaitGroup
 	lastConnectionID uint32
-
-	retryCount int
+	running          bool
 }
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.

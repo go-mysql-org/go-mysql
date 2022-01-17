@@ -13,7 +13,8 @@ import (
 	"github.com/siddontang/go-log/log"
 )
 
-// Unlick mysqldump, Dumper is designed for parsing and syning data easily.
+// Unlike mysqldump, Dumper is designed for parsing and syning data easily.
+//nolint:govet // this struct is not optimally aligned, but that adds to the readability
 type Dumper struct {
 	// mysqldump execution path, like mysqldump or /usr/bin/mysqldump, etc...
 	ExecutionPath string

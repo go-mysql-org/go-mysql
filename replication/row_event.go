@@ -19,6 +19,7 @@ import (
 
 var errMissingTableMapEvent = errors.New("invalid table id, no corresponding table map event")
 
+//nolint:govet // this struct is not optimally aligned, but that adds to the readability
 type TableMapEvent struct {
 	flavor      string
 	tableIDSize int
@@ -812,33 +813,26 @@ func (e *TableMapEvent) IsEnumOrSetColumn(i int) bool {
 const RowsEventStmtEndFlag = 0x01
 
 type RowsEvent struct {
-	//0, 1, 2
-	Version int
+	tables                  map[uint64]*TableMapEvent
+	timestampStringLocation *time.Location
+	Table                   *TableMapEvent
 
-	tableIDSize int
-	tables      map[uint64]*TableMapEvent
-	needBitmap2 bool
-
-	Table *TableMapEvent
-
-	TableID uint64
-
-	Flags uint16
+	//rows: invalid: int64, float64, bool, []byte, string
+	Rows [][]interface{}
 
 	//if version == 2
 	ExtraData []byte
 
-	//lenenc_int
-	ColumnCount uint64
-
 	/*
-		By default MySQL and MariaDB log the full row image.
-		see
-			- https://dev.mysql.com/doc/refman/8.0/en/replication-options-binary-log.html#sysvar_binlog_row_image
-			- https://mariadb.com/kb/en/replication-and-binary-log-system-variables/#binlog_row_image
+	   By default MySQL and MariaDB log the full row image.
+	   see
+	           - https://dev.mysql.com/doc/refman/8.0/en/replication-options-binary-log.html#sysvar_binlog_row_image
+	           - https://mariadb.com/kb/en/replication-and-binary-log-system-variables/#binlog_row_image
 
-		ColumnBitmap1, ColumnBitmap2 and SkippedColumns are not set on the full row image.
+	   SkippedColumns and ColumnBitmap1, ColumnBitmap2 are not set on the full row image.
 	*/
+
+	SkippedColumns [][]int
 
 	//len = (ColumnCount + 7) / 8
 	ColumnBitmap1 []byte
@@ -846,15 +840,20 @@ type RowsEvent struct {
 	//if UPDATE_ROWS_EVENTv1 or v2
 	//len = (ColumnCount + 7) / 8
 	ColumnBitmap2 []byte
+	TableID       uint64
+	tableIDSize   int
 
-	//rows: invalid: int64, float64, bool, []byte, string
-	Rows           [][]interface{}
-	SkippedColumns [][]int
+	//lenenc_int
+	ColumnCount uint64
 
-	parseTime               bool
-	timestampStringLocation *time.Location
-	useDecimal              bool
-	ignoreJSONDecodeErr     bool
+	//0, 1, 2
+	Version int
+
+	Flags               uint16
+	parseTime           bool
+	needBitmap2         bool
+	useDecimal          bool
+	ignoreJSONDecodeErr bool
 }
 
 func (e *RowsEvent) Decode(data []byte) (err2 error) {

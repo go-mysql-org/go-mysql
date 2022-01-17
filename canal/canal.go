@@ -25,34 +25,26 @@ import (
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
 // MySQL must open row format for binlog
 type Canal struct {
-	m sync.Mutex
-
-	cfg *Config
-
-	parser     *parser.Parser
-	master     *masterInfo
-	dumper     *dump.Dumper
-	dumped     bool
-	dumpDoneCh chan struct{}
-	syncer     *replication.BinlogSyncer
-
-	eventHandler EventHandler
-
-	connLock sync.Mutex
-	conn     *client.Conn
-
-	tableLock          sync.RWMutex
-	tables             map[string]*schema.Table
+	ctx                context.Context
+	eventHandler       EventHandler
+	cancel             context.CancelFunc
 	errorTablesGetTime map[string]time.Time
-
-	tableMatchCache   map[string]bool
-	includeTableRegex []*regexp.Regexp
-	excludeTableRegex []*regexp.Regexp
-
-	delay *uint32
-
-	ctx    context.Context
-	cancel context.CancelFunc
+	tableMatchCache    map[string]bool
+	conn               *client.Conn
+	dumpDoneCh         chan struct{}
+	syncer             *replication.BinlogSyncer
+	dumper             *dump.Dumper
+	master             *masterInfo
+	parser             *parser.Parser
+	cfg                *Config
+	tables             map[string]*schema.Table
+	delay              *uint32
+	excludeTableRegex  []*regexp.Regexp
+	includeTableRegex  []*regexp.Regexp
+	tableLock          sync.RWMutex
+	connLock           sync.Mutex
+	m                  sync.Mutex
+	dumped             bool
 }
 
 // canal will retry fetching unknown table's meta after UnknownTableRetryPeriod

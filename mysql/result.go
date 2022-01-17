@@ -1,13 +1,13 @@
 package mysql
 
 type Result struct {
-	Status   uint16
-	Warnings uint16
+	*Resultset
 
 	InsertId     uint64
 	AffectedRows uint64
 
-	*Resultset
+	Status   uint16
+	Warnings uint16
 }
 
 type Executer interface {

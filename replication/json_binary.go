@@ -94,9 +94,9 @@ func (e *RowsEvent) decodeJsonBinary(data []byte) ([]byte, error) {
 }
 
 type jsonBinaryDecoder struct {
+	err             error
 	useDecimal      bool
 	ignoreDecodeErr bool
-	err             error
 }
 
 func (d *jsonBinaryDecoder) decodeValue(tp byte, data []byte) interface{} {

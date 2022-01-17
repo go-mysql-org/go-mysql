@@ -15,10 +15,10 @@ import (
 )
 
 type dumpParseHandler struct {
+	gset mysql.GTIDSet
 	c    *Canal
 	name string
 	pos  uint64
-	gset mysql.GTIDSet
 }
 
 func (h *dumpParseHandler) BinLog(name string, pos uint64) error {

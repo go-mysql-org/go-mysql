@@ -26,11 +26,10 @@ const (
 )
 
 type BinlogEvent struct {
+	Event  Event
+	Header *EventHeader
 	// raw binlog data which contains all data, including binlog header and event body, and including crc32 checksum if exists
 	RawData []byte
-
-	Header *EventHeader
-	Event  Event
 }
 
 func (e *BinlogEvent) Dump(w io.Writer) {
@@ -61,11 +60,11 @@ func (e *EventError) Error() string {
 
 type EventHeader struct {
 	Timestamp uint32
-	EventType EventType
 	ServerID  uint32
 	EventSize uint32
 	LogPos    uint32
 	Flags     uint16
+	EventType EventType
 }
 
 func (h *EventHeader) Decode(data []byte) error {
@@ -145,12 +144,12 @@ func calcVersionProduct(server string) int {
 }
 
 type FormatDescriptionEvent struct {
-	Version uint16
 	//len = 50
 	ServerVersion          []byte
-	CreateTimestamp        uint32
-	EventHeaderLength      uint8
 	EventTypeHeaderLengths []byte
+	CreateTimestamp        uint32
+	Version                uint16
+	EventHeaderLength      uint8
 
 	// 0 is off, 1 is for CRC32, 255 is undefined
 	ChecksumAlgorithm byte
@@ -203,8 +202,8 @@ func (e *FormatDescriptionEvent) Dump(w io.Writer) {
 }
 
 type RotateEvent struct {
-	Position    uint64
 	NextLogName []byte
+	Position    uint64
 }
 
 func (e *RotateEvent) Decode(data []byte) error {
@@ -270,10 +269,10 @@ func (e *PreviousGTIDsEvent) decodeInterval(data []byte) uint64 {
 }
 
 type XIDEvent struct {
-	XID uint64
-
 	// in fact XIDEvent dosen't have the GTIDSet information, just for beneficial to use
 	GSet GTIDSet
+
+	XID uint64
 }
 
 func (e *XIDEvent) Decode(data []byte) error {
@@ -290,15 +289,15 @@ func (e *XIDEvent) Dump(w io.Writer) {
 }
 
 type QueryEvent struct {
-	SlaveProxyID  uint32
-	ExecutionTime uint32
-	ErrorCode     uint16
+	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
+	GSet GTIDSet
+
 	StatusVars    []byte
 	Schema        []byte
 	Query         []byte
-
-	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
-	GSet GTIDSet
+	ExecutionTime uint32
+	SlaveProxyID  uint32
+	ErrorCode     uint16
 }
 
 func (e *QueryEvent) Decode(data []byte) error {
@@ -346,25 +345,22 @@ func (e *QueryEvent) Dump(w io.Writer) {
 }
 
 type GTIDEvent struct {
-	CommitFlag     uint8
-	SID            []byte
-	GNO            int64
-	LastCommitted  int64
-	SequenceNumber int64
-
+	SID                     []byte
+	OriginalCommitTimestamp uint64
+	GNO                     int64
+	LastCommitted           int64
+	SequenceNumber          int64
 	// ImmediateCommitTimestamp/OriginalCommitTimestamp are introduced in MySQL-8.0.1, see:
 	// https://mysqlhighavailability.com/replication-features-in-mysql-8-0-1/
 	ImmediateCommitTimestamp uint64
-	OriginalCommitTimestamp  uint64
-
 	// Total transaction length (including this GTIDEvent), introduced in MySQL-8.0.2, see:
 	// https://mysqlhighavailability.com/taking-advantage-of-new-transaction-length-metadata/
 	TransactionLength uint64
-
 	// ImmediateServerVersion/OriginalServerVersion are introduced in MySQL-8.0.14, see
 	// https://dev.mysql.com/doc/refman/8.0/en/replication-compatibility.html
 	ImmediateServerVersion uint32
 	OriginalServerVersion  uint32
+	CommitFlag             uint8
 }
 
 func (e *GTIDEvent) Decode(data []byte) error {
@@ -464,8 +460,8 @@ func (e *GTIDEvent) OriginalCommitTime() time.Time {
 }
 
 type BeginLoadQueryEvent struct {
-	FileID    uint32
 	BlockData []byte
+	FileID    uint32
 }
 
 func (e *BeginLoadQueryEvent) Decode(data []byte) error {
@@ -488,12 +484,12 @@ func (e *BeginLoadQueryEvent) Dump(w io.Writer) {
 type ExecuteLoadQueryEvent struct {
 	SlaveProxyID     uint32
 	ExecutionTime    uint32
-	SchemaLength     uint8
-	ErrorCode        uint16
-	StatusVars       uint16
 	FileID           uint32
 	StartPos         uint32
 	EndPos           uint32
+	ErrorCode        uint16
+	StatusVars       uint16
+	SchemaLength     uint8
 	DupHandlingFlags uint8
 }
 

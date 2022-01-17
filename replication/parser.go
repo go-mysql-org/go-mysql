@@ -21,22 +21,16 @@ var (
 )
 
 type BinlogParser struct {
+	format                  *FormatDescriptionEvent
+	tables                  map[uint64]*TableMapEvent
+	timestampStringLocation *time.Location
 	// "mysql" or "mariadb", if not set, use "mysql" by default
 	flavor string
-
-	format *FormatDescriptionEvent
-
-	tables map[uint64]*TableMapEvent
-
-	// for rawMode, we only parse FormatDescriptionEvent and RotateEvent
-	rawMode bool
-
-	parseTime               bool
-	timestampStringLocation *time.Location
-
 	// used to start/stop processing
 	stopProcessing uint32
-
+	// for rawMode, we only parse FormatDescriptionEvent and RotateEvent
+	rawMode             bool
+	parseTime           bool
 	useDecimal          bool
 	ignoreJSONDecodeErr bool
 	verifyChecksum      bool

@@ -144,15 +144,15 @@ func (t *mariaDBTestSuite) TestParseMariaDBGTIDSet(c *check.C) {
 
 func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
 	cases := []struct {
-		isNilGTID bool
-		gtidStr   string
 		subGTIDs  map[uint32]string
+		gtidStr   string
+		isNilGTID bool
 	}{
-		{true, "", map[uint32]string{1: "1-1-1", 2: "2-2-2"}},
-		{false, "1-2-2", map[uint32]string{1: "1-2-2", 2: "2-2-2"}},
-		{false, "1-2-1", map[uint32]string{1: "1-2-1", 2: "2-2-2"}},
-		{false, "3-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1"}},
-		{false, "3-2-1,4-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1", 4: "4-2-1"}},
+		{isNilGTID: true, gtidStr: "", subGTIDs: map[uint32]string{1: "1-1-1", 2: "2-2-2"}},
+		{isNilGTID: false, gtidStr: "1-2-2", subGTIDs: map[uint32]string{1: "1-2-2", 2: "2-2-2"}},
+		{isNilGTID: false, gtidStr: "1-2-1", subGTIDs: map[uint32]string{1: "1-2-1", 2: "2-2-2"}},
+		{isNilGTID: false, gtidStr: "3-2-1", subGTIDs: map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1"}},
+		{isNilGTID: false, gtidStr: "3-2-1,4-2-1", subGTIDs: map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1", 4: "4-2-1"}},
 	}
 
 	for _, cs := range cases {

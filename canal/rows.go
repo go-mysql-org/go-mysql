@@ -16,7 +16,9 @@ const (
 
 // RowsEvent is the event for row replication.
 type RowsEvent struct {
-	Table  *schema.Table
+	Table *schema.Table
+	// Header can be used to inspect the event
+	Header *replication.EventHeader
 	Action string
 	// changed row list
 	// binlog has three update event version, v0, v1 and v2.
@@ -24,8 +26,6 @@ type RowsEvent struct {
 	// Two rows for one event, format is [before update row, after update row]
 	// for update v0, only one row for a event, and we don't support this version.
 	Rows [][]interface{}
-	// Header can be used to inspect the event
-	Header *replication.EventHeader
 }
 
 func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, header *replication.EventHeader) *RowsEvent {

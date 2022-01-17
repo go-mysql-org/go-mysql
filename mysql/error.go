@@ -14,9 +14,9 @@ var (
 )
 
 type MyError struct {
-	Code    uint16
 	Message string
 	State   string
+	Code    uint16
 }
 
 func (e *MyError) Error() string {

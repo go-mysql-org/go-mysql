@@ -11,6 +11,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
+//nolint:govet // this struct is not optimally aligned, but that adds to the readability
 type DumpConfig struct {
 	// mysqldump execution path, like mysqldump or /usr/bin/mysqldump, etc...
 	// If not set, ignore using mysqldump.
@@ -45,6 +46,7 @@ type DumpConfig struct {
 	ExtraOptions []string `toml:"extra_options"`
 }
 
+//nolint:govet // this struct is not optimally aligned, but that adds to the readability
 type Config struct {
 	Addr     string `toml:"addr"`
 	User     string `toml:"user"`

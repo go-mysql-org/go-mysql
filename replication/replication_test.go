@@ -30,9 +30,9 @@ type testSyncerSuite struct {
 	b *BinlogSyncer
 	c *client.Conn
 
-	wg sync.WaitGroup
-
 	flavor string
+
+	wg sync.WaitGroup
 }
 
 var _ = Suite(&testSyncerSuite{})
