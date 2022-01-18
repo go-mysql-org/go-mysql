@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -234,11 +235,15 @@ func (s *UUIDSet) MinusInterval(in IntervalSlice) {
 	i, j := 0, 0
 	var minuend Interval
 	var subtrahend Interval
-	for j < len(in) && i < len(s.Intervals) {
+	for i < len(s.Intervals) {
 		if minuend.Stop != s.Intervals[i].Stop { // `i` changed?
 			minuend = s.Intervals[i]
 		}
-		subtrahend = in[j]
+		if j < len(in) {
+			subtrahend = in[j]
+		} else {
+			subtrahend = Interval{math.MaxInt64, math.MaxInt64}
+		}
 
 		if minuend.Stop <= subtrahend.Start {
 			// no overlapping
@@ -248,30 +253,22 @@ func (s *UUIDSet) MinusInterval(in IntervalSlice) {
 			// no overlapping
 			j++
 		} else {
-			if minuend.Start < subtrahend.Start && minuend.Stop < subtrahend.Stop {
+			if minuend.Start < subtrahend.Start && minuend.Stop <= subtrahend.Stop {
 				n = append(n, Interval{minuend.Start, subtrahend.Start})
 				i++
-			} else if minuend.Start > subtrahend.Start && minuend.Stop > subtrahend.Stop {
+			} else if minuend.Start >= subtrahend.Start && minuend.Stop > subtrahend.Stop {
 				minuend = Interval{subtrahend.Stop, minuend.Stop}
 				j++
 			} else if minuend.Start >= subtrahend.Start && minuend.Stop <= subtrahend.Stop {
 				// minuend is completely removed
 				i++
-			} else {
+			} else if minuend.Start < subtrahend.Start && minuend.Stop > subtrahend.Stop {
 				n = append(n, Interval{minuend.Start, subtrahend.Start})
 				minuend = Interval{subtrahend.Stop, minuend.Stop}
 				j++
+			} else {
+				panic("should never be here")
 			}
-		}
-	}
-
-	lastSub := in[len(in)-1]
-	for ; i < len(s.Intervals); i++ {
-		minuend = s.Intervals[i]
-		if minuend.Start < lastSub.Stop {
-			n = append(n, Interval{lastSub.Stop, minuend.Stop})
-		} else {
-			n = append(n, s.Intervals[i])
 		}
 	}
 
