@@ -274,35 +274,6 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	return c.eventHandler.OnRow(events)
 }
 
-func (c *Canal) FlushBinlog() error {
-	_, err := c.Execute("FLUSH BINARY LOGS")
-	return errors.Trace(err)
-}
-
-func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
-	timer := time.NewTimer(timeout)
-	for {
-		select {
-		case <-timer.C:
-			return errors.Errorf("wait position %v too long > %s", pos, timeout)
-		default:
-			err := c.FlushBinlog()
-			if err != nil {
-				return errors.Trace(err)
-			}
-			curPos := c.master.Position()
-			if curPos.Compare(pos) >= 0 {
-				return nil
-			} else {
-				log.Debugf("master pos is %v, wait catching %v", curPos, pos)
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-	}
-
-	return nil
-}
-
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
 	rr, err := c.Execute("SHOW MASTER STATUS")
 	if err != nil {
@@ -336,13 +307,4 @@ func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
 		return nil, errors.Trace(err)
 	}
 	return gset, nil
-}
-
-func (c *Canal) CatchMasterPos(timeout time.Duration) error {
-	pos, err := c.GetMasterPos()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return c.WaitUntilPos(pos, timeout)
 }
