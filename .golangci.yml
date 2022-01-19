@@ -16,9 +16,9 @@ linters:
     - unconvert
     - whitespace
     - govet
+    - gosimple
     - ineffassign
     # ToDo:
-    #- gosimple
     #- gocritic
     #- golint
 linters-settings:

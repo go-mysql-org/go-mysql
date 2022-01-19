@@ -186,7 +186,7 @@ func (c *Canal) dump() error {
 		startPos = h.gset
 	}
 	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
-		time.Now().Sub(start).Seconds(), startPos)
+		time.Since(start).Seconds(), startPos)
 	return nil
 }
 

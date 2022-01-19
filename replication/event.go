@@ -251,7 +251,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 		}
 		previousGTIDSets = append(previousGTIDSets, fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":")))
 	}
-	e.GTIDSets = fmt.Sprintf("%s", strings.Join(previousGTIDSets, ","))
+	e.GTIDSets = strings.Join(previousGTIDSets, ",")
 	return nil
 }
 
