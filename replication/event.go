@@ -91,7 +91,7 @@ func (h *EventHeader) Decode(data []byte) error {
 	pos += 4
 
 	h.Flags = binary.LittleEndian.Uint16(data[pos:])
-	pos += 2
+	// pos += 2
 
 	if h.EventSize < uint32(EventHeaderSize) {
 		return errors.Errorf("invalid event size %d, must >= 19", h.EventSize)
@@ -420,7 +420,7 @@ func (e *GTIDEvent) Decode(data []byte) error {
 				// If the most significant bit set, another 4 byte follows representing OriginalServerVersion
 				e.ImmediateServerVersion &= ^(uint32(1) << 31)
 				e.OriginalServerVersion = binary.LittleEndian.Uint32(data[pos:])
-				pos += 4
+				// pos += 4
 			} else {
 				// Otherwise OriginalServerVersion == ImmediateServerVersion
 				e.OriginalServerVersion = e.ImmediateServerVersion
