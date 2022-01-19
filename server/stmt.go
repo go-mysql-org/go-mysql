@@ -170,7 +170,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 	pos := 0
 
 	var v []byte
-	var n int = 0
+	var n int
 	var isNull bool
 	var err error
 
