@@ -308,7 +308,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 		c.tableLock.RLock()
 		lastTime, ok := c.errorTablesGetTime[key]
 		c.tableLock.RUnlock()
-		if ok && time.Now().Sub(lastTime) < UnknownTableRetryPeriod {
+		if ok && time.Since(lastTime) < UnknownTableRetryPeriod {
 			return nil, schema.ErrMissingTableMeta
 		}
 	}

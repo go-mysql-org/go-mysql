@@ -72,14 +72,12 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 			return
 		}
 
-		eventCount := 0
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			e, err := s.GetEvent(ctx)
 			cancel()
 
 			if err == context.DeadlineExceeded {
-				eventCount += 1
 				return
 			}
 
