@@ -23,31 +23,71 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	lastIndex := strings.LastIndex(dsn, "@")
 	seps := []string{dsn[:lastIndex], dsn[lastIndex+1:]}
 	if len(seps) != 2 {
-		return nil, errors.Errorf("invalid dsn, must user:password@addr[?db]")
+		return nil, errors.Errorf("invalid dsn, must user:password@addr[[?db[&param=X]]")
 	}
 
 	var user string
 	var password string
 	var addr string
 	var db string
+	var err error
+	var c *client.Conn
 
 	if ss := strings.Split(seps[0], ":"); len(ss) == 2 {
 		user, password = ss[0], ss[1]
 	} else if len(ss) == 1 {
 		user = ss[0]
 	} else {
-		return nil, errors.Errorf("invalid dsn, must user:password@addr[?db]")
+		return nil, errors.Errorf("invalid dsn, must user:password@addr[[?db[&param=X]]")
 	}
 
+	params := make(map[string]string)
 	if ss := strings.Split(seps[1], "?"); len(ss) == 2 {
-		addr, db = ss[0], ss[1]
+		// If the dsn used a `/` for the path separator this would be easier to parse
+		// with `url.Parse` and we could use `.Path` to get the db and then use
+		// `Query()` to get the parameters and values.
+		// But for consistency with the current way of doing things...
+		addr = ss[0]
+		dbAndParams := ss[1]
+		if ss := strings.Split(dbAndParams, "&"); len(ss) == 1 {
+			db = ss[0]
+		} else {
+			// We have to assume the first is the db
+			// Then need to handle possible multiple parameters / query strings
+			for i, p := range ss {
+				if i == 0 {
+					db = p
+				} else {
+					// Build key value pairs
+					kv := strings.Split(p, "=")
+					params[kv[0]] = kv[1]
+				}
+			}
+		}
 	} else if len(ss) == 1 {
 		addr = ss[0]
 	} else {
-		return nil, errors.Errorf("invalid dsn, must user:password@addr[?db]")
+		return nil, errors.Errorf("invalid dsn, must user:password@addr[[?db[&param=X]]")
 	}
 
-	c, err := client.Connect(addr, user, password, db)
+	tlsConfigName, tls := params["ssl"]
+	if tls {
+		if tlsConfigName == "true" {
+			// This actually does insecureSkipVerify
+			// But not even sure if it makes sense to handle false? According to
+			// client_test.go it doesn't - it'd result in an error 
+			c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.UseSSL(true) })
+		} else {
+			// TODO: This is going to be trickier. Need a way of taking the
+			// `tlsConfigName` which is a string type and using that to point at the actual
+			// `tlsConfig` which is a `NewClientTLSConfig` type. Can probably draw
+			// inspiration from go-sql-driver/mysql
+			//c, err := client.Connect(addr, user, password, db, func(c *Conn) {c.SetTLSConfig(tlsConfig)})
+			return nil, errors.Errorf("Custom TLS configuration support not implemented yet")
+		}
+	} else {
+		c, err = client.Connect(addr, user, password, db)
+	}
 	if err != nil {
 		return nil, err
 	}
