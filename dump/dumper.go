@@ -136,7 +136,7 @@ func (d *Dumper) AddTables(db string, tables ...string) {
 }
 
 func (d *Dumper) AddIgnoreTables(db string, tables ...string) {
-	t, _ := d.IgnoreTables[db]
+	t := d.IgnoreTables[db]
 	t = append(t, tables...)
 	d.IgnoreTables[db] = t
 }

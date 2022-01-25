@@ -26,8 +26,7 @@ func (p RowData) ParseText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
 	var err error
 	var v []byte
 	var isNull bool
-	var pos int = 0
-	var n int = 0
+	var pos, n int
 
 	for i := range f {
 		v, isNull, n, err = LengthEncodedString(p[pos:])
