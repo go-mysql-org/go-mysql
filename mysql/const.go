@@ -167,3 +167,8 @@ const (
 	MySQLFlavor   = "mysql"
 	MariaDBFlavor = "mariadb"
 )
+
+const (
+	MYSQL_OPTION_MULTI_STATEMENTS_ON = iota
+	MYSQL_OPTION_MULTI_STATEMENTS_OFF
+)
