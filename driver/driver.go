@@ -18,6 +18,11 @@ import (
 type driver struct {
 }
 
+// Testing custom tls by hard-coding something in
+var CaPem = []byte(`-----BEGIN CERTIFICATE-----
+MYCACERT
+-----END CERTIFICATE-----`)
+
 // Open: DSN user:password@addr[?db]
 func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	lastIndex := strings.LastIndex(dsn, "@")
@@ -70,6 +75,8 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 		return nil, errors.Errorf("invalid dsn, must user:password@addr[[?db[&param=X]]")
 	}
 
+	custom := client.NewClientTLSConfig(CaPem, make([]byte, 0), make([]byte, 0), false, "custom.host.name")
+
 	tlsConfigName, tls := params["ssl"]
 	if tls {
 		if tlsConfigName == "true" {
@@ -82,8 +89,8 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 			// `tlsConfigName` which is a string type and using that to point at the actual
 			// `tlsConfig` which is a `NewClientTLSConfig` type. Can probably draw
 			// inspiration from go-sql-driver/mysql
-			//c, err := client.Connect(addr, user, password, db, func(c *Conn) {c.SetTLSConfig(tlsConfig)})
-			return nil, errors.Errorf("Custom TLS configuration support not implemented yet")
+			c, err = client.Connect(addr, user, password, db, func(c *client.Conn) {c.SetTLSConfig(custom)})
+			//return nil, errors.Errorf("Custom TLS configuration support not implemented yet")
 		}
 	} else {
 		c, err = client.Connect(addr, user, password, db)
