@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -725,6 +726,11 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 		switch data[0] {
 		case OK_HEADER:
 			if err = b.parseEvent(b.nextPos.Name, s, data); err != nil {
+				// if the error is errMissingTableMapEvent skip
+				if strings.Contains(strings.ToLower(errors.Cause(err).Error()), errMissingTableMapEvent.Error()) {
+					log.Errorf("invalid table skipping , probably deleted? %s", err.Error())
+					continue
+				}
 				s.closeWithError(err)
 				return
 			}
