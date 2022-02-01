@@ -38,7 +38,14 @@ func (c *Conn) readHandshakeResponse() error {
 		return nil
 	}
 
-	// ignore connect attrs for now, the proxy does not support passing attrs to actual MySQL server
+	// read connection attributes
+	if c.capability&CLIENT_CONNECT_ATTRS > 0 {
+		// readAttributes returns new position for further processing of data
+		_, err = c.readAttributes(data, pos)
+		if err != nil {
+			return err
+		}
+	}
 
 	// try to authenticate the client
 	return c.compareAuthData(c.authPluginName, authData)
@@ -197,4 +204,36 @@ func (c *Conn) handleAuthMatch(authData []byte, pos int) (bool, error) {
 		return false, c.handleAuthSwitchResponse()
 	}
 	return true, nil
+}
+
+func (c *Conn) readAttributes(data []byte, pos int) (int, error) {
+	attrs := make(map[string]string)
+	i := 0
+	var key string
+
+	for {
+		str, isNull, strLen, err := LengthEncodedString(data[pos:])
+
+		if err != nil {
+			return -1, err
+		}
+
+		if isNull {
+			break
+		}
+
+		// reading keys or values
+		if i%2 == 0 {
+			key = string(str)
+		} else {
+			attrs[key] = string(str)
+		}
+
+		pos += strLen
+		i++
+	}
+
+	c.attributes = attrs
+
+	return pos, nil
 }
