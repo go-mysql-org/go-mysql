@@ -15,6 +15,8 @@ func NewClientTLSConfig(caPem, certPem, keyPem []byte, insecureSkipVerify bool, 
 
 	var config *tls.Config
 
+	// Allow cert and key to be optional
+	// Send through `make([]byte, 0)` for "nil"
 	if string(certPem) != "" && string(keyPem) != "" {
 		cert, err := tls.X509KeyPair(certPem, keyPem)
 		if err != nil {
@@ -36,3 +38,4 @@ func NewClientTLSConfig(caPem, certPem, keyPem []byte, insecureSkipVerify bool, 
 
 	return config
 }
+

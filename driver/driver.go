@@ -3,6 +3,7 @@
 package driver
 
 import (
+	"crypto/tls"
 	"database/sql"
 	sqldriver "database/sql/driver"
 	"fmt"
@@ -15,13 +16,10 @@ import (
 	"github.com/siddontang/go/hack"
 )
 
+var customTLSConfig *tls.Config
+
 type driver struct {
 }
-
-// Testing custom tls by hard-coding something in
-var CaPem = []byte(`-----BEGIN CERTIFICATE-----
-MYCACERT
------END CERTIFICATE-----`)
 
 // Open: DSN user:password@addr[?db]
 func (d driver) Open(dsn string) (sqldriver.Conn, error) {
@@ -75,22 +73,22 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 		return nil, errors.Errorf("invalid dsn, must user:password@addr[[?db[&param=X]]")
 	}
 
-	custom := client.NewClientTLSConfig(CaPem, make([]byte, 0), make([]byte, 0), false, "custom.host.name")
-
 	tlsConfigName, tls := params["ssl"]
 	if tls {
-		if tlsConfigName == "true" {
-			// This actually does insecureSkipVerify
-			// But not even sure if it makes sense to handle false? According to
-			// client_test.go it doesn't - it'd result in an error 
-			c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.UseSSL(true) })
-		} else {
-			// TODO: This is going to be trickier. Need a way of taking the
-			// `tlsConfigName` which is a string type and using that to point at the actual
-			// `tlsConfig` which is a `NewClientTLSConfig` type. Can probably draw
-			// inspiration from go-sql-driver/mysql
-			c, err = client.Connect(addr, user, password, db, func(c *client.Conn) {c.SetTLSConfig(custom)})
-			//return nil, errors.Errorf("Custom TLS configuration support not implemented yet")
+		switch tlsConfigName {
+			case "true":
+				// This actually does insecureSkipVerify
+				// But not even sure if it makes sense to handle false? According to
+				// client_test.go it doesn't - it'd result in an error
+				c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.UseSSL(true) })
+			case "custom":
+				// I was too concerned about mimicking what go-sql-driver/mysql does which will
+				// allow any name for a custom tls profile and maps the query parameter value to
+				// that TLSConfig variable... there is no need to be that clever. We can just
+				// insist `"custom"` (string) == `custom` (TLSConfig)
+				c, err = client.Connect(addr, user, password, db, func(c *client.Conn) {c.SetTLSConfig(customTLSConfig)})
+			default:
+				return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
 		}
 	} else {
 		c, err = client.Connect(addr, user, password, db)
@@ -275,4 +273,10 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 
 func init() {
 	sql.Register("mysql", driver{})
+}
+
+func SetCustomTLSConfig(caPem []byte, certPem []byte, keyPem []byte, insecureSkipVerify bool, serverName string) {
+	// Basic pass-through function so we can just import the driver
+	// For now there is a single shared "custom" config. I.e. any program can only have one "custom" config
+	customTLSConfig = client.NewClientTLSConfig(caPem, certPem, keyPem, insecureSkipVerify, serverName)
 }
