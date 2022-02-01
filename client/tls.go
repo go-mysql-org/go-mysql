@@ -38,4 +38,3 @@ func NewClientTLSConfig(caPem, certPem, keyPem []byte, insecureSkipVerify bool, 
 
 	return config
 }
-

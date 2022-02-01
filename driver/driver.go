@@ -76,19 +76,19 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	tlsConfigName, tls := params["ssl"]
 	if tls {
 		switch tlsConfigName {
-			case "true":
-				// This actually does insecureSkipVerify
-				// But not even sure if it makes sense to handle false? According to
-				// client_test.go it doesn't - it'd result in an error
-				c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.UseSSL(true) })
-			case "custom":
-				// I was too concerned about mimicking what go-sql-driver/mysql does which will
-				// allow any name for a custom tls profile and maps the query parameter value to
-				// that TLSConfig variable... there is no need to be that clever. We can just
-				// insist `"custom"` (string) == `custom` (TLSConfig)
-				c, err = client.Connect(addr, user, password, db, func(c *client.Conn) {c.SetTLSConfig(customTLSConfig)})
-			default:
-				return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
+		case "true":
+			// This actually does insecureSkipVerify
+			// But not even sure if it makes sense to handle false? According to
+			// client_test.go it doesn't - it'd result in an error
+			c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.UseSSL(true) })
+		case "custom":
+			// I was too concerned about mimicking what go-sql-driver/mysql does which will
+			// allow any name for a custom tls profile and maps the query parameter value to
+			// that TLSConfig variable... there is no need to be that clever. We can just
+			// insist `"custom"` (string) == `custom` (TLSConfig)
+			c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.SetTLSConfig(customTLSConfig) })
+		default:
+			return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
 		}
 	} else {
 		c, err = client.Connect(addr, user, password, db)
