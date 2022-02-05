@@ -20,6 +20,7 @@ type Conn struct {
 	capability     uint32
 	charset        uint8
 	authPluginName string
+	attributes     map[string]string
 	connectionID   uint32
 	status         uint16
 	warnings       uint16
@@ -158,6 +159,10 @@ func (c *Conn) HasCapability(cap uint32) bool {
 
 func (c *Conn) Charset() uint8 {
 	return c.charset
+}
+
+func (c *Conn) Attributes() map[string]string {
+	return c.attributes
 }
 
 func (c *Conn) ConnectionID() uint32 {
