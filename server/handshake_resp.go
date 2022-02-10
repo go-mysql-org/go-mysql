@@ -207,17 +207,29 @@ func (c *Conn) handleAuthMatch() (bool, error) {
 }
 
 func (c *Conn) readAttributes(data []byte, pos int) (int, error) {
-	attrs := make(map[string]string)
+	// read length of attribute data
+	attrLen, isNull, skip := LengthEncodedInt(data[pos:])
+	pos += skip
+	if isNull {
+		return pos, nil
+	}
+
+	if len(data) < pos+int(attrLen) {
+		return pos, errors.New("corrupt attributes data")
+	}
+
 	i := 0
+	attrs := make(map[string]string)
 	var key string
 
+	// read until end of data or NUL for atrribute key/values
 	for {
 		str, isNull, strLen, err := LengthEncodedString(data[pos:])
-
 		if err != nil {
 			return -1, err
 		}
 
+		// end of data
 		if isNull {
 			break
 		}
