@@ -28,6 +28,8 @@ type Conn struct {
 	// client-set capabilities only
 	ccaps uint32
 
+	attributes map[string]string
+
 	status uint16
 
 	charset string
@@ -300,6 +302,10 @@ func (c *Conn) Commit() error {
 func (c *Conn) Rollback() error {
 	_, err := c.exec("ROLLBACK")
 	return errors.Trace(err)
+}
+
+func (c *Conn) SetAttributes(attributes map[string]string) {
+	c.attributes = attributes
 }
 
 func (c *Conn) SetCharset(charset string) error {
