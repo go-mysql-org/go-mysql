@@ -130,7 +130,7 @@ func (c *Conn) readDb(data []byte, pos int) (int, error) {
 func (c *Conn) readPluginName(data []byte, pos int) int {
 	if c.capability&CLIENT_PLUGIN_AUTH != 0 {
 		c.authPluginName = string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
-		pos += len(c.authPluginName)
+		pos += len(c.authPluginName) + 1
 	} else {
 		// The method used is Native Authentication if both CLIENT_PROTOCOL_41 and CLIENT_SECURE_CONNECTION are set,
 		// but CLIENT_PLUGIN_AUTH is not set, so we fallback to 'mysql_native_password'
