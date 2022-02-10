@@ -30,7 +30,7 @@ func (c *Conn) readHandshakeResponse() error {
 
 	pos = c.readPluginName(data, pos)
 
-	cont, err := c.handleAuthMatch(authData, pos)
+	cont, err := c.handleAuthMatch()
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 	return true, nil
 }
 
-func (c *Conn) handleAuthMatch(authData []byte, pos int) (bool, error) {
+func (c *Conn) handleAuthMatch() (bool, error) {
 	// if the client responds the handshake with a different auth method, the server will send the AuthSwitchRequest packet
 	// to the client to ask the client to switch.
 
