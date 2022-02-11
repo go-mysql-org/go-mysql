@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/mocks"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestReadAuthData(t *testing.T) {
@@ -53,6 +55,50 @@ func TestDecodeFirstPart(t *testing.T) {
 	}
 }
 
+func TestReadDB(t *testing.T) {
+	handler := &mocks.Handler{}
+	c := &Conn{
+		h: handler,
+	}
+	c.SetCapability(mysql.CLIENT_CONNECT_WITH_DB)
+	var dbName string
+
+	// when handler's UseDB is called, copy dbName to local variable
+	handler.On("UseDB", mock.IsType("")).Return(nil).Once().RunFn = func(args mock.Arguments) {
+		dbName = args[0].(string)
+	}
+
+	// example data from
+	// https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse41
+	data := []byte{
+		0x54, 0x00, 0x00, 0x01, 0x8d, 0xa6, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x70, 0x61, 0x6d, 0x00, 0x14, 0xab, 0x09, 0xee, 0xf6, 0xbc, 0xb1, 0x32,
+		0x3e, 0x61, 0x14, 0x38, 0x65, 0xc0, 0x99, 0x1d, 0x95, 0x7d, 0x75, 0xd4,
+		0x47, 0x74, 0x65, 0x73, 0x74, 0x00, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x5f,
+		0x6e, 0x61, 0x74, 0x69, 0x76, 0x65, 0x5f, 0x70, 0x61, 0x73, 0x73, 0x77,
+		0x6f, 0x72, 0x64, 0x00,
+	}
+	pos := 61
+
+	var err error
+	pos, err = c.readDb(data, pos)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+
+	if pos != 66 { // 61 + len("test") + 1
+		t.Fatalf("unexpected pos, got %d", pos)
+	}
+
+	if dbName != "test" {
+		t.Fatalf("unexpected db, got %s", dbName)
+	}
+
+	handler.AssertExpectations(t)
+}
+
 func TestReadPluginName(t *testing.T) {
 	// example data from
 	// https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse41
@@ -84,7 +130,7 @@ func TestReadPluginName(t *testing.T) {
 		pos := 66
 
 		pos = c.readPluginName(mysqlNativePassword, pos)
-		if pos != 88 {
+		if pos != 88 { // 66 + len("mysql_native_password") + 1
 			t.Fatalf("unexpected pos, got %d", pos)
 		}
 
@@ -99,7 +145,7 @@ func TestReadPluginName(t *testing.T) {
 		pos := 66
 
 		pos = c.readPluginName(otherPlugin, pos)
-		if pos != 73 {
+		if pos != 73 { // 66 + len("foobar") + 1
 			t.Fatalf("unexpected pos, got %d", pos)
 		}
 
@@ -113,7 +159,7 @@ func TestReadPluginName(t *testing.T) {
 		pos := 123 // can be anything
 
 		pos = c.readPluginName(mysqlNativePassword, pos)
-		if pos != 123 {
+		if pos != 123 { // capability not set, so same as initial pos
 			t.Fatalf("unexpected pos, got %d", pos)
 		}
 
