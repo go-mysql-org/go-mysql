@@ -728,7 +728,6 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			if err = b.parseEvent(b.nextPos.Name, s, data); err != nil {
 				// if the error is errMissingTableMapEvent skip
 				if strings.Contains(strings.ToLower(errors.Cause(err).Error()), errMissingTableMapEvent.Error()) {
-					log.Errorf("invalid table skipping , probably deleted? %s", err.Error())
 					continue
 				}
 				s.closeWithError(err)
