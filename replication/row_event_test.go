@@ -1208,6 +1208,36 @@ func (_ *testDecodeSuite) TestInvalidEvent(c *C) {
 	c.Assert(err, NotNil)
 }
 
+func (_ *testDecodeSuite) TestDecodeTime2(c *C) {
+	testcases := []struct {
+		data        []byte
+		dec         uint16
+		getFracTime bool
+		expected    string
+	}{
+		{[]byte("\xb4\x6e\xfb"), 0, false, "838:59:59"},
+		{[]byte("\x80\xf1\x05"), 0, false, "15:04:05"},
+		{[]byte("\x80\x00\x00"), 0, false, "00:00:00"},
+		{[]byte("\x7f\xff\xff"), 0, false, "-00:00:01"},
+		{[]byte("\x7f\x0e\xfb"), 0, false, "-15:04:05"},
+		{[]byte("\x4b\x91\x05"), 0, false, "-838:59:59"},
+		{[]byte("\x7f\xff\xff\xff"), 2, true, "-00:00:00.01"},
+		{[]byte("\x7f\x0e\xfa\xf4"), 2, true, "-15:04:05.12"},
+		{[]byte("\x4b\x91\x05\xf4"), 2, true, "-838:59:58.12"},
+		{[]byte("\x7f\xff\xff\xff\xff"), 4, true, "-00:00:00.0001"},
+		{[]byte("\x7f\x0e\xfa\xfb\x2d"), 4, true, "-15:04:05.1235"},
+		{[]byte("\x4b\x91\x05\xfb\x2d"), 4, true, "-838:59:58.1235"},
+		{[]byte("\x7f\xff\xff\xff\xff\xff"), 6, true, "-00:00:00.000001"},
+		{[]byte("\x7f\x0e\xfa\xfe\x1d\xc0"), 6, true, "-15:04:05.123456"},
+		{[]byte("\x4b\x91\x05\xfe\x1d\xc0"), 6, true, "-838:59:58.123456"},
+	}
+	for _, tc := range testcases {
+		value, _, err := decodeTime2(tc.data, tc.dec)
+		c.Assert(err, IsNil)
+		c.Assert(value, Equals, tc.expected)
+	}
+}
+
 type decimalTest struct {
 	num      string
 	dumpData []byte
