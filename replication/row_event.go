@@ -1141,6 +1141,10 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		v, err = littleDecodeBit(data, nbits, n)
 	case MYSQL_TYPE_BLOB:
 		v, n, err = decodeBlob(data, meta)
+		newValue, ok := convertToString(v)
+		if ok {
+			v = newValue
+		}
 	case MYSQL_TYPE_VARCHAR,
 		MYSQL_TYPE_VAR_STRING:
 		length = int(meta)
@@ -1152,6 +1156,10 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		length = int(FixedLengthInt(data[0:meta]))
 		n = length + int(meta)
 		v, err = e.decodeJsonBinary(data[meta:n])
+		newValue, ok := convertToString(v)
+		if ok {
+			v = newValue
+		}
 	case MYSQL_TYPE_GEOMETRY:
 		// MySQL saves Geometry as Blob in binlog
 		// Seem that the binary format is SRID (4 bytes) + WKB, outer can use
@@ -1165,6 +1173,20 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	}
 
 	return v, n, err
+}
+
+// convertToString receive an interface and convert it to string if match the desired type
+func convertToString(s interface{}) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	switch v := s.(type) {
+	case []uint8:
+		str := string(v)
+		return str, true
+	default:
+		return "", false
+	}
 }
 
 func decodeString(data []byte, length int) (v string, n int) {
