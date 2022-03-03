@@ -110,7 +110,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		}
 	}
 
-	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs}, nil)
+	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs}, nil, mysql.Position{})
 	return h.c.eventHandler.OnRow(events)
 }
 

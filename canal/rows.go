@@ -3,6 +3,8 @@ package canal
 import (
 	"fmt"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 )
@@ -16,6 +18,8 @@ const (
 
 // RowsEvent is the event for row replication.
 type RowsEvent struct {
+	// the position in this event
+	CurPos mysql.Position
 	Table  *schema.Table
 	Action string
 	// changed row list
@@ -28,14 +32,14 @@ type RowsEvent struct {
 	Header *replication.EventHeader
 }
 
-func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, header *replication.EventHeader) *RowsEvent {
+func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, header *replication.EventHeader, curPos mysql.Position) *RowsEvent {
 	e := new(RowsEvent)
 
 	e.Table = table
 	e.Action = action
 	e.Rows = rows
 	e.Header = header
-
+	e.CurPos = curPos
 	e.handleUnsigned()
 
 	return e

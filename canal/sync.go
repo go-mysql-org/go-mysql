@@ -67,20 +67,19 @@ func (c *Canal) runSyncBinlog() error {
 				fakeRotateLogName = string(e.NextLogName)
 				log.Infof("received fake rotate event, next log name is %s", e.NextLogName)
 			}
-
-			continue
 		}
 
 		savePos = false
 		force = false
 		pos := c.master.Position()
 
-		curPos := pos.Pos
+		curPos := pos
 		// next binlog pos
 		pos.Pos = ev.Header.LogPos
 
 		// new file name received in the fake rotate event
 		if fakeRotateLogName != "" {
+			curPos.Name = fakeRotateLogName
 			pos.Name = fakeRotateLogName
 		}
 
@@ -100,14 +99,14 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.RowsEvent:
 			// we only focus row based event
-			err = c.handleRowsEvent(ev)
+			err = c.handleRowsEvent(ev, curPos)
 			if err != nil {
 				e := errors.Cause(err)
 				// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
 				if e != ErrExcludedTable &&
 					e != schema.ErrTableNotExist &&
 					e != schema.ErrMissingTableMeta {
-					log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+					log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos.Pos, err)
 					return errors.Trace(err)
 				}
 			}
@@ -245,7 +244,7 @@ func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	atomic.StoreUint32(c.delay, newDelay)
 }
 
-func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
+func (c *Canal) handleRowsEvent(e *replication.BinlogEvent, curPos mysql.Position) error {
 	ev := e.Event.(*replication.RowsEvent)
 
 	// Caveat: table may be altered at runtime.
@@ -267,7 +266,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	default:
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
-	events := newRowsEvent(t, action, ev.Rows, e.Header)
+	events := newRowsEvent(t, action, ev.Rows, e.Header, curPos)
 	return c.eventHandler.OnRow(events)
 }
 
