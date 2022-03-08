@@ -102,7 +102,7 @@ func (c *Conn) handshake() error {
 }
 
 func (c *Conn) Close() error {
-	if err := c.writeCommandUint32(COM_QUIT, c.connectionID); err != nil {
+	if err := c.writeCommand(COM_QUIT); err != nil {
 		c.Conn.Close()
 		return errors.Trace(err)
 	}
