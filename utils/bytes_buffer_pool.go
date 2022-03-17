@@ -15,18 +15,11 @@ var (
 			return &bytes.Buffer{}
 		},
 	}
-	bytesBufferChan = make(chan *bytes.Buffer, 10)
 )
 
 func BytesBufferGet() (data *bytes.Buffer) {
-	select {
-	case data = <-bytesBufferChan:
-	default:
-		data = bytesBufferPool.Get().(*bytes.Buffer)
-	}
-
+	data = bytesBufferPool.Get().(*bytes.Buffer)
 	data.Reset()
-
 	return data
 }
 
@@ -34,10 +27,5 @@ func BytesBufferPut(data *bytes.Buffer) {
 	if data == nil || data.Len() > TooBigBlockSize {
 		return
 	}
-
-	select {
-	case bytesBufferChan <- data:
-	default:
-		bytesBufferPool.Put(data)
-	}
+	bytesBufferPool.Put(data)
 }
