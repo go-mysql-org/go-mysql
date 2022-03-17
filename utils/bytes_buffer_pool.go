@@ -24,7 +24,7 @@ func BytesBufferGet() (data *bytes.Buffer) {
 }
 
 func BytesBufferPut(data *bytes.Buffer) {
-	if data == nil || len(data.Bytes()) > TooBigBlockSize {
+	if data == nil || data.Len() > TooBigBlockSize {
 		return
 	}
 	bytesBufferPool.Put(data)
