@@ -10,6 +10,7 @@ import (
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
 
@@ -27,6 +28,8 @@ type Conn struct {
 	// client-set capabilities only
 	ccaps uint32
 
+	attributes map[string]string
+
 	status uint16
 
 	charset string
@@ -42,6 +45,9 @@ type SelectPerRowCallback func(row []FieldValue) error
 
 // This function will be called once per result from ExecuteSelectStreaming
 type SelectPerResultCallback func(result *Result) error
+
+// This function will be called once per result from ExecuteMultiple
+type ExecPerResultCallback func(result *Result, err error)
 
 func getNetProto(addr string) string {
 	proto := "tcp"
@@ -198,6 +204,68 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 	}
 }
 
+// ExecuteMultiple will call perResultCallback for every result of the multiple queries
+// that are executed.
+//
+// When ExecuteMultiple is used, the connection should have the SERVER_MORE_RESULTS_EXISTS
+// flag set to signal the server multiple queries are executed. Handling the responses
+// is up to the implementation of perResultCallback.
+//
+// Example:
+//
+//      queries := "SELECT 1; SELECT NOW();"
+//      conn.ExecuteMultiple(queries, func(result *mysql.Result, err error) {
+//          // Use the result as you want
+//      })
+//
+func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCallback) (*Result, error) {
+	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	var buf []byte
+	var err error
+	var result *Result
+	defer utils.ByteSlicePut(buf)
+
+	for {
+		buf, err = c.ReadPacketReuseMem(utils.ByteSliceGet(16)[:0])
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		switch buf[0] {
+		case OK_HEADER:
+			result, err = c.handleOKPacket(buf)
+		case ERR_HEADER:
+			err = c.handleErrorPacket(append([]byte{}, buf...))
+			result = nil
+		case LocalInFile_HEADER:
+			err = ErrMalformPacket
+			result = nil
+		default:
+			result, err = c.readResultset(buf, false)
+		}
+
+		// call user-defined callback
+		perResultCallback(result, err)
+
+		// if there was an error of this was the last result, stop looping
+		if err != nil || result.Status&SERVER_MORE_RESULTS_EXISTS == 0 {
+			break
+		}
+	}
+
+	// return an empty result(set) signaling we're done streaming a multiple
+	// streaming session
+	// if this would end up in WriteValue, it would just be ignored as all
+	// responses should have been handled in perResultCallback
+	return &Result{Resultset: &Resultset{
+		Streaming:     StreamingMultiple,
+		StreamingDone: true,
+	}}, nil
+}
+
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset
 //   WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
 // When given, perResultCallback will be called once per result
@@ -234,6 +302,10 @@ func (c *Conn) Commit() error {
 func (c *Conn) Rollback() error {
 	_, err := c.exec("ROLLBACK")
 	return errors.Trace(err)
+}
+
+func (c *Conn) SetAttributes(attributes map[string]string) {
+	c.attributes = attributes
 }
 
 func (c *Conn) SetCharset(charset string) error {

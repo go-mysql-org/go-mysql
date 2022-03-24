@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"strings"
 
 	. "github.com/pingcap/check"
 
@@ -16,7 +17,10 @@ type connTestSuite struct {
 func (s *connTestSuite) SetUpSuite(c *C) {
 	var err error
 	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
-	s.c, err = Connect(addr, *testUser, *testPassword, "")
+	s.c, err = Connect(addr, *testUser, *testPassword, "", func(c *Conn) {
+		// required for the ExecuteMultiple test
+		c.SetCapability(mysql.CLIENT_MULTI_STATEMENTS)
+	})
 	if err != nil {
 		c.Fatal(err)
 	}
@@ -76,6 +80,46 @@ func (s *connTestSuite) testExecute_CreateTable(c *C) {
 func (s *connTestSuite) testExecute_DropTable(c *C) {
 	_, err := s.c.Execute(`drop table if exists ` + testExecuteSelectStreamingTablename)
 	c.Assert(err, IsNil)
+}
+
+func (s *connTestSuite) TestExecuteMultiple(c *C) {
+	queries := []string{
+		`INSERT INTO ` + testExecuteSelectStreamingTablename + ` (id, str) VALUES (999, "executemultiple")`,
+		`SELECT id FROM ` + testExecuteSelectStreamingTablename + ` LIMIT 2`,
+		`DELETE FROM ` + testExecuteSelectStreamingTablename + ` WHERE id=999`,
+		`THIS IS BOGUS()`,
+	}
+
+	count := 0
+	result, err := s.c.ExecuteMultiple(strings.Join(queries, "; "), func(result *mysql.Result, err error) {
+		switch count {
+		// the INSERT/DELETE query have no resultset, but should have set affectedrows
+		// the err should be nil
+		// also, since this is not the last query, the SERVER_MORE_RESULTS_EXISTS
+		// flag should be set
+		case 0, 2:
+			c.Assert(result.Status&mysql.SERVER_MORE_RESULTS_EXISTS, Not(Equals), 0)
+			c.Assert(result.Resultset, IsNil)
+			c.Assert(result.AffectedRows, Equals, uint64(1))
+			c.Assert(err, IsNil)
+		case 1:
+			// the SELECT query should have an resultset
+			// still not the last query, flag should be set
+			c.Assert(result.Status&mysql.SERVER_MORE_RESULTS_EXISTS, Not(Equals), 0)
+			c.Assert(result.Resultset, NotNil)
+			c.Assert(err, IsNil)
+		case 3:
+			// this query is obviously bogus so the error should be non-nil
+			c.Assert(result, IsNil)
+			c.Assert(err, NotNil)
+		}
+		count++
+	})
+
+	c.Assert(count, Equals, 4)
+	c.Assert(err, IsNil)
+	c.Assert(result.StreamingDone, Equals, true)
+	c.Assert(result.Streaming, Equals, mysql.StreamingMultiple)
 }
 
 func (s *connTestSuite) TestExecuteSelectStreaming(c *C) {

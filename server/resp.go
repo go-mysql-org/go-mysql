@@ -119,8 +119,15 @@ func (c *Conn) writeResultset(r *Resultset) error {
 	// for a streaming resultset, that handled rowdata separately in a callback
 	// of type SelectPerRowCallback, we can suffice by ending the stream with
 	// an EOF
+	// when streaming multiple queries, no EOF has to be sent, all results should've
+	// been taken care of already in the user-defined callback
 	if r.StreamingDone {
-		return c.writeEOF()
+		switch r.Streaming {
+		case StreamingMultiple:
+			return nil
+		case StreamingSelect:
+			return c.writeEOF()
+		}
 	}
 
 	columnLen := PutLengthEncodedInt(uint64(len(r.Fields)))
@@ -136,9 +143,9 @@ func (c *Conn) writeResultset(r *Resultset) error {
 		return err
 	}
 
-	// streaming resultsets handle rowdata in a separate callback of type
+	// streaming select resultsets handle rowdata in a separate callback of type
 	// SelectPerRowCallback so we're done here
-	if r.Streaming {
+	if r.Streaming == StreamingSelect {
 		return nil
 	}
 

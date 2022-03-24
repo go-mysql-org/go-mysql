@@ -309,7 +309,7 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, 
 	}
 
 	// this is a streaming resultset
-	result.Resultset.Streaming = true
+	result.Resultset.Streaming = StreamingSelect
 
 	if err := c.readResultColumns(result); err != nil {
 		return errors.Trace(err)
