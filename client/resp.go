@@ -216,38 +216,42 @@ func (c *Conn) readOK() (*Result, error) {
 }
 
 func (c *Conn) readResult(binary bool) (*Result, error) {
-	firstPkgBuf, err := c.ReadPacketReuseMem(utils.ByteSliceGet(16)[:0])
-	defer utils.ByteSlicePut(firstPkgBuf)
-
+	bs := utils.ByteSliceGet(16)
+	defer utils.ByteSlicePut(bs)
+	var err error
+	bs.B, err = c.ReadPacketReuseMem(bs.B[:0])
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if firstPkgBuf[0] == OK_HEADER {
-		return c.handleOKPacket(firstPkgBuf)
-	} else if firstPkgBuf[0] == ERR_HEADER {
-		return nil, c.handleErrorPacket(append([]byte{}, firstPkgBuf...))
-	} else if firstPkgBuf[0] == LocalInFile_HEADER {
+	switch bs.B[0] {
+	case OK_HEADER:
+		return c.handleOKPacket(bs.B)
+	case ERR_HEADER:
+		return nil, c.handleErrorPacket(bytes.Repeat(bs.B, 1))
+	case LocalInFile_HEADER:
 		return nil, ErrMalformPacket
+	default:
+		return c.readResultset(bs.B, binary)
 	}
-
-	return c.readResultset(firstPkgBuf, binary)
 }
 
 func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback) error {
-	firstPkgBuf, err := c.ReadPacketReuseMem(utils.ByteSliceGet(16)[:0])
-	defer utils.ByteSlicePut(firstPkgBuf)
-
+	bs := utils.ByteSliceGet(16)
+	defer utils.ByteSlicePut(bs)
+	var err error
+	bs.B, err = c.ReadPacketReuseMem(bs.B[:0])
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	if firstPkgBuf[0] == OK_HEADER {
+	switch bs.B[0] {
+	case OK_HEADER:
 		// https://dev.mysql.com/doc/internals/en/com-query-response.html
 		// 14.6.4.1 COM_QUERY Response
 		// If the number of columns in the resultset is 0, this is a OK_Packet.
 
-		okResult, err := c.handleOKPacket(firstPkgBuf)
+		okResult, err := c.handleOKPacket(bs.B)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -262,13 +266,13 @@ func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectP
 			result.Reset(0)
 		}
 		return nil
-	} else if firstPkgBuf[0] == ERR_HEADER {
-		return c.handleErrorPacket(append([]byte{}, firstPkgBuf...))
-	} else if firstPkgBuf[0] == LocalInFile_HEADER {
+	case ERR_HEADER:
+		return c.handleErrorPacket(bytes.Repeat(bs.B, 1))
+	case LocalInFile_HEADER:
 		return ErrMalformPacket
+	default:
+		return c.readResultsetStreaming(bs.B, binary, result, perRowCb, perResCb)
 	}
-
-	return c.readResultsetStreaming(firstPkgBuf, binary, result, perRowCb, perResCb)
 }
 
 func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
