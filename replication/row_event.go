@@ -1109,7 +1109,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 		n = 3
 		i32 := uint32(FixedLengthInt(data[0:3]))
 		if i32 == 0 {
-			v = "0000-00-00"
+			v = nil
 		} else {
 			v = fmt.Sprintf("%04d-%02d-%02d", i32/(16*32), i32/32%16, i32%32)
 		}
