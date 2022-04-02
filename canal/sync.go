@@ -100,7 +100,7 @@ func (c *Canal) runSyncBinlog() error {
 			}
 		case *replication.RowsEvent:
 			// we only focus row based event
-			err = c.handleRowsEvent(ev, e)
+			err = c.handleRowsEvent(ev.Header, e)
 			if err != nil {
 				e := errors.Cause(err)
 				// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
@@ -245,7 +245,7 @@ func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	atomic.StoreUint32(c.delay, newDelay)
 }
 
-func (c *Canal) handleRowsEvent(e *replication.BinlogEvent, ev *replication.RowsEvent) error {
+func (c *Canal) handleRowsEvent(eventHeader *replication.EventHeader, ev *replication.RowsEvent) error {
 	// Caveat: table may be altered at runtime.
 	schema := string(ev.Table.Schema)
 	table := string(ev.Table.Table)
@@ -255,7 +255,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent, ev *replication.Rows
 		return err
 	}
 	var action string
-	switch e.Header.EventType {
+	switch eventHeader.EventType {
 	case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 		action = InsertAction
 	case replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
@@ -263,9 +263,9 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent, ev *replication.Rows
 	case replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 		action = UpdateAction
 	default:
-		return errors.Errorf("%s not supported now", e.Header.EventType)
+		return errors.Errorf("%s not supported now", eventHeader.EventType)
 	}
-	events := newRowsEvent(t, action, ev.Rows, e.Header)
+	events := newRowsEvent(t, action, ev.Rows, eventHeader)
 	return c.eventHandler.OnRow(events)
 }
 
