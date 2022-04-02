@@ -53,6 +53,17 @@ func (r *RowsEvent) handleUnsigned() {
 
 	for i := 0; i < len(r.Rows); i++ {
 		for _, columnIdx := range r.Table.UnsignedColumns {
+			// ignore when current column index gets out of old data size.
+			// when new fields added to the table but the data is in old schema.
+			if columnIdx >= len(r.Rows[i]) {
+				continue
+			}
+
+			// Best practice: new columns should be added to the the end of table existing columns
+			//        like :  table(id,name,addr) => table(id,name,addr,age) , here age is added the the end
+			// Bad practice: table(id,name,addr) => table(id,name,age,addr)  , here age is added before the addr
+			// The result of bad practice will cause the following logic be problematic
+
 			switch value := r.Rows[i][columnIdx].(type) {
 			case int8:
 				r.Rows[i][columnIdx] = uint8(value)
