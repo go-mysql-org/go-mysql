@@ -1068,12 +1068,8 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 			})
 		}
 	case MYSQL_TYPE_TIMESTAMP2:
-		if meta == 0 {
-			v = nil
-		} else {
-			v, n, err = decodeTimestamp2(data, meta, e.timestampStringLocation)
-			v = e.parseFracTime(v)
-		}
+		v, n, err = decodeTimestamp2(data, meta, e.timestampStringLocation)
+		v = e.parseFracTime(v)
 	case MYSQL_TYPE_DATETIME:
 		n = 8
 		i64 := binary.LittleEndian.Uint64(data)
@@ -1399,7 +1395,7 @@ func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Loc
 	}
 
 	if sec == 0 {
-		return formatZeroTime(int(usec), int(dec)), n, nil
+		return nil, n, nil
 	}
 
 	return fracTime{
