@@ -1428,7 +1428,7 @@ func decodeDatetime2(data []byte, dec uint16) (interface{}, int, error) {
 	}
 
 	if intPart == 0 {
-		return formatZeroTime(int(frac), int(dec)), n, nil
+		return nil, n, nil
 	}
 
 	tmp := intPart<<24 + frac
