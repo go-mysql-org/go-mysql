@@ -19,7 +19,8 @@ import (
 )
 
 var (
-	errSyncRunning = errors.New("Sync is running, must Close first")
+	errSyncRunning    = errors.New("Sync is running, must Close first")
+	maxHostNameLength = 60
 )
 
 // BinlogSyncerConfig is the configuration for BinlogSyncer.
@@ -524,7 +525,10 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	b.c.ResetSequence()
 
 	hostname := b.localHostname()
-
+	if len(hostname) > maxHostNameLength {
+		runes := []rune(hostname)
+		hostname = string(runes[0:maxHostNameLength])
+	}
 	// This should be the name of slave host not the host we are connecting to.
 	data := make([]byte, 4+1+4+1+len(hostname)+1+len(b.cfg.User)+1+len(b.cfg.Password)+2+4+4)
 	pos := 4
