@@ -313,6 +313,10 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	serverUUID, err := uuid.NewUUID()
+	if err != nil {
+		log.Errorf("failed to get new uud %v", err)
+		return errors.Trace(err)
+	}
 	if _, err = b.c.Execute(fmt.Sprintf("SET @slave_uuid = '%s', @replica_uuid = '%s'", serverUUID, serverUUID)); err != nil {
 		log.Errorf("failed to set @slave_uuid = '%s', err: %v", serverUUID, err)
 		return errors.Trace(err)
