@@ -8,6 +8,7 @@ import (
 	sqldriver "database/sql/driver"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -16,7 +17,8 @@ import (
 	"github.com/siddontang/go/hack"
 )
 
-var customTLSConfig *tls.Config
+// Map of dsn address (makes more sense than full dsn?) to tls Config
+var customTLSConfigMap = make(map[string]*tls.Config)
 
 type driver struct {
 }
@@ -84,9 +86,10 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 		case "custom":
 			// I was too concerned about mimicking what go-sql-driver/mysql does which will
 			// allow any name for a custom tls profile and maps the query parameter value to
-			// that TLSConfig variable... there is no need to be that clever. We can just
-			// insist `"custom"` (string) == `custom` (TLSConfig)
-			c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.SetTLSConfig(customTLSConfig) })
+			// that TLSConfig variable... there is no need to be that clever.
+			// Instead of doing that, let's store required custom TLSConfigs in a map that
+			// uses the DSN address as the key
+			c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.SetTLSConfig(customTLSConfigMap[addr]) })
 		default:
 			return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
 		}
@@ -275,8 +278,19 @@ func init() {
 	sql.Register("mysql", driver{})
 }
 
-func SetCustomTLSConfig(caPem []byte, certPem []byte, keyPem []byte, insecureSkipVerify bool, serverName string) {
+func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte, insecureSkipVerify bool, serverName string) {
+	// Extract addr from dsn
+	// We can hopefully extend the use of url.Parse if we switch the DSN style
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		errors.Errorf("Unable to parse DSN. Need to extract address to use as key for storing custom TLS config")
+	}
+	addr := parsed.Host
+
+	// I thought about using serverName instead of addr below, but decided against that as
+	// having multiple CA certs for one hostname is likely when you have services running on
+	// different ports.
+
 	// Basic pass-through function so we can just import the driver
-	// For now there is a single shared "custom" config. I.e. any program can only have one "custom" config
-	customTLSConfig = client.NewClientTLSConfig(caPem, certPem, keyPem, insecureSkipVerify, serverName)
+	customTLSConfigMap[addr] = client.NewClientTLSConfig(caPem, certPem, keyPem, insecureSkipVerify, serverName)
 }
