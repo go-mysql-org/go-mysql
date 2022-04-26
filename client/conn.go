@@ -31,6 +31,8 @@ type Conn struct {
 	authPluginName string
 
 	connectionID uint32
+
+	serverVersion string
 }
 
 func getNetProto(addr string) string {
@@ -276,4 +278,9 @@ func (c *Conn) exec(query string) (*Result, error) {
 	}
 
 	return c.readResult(false)
+}
+
+// GetServerVersion returns the server version reported in the initial handshake.
+func (c *Conn) GetServerVersion() string {
+	return c.serverVersion
 }
