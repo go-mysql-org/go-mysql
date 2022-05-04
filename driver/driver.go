@@ -43,7 +43,6 @@ type connInfo struct {
 //
 // Optional parameters are supported in the standard DSN form
 func parseDSN(dsn string) (connInfo, error) {
-
 	var matchErr error
 	ci := connInfo{}
 
@@ -81,7 +80,6 @@ func parseDSN(dsn string) (connInfo, error) {
 // Open takes a supplied DSN string and opens a connection
 // See ParseDSN for more information on the form of the DSN
 func (d driver) Open(dsn string) (sqldriver.Conn, error) {
-
 	var c *client.Conn
 
 	ci, err := parseDSN(dsn)
