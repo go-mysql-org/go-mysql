@@ -3,6 +3,8 @@ package driver
 import (
 	"flag"
 	"fmt"
+	"net/url"
+	"reflect"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
@@ -77,4 +79,29 @@ func (s *testDriverSuite) TestTransaction(c *C) {
 
 	err = tx.Commit()
 	c.Assert(err, IsNil)
+}
+
+func TestParseDSN(t *testing.T) {
+	// List of DSNs to test and expected results
+	// Use different numbered domains to more readily see what has failed - since we
+	// test in a loop we get the same line number on error
+	testDSNs := map[string]connInfo{
+		"user:password@localhost?db":                 connInfo{standardDSN: false, addr: "localhost", user: "user", password: "password", db: "db", params: url.Values{}},
+		"user@1.domain.com?db":                       connInfo{standardDSN: false, addr: "1.domain.com", user: "user", password: "", db: "db", params: url.Values{}},
+		"user:password@2.domain.com/db":              connInfo{standardDSN: true, addr: "2.domain.com", user: "user", password: "password", db: "db", params: url.Values{}},
+		"user:password@3.domain.com/db?ssl=true":     connInfo{standardDSN: true, addr: "3.domain.com", user: "user", password: "password", db: "db", params: url.Values{"ssl": []string{"true"}}},
+		"user:password@4.domain.com/db?ssl=custom":   connInfo{standardDSN: true, addr: "4.domain.com", user: "user", password: "password", db: "db", params: url.Values{"ssl": []string{"custom"}}},
+		"user:password@5.domain.com/db?unused=param": connInfo{standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"unused": []string{"param"}}},
+	}
+
+	for supplied, expected := range testDSNs {
+		actual, err := parseDSN(supplied)
+		if err != nil {
+			t.Errorf("TestParseDSN failed. Got error: %s", err)
+		}
+		// Compare that with expected
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("TestParseDSN failed.\nExpected:\n%#v\nGot:\n%#v", expected, actual)
+		}
+	}
 }

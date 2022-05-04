@@ -23,64 +23,98 @@ var customTLSConfigMap = make(map[string]*tls.Config)
 type driver struct {
 }
 
-// Open: DSN
-// Support both legacy style DSNs: user:password@addr[?db]
-// And more standard DSNs: user:password@addr/db?param=value
-// Optional parameters are supported in the standard DSN
-func (d driver) Open(dsn string) (sqldriver.Conn, error) {
+type connInfo struct {
+	standardDSN bool
+	addr        string
+	user        string
+	password    string
+	db          string
+	params      url.Values
+}
+
+// ParseDSN takes a DSN string and splits it up into struct containing addr,
+// user, password and db.
+// It returns an error if unable to parse.
+// The struct also contains a boolean indicating if the DSN is in legacy or
+// standard form.
+//
+// Legacy form uses a `?` is used as the path separator: user:password@addr[?db]
+// Standard form uses a `/`: user:password@addr/db?param=value
+//
+// Optional parameters are supported in the standard DSN form
+func parseDSN(dsn string) (connInfo, error) {
+
+	var matchErr error
+	ci := connInfo{}
+
 	// If a "/" occurs after "@" and then no more "@" or "/" occur after that
-	standardDSN, matchErr := regexp.MatchString("@[^@]+/[^@/]+", dsn)
+	ci.standardDSN, matchErr = regexp.MatchString("@[^@]+/[^@/]+", dsn)
 	if matchErr != nil {
-		return nil, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
+		return ci, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
 	}
 
 	// Add a prefix so we can parse with url.Parse
 	dsn = "mysql://" + dsn
 	parsedDSN, parseErr := url.Parse(dsn)
 	if parseErr != nil {
-		return nil, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
+		return ci, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
 	}
 
-	var user string
-	var password string
-	var addr string
-	var db string
-	var err error
+	ci.addr = parsedDSN.Host
+	ci.user = parsedDSN.User.Username()
+	// We ignore the second argument as that is just a flag for existence of a password
+	// If not set we get empty string anyway
+	ci.password, _ = parsedDSN.User.Password()
+
+	if ci.standardDSN {
+		ci.db = parsedDSN.Path[1:]
+		ci.params = parsedDSN.Query()
+	} else {
+		ci.db = parsedDSN.RawQuery
+		// This is the equivalent to a "nil" list of parameters
+		ci.params = url.Values{}
+	}
+
+	return ci, nil
+}
+
+// Open takes a supplied DSN string and opens a connection
+// See ParseDSN for more information on the form of the DSN
+func (d driver) Open(dsn string) (sqldriver.Conn, error) {
+
 	var c *client.Conn
 
-	user = parsedDSN.User.Username()
-	// What does the below return for _. It's not err / bool
-	password, _ = parsedDSN.User.Password()
-	addr = parsedDSN.Host
-	if standardDSN {
-		// Remove slash
-		db = parsedDSN.Path[1:]
-		params := parsedDSN.Query()
-		if params["ssl"] != nil {
-			tlsConfigName := params.Get("ssl")
+	ci, err := parseDSN(dsn)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if ci.standardDSN {
+		if ci.params["ssl"] != nil {
+			tlsConfigName := ci.params.Get("ssl")
 			switch tlsConfigName {
 			case "true":
 				// This actually does insecureSkipVerify
 				// But not even sure if it makes sense to handle false? According to
 				// client_test.go it doesn't - it'd result in an error
-				c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.UseSSL(true) })
+				c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, func(c *client.Conn) { c.UseSSL(true) })
 			case "custom":
 				// I was too concerned about mimicking what go-sql-driver/mysql does which will
 				// allow any name for a custom tls profile and maps the query parameter value to
 				// that TLSConfig variable... there is no need to be that clever.
 				// Instead of doing that, let's store required custom TLSConfigs in a map that
 				// uses the DSN address as the key
-				c, err = client.Connect(addr, user, password, db, func(c *client.Conn) { c.SetTLSConfig(customTLSConfigMap[addr]) })
+				c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, func(c *client.Conn) { c.SetTLSConfig(customTLSConfigMap[ci.addr]) })
 			default:
 				return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
 			}
 		} else {
-			c, err = client.Connect(addr, user, password, db)
+			c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db)
 		}
 	} else {
 		// No more processing here. Let's only support url parameters with the newer style DSN
-		db = parsedDSN.RawQuery
-		c, err = client.Connect(addr, user, password, db)
+		c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db)
 	}
 	if err != nil {
 		return nil, err
@@ -263,7 +297,6 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 func init() {
 	sql.Register("mysql", driver{})
 }
-
 
 // SetCustomTLSConfig sets a custom TLSConfig for the address (host:port) of the supplied DSN.
 // It requires a full import of the driver (not by side-effects only).
