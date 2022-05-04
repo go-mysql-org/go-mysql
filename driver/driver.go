@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"sync"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -17,6 +18,7 @@ import (
 	"github.com/siddontang/go/hack"
 )
 
+var customTLSMutex sync.Mutex
 // Map of dsn address (makes more sense than full dsn?) to tls Config
 var customTLSConfigMap = make(map[string]*tls.Config)
 
@@ -315,8 +317,10 @@ func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte,
 	// having multiple CA certs for one hostname is likely when you have services running on
 	// different ports.
 
+	customTLSMutex.Lock()
 	// Basic pass-through function so we can just import the driver
 	customTLSConfigMap[addr] = client.NewClientTLSConfig(caPem, certPem, keyPem, insecureSkipVerify, serverName)
+	customTLSMutex.Unlock()
 
 	return nil
 }
