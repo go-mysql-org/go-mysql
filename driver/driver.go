@@ -264,9 +264,16 @@ func init() {
 	sql.Register("mysql", driver{})
 }
 
+
+// SetCustomTLSConfig sets a custom TLSConfig for the address (host:port) of the supplied DSN.
+// It requires a full import of the driver (not by side-effects only).
+// Example of supplying a custom CA, no client cert, no key, validating the
+// certificate, and supplying a serverName for the validation:
+//
+//     driver.SetCustomTLSConfig(CaPem, make([]byte, 0), make([]byte, 0), false, "my.domain.name")
+//
 func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte, insecureSkipVerify bool, serverName string) error {
 	// Extract addr from dsn
-	// We can hopefully extend the use of url.Parse if we switch the DSN style
 	parsed, err := url.Parse(dsn)
 	if err != nil {
 		return errors.Errorf("Unable to parse DSN. Need to extract address to use as key for storing custom TLS config")
