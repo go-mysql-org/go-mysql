@@ -264,12 +264,12 @@ func init() {
 	sql.Register("mysql", driver{})
 }
 
-func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte, insecureSkipVerify bool, serverName string) {
+func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte, insecureSkipVerify bool, serverName string) error {
 	// Extract addr from dsn
 	// We can hopefully extend the use of url.Parse if we switch the DSN style
 	parsed, err := url.Parse(dsn)
 	if err != nil {
-		errors.Errorf("Unable to parse DSN. Need to extract address to use as key for storing custom TLS config")
+		return errors.Errorf("Unable to parse DSN. Need to extract address to use as key for storing custom TLS config")
 	}
 	addr := parsed.Host
 
@@ -279,4 +279,6 @@ func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte,
 
 	// Basic pass-through function so we can just import the driver
 	customTLSConfigMap[addr] = client.NewClientTLSConfig(caPem, certPem, keyPem, insecureSkipVerify, serverName)
+
+	return nil
 }
