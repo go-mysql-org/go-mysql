@@ -19,6 +19,7 @@ import (
 )
 
 var customTLSMutex sync.Mutex
+
 // Map of dsn address (makes more sense than full dsn?) to tls Config
 var customTLSConfigMap = make(map[string]*tls.Config)
 
