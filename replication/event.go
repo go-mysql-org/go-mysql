@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-	uuid "github.com/satori/go.uuid"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 )
