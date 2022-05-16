@@ -39,6 +39,8 @@ type Conn struct {
 	authPluginName string
 
 	connectionID uint32
+
+	serverVersion string
 }
 
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
@@ -132,6 +134,11 @@ func (c *Conn) handshake() error {
 }
 
 func (c *Conn) Close() error {
+	if err := c.writeCommand(COM_QUIT); err != nil {
+		c.Conn.Close()
+		return errors.Trace(err)
+	}
+
 	return c.Conn.Close()
 }
 
@@ -399,4 +406,9 @@ func (c *Conn) exec(query string) (*Result, error) {
 	}
 
 	return c.readResult(false)
+}
+
+// GetServerVersion returns the server version reported in the initial handshake.
+func (c *Conn) GetServerVersion() string {
+	return c.serverVersion
 }

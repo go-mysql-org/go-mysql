@@ -123,6 +123,7 @@ func (c *Conn) readDb(data []byte, pos int) (int, error) {
 		if err := c.h.UseDB(db); err != nil {
 			return 0, err
 		}
+		c.db = db
 	}
 	return pos, nil
 }
