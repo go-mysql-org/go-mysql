@@ -139,6 +139,20 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 	}
 }
 
+// generate connection attributes data
+func (c *Conn) genAttributes() []byte {
+	if len(c.attributes) == 0 {
+		return nil
+	}
+
+	attrData := make([]byte, 0)
+	for k, v := range c.attributes {
+		attrData = append(attrData, PutLengthEncodedString([]byte(k))...)
+		attrData = append(attrData, PutLengthEncodedString([]byte(v))...)
+	}
+	return append(PutLengthEncodedInt(uint64(len(attrData))), attrData...)
+}
+
 // See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
 func (c *Conn) writeAuthHandshake() error {
 	if !authPluginAllowed(c.authPluginName) {
@@ -194,6 +208,12 @@ func (c *Conn) writeAuthHandshake() error {
 	if len(c.db) > 0 {
 		capability |= CLIENT_CONNECT_WITH_DB
 		length += len(c.db) + 1
+	}
+	// connection attributes
+	attrData := c.genAttributes()
+	if len(attrData) > 0 {
+		capability |= CLIENT_CONNECT_ATTRS
+		length += len(attrData)
 	}
 
 	data := make([]byte, length+4)
@@ -264,6 +284,12 @@ func (c *Conn) writeAuthHandshake() error {
 	// Assume native client during response
 	pos += copy(data[pos:], c.authPluginName)
 	data[pos] = 0x00
+	pos++
+
+	// connection attributes
+	if len(attrData) > 0 {
+		copy(data[pos:], attrData)
+	}
 
 	return c.WritePacket(data)
 }

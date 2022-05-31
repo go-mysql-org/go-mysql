@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/pingcap/check"
-	uuid "github.com/satori/go.uuid"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -339,7 +339,7 @@ func (t *testSyncerSuite) TestMysqlGTIDSync(c *C) {
 
 	var masterUuid uuid.UUID
 	if s, _ := r.GetString(0, 1); len(s) > 0 && s != "NONE" {
-		masterUuid, err = uuid.FromString(s)
+		masterUuid, err = uuid.Parse(s)
 		c.Assert(err, IsNil)
 	}
 

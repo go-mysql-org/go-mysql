@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go/hack"
 )
 
@@ -174,7 +174,7 @@ func ParseUUIDSet(str string) (*UUIDSet, error) {
 
 	var err error
 	s := new(UUIDSet)
-	if s.SID, err = uuid.FromString(sep[0]); err != nil {
+	if s.SID, err = uuid.Parse(sep[0]); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -203,7 +203,7 @@ func NewUUIDSet(sid uuid.UUID, in ...Interval) *UUIDSet {
 }
 
 func (s *UUIDSet) Contain(sub *UUIDSet) bool {
-	if !bytes.Equal(s.SID.Bytes(), sub.SID.Bytes()) {
+	if s.SID != sub.SID {
 		return false
 	}
 
@@ -280,7 +280,9 @@ func (s *UUIDSet) String() string {
 }
 
 func (s *UUIDSet) encode(w io.Writer) {
-	_, _ = w.Write(s.SID.Bytes())
+	b, _ := s.SID.MarshalBinary()
+
+	_, _ = w.Write(b)
 	n := int64(len(s.Intervals))
 
 	_ = binary.Write(w, binary.LittleEndian, n)

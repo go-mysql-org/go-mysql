@@ -1500,20 +1500,20 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 
 	case 5, 6:
 		tmp = int64(BFixedLengthInt(data[0:6])) - TIMEF_OFS
-		return timeFormat(tmp, n)
+		return timeFormat(tmp, dec, n)
 	default:
 		intPart = int64(BFixedLengthInt(data[0:3])) - TIMEF_INT_OFS
 		tmp = intPart << 24
 	}
 
-	if intPart == 0 {
+	if intPart == 0 && frac == 0 {
 		return "00:00:00", n, nil
 	}
 
-	return timeFormat(tmp, n)
+	return timeFormat(tmp, dec, n)
 }
 
-func timeFormat(tmp int64, n int) (string, int, error) {
+func timeFormat(tmp int64, dec uint16, n int) (string, int, error) {
 	hms := int64(0)
 	sign := ""
 	if tmp < 0 {
@@ -1529,7 +1529,8 @@ func timeFormat(tmp int64, n int) (string, int, error) {
 	secPart := tmp % (1 << 24)
 
 	if secPart != 0 {
-		return fmt.Sprintf("%s%02d:%02d:%02d.%06d", sign, hour, minute, second, secPart), n, nil
+		s := fmt.Sprintf("%s%02d:%02d:%02d.%06d", sign, hour, minute, second, secPart)
+		return s[0 : len(s)-(6-int(dec))], n, nil
 	}
 
 	return fmt.Sprintf("%s%02d:%02d:%02d", sign, hour, minute, second), n, nil

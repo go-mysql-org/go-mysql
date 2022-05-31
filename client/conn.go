@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -27,6 +28,8 @@ type Conn struct {
 	capability uint32
 	// client-set capabilities only
 	ccaps uint32
+
+	attributes map[string]string
 
 	status uint16
 
@@ -221,30 +224,30 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 		return nil, errors.Trace(err)
 	}
 
-	var buf []byte
 	var err error
 	var result *Result
-	defer utils.ByteSlicePut(buf)
+
+	bs := utils.ByteSliceGet(16)
+	defer utils.ByteSlicePut(bs)
 
 	for {
-		buf, err = c.ReadPacketReuseMem(utils.ByteSliceGet(16)[:0])
+		bs.B, err = c.ReadPacketReuseMem(bs.B[:0])
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
-		switch buf[0] {
+		switch bs.B[0] {
 		case OK_HEADER:
-			result, err = c.handleOKPacket(buf)
+			result, err = c.handleOKPacket(bs.B)
 		case ERR_HEADER:
-			err = c.handleErrorPacket(append([]byte{}, buf...))
+			err = c.handleErrorPacket(bytes.Repeat(bs.B, 1))
 			result = nil
 		case LocalInFile_HEADER:
 			err = ErrMalformPacket
 			result = nil
 		default:
-			result, err = c.readResultset(buf, false)
+			result, err = c.readResultset(bs.B, false)
 		}
-
 		// call user-defined callback
 		perResultCallback(result, err)
 
@@ -300,6 +303,10 @@ func (c *Conn) Commit() error {
 func (c *Conn) Rollback() error {
 	_, err := c.exec("ROLLBACK")
 	return errors.Trace(err)
+}
+
+func (c *Conn) SetAttributes(attributes map[string]string) {
+	c.attributes = attributes
 }
 
 func (c *Conn) SetCharset(charset string) error {

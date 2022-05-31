@@ -30,7 +30,7 @@ func (c *Conn) readHandshakeResponse() error {
 
 	pos = c.readPluginName(data, pos)
 
-	cont, err := c.handleAuthMatch(authData, pos)
+	cont, err := c.handleAuthMatch()
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (c *Conn) readDb(data []byte, pos int) (int, error) {
 func (c *Conn) readPluginName(data []byte, pos int) int {
 	if c.capability&CLIENT_PLUGIN_AUTH != 0 {
 		c.authPluginName = string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
-		pos += len(c.authPluginName)
+		pos += len(c.authPluginName) + 1
 	} else {
 		// The method used is Native Authentication if both CLIENT_PROTOCOL_41 and CLIENT_SECURE_CONNECTION are set,
 		// but CLIENT_PLUGIN_AUTH is not set, so we fallback to 'mysql_native_password'
@@ -191,7 +191,7 @@ func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 	return true, nil
 }
 
-func (c *Conn) handleAuthMatch(authData []byte, pos int) (bool, error) {
+func (c *Conn) handleAuthMatch() (bool, error) {
 	// if the client responds the handshake with a different auth method, the server will send the AuthSwitchRequest packet
 	// to the client to ask the client to switch.
 
@@ -207,17 +207,29 @@ func (c *Conn) handleAuthMatch(authData []byte, pos int) (bool, error) {
 }
 
 func (c *Conn) readAttributes(data []byte, pos int) (int, error) {
-	attrs := make(map[string]string)
+	// read length of attribute data
+	attrLen, isNull, skip := LengthEncodedInt(data[pos:])
+	pos += skip
+	if isNull {
+		return pos, nil
+	}
+
+	if len(data) < pos+int(attrLen) {
+		return pos, errors.New("corrupt attributes data")
+	}
+
 	i := 0
+	attrs := make(map[string]string)
 	var key string
 
+	// read until end of data or NUL for atrribute key/values
 	for {
 		str, isNull, strLen, err := LengthEncodedString(data[pos:])
-
 		if err != nil {
 			return -1, err
 		}
 
+		// end of data
 		if isNull {
 			break
 		}
