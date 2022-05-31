@@ -266,30 +266,57 @@ so that most MySQL clients should be able to connect to the Server without modif
 
 ### Example
 
+Minimalistic MySQL server implementation:
+
 ```go
+package main
+
 import (
-	"github.com/go-mysql-org/go-mysql/server"
+	"log"
 	"net"
+
+	"github.com/go-mysql-org/go-mysql/server"
 )
 
-l, _ := net.Listen("tcp", "127.0.0.1:4000")
+func main() {
+	// Listen for connections on localhost port 4000
+	l, err := net.Listen("tcp", "127.0.0.1:4000")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-c, _ := l.Accept()
+	// Accept a new connection once
+	c, err := l.Accept()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// Create a connection with user root and an empty password.
-// You can use your own handler to handle command here.
-conn, _ := server.NewConn(c, "root", "", server.EmptyHandler{})
+	// Create a connection with user root and an empty password.
+	// You can use your own handler to handle command here.
+	conn, err := server.NewConn(c, "root", "", server.EmptyHandler{})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-for {
-	conn.HandleCommand()
+	// as long as the client keeps sending commands, keep handling them
+	for {
+		if err := conn.HandleCommand(); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
-``` 
+
+```
 
 Another shell
 
 ```
-mysql -h127.0.0.1 -P4000 -uroot -p 
-//Becuase empty handler does nothing, so here the MySQL client can only connect the proxy server. :-) 
+$ mysql -h127.0.0.1 -P4000 -uroot
+Your MySQL connection id is 10001
+Server version: 5.7.0
+
+MySQL [(none)]>
+// Since EmptyHandler implements no commands, it will throw an error on any query that you will send
 ```
 
 > ```NewConn()``` will use default server configurations:
