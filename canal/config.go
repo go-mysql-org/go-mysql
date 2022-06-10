@@ -4,11 +4,13 @@ import (
 	"crypto/tls"
 	"io/ioutil"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
+	"github.com/siddontang/go-log/log"
 )
 
 type DumpConfig struct {
@@ -86,6 +88,9 @@ type Config struct {
 
 	// Set TLS config
 	TLSConfig *tls.Config
+
+	//Set Logger
+	Logger *log.Logger
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
@@ -123,6 +128,9 @@ func NewDefaultConfig() *Config {
 	c.Dump.ExecutionPath = "mysqldump"
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
+
+	streamHandler, _ := log.NewStreamHandler(os.Stdout)
+	c.Logger = log.NewDefault(streamHandler)
 
 	return c
 }
