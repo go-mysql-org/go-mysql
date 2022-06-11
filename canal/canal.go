@@ -71,7 +71,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	if c.cfg.DiscardNoMetaRowEvent {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
-	c.master = &masterInfo{}
+	c.master = &masterInfo{logger: c.cfg.Logger}
 
 	c.delay = new(uint32)
 
