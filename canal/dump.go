@@ -11,7 +11,6 @@ import (
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
-	"github.com/siddontang/go-log/log"
 )
 
 type dumpParseHandler struct {
@@ -49,7 +48,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 			e == schema.ErrMissingTableMeta {
 			return nil
 		}
-		log.Errorf("get %s.%s information err: %v", db, table, err)
+		h.c.cfg.Logger.Errorf("get %s.%s information err: %v", db, table, err)
 		return errors.Trace(err)
 	}
 
@@ -163,13 +162,13 @@ func (c *Canal) dump() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		log.Infof("skip master data, get current binlog position %v", pos)
+		c.cfg.Logger.Infof("skip master data, get current binlog position %v", pos)
 		h.name = pos.Name
 		h.pos = uint64(pos.Pos)
 	}
 
 	start := time.Now()
-	log.Info("try dump MySQL and parse")
+	c.cfg.Logger.Info("try dump MySQL and parse")
 	if err := c.dumper.DumpAndParse(h); err != nil {
 		return errors.Trace(err)
 	}
@@ -185,7 +184,7 @@ func (c *Canal) dump() error {
 		c.master.UpdateGTIDSet(h.gset)
 		startPos = h.gset
 	}
-	log.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
+	c.cfg.Logger.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
 		time.Since(start).Seconds(), startPos)
 	return nil
 }
@@ -196,12 +195,12 @@ func (c *Canal) tryDump() error {
 	if (len(pos.Name) > 0 && pos.Pos > 0) ||
 		(gset != nil && gset.String() != "") {
 		// we will sync with binlog name and position
-		log.Infof("skip dump, use last binlog replication pos %s or GTID set %v", pos, gset)
+		c.cfg.Logger.Infof("skip dump, use last binlog replication pos %s or GTID set %v", pos, gset)
 		return nil
 	}
 
 	if c.dumper == nil {
-		log.Info("skip dump, no mysqldump")
+		c.cfg.Logger.Info("skip dump, no mysqldump")
 		return nil
 	}
 
