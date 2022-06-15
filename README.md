@@ -250,7 +250,10 @@ import (
     "github.com/go-mysql-org/go-mysql/client"
 )
 
-pool := client.NewPool(log.Debugf, 100, 400, 5, "127.0.0.1:3306", `root`, ``, `test`)
+pool, err := client.NewPool(log.Debugf, 100, 400, 5, "127.0.0.1:3306", `root`, ``, `test`)
+if err != nil {
+	return
+}
 // ...
 conn, _ := pool.GetConn(ctx)
 defer pool.PutConn(conn)

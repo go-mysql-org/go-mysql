@@ -14,7 +14,10 @@ import (
 Pool for efficient reuse of connections.
 
 Usage:
-	pool := client.NewPool(log.Debugf, 100, 400, 5, `127.0.0.1:3306`, `username`, `userpwd`, `dbname`)
+	pool, err := client.NewPool(log.Debugf, 100, 400, 5, `127.0.0.1:3306`, `username`, `userpwd`, `dbname`)
+	if err != nil {
+		return
+	}
 	...
 	conn, _ := pool.GetConn(ctx)
 	defer pool.PutConn(conn)
@@ -89,7 +92,7 @@ func NewPool(
 	password string,
 	dbName string,
 	options ...func(conn *Conn),
-) *Pool {
+) (*Pool, error) {
 	if minAlive > maxAlive {
 		minAlive = maxAlive
 	}
@@ -122,12 +125,14 @@ func NewPool(
 
 	if pool.minAlive > 0 {
 		pool.logFunc(`Pool: Setup %d new connections (minimal pool size)...`, pool.minAlive)
-		pool.startNewConnections(pool.minAlive)
+		if err := pool.startNewConnections(pool.minAlive); err != nil {
+			return nil, err
+		}
 	}
 
 	go pool.closeOldIdleConnections()
 
-	return pool
+	return pool, nil
 }
 
 func (pool *Pool) GetStats(stats *ConnectionStats) {
@@ -389,7 +394,10 @@ func (pool *Pool) spawnConnectionsIfNeeded() bool {
 	}
 
 	pool.logFunc(`Pool: Setup %d new connections (total: %d idle: %d)...`, needSpanNew, totalCount, idleCount)
-	pool.startNewConnections(needSpanNew)
+	if err := pool.startNewConnections(needSpanNew); err != nil {
+		pool.logFunc(`Pool: Setup startNewConnections failed,err : %v`, err)
+		return false
+	}
 
 	return true
 }
@@ -446,15 +454,17 @@ func (pool *Pool) closeConn(conn *Conn) {
 	_ = conn.Close() // Closing is not an instant action, so do it outside the lock
 }
 
-func (pool *Pool) startNewConnections(count int) {
+func (pool *Pool) startNewConnections(count int) error {
 	connections := make([]Connection, 0, count)
 	for i := 0; i < count; i++ {
-		if conn, err := pool.createNewConnection(); err == nil {
-			pool.synchro.Lock()
-			pool.synchro.stats.TotalCount++
-			pool.synchro.Unlock()
-			connections = append(connections, conn)
+		conn, err := pool.createNewConnection()
+		if err != nil {
+			return err
 		}
+		pool.synchro.Lock()
+		pool.synchro.stats.TotalCount++
+		pool.synchro.Unlock()
+		connections = append(connections, conn)
 	}
 
 	pool.synchro.Lock()
@@ -462,6 +472,7 @@ func (pool *Pool) startNewConnections(count int) {
 		pool.putConnectionUnsafe(connection)
 	}
 	pool.synchro.Unlock()
+	return nil
 }
 
 func (pool *Pool) ping(conn *Conn) error {
