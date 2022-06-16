@@ -1,3 +1,8 @@
+### Tag v1.6.0 (2022-06-16)
+* Allow logger override. [#699](https://github.com/go-mysql-org/go-mysql/pull/699) ([cameron-p-m](https://github.com/cameron-p-m))
+* Improved the server example in README. [#696](https://github.com/go-mysql-org/go-mysql/pull/696) ([skoef](https://github.com/skoef))
+* Allow TLS connections in the driver. [#673](https://github.com/go-mysql-org/go-mysql/pull/673) ([atomicules](https://github.com/atomicules))
+
 ### Tag v1.5.0 (2022-04-30)
 * Replacing github.com/satori/go.uuid with github.com/google/uuid. [#690](https://github.com/go-mysql-org/go-mysql/pull/690) ([martinhrvn](https://github.com/martinhrvn))
 * Fix dump gtid regexp. [#688](https://github.com/go-mysql-org/go-mysql/pull/688) ([yrbb](https://github.com/yrbb))
