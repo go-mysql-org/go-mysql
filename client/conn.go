@@ -84,16 +84,11 @@ func ConnectWithDialer(ctx context.Context, network string, addr string, user st
 		return nil, errors.Trace(err)
 	}
 
-	if c.tlsConfig != nil {
-		c.Conn = packet.NewTLSConn(conn)
-	} else {
-		c.Conn = packet.NewConn(conn)
-	}
-
 	c.user = user
 	c.password = password
 	c.db = dbName
 	c.proto = network
+	c.Conn = packet.NewConn(conn)
 
 	// use default charset here, utf-8
 	c.charset = DEFAULT_CHARSET
@@ -101,6 +96,12 @@ func ConnectWithDialer(ctx context.Context, network string, addr string, user st
 	// Apply configuration functions.
 	for i := range options {
 		options[i](c)
+	}
+
+	if c.tlsConfig != nil {
+		seq := c.Conn.Sequence
+		c.Conn = packet.NewTLSConn(conn)
+		c.Conn.Sequence = seq
 	}
 
 	if err = c.handshake(); err != nil {
