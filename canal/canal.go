@@ -481,17 +481,17 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 		}
 
 		rr, err = c.conn.Execute(cmd, args...)
-		if err != nil && !mysql.ErrorEqual(err, mysql.ErrBadConn) {
-			return
-		} else if mysql.ErrorEqual(err, mysql.ErrBadConn) {
-			c.conn.Close()
-			c.conn = nil
-			continue
-		} else {
-			return
+		if err != nil {
+			if mysql.ErrorEqual(err, mysql.ErrBadConn) {
+				c.conn.Close()
+				c.conn = nil
+				continue
+			}
+			return nil, err
 		}
+		break
 	}
-	return
+	return rr, err
 }
 
 func (c *Canal) SyncedPosition() mysql.Position {
