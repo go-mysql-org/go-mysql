@@ -78,6 +78,10 @@ type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 func ConnectWithDialer(ctx context.Context, network string, addr string, user string, password string, dbName string, dialer Dialer, options ...func(*Conn)) (*Conn, error) {
 	c := new(Conn)
 
+	if network == "" {
+		network = getNetProto(addr)
+	}
+
 	var err error
 	conn, err := dialer(ctx, network, addr)
 	if err != nil {

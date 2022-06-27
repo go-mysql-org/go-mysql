@@ -112,6 +112,9 @@ type BinlogSyncerConfig struct {
 
 	// Set Logger
 	Logger *log.Logger
+
+	// Set Dialer
+	Dialer client.Dialer
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -148,6 +151,10 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	}
 	if cfg.ServerID == 0 {
 		cfg.Logger.Fatal("can't use 0 as the server ID")
+	}
+	if cfg.Dialer == nil {
+		dialer := &net.Dialer{}
+		cfg.Dialer = dialer.DialContext
 	}
 
 	// Clear the Password to avoid outputing it in log.
@@ -864,9 +871,13 @@ func (b *BinlogSyncer) newConnection() (*client.Conn, error) {
 		addr = b.cfg.Host
 	}
 
-	return client.Connect(addr, b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
-		c.SetTLSConfig(b.cfg.TLSConfig)
-	})
+	ctx, cancel := context.WithTimeout(b.ctx, time.Second*10)
+	defer cancel()
+
+	return client.ConnectWithDialer(ctx, "", addr, b.cfg.User, b.cfg.Password,
+		"", b.cfg.Dialer, func(c *client.Conn) {
+			c.SetTLSConfig(b.cfg.TLSConfig)
+		})
 }
 
 func (b *BinlogSyncer) killConnection(conn *client.Conn, id uint32) {

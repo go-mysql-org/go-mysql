@@ -4,10 +4,12 @@ import (
 	"crypto/tls"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"os"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
@@ -91,6 +93,9 @@ type Config struct {
 
 	//Set Logger
 	Logger *log.Logger
+
+	//Set Dialer
+	Dialer client.Dialer
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
@@ -131,6 +136,9 @@ func NewDefaultConfig() *Config {
 
 	streamHandler, _ := log.NewStreamHandler(os.Stdout)
 	c.Logger = log.NewDefault(streamHandler)
+
+	dialer := &net.Dialer{}
+	c.Dialer = dialer.DialContext
 
 	return c
 }
