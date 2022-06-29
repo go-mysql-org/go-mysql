@@ -24,10 +24,7 @@ func (c *Conn) handleAuthSwitchResponse() error {
 		if err := c.acquirePassword(); err != nil {
 			return err
 		}
-		if !bytes.Equal(CalcPassword(c.salt, []byte(c.password)), authData) {
-			return errAccessDenied(c.password)
-		}
-		return nil
+		return c.compareNativePasswordAuthData(authData, c.password)
 
 	case AUTH_CACHING_SHA2_PASSWORD:
 		if !c.cachingSha2FullAuth {
