@@ -61,14 +61,12 @@ func getNetProto(addr string) string {
 // Connect to a MySQL server, addr can be ip:port, or a unix socket domain like /var/sock.
 // Accepts a series of configuration functions as a variadic argument.
 func Connect(addr string, user string, password string, dbName string, options ...func(*Conn)) (*Conn, error) {
-	proto := getNetProto(addr)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	dialer := &net.Dialer{}
 
-	return ConnectWithDialer(ctx, proto, addr, user, password, dbName, dialer.DialContext, options...)
+	return ConnectWithDialer(ctx, "", addr, user, password, dbName, dialer.DialContext, options...)
 }
 
 // Dialer connects to the address on the named network using the provided context.
@@ -77,6 +75,10 @@ type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 // Connect to a MySQL server using the given Dialer.
 func ConnectWithDialer(ctx context.Context, network string, addr string, user string, password string, dbName string, dialer Dialer, options ...func(*Conn)) (*Conn, error) {
 	c := new(Conn)
+
+	if network == "" {
+		network = getNetProto(addr)
+	}
 
 	var err error
 	conn, err := dialer(ctx, network, addr)

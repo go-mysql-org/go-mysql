@@ -427,6 +427,7 @@ func (c *Canal) prepareSyncer() error {
 		TimestampStringLocation: c.cfg.TimestampStringLocation,
 		TLSConfig:               c.cfg.TLSConfig,
 		Logger:                  c.cfg.Logger,
+		Dialer:                  c.cfg.Dialer,
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {
@@ -451,6 +452,14 @@ func (c *Canal) prepareSyncer() error {
 	return nil
 }
 
+func (c *Canal) connect(options ...func(*client.Conn)) (*client.Conn, error) {
+	ctx, cancel := context.WithTimeout(c.ctx, time.Second*10)
+	defer cancel()
+
+	return client.ConnectWithDialer(ctx, "", c.cfg.Addr,
+		c.cfg.User, c.cfg.Password, "", c.cfg.Dialer, options...)
+}
+
 // Execute a SQL
 func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
 	c.connLock.Lock()
@@ -461,27 +470,28 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 			conn.SetTLSConfig(c.cfg.TLSConfig)
 		})
 	}
+
 	retryNum := 3
 	for i := 0; i < retryNum; i++ {
 		if c.conn == nil {
-			c.conn, err = client.Connect(c.cfg.Addr, c.cfg.User, c.cfg.Password, "", argF...)
+			c.conn, err = c.connect(argF...)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
 		}
 
 		rr, err = c.conn.Execute(cmd, args...)
-		if err != nil && !mysql.ErrorEqual(err, mysql.ErrBadConn) {
-			return
-		} else if mysql.ErrorEqual(err, mysql.ErrBadConn) {
-			c.conn.Close()
-			c.conn = nil
-			continue
-		} else {
-			return
+		if err != nil {
+			if mysql.ErrorEqual(err, mysql.ErrBadConn) {
+				c.conn.Close()
+				c.conn = nil
+				continue
+			}
+			return nil, err
 		}
+		break
 	}
-	return
+	return rr, err
 }
 
 func (c *Canal) SyncedPosition() mysql.Position {
