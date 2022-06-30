@@ -12,13 +12,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
+
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/dump"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
-	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
@@ -367,6 +368,13 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	c.tableLock.Unlock()
 
 	return t, nil
+}
+
+func (c *Canal) SetTable(db string, table string, t *schema.Table) {
+	key := fmt.Sprintf("%s.%s", db, table)
+	c.tableLock.Lock()
+	c.tables[key] = t
+	c.tableLock.Unlock()
 }
 
 // ClearTableCache clear table cache
