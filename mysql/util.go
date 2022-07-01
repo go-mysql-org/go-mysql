@@ -107,14 +107,14 @@ func AppendLengthEncodedInteger(b []byte, n uint64) []byte {
 		byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
 }
 
-func RandomBuf(size int) ([]byte, error) {
+func RandomBuf(size int) []byte {
 	buf := make([]byte, size)
 	mrand.Seed(time.Now().UTC().UnixNano())
 	min, max := 30, 127
 	for i := 0; i < size; i++ {
 		buf[i] = byte(min + mrand.Intn(max-min))
 	}
-	return buf, nil
+	return buf
 }
 
 // FixedLengthInt: little endian
