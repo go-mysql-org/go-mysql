@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -866,7 +867,7 @@ func (b *BinlogSyncer) LastConnectionID() uint32 {
 func (b *BinlogSyncer) newConnection() (*client.Conn, error) {
 	var addr string
 	if b.cfg.Port != 0 {
-		addr = fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port)
+		addr = net.JoinHostPort(b.cfg.Host, strconv.Itoa(int(b.cfg.Port)))
 	} else {
 		addr = b.cfg.Host
 	}
