@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -38,7 +40,7 @@ func main() {
 	flag.Parse()
 
 	cfg := canal.NewDefaultConfig()
-	cfg.Addr = fmt.Sprintf("%s:%d", *host, *port)
+	cfg.Addr = net.JoinHostPort(*host, strconv.Itoa(*port))
 	cfg.User = *user
 	cfg.Password = *password
 	cfg.Flavor = *flavor
