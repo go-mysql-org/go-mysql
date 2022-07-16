@@ -68,7 +68,7 @@ for {
 // or we can use a timeout context
 for {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	ev, err := s.GetEvent(ctx)
+	ev, err := streamer.GetEvent(ctx)
 	cancel()
 
 	if err == context.DeadlineExceeded {
