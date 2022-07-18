@@ -210,7 +210,7 @@ func (b *BinlogSyncer) close() {
 		// Use a new connection to kill the binlog syncer
 		// because calling KILL from the same connection
 		// doesn't actually disconnect it.
-		c, err := b.newConnection()
+		c, err := b.newConnection(context.Background())
 		if err == nil {
 			b.killConnection(c, b.lastConnectionID)
 			c.Close()
@@ -241,7 +241,7 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	var err error
-	b.c, err = b.newConnection()
+	b.c, err = b.newConnection(b.ctx)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -864,7 +864,7 @@ func (b *BinlogSyncer) LastConnectionID() uint32 {
 	return b.lastConnectionID
 }
 
-func (b *BinlogSyncer) newConnection() (*client.Conn, error) {
+func (b *BinlogSyncer) newConnection(ctx context.Context) (*client.Conn, error) {
 	var addr string
 	if b.cfg.Port != 0 {
 		addr = net.JoinHostPort(b.cfg.Host, strconv.Itoa(int(b.cfg.Port)))
@@ -872,10 +872,10 @@ func (b *BinlogSyncer) newConnection() (*client.Conn, error) {
 		addr = b.cfg.Host
 	}
 
-	ctx, cancel := context.WithTimeout(b.ctx, time.Second*10)
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
-	return client.ConnectWithDialer(ctx, "", addr, b.cfg.User, b.cfg.Password,
+	return client.ConnectWithDialer(timeoutCtx, "", addr, b.cfg.User, b.cfg.Password,
 		"", b.cfg.Dialer, func(c *client.Conn) {
 			c.SetTLSConfig(b.cfg.TLSConfig)
 		})
