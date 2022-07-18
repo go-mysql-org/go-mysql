@@ -872,7 +872,7 @@ func (b *BinlogSyncer) newConnection() (*client.Conn, error) {
 		addr = b.cfg.Host
 	}
 
-	ctx, cancel := context.WithTimeout(b.ctx, time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	return client.ConnectWithDialer(ctx, "", addr, b.cfg.User, b.cfg.Password,
