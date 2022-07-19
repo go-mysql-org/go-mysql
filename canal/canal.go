@@ -380,7 +380,7 @@ func (c *Canal) ClearTableCache(db []byte, table []byte) {
 	c.tableLock.Unlock()
 }
 
-// SetTableCache sets table cache value for the given key
+// SetTableCache sets table cache value for the given table
 func (c *Canal) SetTableCache(db []byte, table []byte, schema *schema.Table) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
