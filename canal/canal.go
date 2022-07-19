@@ -380,6 +380,18 @@ func (c *Canal) ClearTableCache(db []byte, table []byte) {
 	c.tableLock.Unlock()
 }
 
+// SetTableCache sets table cache value for the given table
+func (c *Canal) SetTableCache(db []byte, table []byte, schema *schema.Table) {
+	key := fmt.Sprintf("%s.%s", db, table)
+	c.tableLock.Lock()
+	c.tables[key] = schema
+	if c.cfg.DiscardNoMetaRowEvent {
+		// if get table info success, delete this key from errorTablesGetTime
+		delete(c.errorTablesGetTime, key)
+	}
+	c.tableLock.Unlock()
+}
+
 // CheckBinlogRowImage checks MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
 func (c *Canal) CheckBinlogRowImage(image string) error {
 	// need to check MySQL binlog row image? full, minimal or noblob?
