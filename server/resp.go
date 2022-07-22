@@ -182,11 +182,16 @@ func (c *Conn) writeFieldList(fs []*Field, data []byte) error {
 func (c *Conn) writeFieldValues(fv []FieldValue) error {
 	data := make([]byte, 4, 1024)
 	for _, v := range fv {
-		tv, err := FormatTextValue(v.Value())
-		if err != nil {
-			return err
+		if v.Value() == nil {
+			// NULL value is encoded as 0xfb here
+			data = append(data, []byte{0xfb}...)
+		} else {
+			tv, err := FormatTextValue(v.Value())
+			if err != nil {
+				return err
+			}
+			data = append(data, PutLengthEncodedString(tv)...)
 		}
-		data = append(data, PutLengthEncodedString(tv)...)
 	}
 
 	return c.WritePacket(data)
