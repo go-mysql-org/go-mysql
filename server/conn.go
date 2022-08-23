@@ -11,9 +11,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/packet"
 )
 
-/*
-   Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
-*/
+// Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
 type Conn struct {
 	*packet.Conn
 

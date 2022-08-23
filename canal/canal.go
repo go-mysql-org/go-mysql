@@ -3,7 +3,7 @@ package canal
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"regexp"
 	"strconv"
@@ -165,7 +165,7 @@ func (c *Canal) prepareDumper() error {
 	}
 
 	if c.cfg.Dump.DiscardErr {
-		c.dumper.SetErrOut(ioutil.Discard)
+		c.dumper.SetErrOut(io.Discard)
 	} else {
 		c.dumper.SetErrOut(os.Stderr)
 	}
