@@ -304,8 +304,7 @@ func init() {
 // Example of supplying a custom CA, no client cert, no key, validating the
 // certificate, and supplying a serverName for the validation:
 //
-//     driver.SetCustomTLSConfig(CaPem, make([]byte, 0), make([]byte, 0), false, "my.domain.name")
-//
+// driver.SetCustomTLSConfig(CaPem, make([]byte, 0), make([]byte, 0), false, "my.domain.name")
 func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte, insecureSkipVerify bool, serverName string) error {
 	// Extract addr from dsn
 	parsed, err := url.Parse(dsn)

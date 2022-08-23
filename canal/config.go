@@ -2,7 +2,6 @@ package canal
 
 import (
 	"crypto/tls"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -99,7 +98,7 @@ type Config struct {
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
-	data, err := ioutil.ReadFile(name)
+	data, err := os.ReadFile(name)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
