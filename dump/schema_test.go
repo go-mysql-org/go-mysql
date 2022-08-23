@@ -3,7 +3,7 @@ package dump
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -83,19 +83,19 @@ func (s *schemaTestSuite) TestDump(c *C) {
 	// Using mysql 5.7 can't work, error:
 	// 	mysqldump: Error 1412: Table definition has changed,
 	// 	please retry transaction when dumping table `test_replication` at row: 0
-	// err := s.d.Dump(ioutil.Discard)
+	// err := s.d.Dump(io.Discard)
 	// c.Assert(err, IsNil)
 
 	s.d.AddDatabases("test1", "test2")
 
 	s.d.AddIgnoreTables("test1", "t2")
 
-	err := s.d.Dump(ioutil.Discard)
+	err := s.d.Dump(io.Discard)
 	c.Assert(err, IsNil)
 
 	s.d.AddTables("test1", "t1")
 
-	err = s.d.Dump(ioutil.Discard)
+	err = s.d.Dump(io.Discard)
 	c.Assert(err, IsNil)
 }
 
