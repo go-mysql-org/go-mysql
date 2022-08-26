@@ -82,7 +82,7 @@ func (s *connTestSuite) testExecute_DropTable(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *clientTestSuite) TestFieldList(c *C) {
+func (s *connTestSuite) TestFieldList(c *C) {
 	fields, err := s.c.FieldList(testExecuteSelectStreamingTablename, "")
 	c.Assert(err, IsNil)
 	c.Assert(fields, HasLen, 2)
