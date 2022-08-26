@@ -328,20 +328,17 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 		return nil, errors.Trace(err)
 	}
 
-	data, err := c.ReadPacket()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
 	fs := make([]*Field, 0, 4)
 	var f *Field
-	if data[0] == ERR_HEADER {
-		return nil, c.handleErrorPacket(data)
-	}
-
 	for {
-		if data, err = c.ReadPacket(); err != nil {
+		data, err := c.ReadPacket()
+		if err != nil {
 			return nil, errors.Trace(err)
+		}
+
+		// ERR Packet
+		if data[0] == ERR_HEADER {
+			return nil, c.handleErrorPacket(data)
 		}
 
 		// EOF Packet
