@@ -61,14 +61,12 @@ func getNetProto(addr string) string {
 // Connect to a MySQL server, addr can be ip:port, or a unix socket domain like /var/sock.
 // Accepts a series of configuration functions as a variadic argument.
 func Connect(addr string, user string, password string, dbName string, options ...func(*Conn)) (*Conn, error) {
-	proto := getNetProto(addr)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	dialer := &net.Dialer{}
 
-	return ConnectWithDialer(ctx, proto, addr, user, password, dbName, dialer.DialContext, options...)
+	return ConnectWithDialer(ctx, "", addr, user, password, dbName, dialer.DialContext, options...)
 }
 
 // Dialer connects to the address on the named network using the provided context.
@@ -78,22 +76,21 @@ type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 func ConnectWithDialer(ctx context.Context, network string, addr string, user string, password string, dbName string, dialer Dialer, options ...func(*Conn)) (*Conn, error) {
 	c := new(Conn)
 
+	if network == "" {
+		network = getNetProto(addr)
+	}
+
 	var err error
 	conn, err := dialer(ctx, network, addr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if c.tlsConfig != nil {
-		c.Conn = packet.NewTLSConn(conn)
-	} else {
-		c.Conn = packet.NewConn(conn)
-	}
-
 	c.user = user
 	c.password = password
 	c.db = dbName
 	c.proto = network
+	c.Conn = packet.NewConn(conn)
 
 	// use default charset here, utf-8
 	c.charset = DEFAULT_CHARSET
@@ -101,6 +98,12 @@ func ConnectWithDialer(ctx context.Context, network string, addr string, user st
 	// Apply configuration functions.
 	for i := range options {
 		options[i](c)
+	}
+
+	if c.tlsConfig != nil {
+		seq := c.Conn.Sequence
+		c.Conn = packet.NewTLSConn(conn)
+		c.Conn.Sequence = seq
 	}
 
 	if err = c.handshake(); err != nil {
@@ -214,11 +217,10 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 //
 // Example:
 //
-//      queries := "SELECT 1; SELECT NOW();"
-//      conn.ExecuteMultiple(queries, func(result *mysql.Result, err error) {
-//          // Use the result as you want
-//      })
-//
+// queries := "SELECT 1; SELECT NOW();"
+// conn.ExecuteMultiple(queries, func(result *mysql.Result, err error) {
+// // Use the result as you want
+// })
 func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCallback) (*Result, error) {
 	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
 		return nil, errors.Trace(err)
@@ -268,20 +270,19 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 }
 
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset
-//   WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
+// WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
 // When given, perResultCallback will be called once per result
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
 //
 // Example:
 //
-// 		var result mysql.Result
-// 		conn.ExecuteSelectStreaming(`SELECT ... LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
-//   		// Use the row as you want.
-//   		// You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
-//   		return nil
-// 		}, nil)
-//
+// var result mysql.Result
+// conn.ExecuteSelectStreaming(`SELECT ... LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
+// // Use the row as you want.
+// // You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
+// return nil
+// }, nil)
 func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
 	if err := c.writeCommandStr(COM_QUERY, command); err != nil {
 		return errors.Trace(err)
@@ -327,20 +328,17 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 		return nil, errors.Trace(err)
 	}
 
-	data, err := c.ReadPacket()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
 	fs := make([]*Field, 0, 4)
 	var f *Field
-	if data[0] == ERR_HEADER {
-		return nil, c.handleErrorPacket(data)
-	}
-
 	for {
-		if data, err = c.ReadPacket(); err != nil {
+		data, err := c.ReadPacket()
+		if err != nil {
 			return nil, errors.Trace(err)
+		}
+
+		// ERR Packet
+		if data[0] == ERR_HEADER {
+			return nil, c.handleErrorPacket(data)
 		}
 
 		// EOF Packet

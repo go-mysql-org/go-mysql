@@ -21,7 +21,7 @@ var delay = 50
 
 // test caching for 'caching_sha2_password'
 // NOTE the idea here is to plugin a throttled credential provider so that the first connection (cache miss) will take longer time
-//      than the second connection (cache hit). Remember to set the password for MySQL user otherwise it won't cache empty password.
+// than the second connection (cache hit). Remember to set the password for MySQL user otherwise it won't cache empty password.
 func TestCachingSha2Cache(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 

@@ -189,3 +189,43 @@ func (t *respConnTestSuite) TestConnWriteFieldList(c *check.C) {
 	c.Assert(clientConn.WriteBuffered[:27], check.BytesEquals, []byte{23, 0, 0, 0, 3, 100, 101, 102, 0, 0, 0, 1, 'c', 0, 12, 33, 0, 0, 0, 0, 0, 253, 0, 0, 0, 0, 0})
 	c.Assert(clientConn.WriteBuffered[27:], check.BytesEquals, []byte{1, 0, 0, 1, mysql.EOF_HEADER})
 }
+
+func (t *respConnTestSuite) TestConnWriteFieldValues(c *check.C) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+
+	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]interface{}{
+		[]interface{}{"d"},
+		[]interface{}{nil},
+	})
+
+	c.Assert(err, check.IsNil)
+	err = conn.writeFieldList(r.Fields, nil)
+	c.Assert(err, check.IsNil)
+
+	// fields and EOF
+	c.Assert(clientConn.WriteBuffered[:27], check.BytesEquals, []byte{23, 0, 0, 0, 3, 100, 101, 102, 0, 0, 0, 1, 'c', 0, 12, 33, 0, 0, 0, 0, 0, 253, 0, 0, 0, 0, 0})
+	c.Assert(clientConn.WriteBuffered[27:32], check.BytesEquals, []byte{1, 0, 0, 1, mysql.EOF_HEADER})
+
+	r.Values = make([][]mysql.FieldValue, len(r.RowDatas))
+	for i := range r.Values {
+		r.Values[i], err = r.RowDatas[i].Parse(r.Fields, false, r.Values[i])
+
+		c.Assert(err, check.IsNil)
+
+		err = conn.writeFieldValues(r.Values[i])
+		c.Assert(err, check.IsNil)
+	}
+
+	err = conn.writeEOF()
+	c.Assert(err, check.IsNil)
+
+	// first row
+	c.Assert(clientConn.WriteBuffered[32:38], check.BytesEquals, []byte{2, 0, 0, 2, 1, 'd'})
+
+	// second row with NULL value
+	c.Assert(clientConn.WriteBuffered[38:43], check.BytesEquals, []byte{1, 0, 0, 3, 251})
+
+	// EOF
+	c.Assert(clientConn.WriteBuffered[43:], check.BytesEquals, []byte{1, 0, 0, 4, mysql.EOF_HEADER})
+}

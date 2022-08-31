@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -112,6 +113,9 @@ type BinlogSyncerConfig struct {
 
 	// Set Logger
 	Logger *log.Logger
+
+	// Set Dialer
+	Dialer client.Dialer
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -148,6 +152,10 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	}
 	if cfg.ServerID == 0 {
 		cfg.Logger.Fatal("can't use 0 as the server ID")
+	}
+	if cfg.Dialer == nil {
+		dialer := &net.Dialer{}
+		cfg.Dialer = dialer.DialContext
 	}
 
 	// Clear the Password to avoid outputing it in log.
@@ -202,7 +210,7 @@ func (b *BinlogSyncer) close() {
 		// Use a new connection to kill the binlog syncer
 		// because calling KILL from the same connection
 		// doesn't actually disconnect it.
-		c, err := b.newConnection()
+		c, err := b.newConnection(context.Background())
 		if err == nil {
 			b.killConnection(c, b.lastConnectionID)
 			c.Close()
@@ -233,7 +241,7 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	var err error
-	b.c, err = b.newConnection()
+	b.c, err = b.newConnection(b.ctx)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -856,17 +864,21 @@ func (b *BinlogSyncer) LastConnectionID() uint32 {
 	return b.lastConnectionID
 }
 
-func (b *BinlogSyncer) newConnection() (*client.Conn, error) {
+func (b *BinlogSyncer) newConnection(ctx context.Context) (*client.Conn, error) {
 	var addr string
 	if b.cfg.Port != 0 {
-		addr = fmt.Sprintf("%s:%d", b.cfg.Host, b.cfg.Port)
+		addr = net.JoinHostPort(b.cfg.Host, strconv.Itoa(int(b.cfg.Port)))
 	} else {
 		addr = b.cfg.Host
 	}
 
-	return client.Connect(addr, b.cfg.User, b.cfg.Password, "", func(c *client.Conn) {
-		c.SetTLSConfig(b.cfg.TLSConfig)
-	})
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	return client.ConnectWithDialer(timeoutCtx, "", addr, b.cfg.User, b.cfg.Password,
+		"", b.cfg.Dialer, func(c *client.Conn) {
+			c.SetTLSConfig(b.cfg.TLSConfig)
+		})
 }
 
 func (b *BinlogSyncer) killConnection(conn *client.Conn, id uint32) {

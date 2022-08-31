@@ -68,12 +68,8 @@ func (c *Conn) writeAuthSwitchRequest(newAuthPluginName string) error {
 	data = append(data, EOF_HEADER)
 	data = append(data, []byte(newAuthPluginName)...)
 	data = append(data, 0x00)
-	rnd, err := RandomBuf(20)
-	if err != nil {
-		return err
-	}
 	// new auth data
-	c.salt = rnd
+	c.salt = RandomBuf(20)
 	data = append(data, c.salt...)
 	// the online doc states it's a string.EOF, however, the actual MySQL server add a \NUL to the end, without it, the
 	// official MySQL client will fail.
@@ -186,11 +182,16 @@ func (c *Conn) writeFieldList(fs []*Field, data []byte) error {
 func (c *Conn) writeFieldValues(fv []FieldValue) error {
 	data := make([]byte, 4, 1024)
 	for _, v := range fv {
-		tv, err := FormatTextValue(v.Value())
-		if err != nil {
-			return err
+		if v.Value() == nil {
+			// NULL value is encoded as 0xfb here
+			data = append(data, []byte{0xfb}...)
+		} else {
+			tv, err := FormatTextValue(v.Value())
+			if err != nil {
+				return err
+			}
+			data = append(data, PutLengthEncodedString(tv)...)
 		}
-		data = append(data, PutLengthEncodedString(tv)...)
 	}
 
 	return c.WritePacket(data)
