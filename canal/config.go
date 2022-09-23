@@ -12,6 +12,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
+	"github.com/siddontang/go-log/loggers"
 )
 
 type DumpConfig struct {
@@ -91,7 +92,7 @@ type Config struct {
 	TLSConfig *tls.Config
 
 	//Set Logger
-	Logger *log.Logger
+	Logger loggers.Advanced
 
 	//Set Dialer
 	Dialer client.Dialer
