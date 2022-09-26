@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/siddontang/go-log/log"
+	"github.com/siddontang/go-log/loggers"
 )
 
 type masterInfo struct {
@@ -16,7 +16,7 @@ type masterInfo struct {
 
 	timestamp uint32
 
-	logger *log.Logger
+	logger loggers.Advanced
 }
 
 func (m *masterInfo) Update(pos mysql.Position) {

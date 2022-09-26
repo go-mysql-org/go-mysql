@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/siddontang/go-log/loggers"
+
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
@@ -112,7 +114,7 @@ type BinlogSyncerConfig struct {
 	Option func(*client.Conn) error
 
 	// Set Logger
-	Logger *log.Logger
+	Logger loggers.Advanced
 
 	// Set Dialer
 	Dialer client.Dialer
