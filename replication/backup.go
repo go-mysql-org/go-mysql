@@ -7,11 +7,11 @@ import (
 	"path"
 	"time"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
-// StartBackup: Like mysqlbinlog remote raw backup
+// Like mysqlbinlog remote raw backup
 // Backup remote binlog from position (filename, offset) and write in backupDir
 func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Duration) error {
 	if timeout == 0 {
@@ -22,9 +22,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 	// Force use raw mode
 	b.parser.SetRawMode(true)
 
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		return errors.Trace(err)
-	}
+	os.MkdirAll(backupDir, 0755)
 
 	s, err := b.StartSync(p)
 	if err != nil {
@@ -42,7 +40,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 	}()
 
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		e, err := s.GetEvent(ctx)
 		cancel()
 
@@ -84,6 +82,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			if _, err = f.Write(BinLogFileHeader); err != nil {
 				return errors.Trace(err)
 			}
+
 		}
 
 		if n, err := f.Write(e.RawData); err != nil {
@@ -92,4 +91,6 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			return errors.Trace(io.ErrShortWrite)
 		}
 	}
+
+	return nil
 }

@@ -2,18 +2,14 @@ package mysql
 
 import (
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha1"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
-	mrand "math/rand"
 	"runtime"
 	"strings"
-	"time"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	"github.com/siddontang/go/hack"
 )
 
@@ -52,72 +48,24 @@ func CalcPassword(scramble, password []byte) []byte {
 	return scramble
 }
 
-// CalcCachingSha2Password: Hash password using MySQL 8+ method (SHA256)
-func CalcCachingSha2Password(scramble []byte, password string) []byte {
-	if len(password) == 0 {
-		return nil
-	}
-
-	// XOR(SHA256(password), SHA256(SHA256(SHA256(password)), scramble))
-
-	crypt := sha256.New()
-	crypt.Write([]byte(password))
-	message1 := crypt.Sum(nil)
-
-	crypt.Reset()
-	crypt.Write(message1)
-	message1Hash := crypt.Sum(nil)
-
-	crypt.Reset()
-	crypt.Write(message1Hash)
-	crypt.Write(scramble)
-	message2 := crypt.Sum(nil)
-
-	for i := range message1 {
-		message1[i] ^= message2[i]
-	}
-
-	return message1
-}
-
-func EncryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, error) {
-	plain := make([]byte, len(password)+1)
-	copy(plain, password)
-	for i := range plain {
-		j := i % len(seed)
-		plain[i] ^= seed[j]
-	}
-	sha1v := sha1.New()
-	return rsa.EncryptOAEP(sha1v, rand.Reader, pub, plain, nil)
-}
-
-// AppendLengthEncodedInteger: encodes a uint64 value and appends it to the given bytes slice
-func AppendLengthEncodedInteger(b []byte, n uint64) []byte {
-	switch {
-	case n <= 250:
-		return append(b, byte(n))
-
-	case n <= 0xffff:
-		return append(b, 0xfc, byte(n), byte(n>>8))
-
-	case n <= 0xffffff:
-		return append(b, 0xfd, byte(n), byte(n>>8), byte(n>>16))
-	}
-	return append(b, 0xfe, byte(n), byte(n>>8), byte(n>>16), byte(n>>24),
-		byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
-}
-
-func RandomBuf(size int) []byte {
+func RandomBuf(size int) ([]byte, error) {
 	buf := make([]byte, size)
-	mrand.Seed(time.Now().UTC().UnixNano())
-	min, max := 30, 127
-	for i := 0; i < size; i++ {
-		buf[i] = byte(min + mrand.Intn(max-min))
+
+	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
+		return nil, errors.Trace(err)
 	}
-	return buf
+
+	// avoid to generate '\0'
+	for i, b := range buf {
+		if uint8(b) == 0 {
+			buf[i] = '0'
+		}
+	}
+
+	return buf, nil
 }
 
-// FixedLengthInt: little endian
+// little endian
 func FixedLengthInt(buf []byte) uint64 {
 	var num uint64 = 0
 	for i, b := range buf {
@@ -126,7 +74,7 @@ func FixedLengthInt(buf []byte) uint64 {
 	return num
 }
 
-// BFixedLengthInt: big endian
+// big endian
 func BFixedLengthInt(buf []byte) uint64 {
 	var num uint64 = 0
 	for i, b := range buf {
@@ -136,33 +84,39 @@ func BFixedLengthInt(buf []byte) uint64 {
 }
 
 func LengthEncodedInt(b []byte) (num uint64, isNull bool, n int) {
-	if len(b) == 0 {
-		return 0, true, 0
-	}
-
 	switch b[0] {
+
 	// 251: NULL
 	case 0xfb:
-		return 0, true, 1
+		n = 1
+		isNull = true
+		return
 
-		// 252: value of following 2
+	// 252: value of following 2
 	case 0xfc:
-		return uint64(b[1]) | uint64(b[2])<<8, false, 3
+		num = uint64(b[1]) | uint64(b[2])<<8
+		n = 3
+		return
 
-		// 253: value of following 3
+	// 253: value of following 3
 	case 0xfd:
-		return uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16, false, 4
+		num = uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16
+		n = 4
+		return
 
-		// 254: value of following 8
+	// 254: value of following 8
 	case 0xfe:
-		return uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16 |
-				uint64(b[4])<<24 | uint64(b[5])<<32 | uint64(b[6])<<40 |
-				uint64(b[7])<<48 | uint64(b[8])<<56,
-			false, 9
+		num = uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16 |
+			uint64(b[4])<<24 | uint64(b[5])<<32 | uint64(b[6])<<40 |
+			uint64(b[7])<<48 | uint64(b[8])<<56
+		n = 9
+		return
 	}
 
 	// 0-250: value of first byte
-	return uint64(b[0]), false, 1
+	num = uint64(b[0])
+	n = 1
+	return
 }
 
 func PutLengthEncodedInt(n uint64) []byte {
@@ -183,26 +137,23 @@ func PutLengthEncodedInt(n uint64) []byte {
 	return nil
 }
 
-// LengthEncodedString returns the string read as a bytes slice, whether the value is NULL,
-// the number of bytes read and an error, in case the string is longer than
-// the input slice
-func LengthEncodedString(b []byte) ([]byte, bool, int, error) {
+func LengthEnodedString(b []byte) ([]byte, bool, int, error) {
 	// Get length
 	num, isNull, n := LengthEncodedInt(b)
 	if num < 1 {
-		return b[n:n], isNull, n, nil
+		return nil, isNull, n, nil
 	}
 
 	n += int(num)
 
 	// Check data length
 	if len(b) >= n {
-		return b[n-int(num) : n : n], false, n, nil
+		return b[n-int(num) : n], false, n, nil
 	}
 	return nil, false, n, io.EOF
 }
 
-func SkipLengthEncodedString(b []byte) (int, error) {
+func SkipLengthEnodedString(b []byte) (int, error) {
 	// Get length
 	num, _, n := LengthEncodedInt(b)
 	if num < 1 {
@@ -340,7 +291,7 @@ var (
 	EncodeMap [256]byte
 )
 
-// Escape: only support utf-8
+// only support utf-8
 func Escape(sql string) string {
 	dest := make([]byte, 0, 2*len(sql))
 

@@ -2,21 +2,20 @@ package client
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"math"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
+	. "github.com/siddontang/go-mysql/mysql"
 )
 
 type Stmt struct {
-	conn *Conn
-	id   uint32
+	conn  *Conn
+	id    uint32
+	query string
 
-	params   int
-	columns  int
-	warnings int
+	params  int
+	columns int
 }
 
 func (s *Stmt) ParamNum() int {
@@ -27,24 +26,12 @@ func (s *Stmt) ColumnNum() int {
 	return s.columns
 }
 
-func (s *Stmt) WarningsNum() int {
-	return s.warnings
-}
-
 func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 	if err := s.write(args...); err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	return s.conn.readResult(true)
-}
-
-func (s *Stmt) ExecuteSelectStreaming(result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback, args ...interface{}) error {
-	if err := s.write(args...); err != nil {
-		return errors.Trace(err)
-	}
-
-	return s.conn.readResultStreaming(true, result, perRowCb, perResCb)
 }
 
 func (s *Stmt) Close() error {
@@ -68,7 +55,7 @@ func (s *Stmt) write(args ...interface{}) error {
 	//NULL-bitmap, length: (num-params+7)
 	nullBitmap := make([]byte, (paramsNum+7)>>3)
 
-	length := 1 + 4 + 1 + 4 + ((paramsNum + 7) >> 3) + 1 + (paramsNum << 1)
+	var length int = int(1 + 4 + 1 + 4 + ((paramsNum + 7) >> 3) + 1 + (paramsNum << 1))
 
 	var newParamBoundFlag byte = 0
 
@@ -104,11 +91,11 @@ func (s *Stmt) write(args ...interface{}) error {
 		case uint16:
 			paramTypes[i<<1] = MYSQL_TYPE_SHORT
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint16ToBytes(v)
+			paramValues[i] = Uint16ToBytes(uint16(v))
 		case uint32:
 			paramTypes[i<<1] = MYSQL_TYPE_LONG
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint32ToBytes(v)
+			paramValues[i] = Uint32ToBytes(uint32(v))
 		case uint:
 			paramTypes[i<<1] = MYSQL_TYPE_LONGLONG
 			paramTypes[(i<<1)+1] = 0x80
@@ -116,13 +103,14 @@ func (s *Stmt) write(args ...interface{}) error {
 		case uint64:
 			paramTypes[i<<1] = MYSQL_TYPE_LONGLONG
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint64ToBytes(v)
+			paramValues[i] = Uint64ToBytes(uint64(v))
 		case bool:
 			paramTypes[i<<1] = MYSQL_TYPE_TINY
 			if v {
 				paramValues[i] = []byte{1}
 			} else {
 				paramValues[i] = []byte{0}
+
 			}
 		case float32:
 			paramTypes[i<<1] = MYSQL_TYPE_FLOAT
@@ -134,9 +122,6 @@ func (s *Stmt) write(args ...interface{}) error {
 			paramTypes[i<<1] = MYSQL_TYPE_STRING
 			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
 		case []byte:
-			paramTypes[i<<1] = MYSQL_TYPE_STRING
-			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
-		case json.RawMessage:
 			paramTypes[i<<1] = MYSQL_TYPE_STRING
 			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
 		default:
@@ -213,8 +198,7 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	pos += 2
 
 	//warnings
-	s.warnings = int(binary.LittleEndian.Uint16(data[pos:]))
-	// pos += 2
+	//warnings = binary.LittleEndian.Uint16(data[pos:])
 
 	if s.params > 0 {
 		if err := s.conn.readUntilEOF(); err != nil {

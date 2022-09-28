@@ -1,17 +1,11 @@
 package client
 
 import (
-	"bytes"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/binary"
-	"encoding/pem"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
+	. "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
-
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 func (c *Conn) readUntilEOF() (err error) {
@@ -29,6 +23,7 @@ func (c *Conn) readUntilEOF() (err error) {
 			return
 		}
 	}
+	return
 }
 
 func (c *Conn) isEOFPacket(data []byte) bool {
@@ -37,7 +32,7 @@ func (c *Conn) isEOFPacket(data []byte) bool {
 
 func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 	var n int
-	var pos = 1
+	var pos int = 1
 
 	r := new(Result)
 
@@ -52,12 +47,12 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 		pos += 2
 
 		//todo:strict_mode, check warnings as error
-		r.Warnings = binary.LittleEndian.Uint16(data[pos:])
-		// pos += 2
+		//Warnings := binary.LittleEndian.Uint16(data[pos:])
+		//pos += 2
 	} else if c.capability&CLIENT_TRANSACTIONS > 0 {
 		r.Status = binary.LittleEndian.Uint16(data[pos:])
 		c.status = r.Status
-		// pos += 2
+		pos += 2
 	}
 
 	//new ok package will check CLIENT_SESSION_TRACK too, but I don't support it now.
@@ -69,7 +64,7 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 func (c *Conn) handleErrorPacket(data []byte) error {
 	e := new(MyError)
 
-	var pos = 1
+	var pos int = 1
 
 	e.Code = binary.LittleEndian.Uint16(data[pos:])
 	pos += 2
@@ -84,120 +79,6 @@ func (c *Conn) handleErrorPacket(data []byte) error {
 	e.Message = hack.String(data[pos:])
 
 	return e
-}
-
-func (c *Conn) handleAuthResult() error {
-	data, switchToPlugin, err := c.readAuthResult()
-	if err != nil {
-		return err
-	}
-	// handle auth switch, only support 'sha256_password', and 'caching_sha2_password'
-	if switchToPlugin != "" {
-		//fmt.Printf("now switching auth plugin to '%s'\n", switchToPlugin)
-		if data == nil {
-			data = c.salt
-		} else {
-			copy(c.salt, data)
-		}
-		c.authPluginName = switchToPlugin
-		auth, addNull, err := c.genAuthResponse(data)
-		if err != nil {
-			return err
-		}
-
-		if err = c.WriteAuthSwitchPacket(auth, addNull); err != nil {
-			return err
-		}
-
-		// Read Result Packet
-		data, switchToPlugin, err = c.readAuthResult()
-		if err != nil {
-			return err
-		}
-
-		// Do not allow to change the auth plugin more than once
-		if switchToPlugin != "" {
-			return errors.Errorf("can not switch auth plugin more than once")
-		}
-	}
-
-	// handle caching_sha2_password
-	if c.authPluginName == AUTH_CACHING_SHA2_PASSWORD {
-		if data == nil {
-			return nil // auth already succeeded
-		}
-		if data[0] == CACHE_SHA2_FAST_AUTH {
-			_, err = c.readOK()
-			return err
-		} else if data[0] == CACHE_SHA2_FULL_AUTH {
-			// need full authentication
-			if c.tlsConfig != nil || c.proto == "unix" {
-				if err = c.WriteClearAuthPacket(c.password); err != nil {
-					return err
-				}
-			} else {
-				if err = c.WritePublicKeyAuthPacket(c.password, c.salt); err != nil {
-					return err
-				}
-			}
-			_, err = c.readOK()
-			return err
-		} else {
-			return errors.Errorf("invalid packet %x", data[0])
-		}
-	} else if c.authPluginName == AUTH_SHA256_PASSWORD {
-		if len(data) == 0 {
-			return nil // auth already succeeded
-		}
-		block, _ := pem.Decode(data)
-		pub, err := x509.ParsePKIXPublicKey(block.Bytes)
-		if err != nil {
-			return err
-		}
-		// send encrypted password
-		err = c.WriteEncryptedPassword(c.password, c.salt, pub.(*rsa.PublicKey))
-		if err != nil {
-			return err
-		}
-		_, err = c.readOK()
-		return err
-	}
-	return nil
-}
-
-func (c *Conn) readAuthResult() ([]byte, string, error) {
-	data, err := c.ReadPacket()
-	if err != nil {
-		return nil, "", err
-	}
-
-	// see: https://insidemysql.com/preparing-your-community-connector-for-mysql-8-part-2-sha256/
-	// packet indicator
-	switch data[0] {
-	case OK_HEADER:
-		_, err := c.handleOKPacket(data)
-		return nil, "", err
-
-	case MORE_DATE_HEADER:
-		return data[1:], "", err
-
-	case EOF_HEADER:
-		// server wants to switch auth
-		if len(data) < 1 {
-			// https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::OldAuthSwitchRequest
-			return nil, AUTH_MYSQL_OLD_PASSWORD, nil
-		}
-		pluginEndIndex := bytes.IndexByte(data, 0x00)
-		if pluginEndIndex < 0 {
-			return nil, "", errors.New("invalid packet")
-		}
-		plugin := string(data[1:pluginEndIndex])
-		authData := data[pluginEndIndex+1:]
-		return authData, plugin, nil
-
-	default: // Error otherwise
-		return nil, "", c.handleErrorPacket(data)
-	}
 }
 
 func (c *Conn) readOK() (*Result, error) {
@@ -216,66 +97,31 @@ func (c *Conn) readOK() (*Result, error) {
 }
 
 func (c *Conn) readResult(binary bool) (*Result, error) {
-	bs := utils.ByteSliceGet(16)
-	defer utils.ByteSlicePut(bs)
-	var err error
-	bs.B, err = c.ReadPacketReuseMem(bs.B[:0])
+	data, err := c.ReadPacket()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	switch bs.B[0] {
-	case OK_HEADER:
-		return c.handleOKPacket(bs.B)
-	case ERR_HEADER:
-		return nil, c.handleErrorPacket(bytes.Repeat(bs.B, 1))
-	case LocalInFile_HEADER:
+	if data[0] == OK_HEADER {
+		return c.handleOKPacket(data)
+	} else if data[0] == ERR_HEADER {
+		return nil, c.handleErrorPacket(data)
+	} else if data[0] == LocalInFile_HEADER {
 		return nil, ErrMalformPacket
-	default:
-		return c.readResultset(bs.B, binary)
-	}
-}
-
-func (c *Conn) readResultStreaming(binary bool, result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback) error {
-	bs := utils.ByteSliceGet(16)
-	defer utils.ByteSlicePut(bs)
-	var err error
-	bs.B, err = c.ReadPacketReuseMem(bs.B[:0])
-	if err != nil {
-		return errors.Trace(err)
 	}
 
-	switch bs.B[0] {
-	case OK_HEADER:
-		// https://dev.mysql.com/doc/internals/en/com-query-response.html
-		// 14.6.4.1 COM_QUERY Response
-		// If the number of columns in the resultset is 0, this is a OK_Packet.
-
-		okResult, err := c.handleOKPacket(bs.B)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		result.Status = okResult.Status
-		result.AffectedRows = okResult.AffectedRows
-		result.InsertId = okResult.InsertId
-		result.Warnings = okResult.Warnings
-		if result.Resultset == nil {
-			result.Resultset = NewResultset(0)
-		} else {
-			result.Reset(0)
-		}
-		return nil
-	case ERR_HEADER:
-		return c.handleErrorPacket(bytes.Repeat(bs.B, 1))
-	case LocalInFile_HEADER:
-		return ErrMalformPacket
-	default:
-		return c.readResultsetStreaming(bs.B, binary, result, perRowCb, perResCb)
-	}
+	return c.readResultset(data, binary)
 }
 
 func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
+	result := &Result{
+		Status:       0,
+		InsertId:     0,
+		AffectedRows: 0,
+
+		Resultset: &Resultset{},
+	}
+
 	// column count
 	count, _, n := LengthEncodedInt(data)
 
@@ -283,9 +129,8 @@ func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 		return nil, ErrMalformPacket
 	}
 
-	result := &Result{
-		Resultset: NewResultset(int(count)),
-	}
+	result.Fields = make([]*Field, count)
+	result.FieldNames = make(map[string]int, count)
 
 	if err := c.readResultColumns(result); err != nil {
 		return nil, errors.Trace(err)
@@ -298,59 +143,20 @@ func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 	return result, nil
 }
 
-func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback) error {
-	columnCount, _, n := LengthEncodedInt(data)
-
-	if n-len(data) != 0 {
-		return ErrMalformPacket
-	}
-
-	if result.Resultset == nil {
-		result.Resultset = NewResultset(int(columnCount))
-	} else {
-		// Reuse memory if can
-		result.Reset(int(columnCount))
-	}
-
-	// this is a streaming resultset
-	result.Resultset.Streaming = StreamingSelect
-
-	if err := c.readResultColumns(result); err != nil {
-		return errors.Trace(err)
-	}
-
-	if perResCb != nil {
-		if err := perResCb(result); err != nil {
-			return err
-		}
-	}
-
-	if err := c.readResultRowsStreaming(result, binary, perRowCb); err != nil {
-		return errors.Trace(err)
-	}
-
-	// this resultset is done streaming
-	result.Resultset.StreamingDone = true
-
-	return nil
-}
-
 func (c *Conn) readResultColumns(result *Result) (err error) {
 	var i int = 0
 	var data []byte
 
 	for {
-		rawPkgLen := len(result.RawPkg)
-		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
+		data, err = c.ReadPacket()
 		if err != nil {
 			return
 		}
-		data = result.RawPkg[rawPkgLen:]
 
 		// EOF Packet
 		if c.isEOFPacket(data) {
 			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				//result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				//todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
@@ -363,10 +169,7 @@ func (c *Conn) readResultColumns(result *Result) (err error) {
 			return
 		}
 
-		if result.Fields[i] == nil {
-			result.Fields[i] = &Field{}
-		}
-		err = result.Fields[i].Parse(data)
+		result.Fields[i], err = FieldData(data).Parse()
 		if err != nil {
 			return
 		}
@@ -381,17 +184,16 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 	var data []byte
 
 	for {
-		rawPkgLen := len(result.RawPkg)
-		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
+		data, err = c.ReadPacket()
+
 		if err != nil {
 			return
 		}
-		data = result.RawPkg[rawPkgLen:]
 
 		// EOF Packet
 		if c.isEOFPacket(data) {
 			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				//result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				//todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
@@ -400,66 +202,14 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 			break
 		}
 
-		if data[0] == ERR_HEADER {
-			return c.handleErrorPacket(data)
-		}
-
 		result.RowDatas = append(result.RowDatas, data)
 	}
 
-	if cap(result.Values) < len(result.RowDatas) {
-		result.Values = make([][]FieldValue, len(result.RowDatas))
-	} else {
-		result.Values = result.Values[:len(result.RowDatas)]
-	}
+	result.Values = make([][]interface{}, len(result.RowDatas))
 
 	for i := range result.Values {
-		result.Values[i], err = result.RowDatas[i].Parse(result.Fields, isBinary, result.Values[i])
+		result.Values[i], err = result.RowDatas[i].Parse(result.Fields, isBinary)
 
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-
-	return nil
-}
-
-func (c *Conn) readResultRowsStreaming(result *Result, isBinary bool, perRowCb SelectPerRowCallback) (err error) {
-	var (
-		data []byte
-		row  []FieldValue
-	)
-
-	for {
-		data, err = c.ReadPacketReuseMem(data[:0])
-		if err != nil {
-			return
-		}
-
-		// EOF Packet
-		if c.isEOFPacket(data) {
-			if c.capability&CLIENT_PROTOCOL_41 > 0 {
-				result.Warnings = binary.LittleEndian.Uint16(data[1:])
-				// todo add strict_mode, warning will be treat as error
-				result.Status = binary.LittleEndian.Uint16(data[3:])
-				c.status = result.Status
-			}
-
-			break
-		}
-
-		if data[0] == ERR_HEADER {
-			return c.handleErrorPacket(data)
-		}
-
-		// Parse this row
-		row, err = RowData(data).Parse(result.Fields, isBinary, row)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		// Send the row to "userland" code
-		err = perRowCb(row)
 		if err != nil {
 			return errors.Trace(err)
 		}

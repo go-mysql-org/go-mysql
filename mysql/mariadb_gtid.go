@@ -3,12 +3,11 @@ package mysql
 import (
 	"bytes"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
+	"github.com/juju/errors"
+	"github.com/siddontang/go/hack"
 )
 
 // MariadbGTID represent mariadb gtid, [domain ID]-[server-id]-[sequence]
@@ -73,27 +72,13 @@ func (gtid *MariadbGTID) Clone() *MariadbGTID {
 	return o
 }
 
-func (gtid *MariadbGTID) forward(newer *MariadbGTID) error {
+func (gtid *MariadbGTID) forward(newer *MariadbGTID) error  {
 	if newer.DomainID != gtid.DomainID {
 		return errors.Errorf("%s is not same with doamin of %s", newer, gtid)
 	}
 
-	/*
-		Here's a simplified example of binlog events.
-		Although I think one domain should have only one update at same time, we can't limit the user's usage.
-		we just output a warn log and let it go on
-		| mysqld-bin.000001 | 1453 | Gtid              |       112 |        1495 | BEGIN GTID 0-112-6  |
-		| mysqld-bin.000001 | 1624 | Xid               |       112 |        1655 | COMMIT xid=74       |
-		| mysqld-bin.000001 | 1655 | Gtid              |       112 |        1697 | BEGIN GTID 0-112-7  |
-		| mysqld-bin.000001 | 1826 | Xid               |       112 |        1857 | COMMIT xid=75       |
-		| mysqld-bin.000001 | 1857 | Gtid              |       111 |        1899 | BEGIN GTID 0-111-5  |
-		| mysqld-bin.000001 | 1981 | Xid               |       111 |        2012 | COMMIT xid=77       |
-		| mysqld-bin.000001 | 2012 | Gtid              |       112 |        2054 | BEGIN GTID 0-112-8  |
-		| mysqld-bin.000001 | 2184 | Xid               |       112 |        2215 | COMMIT xid=116      |
-		| mysqld-bin.000001 | 2215 | Gtid              |       111 |        2257 | BEGIN GTID 0-111-6  |
-	*/
 	if newer.SequenceNumber <= gtid.SequenceNumber {
-		log.Warnf("out of order binlog appears with gtid %s vs current position gtid %s", newer, gtid)
+		return errors.Errorf("out of order binlog appears with gtid %s vs current position gtid %s", newer, gtid)
 	}
 
 	gtid.ServerID = newer.ServerID
@@ -113,13 +98,18 @@ func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 	if str == "" {
 		return s, nil
 	}
-	err := s.Update(str)
-	if err != nil {
-		return nil, err
+
+	sp := strings.Split(str, ",")
+
+	//todo, handle redundant same uuid
+	for i := 0; i < len(sp); i++ {
+		err := s.Update(sp[i])
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 	return s, nil
 }
-
 // AddSet adds mariadb gtid into mariadb gtid set
 func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 	if gtid == nil {
@@ -141,29 +131,18 @@ func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 
 // Update updates mariadb gtid set
 func (s *MariadbGTIDSet) Update(GTIDStr string) error {
-	sp := strings.Split(GTIDStr, ",")
-	//todo, handle redundant same uuid
-	for i := 0; i < len(sp); i++ {
-		gtid, err := ParseMariadbGTID(sp[i])
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = s.AddSet(gtid)
-		if err != nil {
-			return errors.Trace(err)
-		}
+	gtid, err := ParseMariadbGTID(GTIDStr)
+	if err != nil {
+		return err
 	}
-	return nil
+
+	err = s.AddSet(gtid)
+	return errors.Trace(err)
 }
 
-func (s *MariadbGTIDSet) String() string {
-	sets := make([]string, 0, len(s.Sets))
-	for _, set := range s.Sets {
-		sets = append(sets, set.String())
-	}
-	sort.Strings(sets)
 
-	return strings.Join(sets, ",")
+func (s *MariadbGTIDSet) String() string {
+	return hack.String(s.Encode())
 }
 
 // Encode encodes mariadb gtid set
@@ -197,7 +176,7 @@ func (s *MariadbGTIDSet) Equal(o GTIDSet) bool {
 	if !ok {
 		return false
 	}
-
+	
 	if len(other.Sets) != len(s.Sets) {
 		return false
 	}

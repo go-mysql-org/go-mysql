@@ -2,28 +2,15 @@ package replication
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"hash/crc32"
 	"io"
 	"os"
 	"sync/atomic"
-	"time"
 
-	"github.com/pingcap/errors"
-
-	"github.com/go-mysql-org/go-mysql/utils"
-)
-
-var (
-	// ErrChecksumMismatch indicates binlog checksum mismatch.
-	ErrChecksumMismatch = errors.New("binlog checksum mismatch, data may be corrupted")
+	"github.com/juju/errors"
 )
 
 type BinlogParser struct {
-	// "mysql" or "mariadb", if not set, use "mysql" by default
-	flavor string
-
 	format *FormatDescriptionEvent
 
 	tables map[uint64]*TableMapEvent
@@ -31,21 +18,19 @@ type BinlogParser struct {
 	// for rawMode, we only parse FormatDescriptionEvent and RotateEvent
 	rawMode bool
 
-	parseTime               bool
-	timestampStringLocation *time.Location
+	parseTime bool
 
 	// used to start/stop processing
 	stopProcessing uint32
 
-	useDecimal          bool
-	ignoreJSONDecodeErr bool
-	verifyChecksum      bool
+	useDecimal bool
 }
 
 func NewBinlogParser() *BinlogParser {
 	p := new(BinlogParser)
 
 	p.tables = make(map[uint64]*TableMapEvent)
+	// p.stop = make(uint32)
 
 	return p
 }
@@ -82,7 +67,7 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 		offset = 4
 	} else if offset > 4 {
 		//  FORMAT_DESCRIPTION event should be read by default always (despite that fact passed offset may be higher than 4)
-		if _, err = f.Seek(4, io.SeekStart); err != nil {
+		if _, err = f.Seek(4, os.SEEK_SET); err != nil {
 			return errors.Errorf("seek %s to %d error %v", name, offset, err)
 		}
 
@@ -91,7 +76,7 @@ func (p *BinlogParser) ParseFile(name string, offset int64, onEvent OnEventFunc)
 		}
 	}
 
-	if _, err = f.Seek(offset, io.SeekStart); err != nil {
+	if _, err = f.Seek(offset, os.SEEK_SET); err != nil {
 		return errors.Errorf("seek %s to %d error %v", name, offset, err)
 	}
 
@@ -112,50 +97,48 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 	var err error
 	var n int64
 
-	// Here we use `sync.Pool` to avoid allocate/destroy buffers frequently.
-	buf := utils.BytesBufferGet()
-	defer utils.BytesBufferPut(buf)
+	headBuf := make([]byte, EventHeaderSize)
 
-	if n, err = io.CopyN(buf, r, EventHeaderSize); err == io.EOF {
+	if _, err = io.ReadFull(r, headBuf); err == io.EOF {
 		return true, nil
 	} else if err != nil {
-		return false, errors.Errorf("get event header err %v, need %d but got %d", err, EventHeaderSize, n)
+		return false, errors.Trace(err)
 	}
 
 	var h *EventHeader
-	h, err = p.parseHeader(buf.Bytes())
+	h, err = p.parseHeader(headBuf)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 
-	if h.EventSize < uint32(EventHeaderSize) {
+	if h.EventSize <= uint32(EventHeaderSize) {
 		return false, errors.Errorf("invalid event header, event size is %d, too small", h.EventSize)
 	}
-	if n, err = io.CopyN(buf, r, int64(h.EventSize-EventHeaderSize)); err != nil {
-		return false, errors.Errorf("get event err %v, need %d but got %d", err, h.EventSize, n)
-	}
-	if buf.Len() != int(h.EventSize) {
-		return false, errors.Errorf("invalid raw data size in event %s, need %d but got %d", h.EventType, h.EventSize, buf.Len())
+
+	var buf bytes.Buffer
+	if n, err = io.CopyN(&buf, r, int64(h.EventSize)-int64(EventHeaderSize)); err != nil {
+		return false, errors.Errorf("get event body err %v, need %d - %d, but got %d", err, h.EventSize, EventHeaderSize, n)
 	}
 
-	var rawData []byte
-	rawData = append(rawData, buf.Bytes()...)
-	bodyLen := int(h.EventSize) - EventHeaderSize
-	body := rawData[EventHeaderSize:]
-	if len(body) != bodyLen {
-		return false, errors.Errorf("invalid body data size in event %s, need %d but got %d", h.EventType, bodyLen, len(body))
+	data := buf.Bytes()
+	rawData := data
+
+	eventLen := int(h.EventSize) - EventHeaderSize
+
+	if len(data) != eventLen {
+		return false, errors.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
 	}
 
 	var e Event
-	e, err = p.parseEvent(h, body, rawData)
+	e, err = p.parseEvent(h, data)
 	if err != nil {
-		if err == errMissingTableMapEvent {
+		if _, ok := err.(errMissingTableMapEvent); ok {
 			return false, nil
 		}
 		return false, errors.Trace(err)
 	}
 
-	if err = onEvent(&BinlogEvent{RawData: rawData, Header: h, Event: e}); err != nil {
+	if err = onEvent(&BinlogEvent{rawData, h, e}); err != nil {
 		return false, errors.Trace(err)
 	}
 
@@ -163,6 +146,7 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 }
 
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
+
 	for {
 		if atomic.LoadUint32(&p.stopProcessing) == 1 {
 			break
@@ -170,7 +154,7 @@ func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
 
 		done, err := p.parseSingleEvent(r, onEvent)
 		if err != nil {
-			if err == errMissingTableMapEvent {
+			if _, ok := err.(errMissingTableMapEvent); ok {
 				continue
 			}
 			return errors.Trace(err)
@@ -192,24 +176,8 @@ func (p *BinlogParser) SetParseTime(parseTime bool) {
 	p.parseTime = parseTime
 }
 
-func (p *BinlogParser) SetTimestampStringLocation(timestampStringLocation *time.Location) {
-	p.timestampStringLocation = timestampStringLocation
-}
-
 func (p *BinlogParser) SetUseDecimal(useDecimal bool) {
 	p.useDecimal = useDecimal
-}
-
-func (p *BinlogParser) SetIgnoreJSONDecodeError(ignoreJSONDecodeErr bool) {
-	p.ignoreJSONDecodeErr = ignoreJSONDecodeErr
-}
-
-func (p *BinlogParser) SetVerifyChecksum(verify bool) {
-	p.verifyChecksum = verify
-}
-
-func (p *BinlogParser) SetFlavor(flavor string) {
-	p.flavor = flavor
 }
 
 func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
@@ -222,7 +190,7 @@ func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
 	return h, nil
 }
 
-func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (Event, error) {
+func (p *BinlogParser) parseEvent(h *EventHeader, data []byte) (Event, error) {
 	var e Event
 
 	if h.EventType == FORMAT_DESCRIPTION_EVENT {
@@ -230,11 +198,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 		e = p.format
 	} else {
 		if p.format != nil && p.format.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
-			err := p.verifyCrc32Checksum(rawData)
-			if err != nil {
-				return nil, err
-			}
-			data = data[0 : len(data)-BinlogChecksumLength]
+			data = data[0 : len(data)-4]
 		}
 
 		if h.EventType == ROTATE_EVENT {
@@ -246,9 +210,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 			case XID_EVENT:
 				e = &XIDEvent{}
 			case TABLE_MAP_EVENT:
-				te := &TableMapEvent{
-					flavor: p.flavor,
-				}
+				te := &TableMapEvent{}
 				if p.format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {
 					te.tableIDSize = 4
 				} else {
@@ -269,8 +231,6 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = &RowsQueryEvent{}
 			case GTID_EVENT:
 				e = &GTIDEvent{}
-			case ANONYMOUS_GTID_EVENT:
-				e = &GTIDEvent{}
 			case BEGIN_LOAD_QUERY_EVENT:
 				e = &BeginLoadQueryEvent{}
 			case EXECUTE_LOAD_QUERY_EVENT:
@@ -285,10 +245,6 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				ee := &MariadbGTIDEvent{}
 				ee.GTID.ServerID = h.ServerID
 				e = ee
-			case PREVIOUS_GTIDS_EVENT:
-				e = &PreviousGTIDsEvent{}
-			case INTVAR_EVENT:
-				e = &IntVarEvent{}
 			default:
 				e = &GenericEvent{}
 			}
@@ -315,7 +271,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 	return e, nil
 }
 
-// Parse: Given the bytes for a a binary log event: return the decoded event.
+// Given the bytes for a a binary log event: return the decoded event.
 // With the exception of the FORMAT_DESCRIPTION_EVENT event type
 // there must have previously been passed a FORMAT_DESCRIPTION_EVENT
 // into the parser for this to work properly on any given event.
@@ -337,32 +293,12 @@ func (p *BinlogParser) Parse(data []byte) (*BinlogEvent, error) {
 		return nil, fmt.Errorf("invalid data size %d in event %s, less event length %d", len(data), h.EventType, eventLen)
 	}
 
-	e, err := p.parseEvent(h, data, rawData)
+	e, err := p.parseEvent(h, data)
 	if err != nil {
 		return nil, err
 	}
 
-	return &BinlogEvent{RawData: rawData, Header: h, Event: e}, nil
-}
-
-func (p *BinlogParser) verifyCrc32Checksum(rawData []byte) error {
-	if !p.verifyChecksum {
-		return nil
-	}
-
-	calculatedPart := rawData[0 : len(rawData)-BinlogChecksumLength]
-	expectedChecksum := rawData[len(rawData)-BinlogChecksumLength:]
-
-	// mysql use zlib's CRC32 implementation, which uses polynomial 0xedb88320UL.
-	// reference: https://github.com/madler/zlib/blob/master/crc32.c
-	// https://github.com/madler/zlib/blob/master/doc/rfc1952.txt#L419
-	checksum := crc32.ChecksumIEEE(calculatedPart)
-	computed := make([]byte, BinlogChecksumLength)
-	binary.LittleEndian.PutUint32(computed, checksum)
-	if !bytes.Equal(expectedChecksum, computed) {
-		return ErrChecksumMismatch
-	}
-	return nil
+	return &BinlogEvent{rawData, h, e}, nil
 }
 
 func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
@@ -376,9 +312,7 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 	e.needBitmap2 = false
 	e.tables = p.tables
 	e.parseTime = p.parseTime
-	e.timestampStringLocation = p.timestampStringLocation
 	e.useDecimal = p.useDecimal
-	e.ignoreJSONDecodeErr = p.ignoreJSONDecodeErr
 
 	switch h.EventType {
 	case WRITE_ROWS_EVENTv0:
