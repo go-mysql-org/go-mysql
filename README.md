@@ -123,8 +123,8 @@ A simple example:
 package main
 
 import (
-	"github.com/siddontang/go-log/log"
 	"github.com/go-mysql-org/go-mysql/canal"
+	"github.com/siddontang/go-log/log"
 )
 
 type MyEventHandler struct {

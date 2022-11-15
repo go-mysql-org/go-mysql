@@ -1104,13 +1104,13 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 	}
 
 	enumStrValueMap := map[int][]string{
-		38: []string{"a", "b"},
-		43: []string{"c", "d"},
+		38: {"a", "b"},
+		43: {"c", "d"},
 	}
 
 	setStrValueMap := map[int][]string{
-		39: []string{"1", "2"},
-		42: []string{"3", "4"},
+		39: {"1", "2"},
+		42: {"3", "4"},
 	}
 
 	geometryTypeMap := map[int]uint64{

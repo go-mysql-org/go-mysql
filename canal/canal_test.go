@@ -304,19 +304,19 @@ func TestDropTableExp(t *testing.T) {
 
 func TestWithoutSchemeExp(t *testing.T) {
 	cases := []replication.QueryEvent{
-		replication.QueryEvent{
+		{
 			Schema: []byte("test"),
 			Query:  []byte("drop table test0"),
 		},
-		replication.QueryEvent{
+		{
 			Schema: []byte("test"),
 			Query:  []byte("rename table `test0` to `testtmp`"),
 		},
-		replication.QueryEvent{
+		{
 			Schema: []byte("test"),
 			Query:  []byte("ALTER TABLE `test0` ADD `field2` DATE  NULL  AFTER `field1`;"),
 		},
-		replication.QueryEvent{
+		{
 			Schema: []byte("test"),
 			Query:  []byte("CREATE TABLE IF NOT EXISTS test0 (`id` int(10)) ENGINE=InnoDB"),
 		},

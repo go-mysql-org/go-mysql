@@ -102,12 +102,12 @@ func (s *clientTestSuite) TestConn_SetCapability(c *C) {
 		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
 	}
 
-	for _, cap := range caps {
-		c.Assert(s.c.ccaps&cap > 0, IsFalse)
-		s.c.SetCapability(cap)
-		c.Assert(s.c.ccaps&cap > 0, IsTrue)
-		s.c.UnsetCapability(cap)
-		c.Assert(s.c.ccaps&cap > 0, IsFalse)
+	for _, capI := range caps {
+		c.Assert(s.c.ccaps&capI > 0, IsFalse)
+		s.c.SetCapability(capI)
+		c.Assert(s.c.ccaps&capI > 0, IsTrue)
+		s.c.UnsetCapability(capI)
+		c.Assert(s.c.ccaps&capI > 0, IsFalse)
 	}
 }
 
@@ -186,7 +186,7 @@ func (s *clientTestSuite) TestConn_Select(c *C) {
 	c.Assert(ss, Equals, "a")
 
 	f, _ := result.GetFloat(0, 1)
-	c.Assert(f, Equals, float64(3.14))
+	c.Assert(f, Equals, 3.14)
 
 	e, _ := result.GetString(0, 2)
 	c.Assert(e, Equals, "test1")
@@ -195,7 +195,7 @@ func (s *clientTestSuite) TestConn_Select(c *C) {
 	c.Assert(ss, Equals, "a")
 
 	f, _ = result.GetFloatByName(0, "f")
-	c.Assert(f, Equals, float64(3.14))
+	c.Assert(f, Equals, 3.14)
 
 	e, _ = result.GetStringByName(0, "e")
 	c.Assert(e, Equals, "test1")
@@ -301,7 +301,7 @@ func (s *clientTestSuite) TestStmt_Select(c *C) {
 	c.Assert(ss, Equals, "a")
 
 	f, _ := result.GetFloat(0, 1)
-	c.Assert(f, Equals, float64(3.14))
+	c.Assert(f, Equals, 3.14)
 
 	e, _ := result.GetString(0, 2)
 	c.Assert(e, Equals, "test1")
@@ -310,7 +310,7 @@ func (s *clientTestSuite) TestStmt_Select(c *C) {
 	c.Assert(ss, Equals, "a")
 
 	f, _ = result.GetFloatByName(0, "f")
-	c.Assert(f, Equals, float64(3.14))
+	c.Assert(f, Equals, 3.14)
 
 	e, _ = result.GetStringByName(0, "e")
 	c.Assert(e, Equals, "test1")

@@ -774,7 +774,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 
 	needACK := false
 	if b.cfg.SemiSyncEnabled && (data[0] == SemiSyncIndicator) {
-		needACK = (data[1] == 0x01)
+		needACK = data[1] == 0x01
 		//skip semi sync header
 		data = data[2:]
 	}

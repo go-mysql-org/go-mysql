@@ -85,12 +85,12 @@ func (t *connTestSuite) TestCapability(c *check.C) {
 		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
 	}
 
-	for _, cap := range caps {
-		c.Assert(conn.HasCapability(cap), check.IsFalse)
-		conn.SetCapability(cap)
-		c.Assert(conn.HasCapability(cap), check.IsTrue)
-		c.Assert(conn.Capability()&cap > 0, check.IsTrue)
-		conn.UnsetCapability(cap)
-		c.Assert(conn.HasCapability(cap), check.IsFalse)
+	for _, capI := range caps {
+		c.Assert(conn.HasCapability(capI), check.IsFalse)
+		conn.SetCapability(capI)
+		c.Assert(conn.HasCapability(capI), check.IsTrue)
+		c.Assert(conn.Capability()&capI > 0, check.IsTrue)
+		conn.UnsetCapability(capI)
+		c.Assert(conn.HasCapability(capI), check.IsFalse)
 	}
 }

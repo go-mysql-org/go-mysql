@@ -108,11 +108,11 @@ func (h *EventHeader) Dump(w io.Writer) {
 }
 
 var (
-	checksumVersionSplitMysql   []int = []int{5, 6, 1}
-	checksumVersionProductMysql int   = (checksumVersionSplitMysql[0]*256+checksumVersionSplitMysql[1])*256 + checksumVersionSplitMysql[2]
+	checksumVersionSplitMysql   = []int{5, 6, 1}
+	checksumVersionProductMysql = (checksumVersionSplitMysql[0]*256+checksumVersionSplitMysql[1])*256 + checksumVersionSplitMysql[2]
 
-	checksumVersionSplitMariaDB   []int = []int{5, 3, 0}
-	checksumVersionProductMariaDB int   = (checksumVersionSplitMariaDB[0]*256+checksumVersionSplitMariaDB[1])*256 + checksumVersionSplitMariaDB[2]
+	checksumVersionSplitMariaDB   = []int{5, 3, 0}
+	checksumVersionProductMariaDB = (checksumVersionSplitMariaDB[0]*256+checksumVersionSplitMariaDB[1])*256 + checksumVersionSplitMariaDB[2]
 )
 
 // server version format X.Y.Zabc, a is not . or number
@@ -141,7 +141,7 @@ func splitServerVersion(server string) []int {
 func calcVersionProduct(server string) int {
 	versionSplit := splitServerVersion(server)
 
-	return ((versionSplit[0]*256+versionSplit[1])*256 + versionSplit[2])
+	return (versionSplit[0]*256+versionSplit[1])*256 + versionSplit[2]
 }
 
 type FormatDescriptionEvent struct {
