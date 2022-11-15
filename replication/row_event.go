@@ -197,13 +197,13 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 	for i, t := range e.ColumnType {
 		switch t {
 		case MYSQL_TYPE_STRING:
-			var x uint16 = uint16(data[pos]) << 8 //real type
-			x += uint16(data[pos+1])              //pack or field length
+			var x = uint16(data[pos]) << 8 //real type
+			x += uint16(data[pos+1])       //pack or field length
 			e.ColumnMeta[i] = x
 			pos += 2
 		case MYSQL_TYPE_NEWDECIMAL:
-			var x uint16 = uint16(data[pos]) << 8 //precision
-			x += uint16(data[pos+1])              //decimals
+			var x = uint16(data[pos]) << 8 //precision
+			x += uint16(data[pos+1])       //decimals
 			e.ColumnMeta[i] = x
 			pos += 2
 		case MYSQL_TYPE_VAR_STRING,
@@ -1002,7 +1002,7 @@ func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
 
 // see mysql sql/log_event.cc log_event_print_value
 func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{}, n int, err error) {
-	var length int = 0
+	var length = 0
 
 	if tp == MYSQL_TYPE_STRING {
 		if meta >= 256 {
@@ -1428,7 +1428,7 @@ func decodeDatetime2(data []byte, dec uint16) (interface{}, int, error) {
 
 	second := int(hms % (1 << 6))
 	minute := int((hms >> 6) % (1 << 6))
-	hour := int((hms >> 12))
+	hour := int(hms >> 12)
 
 	// DATETIME encoding for nonfractional part after MySQL 5.6.4
 	// https://dev.mysql.com/doc/internals/en/date-and-time-data-type-representation.html

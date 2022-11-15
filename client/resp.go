@@ -336,7 +336,7 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, 
 }
 
 func (c *Conn) readResultColumns(result *Result) (err error) {
-	var i int = 0
+	var i = 0
 	var data []byte
 
 	for {

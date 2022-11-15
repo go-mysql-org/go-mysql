@@ -195,8 +195,8 @@ func (t *respConnTestSuite) TestConnWriteFieldValues(c *check.C) {
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
 	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]interface{}{
-		[]interface{}{"d"},
-		[]interface{}{nil},
+		{"d"},
+		{nil},
 	})
 
 	c.Assert(err, check.IsNil)

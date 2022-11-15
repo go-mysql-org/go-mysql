@@ -74,7 +74,7 @@ func (s *Stmt) write(args ...interface{}) error {
 
 	for i := range args {
 		if args[i] == nil {
-			nullBitmap[i/8] |= (1 << (uint(i) % 8))
+			nullBitmap[i/8] |= 1 << (uint(i) % 8)
 			paramTypes[i<<1] = MYSQL_TYPE_NULL
 			continue
 		}
