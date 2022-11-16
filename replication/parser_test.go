@@ -2,10 +2,8 @@ package replication
 
 import (
 	"bytes"
-	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/stretchr/testify/require"
 )
 
 func (t *testSyncerSuite) TestIndexOutOfRange(c *C) {
@@ -79,7 +77,7 @@ func (t *testSyncerSuite) TestParseEvent(c *C) {
 	}
 }
 
-func TestDecodeRowsEvent(t *testing.T) {
+func (t *testSyncerSuite) TestRowsEventDecodeFunc(c *C) {
 	testCases := []struct {
 		byteData  []byte
 		eventSize uint32
@@ -105,8 +103,8 @@ func TestDecodeRowsEvent(t *testing.T) {
 	})
 	for _, tc := range testCases {
 		e, err := parser.Parse(tc.byteData)
-		require.NoError(t, err)
-		require.Equal(t, e.Header.EventType, tc.eventType)
-		require.Equal(t, e.Header.EventSize, tc.eventSize)
+		c.Assert(err, IsNil)
+		c.Assert(e.Header.EventType, Equals, tc.eventType)
+		c.Assert(e.Header.EventSize, Equals, tc.eventSize)
 	}
 }
