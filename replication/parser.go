@@ -40,6 +40,8 @@ type BinlogParser struct {
 	useDecimal          bool
 	ignoreJSONDecodeErr bool
 	verifyChecksum      bool
+
+	rowsEventDecodeFunc func(*RowsEvent, []byte) error
 }
 
 func NewBinlogParser() *BinlogParser {
@@ -212,6 +214,10 @@ func (p *BinlogParser) SetFlavor(flavor string) {
 	p.flavor = flavor
 }
 
+func (p *BinlogParser) SetRowsEventDecodeFunc(rowsEventDecodeFunc func(*RowsEvent, []byte) error) {
+	p.rowsEventDecodeFunc = rowsEventDecodeFunc
+}
+
 func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
 	h := new(EventHeader)
 	err := h.Decode(data)
@@ -297,7 +303,13 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 		}
 	}
 
-	if err := e.Decode(data); err != nil {
+	var err error
+	if re, ok := e.(*RowsEvent); ok && p.rowsEventDecodeFunc != nil {
+		err = p.rowsEventDecodeFunc(re, data)
+	} else {
+		err = e.Decode(data)
+	}
+	if err != nil {
 		return nil, &EventError{h, err.Error(), data}
 	}
 

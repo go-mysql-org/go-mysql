@@ -118,6 +118,8 @@ type BinlogSyncerConfig struct {
 
 	// Set Dialer
 	Dialer client.Dialer
+
+	RowsEventDecodeFunc func(*RowsEvent, []byte) error
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -176,6 +178,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetTimestampStringLocation(b.cfg.TimestampStringLocation)
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
+	b.parser.SetRowsEventDecodeFunc(b.cfg.RowsEventDecodeFunc)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 

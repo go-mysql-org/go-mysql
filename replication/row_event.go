@@ -857,7 +857,7 @@ type RowsEvent struct {
 	ignoreJSONDecodeErr     bool
 }
 
-func (e *RowsEvent) Decode(data []byte) (err2 error) {
+func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 	pos := 0
 	e.TableID = FixedLengthInt(data[0:e.tableIDSize])
 	pos += e.tableIDSize
@@ -890,14 +890,19 @@ func (e *RowsEvent) Decode(data []byte) (err2 error) {
 	e.Table, ok = e.tables[e.TableID]
 	if !ok {
 		if len(e.tables) > 0 {
-			return errors.Errorf("invalid table id %d, no corresponding table map event", e.TableID)
+			return 0, errors.Errorf("invalid table id %d, no corresponding table map event", e.TableID)
 		} else {
-			return errors.Annotatef(errMissingTableMapEvent, "table id %d", e.TableID)
+			return 0, errors.Annotatef(errMissingTableMapEvent, "table id %d", e.TableID)
 		}
 	}
+	return pos, nil
+}
 
-	var err error
-
+func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
+	var (
+		n   int
+		err error
+	)
 	// ... repeat rows until event-end
 	defer func() {
 		if r := recover(); r != nil {
@@ -930,6 +935,14 @@ func (e *RowsEvent) Decode(data []byte) (err2 error) {
 	}
 
 	return nil
+}
+
+func (e *RowsEvent) Decode(data []byte) error {
+	pos, err := e.DecodeHeader(data)
+	if err != nil {
+		return err
+	}
+	return e.DecodeData(pos, data)
 }
 
 func isBitSet(bitmap []byte, i int) bool {
