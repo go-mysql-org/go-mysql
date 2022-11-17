@@ -170,7 +170,7 @@ func (t *mysqlTestSuite) TestMysqlAddGTID(c *check.C) {
 	g1, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57")
 	c.Assert(err, check.IsNil)
 
-	u, err := uuid.FromBytes([]byte("3E11FA47-71CA-11E1-9E33-C80AA9429562"))
+	u, err := uuid.Parse("3E11FA47-71CA-11E1-9E33-C80AA9429562")
 	c.Assert(err, check.IsNil)
 
 	err = g1.AddGTID(u, 58, 0, 0, 0)
@@ -185,7 +185,7 @@ func (t *mysqlTestSuite) TestMysqlAddGTID(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(strings.ToUpper(g1.String()), check.Equals, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-60")
 
-	u2, err := uuid.FromBytes([]byte("519CE70F-A893-11E9-A95A-B32DC65A7026"))
+	u2, err := uuid.Parse("519CE70F-A893-11E9-A95A-B32DC65A7026")
 	c.Assert(err, check.IsNil)
 	err = g1.AddGTID(u2, 58, 0, 0, 0)
 	c.Assert(err, check.IsNil)
