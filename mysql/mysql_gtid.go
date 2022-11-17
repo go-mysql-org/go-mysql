@@ -111,6 +111,52 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 	return n
 }
 
+func min(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func (s *IntervalSlice) InsertInterval(interval Interval) {
+	var (
+		count int
+		i     int
+	)
+
+	*s = append(*s, interval)
+	total := len(*s)
+	for i = total - 1; i > 0; i-- {
+		if (*s)[i].Stop < (*s)[i-1].Start {
+			(*s)[i], (*s)[i-1] = (*s)[i-1], (*s)[i]
+		} else if (*s)[i].Start > (*s)[i-1].Stop {
+			break
+		} else {
+			(*s)[i-1].Start = min((*s)[i-1].Start, (*s)[i].Start)
+			(*s)[i-1].Stop = max((*s)[i-1].Stop, (*s)[i].Stop)
+			count++
+		}
+	}
+	i++
+	if count > 0 {
+		for i != total {
+			if i+count >= total {
+				*s = (*s)[:i]
+				return
+			}
+			(*s)[i] = (*s)[i+count]
+			i++
+		}
+	}
+}
+
 // Contain returns true if sub in s
 func (s IntervalSlice) Contain(sub IntervalSlice) bool {
 	j := 0
@@ -343,10 +389,9 @@ func (s *UUIDSet) Decode(data []byte) error {
 
 func (s *UUIDSet) Clone() *UUIDSet {
 	clone := new(UUIDSet)
-
-	copy(clone.SID[:], s.SID[:])
-	clone.Intervals = s.Intervals.Normalize()
-
+	clone.SID = s.SID
+	clone.Intervals = make([]Interval, len(s.Intervals))
+	copy(clone.Intervals, s.Intervals)
 	return clone
 }
 
@@ -435,6 +480,17 @@ func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 	}
 	for _, uuidSet := range gtidSet.(*MysqlGTIDSet).Sets {
 		s.AddSet(uuidSet)
+	}
+	return nil
+}
+
+func (s *MysqlGTIDSet) AddGTID(uuid uuid.UUID, gno int64, _ uint32, _ uint32, _ uint64) error {
+	sid := uuid.String()
+	o, ok := s.Sets[sid]
+	if ok {
+		o.Intervals.InsertInterval(Interval{gno, gno + 1})
+	} else {
+		s.Sets[sid] = &UUIDSet{uuid, IntervalSlice{Interval{gno, gno + 1}}}
 	}
 	return nil
 }

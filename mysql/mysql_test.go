@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/check"
 )
 
@@ -77,6 +78,42 @@ func (t *mysqlTestSuite) TestMysqlGTIDIntervalSlice(c *check.C) {
 	c.Assert(n2.Contain(n1), check.Equals, true)
 }
 
+func (t *mysqlTestSuite) TestMysqlGTIDInsertInterval(c *check.C) {
+	i := IntervalSlice{Interval{100, 200}}
+	i.InsertInterval(Interval{300, 400})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{100, 200}, Interval{300, 400}})
+
+	i.InsertInterval(Interval{50, 70})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{50, 70}, Interval{100, 200}, Interval{300, 400}})
+
+	i.InsertInterval(Interval{101, 201})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{50, 70}, Interval{100, 201}, Interval{300, 400}})
+
+	i.InsertInterval(Interval{99, 202})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{50, 70}, Interval{99, 202}, Interval{300, 400}})
+
+	i.InsertInterval(Interval{102, 302})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{50, 70}, Interval{99, 400}})
+
+	i.InsertInterval(Interval{500, 600})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{50, 70}, Interval{99, 400}, Interval{500, 600}})
+
+	i.InsertInterval(Interval{50, 100})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{50, 400}, Interval{500, 600}})
+
+	i.InsertInterval(Interval{900, 1000})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{50, 400}, Interval{500, 600}, Interval{900, 1000}})
+
+	i.InsertInterval(Interval{1010, 1020})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{50, 400}, Interval{500, 600}, Interval{900, 1000}, Interval{1010, 1020}})
+
+	i.InsertInterval(Interval{49, 1000})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{49, 1000}, Interval{1010, 1020}})
+
+	i.InsertInterval(Interval{1, 1012})
+	c.Assert(i, check.DeepEquals, IntervalSlice{Interval{1, 1020}})
+}
+
 func (t *mysqlTestSuite) TestMysqlGTIDCodec(c *check.C) {
 	us, err := ParseUUIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
 	c.Assert(err, check.IsNil)
@@ -125,6 +162,37 @@ func (t *mysqlTestSuite) TestMysqlUpdate(c *check.C) {
 		802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1-1221371,
 		F2B50559-A891-11E9-B646-884FF0CA2043:1-479266
 	`)
+	c.Assert(err, check.IsNil)
+	c.Assert(g2.Equal(g1), check.IsTrue)
+}
+
+func (t *mysqlTestSuite) TestMysqlAddGTID(c *check.C) {
+	g1, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57")
+	c.Assert(err, check.IsNil)
+
+	u, err := uuid.FromBytes([]byte("3E11FA47-71CA-11E1-9E33-C80AA9429562"))
+	c.Assert(err, check.IsNil)
+
+	err = g1.AddGTID(u, 58, 0, 0, 0)
+	c.Assert(err, check.IsNil)
+	c.Assert(strings.ToUpper(g1.String()), check.Equals, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58")
+
+	err = g1.AddGTID(u, 60, 0, 0, 0)
+	c.Assert(err, check.IsNil)
+	c.Assert(strings.ToUpper(g1.String()), check.Equals, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58:60")
+
+	err = g1.AddGTID(u, 59, 0, 0, 0)
+	c.Assert(err, check.IsNil)
+	c.Assert(strings.ToUpper(g1.String()), check.Equals, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-60")
+
+	u2, err := uuid.FromBytes([]byte("519CE70F-A893-11E9-A95A-B32DC65A7026"))
+	c.Assert(err, check.IsNil)
+	err = g1.AddGTID(u2, 58, 0, 0, 0)
+	c.Assert(err, check.IsNil)
+	g2, err := ParseMysqlGTIDSet(`
+	3E11FA47-71CA-11E1-9E33-C80AA9429562:21-60,
+	519CE70F-A893-11E9-A95A-B32DC65A7026:58
+`)
 	c.Assert(err, check.IsNil)
 	c.Assert(g2.Equal(g1), check.IsTrue)
 }
