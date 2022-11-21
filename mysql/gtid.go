@@ -1,7 +1,6 @@
 package mysql
 
 import (
-	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 )
 
@@ -18,8 +17,6 @@ type GTIDSet interface {
 	Update(GTIDStr string) error
 
 	Clone() GTIDSet
-
-	AddGTID(uuid.UUID, int64, uint32, uint32, uint64) error
 }
 
 func ParseGTIDSet(flavor string, s string) (GTIDSet, error) {

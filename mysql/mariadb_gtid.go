@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
 )
@@ -155,10 +154,6 @@ func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 		}
 	}
 	return nil
-}
-
-func (s *MariadbGTIDSet) AddGTID(_ uuid.UUID, _ int64, domainID uint32, serverID uint32, sequenceNumber uint64) error {
-	return s.AddSet(&MariadbGTID{DomainID: domainID, ServerID: serverID, SequenceNumber: sequenceNumber})
 }
 
 func (s *MariadbGTIDSet) String() string {
