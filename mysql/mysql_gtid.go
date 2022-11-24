@@ -144,16 +144,12 @@ func (s *IntervalSlice) InsertInterval(interval Interval) {
 			count++
 		}
 	}
-	i++
 	if count > 0 {
-		for i != total {
-			if i+count >= total {
-				*s = (*s)[:i]
-				return
-			}
-			(*s)[i] = (*s)[i+count]
-			i++
+		i++
+		if i+count < total {
+			copy((*s)[i:], (*s)[i+count:])
 		}
+		*s = (*s)[:total-count]
 	}
 }
 
