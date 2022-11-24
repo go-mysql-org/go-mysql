@@ -484,7 +484,7 @@ func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 	return nil
 }
 
-func (s *MysqlGTIDSet) AddGTID(uuid uuid.UUID, gno int64) error {
+func (s *MysqlGTIDSet) AddGTID(uuid uuid.UUID, gno int64) {
 	sid := uuid.String()
 	o, ok := s.Sets[sid]
 	if ok {
@@ -492,7 +492,6 @@ func (s *MysqlGTIDSet) AddGTID(uuid uuid.UUID, gno int64) error {
 	} else {
 		s.Sets[sid] = &UUIDSet{uuid, IntervalSlice{Interval{gno, gno + 1}}}
 	}
-	return nil
 }
 
 func (s *MysqlGTIDSet) Add(addend MysqlGTIDSet) error {

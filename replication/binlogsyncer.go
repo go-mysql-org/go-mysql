@@ -799,14 +799,14 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		return b.currGset.Clone()
 	}
 
-	advanceCurrentGtidSet := func(uuid uuid.UUID, gno int64, domainID uint32, serverID uint32, sequenceNumber uint64) error {
+	advanceCurrentGtidSet := func(uuid uuid.UUID, gno int64, domainID uint32, serverID uint32, sequenceNumber uint64) (err error) {
 		if b.currGset == nil {
 			b.currGset = b.prevGset.Clone()
 		}
 		prev := b.currGset.Clone()
 		switch gset := b.currGset.(type) {
 		case *MysqlGTIDSet:
-			err = gset.AddGTID(uuid, gno)
+			gset.AddGTID(uuid, gno)
 		case *MariadbGTIDSet:
 			err = gset.AddSet(&MariadbGTID{DomainID: domainID, ServerID: serverID, SequenceNumber: sequenceNumber})
 		default:
