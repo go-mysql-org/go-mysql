@@ -799,12 +799,19 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		return b.currGset.Clone()
 	}
 
-	advanceCurrentGtidSet := func(gtid string) error {
+	advanceCurrentGtidSet := func(uuid uuid.UUID, gno int64, domainID uint32, serverID uint32, sequenceNumber uint64) (err error) {
 		if b.currGset == nil {
 			b.currGset = b.prevGset.Clone()
 		}
 		prev := b.currGset.Clone()
-		err := b.currGset.Update(gtid)
+		switch gset := b.currGset.(type) {
+		case *MysqlGTIDSet:
+			gset.AddGTID(uuid, gno)
+		case *MariadbGTIDSet:
+			err = gset.AddSet(&MariadbGTID{DomainID: domainID, ServerID: serverID, SequenceNumber: sequenceNumber})
+		default:
+			err = errors.Errorf("unsupported GTIDSet type %T", b.currGset)
+		}
 		if err == nil {
 			// right after reconnect we will see same gtid as we saw before, thus currGset will not get changed
 			if !b.currGset.Equal(prev) {
@@ -824,7 +831,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 			break
 		}
 		u, _ := uuid.FromBytes(event.SID)
-		err := advanceCurrentGtidSet(fmt.Sprintf("%s:%d", u.String(), event.GNO))
+		err := advanceCurrentGtidSet(u, event.GNO, 0, 0, 0)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -833,7 +840,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 			break
 		}
 		GTID := event.GTID
-		err := advanceCurrentGtidSet(fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber))
+		err := advanceCurrentGtidSet(uuid.Nil, 0, GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
 		if err != nil {
 			return errors.Trace(err)
 		}
