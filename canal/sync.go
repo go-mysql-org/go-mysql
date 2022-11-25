@@ -34,7 +34,7 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 	}
 }
 
-func (c *Canal) runSyncBinlog() error {
+func (c *Canal) runSyncBinlog(getAndSwitch getEventAndSwitchStreamer) error {
 	s, err := c.startSyncer()
 	if err != nil {
 		return err
@@ -46,9 +46,18 @@ func (c *Canal) runSyncBinlog() error {
 	// The name of the binlog file received in the fake rotate event.
 	// It must be preserved until the new position is saved.
 	fakeRotateLogName := ""
-
+	prevStreamer := s
 	for {
-		ev, err := s.GetEvent(c.ctx)
+		var (
+			ev  *replication.BinlogEvent
+			err error
+		)
+		if getAndSwitch == nil {
+			ev, err = s.GetEvent(c.ctx)
+		} else {
+			s, prevStreamer, ev, err = getAndSwitch(c.ctx, s, prevStreamer)
+		}
+
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -78,6 +87,7 @@ func (c *Canal) runSyncBinlog() error {
 
 		// next binlog pos
 		pos.Pos = ev.Header.LogPos
+		pos.Timestamp = ev.Header.Timestamp
 
 		// new file name received in the fake rotate event
 		if fakeRotateLogName != "" {

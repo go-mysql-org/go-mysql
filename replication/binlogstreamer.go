@@ -92,3 +92,16 @@ func newBinlogStreamer() *BinlogStreamer {
 
 	return s
 }
+
+// PutEvent puts event to BinlogStreamer
+func (s *BinlogStreamer) PutEvent(ev *BinlogEvent) {
+	s.ch <- ev
+}
+
+func (s *BinlogStreamer) CloseWithError(err error) {
+	s.closeWithError(err)
+}
+
+func NewBinlogStreamer() *BinlogStreamer {
+	return newBinlogStreamer()
+}
