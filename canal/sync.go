@@ -95,9 +95,12 @@ func (c *Canal) runSyncBinlog() error {
 			c.cfg.Logger.Infof("rotate binlog to %s", pos)
 			savePos = true
 			force = true
-			if err = c.eventHandler.OnRotate(e); err != nil {
-				return errors.Trace(err)
+			if c.eventHandlerV2 == nil {
+				err = c.eventHandler.OnRotate(e)
+			} else {
+				err = c.eventHandlerV2.OnRotate(ev.Header, e)
 			}
+			if err != nil {
 		case *replication.RowsEvent:
 			// we only focus row based event
 			err = c.handleRowsEvent(ev)
@@ -115,7 +118,12 @@ func (c *Canal) runSyncBinlog() error {
 		case *replication.XIDEvent:
 			savePos = true
 			// try to save the position later
-			if err := c.eventHandler.OnXID(pos); err != nil {
+			if c.eventHandlerV2 == nil {
+				err = c.eventHandler.OnXID(pos)
+			} else {
+				err = c.eventHandlerV2.OnXID(ev.Header, pos)
+			}
+			if err != nil {
 				return errors.Trace(err)
 			}
 			if e.GSet != nil {
@@ -127,7 +135,12 @@ func (c *Canal) runSyncBinlog() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			if err := c.eventHandler.OnGTID(gtid); err != nil {
+			if c.eventHandlerV2 == nil {
+				err = c.eventHandler.OnGTID(gtid)
+			} else {
+				err = c.eventHandlerV2.OnGTID(ev.Header, gtid)
+			}
+			if err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.GTIDEvent:
@@ -136,7 +149,12 @@ func (c *Canal) runSyncBinlog() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			if err := c.eventHandler.OnGTID(gtid); err != nil {
+			if c.eventHandlerV2 == nil {
+				err = c.eventHandler.OnGTID(gtid)
+			} else {
+				err = c.eventHandlerV2.OnGTID(ev.Header, gtid)
+			}
+			if err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
@@ -151,7 +169,7 @@ func (c *Canal) runSyncBinlog() error {
 					if node.db == "" {
 						node.db = string(e.Schema)
 					}
-					if err = c.updateTable(node.db, node.table); err != nil {
+					if err = c.updateTable(ev.Header, node.db, node.table); err != nil {
 						return errors.Trace(err)
 					}
 				}
@@ -159,7 +177,12 @@ func (c *Canal) runSyncBinlog() error {
 					savePos = true
 					force = true
 					// Now we only handle Table Changed DDL, maybe we will support more later.
-					if err = c.eventHandler.OnDDL(pos, e); err != nil {
+					if c.eventHandlerV2 == nil {
+						err = c.eventHandler.OnDDL(pos, e)
+					} else {
+						err = c.eventHandlerV2.OnDDL(ev.Header, pos, e)
+					}
+					if err != nil {
 						return errors.Trace(err)
 					}
 				}
@@ -176,7 +199,12 @@ func (c *Canal) runSyncBinlog() error {
 			c.master.UpdateTimestamp(ev.Header.Timestamp)
 			fakeRotateLogName = ""
 
-			if err := c.eventHandler.OnPosSynced(pos, c.master.GTIDSet(), force); err != nil {
+			if c.eventHandlerV2 == nil {
+				err = c.eventHandler.OnPosSynced(pos, c.master.GTIDSet(), force)
+			} else {
+				err = c.eventHandlerV2.OnPosSynced(ev.Header, pos, c.master.GTIDSet(), force)
+			}
+			if err != nil {
 				return errors.Trace(err)
 			}
 		}
@@ -228,10 +256,15 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 	return ns
 }
 
-func (c *Canal) updateTable(db, table string) (err error) {
+func (c *Canal) updateTable(header *replication.EventHeader, db, table string) (err error) {
 	c.ClearTableCache([]byte(db), []byte(table))
 	c.cfg.Logger.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
-	if err = c.eventHandler.OnTableChanged(db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
+	if c.eventHandlerV2 == nil {
+		err = c.eventHandler.OnTableChanged(db, table)
+	} else {
+		err = c.eventHandlerV2.OnTableChanged(header, db, table)
+	}
+	if err != nil && errors.Cause(err) != schema.ErrTableNotExist {
 		return errors.Trace(err)
 	}
 	return
@@ -268,7 +301,11 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
 	events := newRowsEvent(t, action, ev.Rows, e.Header)
-	return c.eventHandler.OnRow(events)
+	if c.eventHandlerV2 == nil {
+		return c.eventHandler.OnRow(events)
+	} else {
+		return c.eventHandlerV2.OnRow(events)
+	}
 }
 
 func (c *Canal) FlushBinlog() error {

@@ -110,7 +110,11 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 	}
 
 	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs}, nil)
-	return h.c.eventHandler.OnRow(events)
+	if h.c.eventHandlerV2 == nil {
+		return h.c.eventHandler.OnRow(events)
+	} else {
+		return h.c.eventHandlerV2.OnRow(events)
+	}
 }
 
 func (c *Canal) AddDumpDatabases(dbs ...string) {
@@ -175,8 +179,13 @@ func (c *Canal) dump() error {
 
 	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 	c.master.Update(pos)
-	c.master.UpdateGTIDSet(h.gset)
-	if err := c.eventHandler.OnPosSynced(pos, c.master.GTIDSet(), true); err != nil {
+	c.master.UpdateGTIDSet(h.gset)var err error
+	if c.eventHandlerV2 == nil {
+		err = c.eventHandler.OnPosSynced(pos, c.master.GTIDSet(), true)
+	} else {
+		err = c.eventHandlerV2.OnPosSynced(nil, pos, c.master.GTIDSet(), true)
+	}
+	if err != nil {
 		return errors.Trace(err)
 	}
 	var startPos fmt.Stringer = pos

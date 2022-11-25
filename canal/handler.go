@@ -40,3 +40,24 @@ func (h *DummyEventHandler) String() string { return "DummyEventHandler" }
 func (c *Canal) SetEventHandler(h EventHandler) {
 	c.eventHandler = h
 }
+
+// EventHandlerV2 can process event with replication.EventHeader
+type EventHandlerV2 interface {
+	OnRotate(header *replication.EventHeader, rotateEvent *replication.RotateEvent) error
+	// OnTableChanged is called when the table is created, altered, renamed or dropped.
+	// You need to clear the associated data like cache with the table.
+	// It will be called before OnDDL.
+	OnTableChanged(header *replication.EventHeader, schema string, table string) error
+	OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent) error
+	OnRow(e *RowsEvent) error
+	OnXID(header *replication.EventHeader, nextPos mysql.Position) error
+	OnGTID(header *replication.EventHeader, gtid mysql.GTIDSet) error
+	// OnPosSynced Use your own way to sync position. When force is true, sync position immediately.
+	OnPosSynced(header *replication.EventHeader, pos mysql.Position, set mysql.GTIDSet, force bool) error
+	String() string
+}
+
+// SetEventHandlerV2 to registers EventHandlerV2 handler replace the EventHandler
+func (c *Canal) SetEventHandlerV2(h EventHandlerV2) {
+	c.eventHandlerV2 = h
+}

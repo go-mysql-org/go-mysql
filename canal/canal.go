@@ -36,6 +36,7 @@ type Canal struct {
 	syncer     *replication.BinlogSyncer
 
 	eventHandler EventHandler
+	eventHandlerV2 EventHandlerV2
 
 	connLock sync.Mutex
 	conn     *client.Conn
@@ -248,7 +249,11 @@ func (c *Canal) Close() {
 	c.conn = nil
 	c.connLock.Unlock()
 
-	_ = c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
+	if c.eventHandlerV2 == nil {
+		_ = c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
+	} else {
+		_ = c.eventHandlerV2.OnPosSynced(nil, c.master.Position(), c.master.GTIDSet(), true)
+	}
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
