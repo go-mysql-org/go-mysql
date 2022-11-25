@@ -10,6 +10,8 @@ import (
 type Position struct {
 	Name string
 	Pos  uint32
+
+	Timestamp uint32 // for canal handler to show delay time
 }
 
 func (p Position) Compare(o Position) int {

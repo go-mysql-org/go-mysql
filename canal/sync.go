@@ -78,6 +78,7 @@ func (c *Canal) runSyncBinlog() error {
 
 		// next binlog pos
 		pos.Pos = ev.Header.LogPos
+		pos.Timestamp = ev.Header.Timestamp
 
 		// new file name received in the fake rotate event
 		if fakeRotateLogName != "" {
