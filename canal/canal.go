@@ -226,7 +226,7 @@ func (c *Canal) run() error {
 		}
 	}
 
-	if err := c.runSyncBinlog(); err != nil {
+	if err := c.runSyncBinlog(nil); err != nil {
 		if errors.Cause(err) != context.Canceled {
 			c.cfg.Logger.Errorf("canal start sync binlog err: %v", err)
 			return errors.Trace(err)
