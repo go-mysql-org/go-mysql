@@ -190,9 +190,9 @@ func (ta *Table) GetPKColumn(index int) *TableColumn {
 
 // Get Index by column index. Return nil if the column is not a index.
 func (ta *Table) GetIndex(colIndex int) *Index {
-	for i, _colIndex := range t.PKColumns {
+	for i, _colIndex := range ta.PKColumns {
 		if _colIndex == colIndex {
-			return t.Indexes[i]
+			return ta.Indexes[i]
 		}
 	}
 	return nil
