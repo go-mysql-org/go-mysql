@@ -183,8 +183,19 @@ func (ta *Table) FindColumn(name string) int {
 	return -1
 }
 
+// Get TableColumn by Index index
 func (ta *Table) GetPKColumn(index int) *TableColumn {
 	return &ta.Columns[ta.PKColumns[index]]
+}
+
+// Get Index by column index. Return nil if the column is not a index.
+func (ta *Table) GetIndex(colIndex int) *Index {
+	for i, _colIndex := range t.PKColumns {
+		if _colIndex == colIndex {
+			return t.Indexes[i]
+		}
+	}
+	return nil
 }
 
 func (ta *Table) AddIndex(name string) (index *Index) {
