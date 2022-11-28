@@ -183,7 +183,7 @@ func (ta *Table) FindColumn(name string) int {
 	return -1
 }
 
-// Get TableColumn by primary index index
+// Get TableColumn by column index of primary key.
 func (ta *Table) GetPKColumn(index int) *TableColumn {
 	if index >= len(ta.PKColumns) {
 		return nil
@@ -192,8 +192,8 @@ func (ta *Table) GetPKColumn(index int) *TableColumn {
 }
 
 func (ta *Table) IsPrimaryKey(colIndex int) bool {
-	for _, _colIndex := range ta.PKColumns {
-		if _colIndex == colIndex {
+	for _, i := range ta.PKColumns {
+		if i == colIndex {
 			return true
 		}
 	}
