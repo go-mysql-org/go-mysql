@@ -188,8 +188,8 @@ func (ta *Table) GetPKColumn(index int) *TableColumn {
 	return &ta.Columns[ta.PKColumns[index]]
 }
 
-// Get Index by column index. Return nil if the column is not a index.
-func (ta *Table) GetIndex(colIndex int) *Index {
+// Get Primary Index by column index. Return nil if the column is not a primary index.
+func (ta *Table) GetPKIndex(colIndex int) *Index {
 	for i, _colIndex := range ta.PKColumns {
 		if _colIndex == colIndex {
 			return ta.Indexes[i]
