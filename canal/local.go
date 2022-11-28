@@ -2,6 +2,7 @@ package canal
 
 import (
 	"context"
+
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
@@ -90,16 +91,18 @@ func newLocalBinFileStreamer(download BinlogFileDownload, position mysql.Positio
 		streamer.CloseWithError(errors.New("local binlog file not exist"))
 	}
 
-	beginFromHere := false
-	go replication.NewBinlogParser().ParseFile(binFilePath, 0, func(be *replication.BinlogEvent) error {
-		if be.Header.LogPos == position.Pos || position.Pos == 4 { // go ahead to check if begin
-			beginFromHere = true
-		}
-		if beginFromHere {
-			streamer.PutEvent(be)
-		}
-		return nil
-	})
+	go func(binFilePath string, streamer *replication.BinlogStreamer) {
+		beginFromHere := false
+		_ = replication.NewBinlogParser().ParseFile(binFilePath, 0, func(be *replication.BinlogEvent) error {
+			if be.Header.LogPos == position.Pos || position.Pos == 4 { // go ahead to check if begin
+				beginFromHere = true
+			}
+			if beginFromHere {
+				streamer.PutEvent(be)
+			}
+			return nil
+		})
+	}(binFilePath, streamer)
 
 	return streamer
 }
