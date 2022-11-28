@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"regexp"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
+	"github.com/siddontang/go-log/log"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
@@ -62,6 +64,14 @@ var ErrExcludedTable = errors.New("excluded table meta")
 
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
+	if cfg.Logger == nil {
+		streamHandler, _ := log.NewStreamHandler(os.Stdout)
+		cfg.Logger = log.NewDefault(streamHandler)
+	}
+	if cfg.Dialer == nil {
+		dialer := &net.Dialer{}
+		cfg.Dialer = dialer.DialContext
+	}
 	c.cfg = cfg
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
