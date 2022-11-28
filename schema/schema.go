@@ -191,14 +191,13 @@ func (ta *Table) GetPKColumn(index int) *TableColumn {
 	return &ta.Columns[ta.PKColumns[index]]
 }
 
-// Get primary index by column index. Return nil if the column is not a primary index.
-func (ta *Table) GetPKIndex(colIndex int) *Index {
+func (ta *Table) IsPrimaryKey(colIndex int) bool {
 	for _, _colIndex := range ta.PKColumns {
 		if _colIndex == colIndex {
-			return ta.Indexes[0]
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 func (ta *Table) AddIndex(name string) (index *Index) {
