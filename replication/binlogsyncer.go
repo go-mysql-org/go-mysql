@@ -831,13 +831,12 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		}
 		prev := b.currGset.Clone()
 		err = b.currGset.(*MariadbGTIDSet).AddSet(&event.GTID)
-		if err == nil {
-			// right after reconnect we will see same gtid as we saw before, thus currGset will not get changed
-			if !b.currGset.Equal(prev) {
-				b.prevGset = prev
-			}
-		} else {
+		if err != nil {
 			return errors.Trace(err)
+		}
+		// right after reconnect we will see same gtid as we saw before, thus currGset will not get changed
+		if !b.currGset.Equal(prev) {
+			b.prevGset = prev
 		}
 	case *XIDEvent:
 		if !b.cfg.DiscardGTIDSet {
