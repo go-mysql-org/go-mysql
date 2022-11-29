@@ -6,43 +6,6 @@ import (
 )
 
 type EventHandler interface {
-	OnRotate(rotateEvent *replication.RotateEvent) error
-	// OnTableChanged is called when the table is created, altered, renamed or dropped.
-	// You need to clear the associated data like cache with the table.
-	// It will be called before OnDDL.
-	OnTableChanged(schema string, table string) error
-	OnDDL(nextPos mysql.Position, queryEvent *replication.QueryEvent) error
-	OnRow(e *RowsEvent) error
-	OnXID(nextPos mysql.Position) error
-	OnGTID(gtid mysql.GTIDSet) error
-	// OnPosSynced Use your own way to sync position. When force is true, sync position immediately.
-	OnPosSynced(pos mysql.Position, set mysql.GTIDSet, force bool) error
-	String() string
-}
-
-type DummyEventHandler struct {
-}
-
-func (h *DummyEventHandler) OnRotate(*replication.RotateEvent) error          { return nil }
-func (h *DummyEventHandler) OnTableChanged(schema string, table string) error { return nil }
-func (h *DummyEventHandler) OnDDL(nextPos mysql.Position, queryEvent *replication.QueryEvent) error {
-	return nil
-}
-func (h *DummyEventHandler) OnRow(*RowsEvent) error                                { return nil }
-func (h *DummyEventHandler) OnXID(mysql.Position) error                            { return nil }
-func (h *DummyEventHandler) OnGTID(mysql.GTIDSet) error                            { return nil }
-func (h *DummyEventHandler) OnPosSynced(mysql.Position, mysql.GTIDSet, bool) error { return nil }
-
-func (h *DummyEventHandler) String() string { return "DummyEventHandler" }
-
-// `SetEventHandler` registers the sync handler, you must register your
-// own handler before starting Canal.
-func (c *Canal) SetEventHandler(h EventHandler) {
-	c.eventHandler = h
-}
-
-// EventHandlerV2 can process event with replication.EventHeader
-type EventHandlerV2 interface {
 	OnRotate(header *replication.EventHeader, rotateEvent *replication.RotateEvent) error
 	// OnTableChanged is called when the table is created, altered, renamed or dropped.
 	// You need to clear the associated data like cache with the table.
@@ -57,7 +20,29 @@ type EventHandlerV2 interface {
 	String() string
 }
 
-// SetEventHandlerV2 to registers EventHandlerV2 handler replace the EventHandler
-func (c *Canal) SetEventHandlerV2(h EventHandlerV2) {
-	c.eventHandlerV2 = h
+type DummyEventHandler struct {
+}
+
+func (h *DummyEventHandler) OnRotate(*replication.EventHeader, *replication.RotateEvent) error {
+	return nil
+}
+func (h *DummyEventHandler) OnTableChanged(*replication.EventHeader, string, string) error {
+	return nil
+}
+func (h *DummyEventHandler) OnDDL(*replication.EventHeader, mysql.Position, *replication.QueryEvent) error {
+	return nil
+}
+func (h *DummyEventHandler) OnRow(*RowsEvent) error                               { return nil }
+func (h *DummyEventHandler) OnXID(*replication.EventHeader, mysql.Position) error { return nil }
+func (h *DummyEventHandler) OnGTID(*replication.EventHeader, mysql.GTIDSet) error { return nil }
+func (h *DummyEventHandler) OnPosSynced(*replication.EventHeader, mysql.Position, mysql.GTIDSet, bool) error {
+	return nil
+}
+
+func (h *DummyEventHandler) String() string { return "DummyEventHandler" }
+
+// `SetEventHandler` registers the sync handler, you must register your
+// own handler before starting Canal.
+func (c *Canal) SetEventHandler(h EventHandler) {
+	c.eventHandler = h
 }
