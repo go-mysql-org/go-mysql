@@ -8,34 +8,34 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// BinlogFileDownload download the binlog file from cloud computing platform (etc. aliyun)
-type BinlogFileDownload func(mysql.Position) (localBinFilePath string, err error)
+// BinlogFileDownloader downloads the binlog file and return the path to it. It's often used to download binlog backup from RDS service.
+type BinlogFileDownloader func(mysql.Position) (localBinFilePath string, err error)
 
-// WithLocalBinlogDownload registers the local bin file download,
-// that allows download the flushed binlog file to local (etc. aliyun)
-func (c *Canal) WithLocalBinlogDownload(d BinlogFileDownload) {
+// WithLocalBinlogDownloader registers the local bin file downloader,
+// that allows download the backup binlog file from RDS service to local
+func (c *Canal) WithLocalBinlogDownloader(d BinlogFileDownloader) {
 	c.binFileDownload = d
 }
 
-func (c *Canal) adaptLocalBinFileStreamer(syncMasterStreamer *replication.BinlogStreamer, err error) (*LocalBinFileAdapterStreamer, error) {
-	return &LocalBinFileAdapterStreamer{
-		BinlogStreamer:     syncMasterStreamer,
-		syncMasterStreamer: syncMasterStreamer,
+func (c *Canal) adaptLocalBinFileStreamer(remoteBinlogStreamer *replication.BinlogStreamer, err error) (*localBinFileAdapterStreamer, error) {
+	return &localBinFileAdapterStreamer{
+		BinlogStreamer:     remoteBinlogStreamer,
+		syncMasterStreamer: remoteBinlogStreamer,
 		canal:              c,
 		binFileDownload:    c.binFileDownload,
 	}, err
 }
 
-// LocalBinFileAdapterStreamer will support to download flushed binlog file for continuous sync in cloud computing platform
-type LocalBinFileAdapterStreamer struct {
+// localBinFileAdapterStreamer will support to download flushed binlog file for continuous sync in cloud computing platform
+type localBinFileAdapterStreamer struct {
 	*replication.BinlogStreamer                             // the running streamer, it will be localStreamer or sync master streamer
-	syncMasterStreamer          *replication.BinlogStreamer // syncMasterStreamer is the streamer from startSyncer
+	syncMasterStreamer          *replication.BinlogStreamer // syncMasterStreamer is the streamer from canal startSyncer
 	canal                       *Canal
-	binFileDownload             BinlogFileDownload
+	binFileDownload             BinlogFileDownloader
 }
 
-// GetEvent will auto switch  the running streamer and return replication.BinlogEvent
-func (s *LocalBinFileAdapterStreamer) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
+// GetEvent will auto switch the local and remote streamer to get binlog event if possible.
+func (s *localBinFileAdapterStreamer) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
 	if s.binFileDownload == nil { // not support to use local bin file
 		return s.BinlogStreamer.GetEvent(ctx)
 	}
@@ -55,9 +55,10 @@ func (s *LocalBinFileAdapterStreamer) GetEvent(ctx context.Context) (*replicatio
 		_ = s.canal.prepareSyncer()
 
 		newStreamer, startErr := s.canal.startSyncer()
-		if startErr == nil {
-			ev, err = newStreamer.GetEvent(ctx)
+		if startErr != nil {
+			return nil, startErr
 		}
+		ev, err = newStreamer.GetEvent(ctx)
 		// set all streamer to the new sync master streamer
 		s.BinlogStreamer = newStreamer
 		s.syncMasterStreamer = newStreamer
@@ -68,7 +69,7 @@ func (s *LocalBinFileAdapterStreamer) GetEvent(ctx context.Context) (*replicatio
 		if mysqlErr.Code == mysql.ER_MASTER_FATAL_ERROR_READING_BINLOG &&
 			mysqlErr.Message == "Could not find first log file name in binary log index file" {
 			gset := s.canal.master.GTIDSet()
-			if gset == nil || gset.String() == "" { // currently only support xid mode
+			if gset == nil || gset.String() == "" { // currently only support position based replication
 				s.canal.cfg.Logger.Info("Could not find first log, try to download the local binlog for retry")
 				pos := s.canal.master.Position()
 				newStreamer := newLocalBinFileStreamer(s.binFileDownload, pos)
@@ -84,7 +85,7 @@ func (s *LocalBinFileAdapterStreamer) GetEvent(ctx context.Context) (*replicatio
 	return ev, err
 }
 
-func newLocalBinFileStreamer(download BinlogFileDownload, position mysql.Position) *replication.BinlogStreamer {
+func newLocalBinFileStreamer(download BinlogFileDownloader, position mysql.Position) *replication.BinlogStreamer {
 	streamer := replication.NewBinlogStreamer()
 	binFilePath, err := download(position)
 	if err != nil {
