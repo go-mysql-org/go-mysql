@@ -14,7 +14,7 @@ type BinlogFileDownloader func(mysql.Position) (localBinFilePath string, err err
 // WithLocalBinlogDownloader registers the local bin file downloader,
 // that allows download the backup binlog file from RDS service to local
 func (c *Canal) WithLocalBinlogDownloader(d BinlogFileDownloader) {
-	c.binFileDownload = d
+	c.binFileDownloader = d
 }
 
 func (c *Canal) adaptLocalBinFileStreamer(remoteBinlogStreamer *replication.BinlogStreamer, err error) (*localBinFileAdapterStreamer, error) {
@@ -22,7 +22,7 @@ func (c *Canal) adaptLocalBinFileStreamer(remoteBinlogStreamer *replication.Binl
 		BinlogStreamer:     remoteBinlogStreamer,
 		syncMasterStreamer: remoteBinlogStreamer,
 		canal:              c,
-		binFileDownload:    c.binFileDownload,
+		binFileDownloader:  c.binFileDownloader,
 	}, err
 }
 
@@ -31,12 +31,12 @@ type localBinFileAdapterStreamer struct {
 	*replication.BinlogStreamer                             // the running streamer, it will be localStreamer or sync master streamer
 	syncMasterStreamer          *replication.BinlogStreamer // syncMasterStreamer is the streamer from canal startSyncer
 	canal                       *Canal
-	binFileDownload             BinlogFileDownloader
+	binFileDownloader           BinlogFileDownloader
 }
 
 // GetEvent will auto switch the local and remote streamer to get binlog event if possible.
 func (s *localBinFileAdapterStreamer) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
-	if s.binFileDownload == nil { // not support to use local bin file
+	if s.binFileDownloader == nil { // not support to use local bin file
 		return s.BinlogStreamer.GetEvent(ctx)
 	}
 
@@ -72,7 +72,7 @@ func (s *localBinFileAdapterStreamer) GetEvent(ctx context.Context) (*replicatio
 			if gset == nil || gset.String() == "" { // currently only support position based replication
 				s.canal.cfg.Logger.Info("Could not find first log, try to download the local binlog for retry")
 				pos := s.canal.master.Position()
-				newStreamer := newLocalBinFileStreamer(s.binFileDownload, pos)
+				newStreamer := newLocalBinFileStreamer(s.binFileDownloader, pos)
 
 				s.syncMasterStreamer = s.BinlogStreamer
 				s.BinlogStreamer = newStreamer
