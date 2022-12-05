@@ -94,7 +94,7 @@ func newLocalBinFileStreamer(download BinlogFileDownloader, position mysql.Posit
 
 	go func(binFilePath string, streamer *replication.BinlogStreamer) {
 		beginFromHere := false
-		_ = replication.NewBinlogParser().ParseFile(binFilePath, 0, func(be *replication.BinlogEvent) error {
+		err := replication.NewBinlogParser().ParseFile(binFilePath, 0, func(be *replication.BinlogEvent) error {
 			if be.Header.LogPos == position.Pos || position.Pos == 4 { // go ahead to check if begin
 				beginFromHere = true
 			}
@@ -103,6 +103,9 @@ func newLocalBinFileStreamer(download BinlogFileDownloader, position mysql.Posit
 			}
 			return nil
 		})
+		if err != nil {
+			streamer.CloseWithError(err)
+		}
 	}(binFilePath, streamer)
 
 	return streamer
