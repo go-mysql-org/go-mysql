@@ -37,7 +37,7 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 	done := make(chan bool)
 
 	go func() {
-		err := t.b.StartBackup("./var", mysql.Position{Name: "", Pos: uint32(0)}, timeout)
+		err := t.b.StartBackup("./var", mysql.Position{Name: "", Pos: uint64(0)}, timeout)
 		c.Assert(err, IsNil)
 		done <- true
 	}()

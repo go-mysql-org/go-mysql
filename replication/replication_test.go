@@ -302,7 +302,7 @@ func (t *testSyncerSuite) testPositionSync(c *C) {
 	binFile, _ := r.GetString(0, 0)
 	binPos, _ := r.GetInt(0, 1)
 
-	s, err := t.b.StartSync(mysql.Position{Name: binFile, Pos: uint32(binPos)})
+	s, err := t.b.StartSync(mysql.Position{Name: binFile, Pos: uint64(binPos)})
 	c.Assert(err, IsNil)
 
 	// check we have set Slave_UUID
@@ -410,7 +410,7 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 
 	os.RemoveAll(binlogDir)
 
-	err := t.b.StartBackup(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, 2*time.Second)
+	err := t.b.StartBackup(binlogDir, mysql.Position{Name: "", Pos: uint64(0)}, 2*time.Second)
 	c.Assert(err, IsNil)
 
 	p := NewBinlogParser()

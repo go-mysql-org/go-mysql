@@ -91,7 +91,7 @@ func (c *Canal) runSyncBinlog() error {
 		switch e := ev.Event.(type) {
 		case *replication.RotateEvent:
 			pos.Name = string(e.NextLogName)
-			pos.Pos = uint32(e.Position)
+			pos.Pos = e.Position
 			c.cfg.Logger.Infof("rotate binlog to %s", pos)
 			savePos = true
 			force = true
@@ -307,7 +307,7 @@ func (c *Canal) GetMasterPos() (mysql.Position, error) {
 	name, _ := rr.GetString(0, 0)
 	pos, _ := rr.GetInt(0, 1)
 
-	return mysql.Position{Name: name, Pos: uint32(pos)}, nil
+	return mysql.Position{Name: name, Pos: uint64(pos)}, nil
 }
 
 func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {

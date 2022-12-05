@@ -64,7 +64,7 @@ type EventHeader struct {
 	EventType EventType
 	ServerID  uint32
 	EventSize uint32
-	LogPos    uint32
+	LogPos    uint64
 	Flags     uint16
 }
 
@@ -87,7 +87,7 @@ func (h *EventHeader) Decode(data []byte) error {
 	h.EventSize = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
-	h.LogPos = binary.LittleEndian.Uint32(data[pos:])
+	h.LogPos = binary.LittleEndian.Uint64(data[pos:])
 	pos += 4
 
 	h.Flags = binary.LittleEndian.Uint16(data[pos:])

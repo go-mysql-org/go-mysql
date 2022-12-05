@@ -32,7 +32,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 	}
 
 	var filename string
-	var offset uint32
+	var offset uint64
 
 	var f *os.File
 	defer func() {

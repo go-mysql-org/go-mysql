@@ -470,7 +470,7 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p Position) error {
 	data[pos] = COM_BINLOG_DUMP
 	pos++
 
-	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
+	binary.LittleEndian.PutUint64(data[pos:], p.Pos)
 	pos += 4
 
 	binary.LittleEndian.PutUint16(data[pos:], b.cfg.DumpCommandFlag)
@@ -809,7 +809,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	switch event := e.Event.(type) {
 	case *RotateEvent:
 		b.nextPos.Name = string(event.NextLogName)
-		b.nextPos.Pos = uint32(event.Position)
+		b.nextPos.Pos = event.Position
 		b.cfg.Logger.Infof("rotate to %s", b.nextPos)
 	case *GTIDEvent:
 		if b.prevGset == nil {

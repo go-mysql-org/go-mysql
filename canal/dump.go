@@ -173,7 +173,7 @@ func (c *Canal) dump() error {
 		return errors.Trace(err)
 	}
 
-	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
+	pos := mysql.Position{Name: h.name, Pos: h.pos}
 	c.master.Update(pos)
 	c.master.UpdateGTIDSet(h.gset)
 	if err := c.eventHandler.OnPosSynced(nil, pos, c.master.GTIDSet(), true); err != nil {

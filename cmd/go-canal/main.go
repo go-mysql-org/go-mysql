@@ -79,7 +79,7 @@ func main() {
 
 	startPos := mysql.Position{
 		Name: *startName,
-		Pos:  uint32(*startPos),
+		Pos:  uint64(*startPos),
 	}
 
 	go func() {
