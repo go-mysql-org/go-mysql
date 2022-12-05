@@ -9,7 +9,7 @@ import (
 // For binlog filename + position based replication
 type Position struct {
 	Name string
-	Pos  uint32
+	Pos  uint64
 }
 
 func (p Position) Compare(o Position) int {
