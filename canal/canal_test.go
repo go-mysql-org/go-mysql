@@ -123,7 +123,7 @@ func (h *testEventHandler) String() string {
 	return "testEventHandler"
 }
 
-func (h *testEventHandler) OnPosSynced(p mysql.Position, set mysql.GTIDSet, f bool) error {
+func (h *testEventHandler) OnPosSynced(header *replication.EventHeader, p mysql.Position, set mysql.GTIDSet, f bool) error {
 	return nil
 }
 

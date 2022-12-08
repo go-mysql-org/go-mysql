@@ -14,6 +14,8 @@ import (
 
 // use docker mysql for test
 var host = flag.String("host", "127.0.0.1", "MySQL host")
+var schema = flag.String("schema", "test", "MySQL Database")
+var pwd = flag.String("pwd", "", "MySQL password")
 
 func Test(t *testing.T) {
 	TestingT(t)
@@ -28,10 +30,10 @@ var _ = Suite(&schemaTestSuite{})
 
 func (s *schemaTestSuite) SetUpSuite(c *C) {
 	var err error
-	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, 3306), "root", "", "test")
+	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, 3306), "root", *pwd, *schema)
 	c.Assert(err, IsNil)
 
-	s.sqlDB, err = sql.Open("mysql", fmt.Sprintf("root:@%s:3306", *host))
+	s.sqlDB, err = sql.Open("mysql", fmt.Sprintf("root:%s@%s:3306", *pwd, *host))
 	c.Assert(err, IsNil)
 }
 
@@ -75,12 +77,20 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	_, err = s.conn.Execute(str)
 	c.Assert(err, IsNil)
 
-	ta, err := NewTable(s.conn, "test", "schema_test")
+	ta, err := NewTable(s.conn, *schema, "schema_test")
 	c.Assert(err, IsNil)
 
 	c.Assert(ta.Columns, HasLen, 15)
 	c.Assert(ta.Indexes, HasLen, 3)
 	c.Assert(ta.PKColumns, DeepEquals, []int{2, 0})
+	c.Assert(ta.IsPrimaryKey(0), IsTrue)
+	c.Assert(ta.IsPrimaryKey(1), IsFalse)
+	c.Assert(ta.IsPrimaryKey(2), IsTrue)
+	c.Assert(ta.IsPrimaryKey(3), IsFalse)
+	c.Assert(ta.GetPKColumn(0), Equals, &ta.Columns[2])
+	c.Assert(ta.GetPKColumn(1), Equals, &ta.Columns[0])
+	c.Assert(ta.GetPKColumn(2), IsNil)
+	c.Assert(ta.GetPKColumn(3), IsNil)
 	c.Assert(ta.Indexes[0].Columns, HasLen, 2)
 	c.Assert(ta.Indexes[0].Name, Equals, "PRIMARY")
 	c.Assert(ta.Indexes[2].Name, Equals, "name_idx")
@@ -107,7 +117,7 @@ func (s *schemaTestSuite) TestSchema(c *C) {
 	c.Assert(ta.Columns[14].MaxSize, Equals, uint(12))
 	c.Assert(ta.Columns[14].FixedSize, Equals, uint(0))
 
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, "test", "schema_test")
+	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_test")
 	c.Assert(err, IsNil)
 
 	c.Assert(taSqlDb, DeepEquals, ta)
@@ -119,7 +129,7 @@ func (s *schemaTestSuite) TestQuoteSchema(c *C) {
 	_, err := s.conn.Execute(str)
 	c.Assert(err, IsNil)
 
-	ta, err := NewTable(s.conn, "test", "a-b_test")
+	ta, err := NewTable(s.conn, *schema, "a-b_test")
 	c.Assert(err, IsNil)
 
 	c.Assert(ta.Columns[0].Name, Equals, "a.b")

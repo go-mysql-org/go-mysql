@@ -260,7 +260,7 @@ func (c *Canal) Close() {
 	c.conn = nil
 	c.connLock.Unlock()
 
-	_ = c.eventHandler.OnPosSynced(c.master.Position(), c.master.GTIDSet(), true)
+	_ = c.eventHandler.OnPosSynced(nil, c.master.Position(), c.master.GTIDSet(), true)
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
