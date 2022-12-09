@@ -58,47 +58,52 @@ func (s *localBinFileAdapterStreamer) GetEvent(ctx context.Context) (*replicatio
 		if startErr != nil {
 			return nil, startErr
 		}
-		ev, err = newStreamer.GetEvent(ctx)
 		// set all streamer to the new sync master streamer
 		s.BinlogStreamer = newStreamer
 		s.syncMasterStreamer = newStreamer
+
+		ev, err = newStreamer.GetEvent(ctx)
 	}
 
-	if mysqlErr, ok := err.(*mysql.MyError); ok {
-		// change to local binlog file streamer to adapter the steamer
-		if mysqlErr.Code == mysql.ER_MASTER_FATAL_ERROR_READING_BINLOG &&
-			mysqlErr.Message == "Could not find first log file name in binary log index file" {
-			gset := s.canal.master.GTIDSet()
-			if gset == nil || gset.String() == "" { // currently only support position based replication
-				s.canal.cfg.Logger.Info("Could not find first log, try to download the local binlog for retry")
-				pos := s.canal.master.Position()
-				newStreamer := newLocalBinFileStreamer(s.binFileDownloader, pos)
-
-				s.syncMasterStreamer = s.BinlogStreamer
-				s.BinlogStreamer = newStreamer
-
-				return newStreamer.GetEvent(ctx)
-			}
-		}
+	mysqlErr, ok := err.(*mysql.MyError)
+	// only 'Could not find first log' can create local streamer, ignore other errors
+	if !ok || mysqlErr.Code != mysql.ER_MASTER_FATAL_ERROR_READING_BINLOG ||
+		mysqlErr.Message != "Could not find first log file name in binary log index file" {
+		return ev, err
 	}
 
-	return ev, err
+	s.canal.cfg.Logger.Info("Could not find first log, try to download the local binlog for retry")
+
+	// local binlog need next position to find binlog file and begin event
+	pos := s.canal.master.Position()
+	newStreamer := s.newLocalBinFileStreamer(s.binFileDownloader, pos)
+	s.BinlogStreamer = newStreamer
+
+	return newStreamer.GetEvent(ctx)
 }
 
-func newLocalBinFileStreamer(download BinlogFileDownloader, position mysql.Position) *replication.BinlogStreamer {
+func (s *localBinFileAdapterStreamer) newLocalBinFileStreamer(download BinlogFileDownloader, position mysql.Position) *replication.BinlogStreamer {
 	streamer := replication.NewBinlogStreamer()
 	binFilePath, err := download(position)
 	if err != nil {
 		streamer.CloseWithError(errors.New("local binlog file not exist"))
+		return streamer
 	}
 
 	go func(binFilePath string, streamer *replication.BinlogStreamer) {
 		beginFromHere := false
-		err := replication.NewBinlogParser().ParseFile(binFilePath, 0, func(be *replication.BinlogEvent) error {
+		err := s.canal.syncer.GetBinlogParser().ParseFile(binFilePath, 0, func(be *replication.BinlogEvent) error {
+			if position.Pos < 4 { // binlog first pos is 4, if pos < 4 means canal gives error position info
+				return nil
+			}
 			if be.Header.LogPos == position.Pos || position.Pos == 4 { // go ahead to check if begin
 				beginFromHere = true
 			}
 			if beginFromHere {
+				if err := s.canal.syncer.StorePosAndGTID(be); err != nil {
+					streamer.CloseWithError(err)
+					return nil
+				}
 				streamer.PutEvent(be)
 			}
 			return nil
