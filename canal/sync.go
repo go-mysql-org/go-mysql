@@ -65,9 +65,15 @@ func (c *Canal) runSyncBinlog() error {
 			case *replication.RotateEvent:
 				fakeRotateLogName = string(e.NextLogName)
 				c.cfg.Logger.Infof("received fake rotate event, next log name is %s", e.NextLogName)
+				if fakeRotateLogName != c.master.Position().Name {
+					fakeRotateLogName = ""
+					c.cfg.Logger.Info("log name changed, the fake rotate event will be handled as a real roate event")
+				} else {
+					continue
+				}
+			default:
+				continue
 			}
-
-			continue
 		}
 
 		savePos = false
