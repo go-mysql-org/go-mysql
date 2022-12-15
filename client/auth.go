@@ -120,6 +120,8 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 		return CalcPassword(authData[:20], []byte(c.password)), false, nil
 	case AUTH_CACHING_SHA2_PASSWORD:
 		return CalcCachingSha2Password(authData, c.password), false, nil
+	case AUTH_CLEAR_PASSWORD:
+		return []byte(c.password), true, nil
 	case AUTH_SHA256_PASSWORD:
 		if len(c.password) == 0 {
 			return nil, true, nil
