@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"fmt"
+	"github.com/go-mysql-org/go-mysql/replication"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/siddontang/go/hack"
@@ -28,6 +29,11 @@ type Handler interface {
 	//handle any other command that is not currently handled by the library,
 	//default implementation for this method will return an ER_UNKNOWN_ERROR
 	HandleOtherCommand(cmd byte, data []byte) error
+}
+
+type ReplicationHandler interface {
+	// handle Replication command
+	HandleBinlogDump(position uint32, name string) (*replication.Event, error)
 }
 
 func (c *Conn) HandleCommand() error {
@@ -74,6 +80,21 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		}
 	case COM_PING:
 		return nil
+	case COM_BINLOG_DUMP:
+		position := uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16 | uint32(data[3])<<24
+		// get server id
+		_ = uint32(data[4]) | uint32(data[5])<<8 | uint32(data[6])<<16 | uint32(data[7])<<24
+		name := string(data[8:])
+		if h, ok := c.h.(ReplicationHandler); ok {
+			if r, err := h.HandleBinlogDump(position, name); err != nil {
+				return err
+			} else {
+				return r
+			}
+		} else {
+			// TODO add normal error
+			return NewDefaultError(ER_UNKNOWN_ERROR, "not support binlog dump")
+		}
 	case COM_INIT_DB:
 		if err := c.h.UseDB(hack.String(data)); err != nil {
 			return err
@@ -143,6 +164,10 @@ func (h EmptyHandler) UseDB(dbName string) error {
 	return nil
 }
 func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
+	return nil, fmt.Errorf("not supported now")
+}
+
+func (h EmptyHandler) HandleBinlogDump(position uint32, name string) (*replication.Event, error) {
 	return nil, fmt.Errorf("not supported now")
 }
 
