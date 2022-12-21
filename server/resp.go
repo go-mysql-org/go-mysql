@@ -1,9 +1,12 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 )
 
 func (c *Conn) writeOK(r *Result) error {
@@ -197,6 +200,27 @@ func (c *Conn) writeFieldValues(fv []FieldValue) error {
 	return c.WritePacket(data)
 }
 
+func (c *Conn) writeBinlogEvent(s *replication.BinlogStreamer) error {
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ev, err := s.GetEvent(ctx)
+		cancel()
+
+		if err == context.DeadlineExceeded {
+			break
+		}
+		data := make([]byte, 4, 32)
+		data = append(data, OK_HEADER)
+
+		data = append(data, ev.RawData...)
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 type noResponse struct{}
 type eofResponse struct{}
 
@@ -220,6 +244,8 @@ func (c *Conn) WriteValue(value interface{}) error {
 		return c.writeFieldList(v, nil)
 	case []FieldValue:
 		return c.writeFieldValues(v)
+	case *replication.BinlogStreamer:
+		return c.writeBinlogEvent(v)
 	case *Stmt:
 		return c.writePrepare(v)
 	default:

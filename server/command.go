@@ -32,8 +32,9 @@ type Handler interface {
 }
 
 type ReplicationHandler interface {
-	// handle Replication command
-	HandleBinlogDump(position uint32, name string) (*replication.Event, error)
+	//handle Replication command
+	HandleBinlogDump(position uint32, name string, s *replication.BinlogStreamer)
+	HandleBinlogDumpGTID(gtidSet string, s *replication.BinlogStreamer)
 }
 
 func (c *Conn) HandleCommand() error {
@@ -80,21 +81,6 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		}
 	case COM_PING:
 		return nil
-	case COM_BINLOG_DUMP:
-		position := uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16 | uint32(data[3])<<24
-		// get server id
-		_ = uint32(data[4]) | uint32(data[5])<<8 | uint32(data[6])<<16 | uint32(data[7])<<24
-		name := string(data[8:])
-		if h, ok := c.h.(ReplicationHandler); ok {
-			if r, err := h.HandleBinlogDump(position, name); err != nil {
-				return err
-			} else {
-				return r
-			}
-		} else {
-			// TODO add normal error
-			return NewDefaultError(ER_UNKNOWN_ERROR, "not support binlog dump")
-		}
 	case COM_INIT_DB:
 		if err := c.h.UseDB(hack.String(data)); err != nil {
 			return err
@@ -152,6 +138,23 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		}
 
 		return eofResponse{}
+	case COM_REGISTER_SLAVE:
+		return nil
+	case COM_BINLOG_DUMP:
+		position := uint32(data[1]) | uint32(data[2])<<8 | uint32(data[3])<<16 | uint32(data[4])<<24
+		// get server id
+		_ = uint32(data[4]) | uint32(data[5])<<8 | uint32(data[6])<<16 | uint32(data[7])<<24
+		name := string(data[9:])
+		if h, ok := c.h.(ReplicationHandler); ok {
+			s := replication.NewBinlogStreamer()
+			go h.HandleBinlogDump(position, name, s)
+			return s
+		} else {
+			return c.h.HandleOtherCommand(cmd, data)
+		}
+	case COM_BINLOG_DUMP_GTID:
+		// TODO support GTID
+		return nil
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}
@@ -160,14 +163,14 @@ func (c *Conn) dispatch(data []byte) interface{} {
 type EmptyHandler struct {
 }
 
+type EmptyReplicationHandler struct {
+	EmptyHandler
+}
+
 func (h EmptyHandler) UseDB(dbName string) error {
 	return nil
 }
 func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
-	return nil, fmt.Errorf("not supported now")
-}
-
-func (h EmptyHandler) HandleBinlogDump(position uint32, name string) (*replication.Event, error) {
 	return nil, fmt.Errorf("not supported now")
 }
 
@@ -183,6 +186,12 @@ func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args 
 
 func (h EmptyHandler) HandleStmtClose(context interface{}) error {
 	return nil
+}
+
+func (h EmptyReplicationHandler) HandleBinlogDump(position uint32, name string, r *replication.BinlogStreamer) {
+}
+
+func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet string, r *replication.BinlogStreamer) {
 }
 
 func (h EmptyHandler) HandleOtherCommand(cmd byte, data []byte) error {

@@ -84,11 +84,20 @@ func (s *BinlogStreamer) closeWithError(err error) {
 	}
 }
 
-func newBinlogStreamer() *BinlogStreamer {
+func NewBinlogStreamer() *BinlogStreamer {
 	s := new(BinlogStreamer)
 
 	s.ch = make(chan *BinlogEvent, 10240)
 	s.ech = make(chan error, 4)
 
 	return s
+}
+
+func (s *BinlogStreamer) AddEventToStreamer(ev *BinlogEvent) error {
+	select {
+	case s.ch <- ev:
+		return nil
+	case err := <-s.ech:
+		return err
+	}
 }

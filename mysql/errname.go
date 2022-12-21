@@ -865,5 +865,4 @@ var MySQLErrName = map[uint16]string{
 	ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_NOT_NULL:                    "cannot silently convert NULL values, as required in this SQL_MODE",
 	ER_MUST_CHANGE_PASSWORD_LOGIN:                                       "Your password has expired. To log in you must change it using a client that supports expired passwords.",
 	ER_ROW_IN_WRONG_PARTITION:                                           "Found a row in wrong partition %s",
-	ER_INVALID_HANDLER:                                                  "Invalid handler reference, use %s",
 }
