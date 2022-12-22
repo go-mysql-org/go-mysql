@@ -10,7 +10,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb/parser/ast"
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
