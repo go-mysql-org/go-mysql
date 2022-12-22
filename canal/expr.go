@@ -3,8 +3,9 @@ package canal
 import (
 	"io"
 
-	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/format"
+	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/parser/charset"
+	"github.com/pingcap/tidb/parser/format"
 )
 
 func init() {
@@ -44,5 +45,5 @@ func (ve *valueExpr) SetProjectionOffset(offset int)                {}
 func (ve *valueExpr) Restore(ctx *format.RestoreCtx) error          { return nil }
 func (ve *valueExpr) Accept(v ast.Visitor) (node ast.Node, ok bool) { return }
 func (ve *valueExpr) Text() string                                  { return "" }
-func (ve *valueExpr) SetText(text string)                           {}
+func (ve *valueExpr) SetText(enc charset.Encoding, text string)     {}
 func (ve *valueExpr) Format(w io.Writer)                            {}
