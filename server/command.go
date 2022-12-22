@@ -146,7 +146,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			}
 			return nil
 		} else {
-			return NewDefaultError(ER_HANDLER_DOES_NOT_SUPPORT, "replication protocol", "ReplicationHandler")
+			return fmt.Errorf("the handler does not support replication protocol, use ReplicationHandler instead")
 		}
 	case COM_BINLOG_DUMP:
 		if h, ok := c.h.(ReplicationHandler); ok {
@@ -154,7 +154,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			go h.HandleBinlogDump(data, s)
 			return s
 		} else {
-			return NewDefaultError(ER_HANDLER_DOES_NOT_SUPPORT, "replication protocol", "ReplicationHandler")
+			return fmt.Errorf("the handler does not support replication protocol, use ReplicationHandler instead")
 		}
 	case COM_BINLOG_DUMP_GTID:
 		if h, ok := c.h.(ReplicationHandler); ok {
@@ -162,7 +162,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			go h.HandleBinlogDumpGTID(data, s)
 			return s
 		} else {
-			return NewDefaultError(ER_HANDLER_DOES_NOT_SUPPORT, "replication protocol", "ReplicationHandler")
+			return fmt.Errorf("the handler does not support replication protocol, use ReplicationHandler instead")
 		}
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
