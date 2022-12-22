@@ -200,7 +200,7 @@ func (c *Conn) writeFieldValues(fv []FieldValue) error {
 	return c.WritePacket(data)
 }
 
-func (c *Conn) writeBinlogEvent(s *replication.BinlogStreamer) error {
+func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		ev, err := s.GetEvent(ctx)
@@ -245,7 +245,7 @@ func (c *Conn) WriteValue(value interface{}) error {
 	case []FieldValue:
 		return c.writeFieldValues(v)
 	case *replication.BinlogStreamer:
-		return c.writeBinlogEvent(v)
+		return c.writeBinlogEvents(v)
 	case *Stmt:
 		return c.writePrepare(v)
 	default:
