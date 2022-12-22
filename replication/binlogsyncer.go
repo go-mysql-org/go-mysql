@@ -393,7 +393,7 @@ func (b *BinlogSyncer) prepare() error {
 func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
 	b.running = true
 
-	s := newBinlogStreamer()
+	s := NewBinlogStreamer()
 
 	b.wg.Add(1)
 	go b.onStream(s)

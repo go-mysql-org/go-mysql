@@ -33,8 +33,9 @@ type Handler interface {
 
 type ReplicationHandler interface {
 	//handle Replication command
-	HandleBinlogDump(position uint32, name string, s *replication.BinlogStreamer)
-	HandleBinlogDumpGTID(gtidSet string, s *replication.BinlogStreamer)
+	HandleRegisterSlave(data []byte) error
+	HandleBinlogDump(data []byte, s *replication.BinlogStreamer)
+	HandleBinlogDumpGTID(data []byte, s *replication.BinlogStreamer)
 }
 
 func (c *Conn) HandleCommand() error {
@@ -139,22 +140,30 @@ func (c *Conn) dispatch(data []byte) interface{} {
 
 		return eofResponse{}
 	case COM_REGISTER_SLAVE:
-		return nil
+		if h, ok := c.h.(ReplicationHandler); ok {
+			if err := h.HandleRegisterSlave(data); err != nil {
+				return err
+			}
+			return nil
+		} else {
+			return NewDefaultError(ER_HANDLER_DOES_NOT_SUPPORT, "replication protocol", "ReplicationHandler")
+		}
 	case COM_BINLOG_DUMP:
-		position := uint32(data[1]) | uint32(data[2])<<8 | uint32(data[3])<<16 | uint32(data[4])<<24
-		// get server id
-		_ = uint32(data[4]) | uint32(data[5])<<8 | uint32(data[6])<<16 | uint32(data[7])<<24
-		name := string(data[9:])
 		if h, ok := c.h.(ReplicationHandler); ok {
 			s := replication.NewBinlogStreamer()
-			go h.HandleBinlogDump(position, name, s)
+			go h.HandleBinlogDump(data, s)
 			return s
 		} else {
-			return c.h.HandleOtherCommand(cmd, data)
+			return NewDefaultError(ER_HANDLER_DOES_NOT_SUPPORT, "replication protocol", "ReplicationHandler")
 		}
 	case COM_BINLOG_DUMP_GTID:
-		// TODO support GTID
-		return nil
+		if h, ok := c.h.(ReplicationHandler); ok {
+			s := replication.NewBinlogStreamer()
+			go h.HandleBinlogDumpGTID(data, s)
+			return s
+		} else {
+			return NewDefaultError(ER_HANDLER_DOES_NOT_SUPPORT, "replication protocol", "ReplicationHandler")
+		}
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}
@@ -185,6 +194,10 @@ func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args 
 }
 
 func (h EmptyHandler) HandleStmtClose(context interface{}) error {
+	return nil
+}
+
+func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
 	return nil
 }
 

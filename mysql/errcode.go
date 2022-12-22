@@ -867,4 +867,5 @@ const (
 	ER_MUST_CHANGE_PASSWORD_LOGIN                                       = 1862
 	ER_ROW_IN_WRONG_PARTITION                                           = 1863
 	ER_ERROR_LAST                                                       = 1863
+	ER_HANDLER_DOES_NOT_SUPPORT                                         = 1864
 )
