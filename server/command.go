@@ -201,10 +201,10 @@ func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
 	return fmt.Errorf("not supported now")
 }
 
-func (h EmptyReplicationHandler) HandleBinlogDump(position uint32, name string, r *replication.BinlogStreamer) {
+func (h EmptyReplicationHandler) HandleBinlogDump(data []byte, r *replication.BinlogStreamer) {
 }
 
-func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet string, r *replication.BinlogStreamer) {
+func (h EmptyReplicationHandler) HandleBinlogDumpGTID(data []byte, r *replication.BinlogStreamer) {
 }
 
 func (h EmptyHandler) HandleOtherCommand(cmd byte, data []byte) error {
