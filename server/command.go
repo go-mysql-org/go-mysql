@@ -198,7 +198,7 @@ func (h EmptyHandler) HandleStmtClose(context interface{}) error {
 }
 
 func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
-	return nil
+	return fmt.Errorf("not supported now")
 }
 
 func (h EmptyReplicationHandler) HandleBinlogDump(position uint32, name string, r *replication.BinlogStreamer) {
