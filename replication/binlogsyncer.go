@@ -829,6 +829,9 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		if b.prevGset == nil {
 			break
 		}
+		if b.currGset == nil {
+			b.currGset = b.prevGset.Clone()
+		}
 		prev := b.currGset.Clone()
 		err = b.currGset.(*MariadbGTIDSet).AddSet(&event.GTID)
 		if err != nil {
