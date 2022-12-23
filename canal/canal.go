@@ -54,6 +54,8 @@ type Canal struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	binFileDownloader BinlogFileDownloader
 }
 
 // canal will retry fetching unknown table's meta after UnknownTableRetryPeriod

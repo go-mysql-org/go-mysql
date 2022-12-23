@@ -794,6 +794,32 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		return errors.Trace(err)
 	}
 
+	if err := b.StorePosAndGTID(e); err != nil {
+		return errors.Trace(err)
+	}
+
+	needStop := false
+	select {
+	case s.ch <- e:
+	case <-b.ctx.Done():
+		needStop = true
+	}
+
+	if needACK {
+		err := b.replySemiSyncACK(b.nextPos)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	if needStop {
+		return errors.New("sync is been closing...")
+	}
+
+	return nil
+}
+
+func (b *BinlogSyncer) StorePosAndGTID(e *BinlogEvent) error {
 	if e.Header.LogPos > 0 {
 		// Some events like FormatDescriptionEvent return 0, ignore.
 		b.nextPos.Pos = e.Header.LogPos
@@ -833,7 +859,7 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 			b.currGset = b.prevGset.Clone()
 		}
 		prev := b.currGset.Clone()
-		err = b.currGset.(*MariadbGTIDSet).AddSet(&event.GTID)
+		err := b.currGset.(*MariadbGTIDSet).AddSet(&event.GTID)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -850,25 +876,6 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 			event.GSet = getCurrentGtidSet()
 		}
 	}
-
-	needStop := false
-	select {
-	case s.ch <- e:
-	case <-b.ctx.Done():
-		needStop = true
-	}
-
-	if needACK {
-		err := b.replySemiSyncACK(b.nextPos)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-
-	if needStop {
-		return errors.New("sync is been closing...")
-	}
-
 	return nil
 }
 
@@ -904,4 +911,8 @@ func (b *BinlogSyncer) killConnection(conn *client.Conn, id uint32) {
 		}
 	}
 	b.cfg.Logger.Infof("kill last connection id %d", id)
+}
+
+func (b *BinlogSyncer) GetBinlogParser() *BinlogParser {
+	return b.parser
 }
