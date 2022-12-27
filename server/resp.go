@@ -207,7 +207,7 @@ func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
 		cancel()
 
 		if err == context.DeadlineExceeded {
-			break
+			continue
 		}
 		data := make([]byte, 4, 32)
 		data = append(data, OK_HEADER)
@@ -217,8 +217,6 @@ func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
 			return err
 		}
 	}
-
-	return nil
 }
 
 type noResponse struct{}

@@ -101,3 +101,9 @@ func (s *BinlogStreamer) AddEventToStreamer(ev *BinlogEvent) error {
 		return err
 	}
 }
+
+func (s *BinlogStreamer) AddErrorToStreamer(err error) {
+	select {
+	case s.ech <- err:
+	}
+}
