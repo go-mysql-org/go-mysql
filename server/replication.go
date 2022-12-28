@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/binary"
+
 	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
