@@ -149,9 +149,9 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		if h, ok := c.h.(ReplicationHandler); ok {
 			pos, _ := parseBinlogDump(data)
 			if s, err := h.HandleBinlogDump(pos); err != nil {
-				return s
-			} else {
 				return err
+			} else {
+				return s
 			}
 		} else {
 			return c.h.HandleOtherCommand(cmd, data)
@@ -163,9 +163,9 @@ func (c *Conn) dispatch(data []byte) interface{} {
 				return err
 			}
 			if s, err := h.HandleBinlogDumpGTID(gtidSet); err != nil {
-				return s
-			} else {
 				return err
+			} else {
+				return s
 			}
 		} else {
 			return c.h.HandleOtherCommand(cmd, data)
