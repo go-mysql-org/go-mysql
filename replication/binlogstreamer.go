@@ -9,9 +9,8 @@ import (
 )
 
 var (
-	ErrNeedSyncAgain  = errors.New("Last sync error or closed, try sync and get event again")
-	ErrSyncClosed     = errors.New("Sync was closed")
-	ErrStreamerIsFull = errors.New("streamer is full")
+	ErrNeedSyncAgain = errors.New("Last sync error or closed, try sync and get event again")
+	ErrSyncClosed    = errors.New("Sync was closed")
 )
 
 // BinlogStreamer gets the streaming event.
@@ -102,8 +101,6 @@ func (s *BinlogStreamer) AddEventToStreamer(ev *BinlogEvent) error {
 		return nil
 	case err := <-s.ech:
 		return err
-	default:
-		return ErrStreamerIsFull
 	}
 }
 
