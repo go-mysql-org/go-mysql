@@ -3,8 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"time"
-
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 )
@@ -200,16 +198,14 @@ func (c *Conn) writeFieldValues(fv []FieldValue) error {
 	return c.WritePacket(data)
 }
 
+// see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication.html
 func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		ev, err := s.GetEvent(ctx)
-		cancel()
-
-		if err == context.DeadlineExceeded {
-			continue
+		ev, err := s.GetEvent(context.Background())
+		if err != nil {
+			return err
 		}
-		data := make([]byte, 4, 32)
+		data := make([]byte, 4, 4+len(ev.RawData))
 		data = append(data, OK_HEADER)
 
 		data = append(data, ev.RawData...)

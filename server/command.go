@@ -32,10 +32,10 @@ type Handler interface {
 }
 
 type ReplicationHandler interface {
-	//handle Replication command
+	// handle Replication command
 	HandleRegisterSlave(data []byte) error
-	HandleBinlogDump(pos *Position, s *replication.BinlogStreamer)
-	HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet, s *replication.BinlogStreamer)
+	HandleBinlogDump(pos *Position) (*replication.BinlogStreamer, error)
+	HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error)
 }
 
 func (c *Conn) HandleCommand() error {
@@ -141,22 +141,20 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		return eofResponse{}
 	case COM_REGISTER_SLAVE:
 		if h, ok := c.h.(ReplicationHandler); ok {
-			if err := h.HandleRegisterSlave(data); err != nil {
-				return err
-			}
-			return nil
+			return h.HandleRegisterSlave(data)
 		} else {
-			return fmt.Errorf("the handler does not support replication protocol, use ReplicationHandler instead")
+			return c.h.HandleOtherCommand(cmd, data)
 		}
 	case COM_BINLOG_DUMP:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			pos, _ := parseBinlogDump(data)
-			s := replication.NewBinlogStreamer()
-			go h.HandleBinlogDump(pos, s)
-
-			return s
+			if s, err := h.HandleBinlogDump(pos); err != nil {
+				return s
+			} else {
+				return err
+			}
 		} else {
-			return fmt.Errorf("the handler does not support replication protocol, use ReplicationHandler instead")
+			return c.h.HandleOtherCommand(cmd, data)
 		}
 	case COM_BINLOG_DUMP_GTID:
 		if h, ok := c.h.(ReplicationHandler); ok {
@@ -164,13 +162,13 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			if err != nil {
 				return err
 			}
-
-			s := replication.NewBinlogStreamer()
-			go h.HandleBinlogDumpGTID(gtidSet, s)
-
-			return s
+			if s, err := h.HandleBinlogDumpGTID(gtidSet); err != nil {
+				return s
+			} else {
+				return err
+			}
 		} else {
-			return fmt.Errorf("the handler does not support replication protocol, use ReplicationHandler instead")
+			return c.h.HandleOtherCommand(cmd, data)
 		}
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
@@ -209,10 +207,12 @@ func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
 	return fmt.Errorf("not supported now")
 }
 
-func (h EmptyReplicationHandler) HandleBinlogDump(pos *Position, r *replication.BinlogStreamer) {
+func (h EmptyReplicationHandler) HandleBinlogDump(pos *Position) (*replication.BinlogStreamer, error) {
+	return nil, fmt.Errorf("not supported now")
 }
 
-func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet, r *replication.BinlogStreamer) {
+func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error) {
+	return nil, fmt.Errorf("not supported now")
 }
 
 func (h EmptyHandler) HandleOtherCommand(cmd byte, data []byte) error {

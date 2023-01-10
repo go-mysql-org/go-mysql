@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	ErrNeedSyncAgain = errors.New("Last sync error or closed, try sync and get event again")
-	ErrSyncClosed    = errors.New("Sync was closed")
+	ErrNeedSyncAgain  = errors.New("Last sync error or closed, try sync and get event again")
+	ErrSyncClosed     = errors.New("Sync was closed")
+	ErrStreamerIsFull = errors.New("streamer is full")
 )
 
 // BinlogStreamer gets the streaming event.
@@ -93,15 +94,25 @@ func NewBinlogStreamer() *BinlogStreamer {
 	return s
 }
 
+// AddEventToStreamer adds a binlog event to the streamer. You can use it when you want to add an event to the streamer manually.
+// can be used in replication handlers
 func (s *BinlogStreamer) AddEventToStreamer(ev *BinlogEvent) error {
 	select {
 	case s.ch <- ev:
 		return nil
 	case err := <-s.ech:
 		return err
+	default:
+		return ErrStreamerIsFull
 	}
 }
 
-func (s *BinlogStreamer) AddErrorToStreamer(err error) {
-	s.ech <- err
+// AddErrorToStreamer adds an error to the streamer.
+func (s *BinlogStreamer) AddErrorToStreamer(err error) bool {
+	select {
+	case s.ech <- err:
+		return true
+	default:
+		return false
+	}
 }
