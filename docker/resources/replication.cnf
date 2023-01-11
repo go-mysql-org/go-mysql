@@ -1,0 +1,7 @@
+[mysqld]
+server-id=1
+log-bin=mysql
+binlog-format=row
+gtid-mode=ON
+enforce_gtid_consistency=ON
+#log_error_verbosity=2

@@ -10,15 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 )
 
-var testAddr = flag.String("addr", "127.0.0.1:4000", "MySQL proxy server address")
 var testUser = flag.String("user", "root", "MySQL user")
 var testPassword = flag.String("pass", "123456", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
@@ -98,16 +99,18 @@ type serverTestSuite struct {
 }
 
 func (s *serverTestSuite) SetUpSuite(c *C) {
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlFakeHost, *test_util.MysqlFakePort)
+
 	var err error
 
-	s.l, err = net.Listen("tcp", *testAddr)
+	s.l, err = net.Listen("tcp", addr)
 	c.Assert(err, IsNil)
 
 	go s.onAccept(c)
 
 	time.Sleep(20 * time.Millisecond)
 
-	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
+	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, addr, *testDB, s.tlsPara))
 	c.Assert(err, IsNil)
 
 	s.db.SetMaxIdleConns(4)

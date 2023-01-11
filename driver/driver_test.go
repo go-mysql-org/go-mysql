@@ -9,13 +9,10 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	. "github.com/pingcap/check"
+
+	"github.com/go-mysql-org/go-mysql/test_util"
 )
 
-// Use docker mysql to test, mysql is 3306
-var testHost = flag.String("host", "127.0.0.1", "MySQL master host")
-
-// possible choices for different MySQL versions are: 5561,5641,3306,5722,8003,8012
-var testPort = flag.Int("port", 3306, "MySQL server port")
 var testUser = flag.String("user", "root", "MySQL user")
 var testPassword = flag.String("pass", "", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
@@ -31,8 +28,8 @@ type testDriverSuite struct {
 var _ = Suite(&testDriverSuite{})
 
 func (s *testDriverSuite) SetUpSuite(c *C) {
-	addr := fmt.Sprintf("%s:%d", *testHost, *testPort)
-	dsn := fmt.Sprintf("%s:%s@%s?%s", *testUser, *testPassword, addr, *testDB)
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
+	dsn := fmt.Sprintf("%s:%s@%s/%s", *testUser, *testPassword, addr, *testDB)
 
 	var err error
 	s.db, err = sqlx.Open("mysql", dsn)

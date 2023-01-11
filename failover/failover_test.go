@@ -6,11 +6,10 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+
+	"github.com/go-mysql-org/go-mysql/test_util"
 )
 
-// We will use go-mysql docker to test
-// go-mysql docker will build mysql 1-3 instances
-var host = flag.String("host", "127.0.0.1", "go-mysql docker container address")
 var enable_failover_test = flag.Bool("test-failover", false, "enable test failover")
 
 func Test(t *testing.T) {
@@ -33,7 +32,7 @@ func (s *failoverTestSuite) SetUpSuite(c *C) {
 	s.s = make([]*Server, len(ports))
 
 	for i := 0; i < len(ports); i++ {
-		s.s[i] = NewServer(fmt.Sprintf("%s:%d", *host, ports[i]), User{"root", ""}, User{"root", ""})
+		s.s[i] = NewServer(fmt.Sprintf("%s:%d", *test_util.MysqlHost, ports[i]), User{"root", ""}, User{"root", ""})
 	}
 
 	var err error

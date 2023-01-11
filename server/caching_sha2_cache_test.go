@@ -9,12 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 )
 
 var delay = 50
@@ -68,6 +70,7 @@ func (m *RemoteThrottleProvider) GetCredential(username string) (password string
 
 type cacheTestSuite struct {
 	server       *Server
+	serverAddr   string
 	credProvider CredentialProvider
 	tlsPara      string
 
@@ -77,9 +80,11 @@ type cacheTestSuite struct {
 }
 
 func (s *cacheTestSuite) SetUpSuite(c *C) {
+	s.serverAddr = fmt.Sprintf("%s:%s", *test_util.MysqlFakeHost, *test_util.MysqlFakePort)
+
 	var err error
 
-	s.l, err = net.Listen("tcp", *testAddr)
+	s.l, err = net.Listen("tcp", s.serverAddr)
 	c.Assert(err, IsNil)
 
 	go s.onAccept(c)
@@ -130,7 +135,7 @@ func (s *cacheTestSuite) TestCache(c *C) {
 	// first connection
 	t1 := time.Now()
 	var err error
-	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
+	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, s.serverAddr, *testDB, s.tlsPara))
 	c.Assert(err, IsNil)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect(c)
@@ -147,7 +152,7 @@ func (s *cacheTestSuite) TestCache(c *C) {
 
 	// second connection
 	t3 := time.Now()
-	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
+	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, s.serverAddr, *testDB, s.tlsPara))
 	c.Assert(err, IsNil)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect(c)

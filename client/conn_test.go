@@ -7,6 +7,7 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util"
 )
 
 type connTestSuite struct {
@@ -16,7 +17,7 @@ type connTestSuite struct {
 
 func (s *connTestSuite) SetUpSuite(c *C) {
 	var err error
-	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	s.c, err = Connect(addr, *testUser, *testPassword, "", func(c *Conn) {
 		// required for the ExecuteMultiple test
 		c.SetCapability(mysql.CLIENT_MULTI_STATEMENTS)

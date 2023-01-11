@@ -6,8 +6,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/go-mysql-org/go-mysql/client"
 	. "github.com/pingcap/check"
+
+	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/test_util"
 )
 
 type schemaTestSuite struct {
@@ -18,11 +20,13 @@ type schemaTestSuite struct {
 var _ = Suite(&schemaTestSuite{})
 
 func (s *schemaTestSuite) SetUpSuite(c *C) {
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
+
 	var err error
-	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, *port), "root", "", "")
+	s.conn, err = client.Connect(addr, "root", "", "")
 	c.Assert(err, IsNil)
 
-	s.d, err = NewDumper(*execution, fmt.Sprintf("%s:%d", *host, *port), "root", "")
+	s.d, err = NewDumper(*execution, addr, "root", "")
 	c.Assert(err, IsNil)
 	c.Assert(s.d, NotNil)
 

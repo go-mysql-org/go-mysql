@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pingcap/check"
+
+	_ "github.com/go-mysql-org/go-mysql/test_util" // Will register common flags
 )
 
 func Test(t *testing.T) {
