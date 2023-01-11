@@ -34,7 +34,7 @@ type Handler interface {
 type ReplicationHandler interface {
 	// handle Replication command
 	HandleRegisterSlave(data []byte) error
-	HandleBinlogDump(pos *Position) (*replication.BinlogStreamer, error)
+	HandleBinlogDump(pos Position) (*replication.BinlogStreamer, error)
 	HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error)
 }
 
@@ -147,7 +147,10 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		}
 	case COM_BINLOG_DUMP:
 		if h, ok := c.h.(ReplicationHandler); ok {
-			pos, _ := parseBinlogDump(data)
+			pos, err := parseBinlogDump(data)
+			if err != nil {
+				return err
+			}
 			if s, err := h.HandleBinlogDump(pos); err != nil {
 				return err
 			} else {
@@ -207,7 +210,7 @@ func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
 	return fmt.Errorf("not supported now")
 }
 
-func (h EmptyReplicationHandler) HandleBinlogDump(pos *Position) (*replication.BinlogStreamer, error) {
+func (h EmptyReplicationHandler) HandleBinlogDump(pos Position) (*replication.BinlogStreamer, error) {
 	return nil, fmt.Errorf("not supported now")
 }
 
