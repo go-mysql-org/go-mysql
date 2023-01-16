@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/siddontang/go/hack"
 )
 
@@ -28,6 +29,13 @@ type Handler interface {
 	//handle any other command that is not currently handled by the library,
 	//default implementation for this method will return an ER_UNKNOWN_ERROR
 	HandleOtherCommand(cmd byte, data []byte) error
+}
+
+type ReplicationHandler interface {
+	// handle Replication command
+	HandleRegisterSlave(data []byte) error
+	HandleBinlogDump(pos Position) (*replication.BinlogStreamer, error)
+	HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error)
 }
 
 func (c *Conn) HandleCommand() error {
@@ -131,12 +139,50 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		}
 
 		return eofResponse{}
+	case COM_REGISTER_SLAVE:
+		if h, ok := c.h.(ReplicationHandler); ok {
+			return h.HandleRegisterSlave(data)
+		} else {
+			return c.h.HandleOtherCommand(cmd, data)
+		}
+	case COM_BINLOG_DUMP:
+		if h, ok := c.h.(ReplicationHandler); ok {
+			pos, err := parseBinlogDump(data)
+			if err != nil {
+				return err
+			}
+			if s, err := h.HandleBinlogDump(pos); err != nil {
+				return err
+			} else {
+				return s
+			}
+		} else {
+			return c.h.HandleOtherCommand(cmd, data)
+		}
+	case COM_BINLOG_DUMP_GTID:
+		if h, ok := c.h.(ReplicationHandler); ok {
+			gtidSet, err := parseBinlogDumpGTID(data)
+			if err != nil {
+				return err
+			}
+			if s, err := h.HandleBinlogDumpGTID(gtidSet); err != nil {
+				return err
+			} else {
+				return s
+			}
+		} else {
+			return c.h.HandleOtherCommand(cmd, data)
+		}
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}
 }
 
 type EmptyHandler struct {
+}
+
+type EmptyReplicationHandler struct {
+	EmptyHandler
 }
 
 func (h EmptyHandler) UseDB(dbName string) error {
@@ -158,6 +204,18 @@ func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args 
 
 func (h EmptyHandler) HandleStmtClose(context interface{}) error {
 	return nil
+}
+
+func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
+	return fmt.Errorf("not supported now")
+}
+
+func (h EmptyReplicationHandler) HandleBinlogDump(pos Position) (*replication.BinlogStreamer, error) {
+	return nil, fmt.Errorf("not supported now")
+}
+
+func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error) {
+	return nil, fmt.Errorf("not supported now")
 }
 
 func (h EmptyHandler) HandleOtherCommand(cmd byte, data []byte) error {
