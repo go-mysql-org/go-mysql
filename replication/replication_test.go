@@ -15,10 +15,8 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util"
 )
-
-// Use docker mysql to test, mysql is 3306, mariadb is 3316
-var testHost = flag.String("host", "127.0.0.1", "MySQL master host")
 
 var testOutputLogs = flag.Bool("out", false, "output binlog event")
 
@@ -267,7 +265,7 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 		t.c.Close()
 	}
 
-	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *testHost, port), "root", "", "")
+	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *test_util.MysqlHost, port), "root", "", "")
 	if err != nil {
 		c.Skip(err.Error())
 	}
@@ -285,7 +283,7 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 	cfg := BinlogSyncerConfig{
 		ServerID:   100,
 		Flavor:     flavor,
-		Host:       *testHost,
+		Host:       *test_util.MysqlHost,
 		Port:       port,
 		User:       "root",
 		Password:   "",

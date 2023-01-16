@@ -1,20 +1,19 @@
 package canal
 
 import (
-	"flag"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/parser"
 	"github.com/siddontang/go-log/log"
-)
 
-var testHost = flag.String("host", "127.0.0.1", "MySQL host")
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/test_util"
+)
 
 func Test(t *testing.T) {
 	TestingT(t)
@@ -38,7 +37,7 @@ const (
 
 func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg := NewDefaultConfig()
-	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
+	cfg.Addr = fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
 	cfg.User = "root"
 	cfg.HeartbeatPeriod = 200 * time.Millisecond
 	cfg.ReadTimeout = 300 * time.Millisecond

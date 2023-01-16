@@ -9,6 +9,7 @@ import (
 	"github.com/pingcap/errors"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util"
 	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 )
 
@@ -19,7 +20,7 @@ type clientTestSuite struct {
 
 func (s *clientTestSuite) SetUpSuite(c *C) {
 	var err error
-	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	s.c, err = Connect(addr, *testUser, *testPassword, "")
 	if err != nil {
 		c.Fatal(err)
@@ -117,7 +118,7 @@ func (s *clientTestSuite) TestConn_SetCapability(c *C) {
 func (s *clientTestSuite) TestConn_TLS_Verify(c *C) {
 	// Verify that the provided tls.Config is used when attempting to connect to mysql.
 	// An empty tls.Config will result in a connection error.
-	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	_, err := Connect(addr, *testUser, *testPassword, *testDB, func(c *Conn) {
 		c.UseSSL(false)
 	})
@@ -133,7 +134,7 @@ func (s *clientTestSuite) TestConn_TLS_Verify(c *C) {
 
 func (s *clientTestSuite) TestConn_TLS_Skip_Verify(c *C) {
 	// An empty tls.Config will result in a connection error but we can configure to skip it.
-	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	_, err := Connect(addr, *testUser, *testPassword, *testDB, func(c *Conn) {
 		c.UseSSL(true)
 	})
@@ -145,7 +146,7 @@ func (s *clientTestSuite) TestConn_TLS_Certificate(c *C) {
 	// And if server uses auto-generated certificates, it will be an error like:
 	// "x509: certificate is valid for MySQL_Server_8.0.12_Auto_Generated_Server_Certificate, not not-a-valid-name"
 	tlsConfig := NewClientTLSConfig(test_keys.CaPem, test_keys.CertPem, test_keys.KeyPem, false, "not-a-valid-name")
-	addr := fmt.Sprintf("%s:%s", *testHost, s.port)
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	_, err := Connect(addr, *testUser, *testPassword, *testDB, func(c *Conn) {
 		c.SetTLSConfig(tlsConfig)
 	})

@@ -3,7 +3,6 @@ package replication
 import (
 	"context"
 	"os"
-	"sync"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -17,27 +16,20 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 
 	t.testExecute(c, "RESET MASTER")
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	defer wg.Wait()
-
-	go func() {
-		defer wg.Done()
-
+	for times := 1; times <= 2; times++ {
 		t.testSync(c, nil)
-
 		t.testExecute(c, "FLUSH LOGS")
+	}
 
-		t.testSync(c, nil)
-	}()
+	binlogDir := "./var"
 
-	os.RemoveAll("./var")
+	os.RemoveAll(binlogDir)
 	timeout := 2 * time.Second
 
 	done := make(chan bool)
 
 	go func() {
-		err := t.b.StartBackup("./var", mysql.Position{Name: "", Pos: uint32(0)}, timeout)
+		err := t.b.StartBackup(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, timeout)
 		c.Assert(err, IsNil)
 		done <- true
 	}()

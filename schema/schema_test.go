@@ -10,10 +10,9 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	_ "github.com/go-mysql-org/go-mysql/driver"
+	"github.com/go-mysql-org/go-mysql/test_util"
 )
 
-// use docker mysql for test
-var host = flag.String("host", "127.0.0.1", "MySQL host")
 var schema = flag.String("schema", "test", "MySQL Database")
 var pwd = flag.String("pwd", "", "MySQL password")
 
@@ -29,11 +28,13 @@ type schemaTestSuite struct {
 var _ = Suite(&schemaTestSuite{})
 
 func (s *schemaTestSuite) SetUpSuite(c *C) {
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
+
 	var err error
-	s.conn, err = client.Connect(fmt.Sprintf("%s:%d", *host, 3306), "root", *pwd, *schema)
+	s.conn, err = client.Connect(addr, "root", *pwd, *schema)
 	c.Assert(err, IsNil)
 
-	s.sqlDB, err = sql.Open("mysql", fmt.Sprintf("root:%s@%s:3306", *pwd, *host))
+	s.sqlDB, err = sql.Open("mysql", fmt.Sprintf("root:%s@%s", *pwd, addr))
 	c.Assert(err, IsNil)
 }
 
