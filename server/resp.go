@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 )
 
 func (c *Conn) writeOK(r *Result) error {
@@ -197,6 +199,23 @@ func (c *Conn) writeFieldValues(fv []FieldValue) error {
 	return c.WritePacket(data)
 }
 
+// see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication.html
+func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
+	for {
+		ev, err := s.GetEvent(context.Background())
+		if err != nil {
+			return err
+		}
+		data := make([]byte, 4, 4+len(ev.RawData))
+		data = append(data, OK_HEADER)
+
+		data = append(data, ev.RawData...)
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+}
+
 type noResponse struct{}
 type eofResponse struct{}
 
@@ -220,6 +239,8 @@ func (c *Conn) WriteValue(value interface{}) error {
 		return c.writeFieldList(v, nil)
 	case []FieldValue:
 		return c.writeFieldValues(v)
+	case *replication.BinlogStreamer:
+		return c.writeBinlogEvents(v)
 	case *Stmt:
 		return c.writePrepare(v)
 	default:
