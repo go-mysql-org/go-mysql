@@ -10,7 +10,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb/parser"
 	"github.com/siddontang/go-log/log"
 )
 
