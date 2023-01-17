@@ -147,11 +147,11 @@ func (c *Canal) runSyncBinlog() error {
 				if strings.Contains(strings.ToLower(msg), strings.ToLower("procedure")) {
 					// Cut the first row from the message since it contain the procedure call and not the entire message
 					fl := strings.Split(msg, "\n")
-					log.Errorf("parse SP Error: (%s)", fl[0])
+					log.Debugf("parse SP Error: (%s)", fl[0])
 				} else {
-					log.Errorf("parse query(%s) err %v", e.Query, err)
+					log.Debugf("parse query(%s) err %v", e.Query, err)
 				}
-				log.Error("will skip this event")
+				log.Debugln("will skip this event")
 				continue
 			}
 			for _, stmt := range stmts {
