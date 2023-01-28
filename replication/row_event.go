@@ -11,7 +11,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
-	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go/hack"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
@@ -906,9 +905,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 	// ... repeat rows until event-end
 	defer func() {
 		if r := recover(); r != nil {
-			errStr := fmt.Sprintf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v", r, data, e, e.Table)
-			log.Errorf("%s\n%s", errStr, Pstack())
-			err2 = errors.Trace(errors.New(errStr))
+			err2 = errors.Errorf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v", r, data, e, e.Table)
 		}
 	}()
 
