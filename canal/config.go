@@ -39,6 +39,9 @@ type DumpConfig struct {
 	// 'FLUSH TABLES WITH READ LOCK'
 	SkipMasterData bool `toml:"skip_master_data"`
 
+	// Dump with option --no-create-info, default true
+	NoCreateInfo bool `toml:"no_create_info"`
+
 	// Set to change the default max_allowed_packet size
 	MaxAllowedPacketMB int `toml:"max_allowed_packet_mb"`
 
@@ -133,6 +136,7 @@ func NewDefaultConfig() *Config {
 	c.Dump.ExecutionPath = "mysqldump"
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
+	c.Dump.NoCreateInfo = true
 
 	streamHandler, _ := log.NewStreamHandler(os.Stdout)
 	c.Logger = log.NewDefault(streamHandler)
