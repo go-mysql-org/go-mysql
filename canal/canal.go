@@ -162,6 +162,7 @@ func (c *Canal) prepareDumper() error {
 
 	c.dumper.SetWhere(c.cfg.Dump.Where)
 	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
+	c.dumper.NoCreateInfo(c.cfg.Dump.NoCreateInfo)
 	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
 	c.dumper.SetProtocol(c.cfg.Dump.Protocol)
 	c.dumper.SetExtraOptions(c.cfg.Dump.ExtraOptions)

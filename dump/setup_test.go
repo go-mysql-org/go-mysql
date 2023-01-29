@@ -34,3 +34,7 @@ func (h *testParseHandler) GtidSet(gtidsets string) (err error) {
 func (h *testParseHandler) Data(schema string, table string, values []string) error {
 	return nil
 }
+
+func (h *testParseHandler) Table(schema string, query string) error {
+	return nil
+}

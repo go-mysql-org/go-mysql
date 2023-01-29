@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
@@ -111,6 +112,19 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 
 	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs}, nil)
 	return h.c.eventHandler.OnRow(events)
+}
+
+func (h *dumpParseHandler) Table(db string, query string) error {
+	if err := h.c.ctx.Err(); err != nil {
+		return err
+	}
+
+	event := &replication.QueryEvent{
+		Schema: []byte(db),
+		Query:  []byte(query),
+	}
+
+	return h.c.eventHandler.OnDDL(nil, mysql.Position{}, event)
 }
 
 func (c *Canal) AddDumpDatabases(dbs ...string) {
