@@ -24,6 +24,7 @@ type Conn struct {
 	tlsConfig *tls.Config
 	proto     string
 
+	serverVersion string
 	// server capabilities
 	capability uint32
 	// client-set capabilities only
@@ -191,6 +192,10 @@ func (c *Conn) UseDB(dbName string) error {
 
 func (c *Conn) GetDB() string {
 	return c.db
+}
+
+func (c *Conn) GetServerVersion() string {
+	return c.serverVersion
 }
 
 func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {

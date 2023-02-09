@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	. "github.com/pingcap/check"
+	"golang.org/x/mod/semver"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -88,7 +89,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		}
 	}()
 
-	//use mixed format
+	// use mixed format
 	t.testExecute(c, "SET SESSION binlog_format = 'MIXED'")
 
 	str := `DROP TABLE IF EXISTS test_replication`
@@ -117,7 +118,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 
 	t.testExecute(c, str)
 
-	//use row format
+	// use row format
 	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
 
 	t.testExecute(c, `INSERT INTO test_replication (str, f, i, e, b, y, da, ts, dt, tm, de, t, bb, se)
@@ -294,7 +295,7 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 }
 
 func (t *testSyncerSuite) testPositionSync(c *C) {
-	//get current master binlog file and position
+	// get current master binlog file and position
 	r, err := t.c.Execute("SHOW MASTER STATUS")
 	c.Assert(err, IsNil)
 	binFile, _ := r.GetString(0, 0)
@@ -303,11 +304,18 @@ func (t *testSyncerSuite) testPositionSync(c *C) {
 	s, err := t.b.StartSync(mysql.Position{Name: binFile, Pos: uint32(binPos)})
 	c.Assert(err, IsNil)
 
-	// check we have set Slave_UUID
 	r, err = t.c.Execute("SHOW SLAVE HOSTS")
 	c.Assert(err, IsNil)
-	slaveUUID, _ := r.GetString(0, 4)
-	c.Assert(slaveUUID, HasLen, 36)
+
+	// List of replicas must not be empty
+	c.Assert(r.Values, Not(HasLen), 0)
+
+	// Slave_UUID is empty for mysql 8.0.28+ (8.0.32 still broken)
+	if semver.Compare(t.c.GetServerVersion(), "8.0.28") < 0 {
+		// check we have set Slave_UUID
+		slaveUUID, _ := r.GetString(0, 4)
+		c.Assert(slaveUUID, HasLen, 36)
+	}
 
 	// Test re-sync.
 	time.Sleep(100 * time.Millisecond)
