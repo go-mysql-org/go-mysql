@@ -123,8 +123,9 @@ func (h *dumpParseHandler) Table(db string, query string) error {
 		Schema: []byte(db),
 		Query:  []byte(query),
 	}
+	pos := mysql.Position{Name: h.name, Pos: uint32(h.pos)}
 
-	return h.c.eventHandler.OnDDL(nil, mysql.Position{}, event)
+	return h.c.eventHandler.OnDDL(nil, pos, event)
 }
 
 func (c *Canal) AddDumpDatabases(dbs ...string) {

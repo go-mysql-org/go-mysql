@@ -1,6 +1,7 @@
 package dump
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -151,5 +152,47 @@ func (s *parserTestSuite) TestParseLine(c *C) {
 		c.Assert(m, HasLen, 1)
 		c.Assert(m[0][1], Matches, "test")
 		c.Assert(m[0][2], Matches, t.expected)
+	}
+}
+
+func (s *parserTestSuite) TestParseTable(c *C) {
+	tables := []struct {
+		input    []string
+		expected string
+	}{
+		{input: []string{
+			"CREATE TABLE `t1` (",
+			"p1 varchar(100) NOT NULL COMMENT 'p1', ",
+			"p2 int(10) NOT NULL DEFAULT 0 COMMENT 'p2', ",
+			"PRIMARY KEY(p1)",
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+		},
+			expected: "CREATE TABLE `t1` (p1 varchar(100) NOT NULL COMMENT 'p1', p2 int(10) NOT NULL DEFAULT 0 COMMENT 'p2', PRIMARY KEY(p1)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
+		{input: []string{"CREATE TABLE `t1` (p1 int(10)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
+			expected: "CREATE TABLE `t1` (p1 int(10)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
+	}
+	tableStartExp := regexp.MustCompile("^CREATE TABLE `(.+)` \\(")
+
+	for _, t := range tables {
+		var inTableParsing bool
+		var query string
+		for _, line := range t.input {
+			if !inTableParsing {
+				if m := tableStartExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
+					inTableParsing = true
+				}
+			}
+
+			if inTableParsing {
+				if i := strings.IndexByte(line, byte(';')); i > 0 {
+					query += line
+					inTableParsing = false
+					continue
+				}
+				query += line
+				continue
+			}
+		}
+		c.Assert(query, Matches, t.expected)
 	}
 }
