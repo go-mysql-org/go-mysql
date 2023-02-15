@@ -193,6 +193,6 @@ func (s *parserTestSuite) TestParseTable(c *C) {
 				continue
 			}
 		}
-		c.Assert(query, Matches, t.expected)
+		c.Assert(query, Equals, t.expected)
 	}
 }
