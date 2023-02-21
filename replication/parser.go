@@ -295,6 +295,8 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = &PreviousGTIDsEvent{}
 			case INTVAR_EVENT:
 				e = &IntVarEvent{}
+			case TRANSACTION_PAYLOAD_EVENT:
+				e = &TransactionPayloadEvent{}
 			default:
 				e = &GenericEvent{}
 			}
