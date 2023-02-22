@@ -70,7 +70,7 @@ func (e *TransactionPayloadEvent) Dump(w io.Writer) {
 	payloadUncompressed, _ := decoder.DecodeAll(e.Payload, nil)
 	fmt.Fprintf(w, "Decompressed: \n%s", hex.Dump(payloadUncompressed))
 
-	// The uncompressed data needs to be split up into individual events for Parsse()
+	// The uncompressed data needs to be split up into individual events for Parse()
 	// to work on them. We can't use a NewBinlogParser() as we need the initialization
 	// from the FormatDescriptionEvent. And we need to disable the binlog checksum
 	// algorithm as otherwise the XidEvent's get truncated and fail to parse.
