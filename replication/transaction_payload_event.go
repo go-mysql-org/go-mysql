@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/klauspost/compress/zstd"
+	"github.com/DataDog/zstd"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 )
@@ -66,8 +66,10 @@ func (e *TransactionPayloadEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Payload CompressionType: %s\n", e.compressionType())
 	fmt.Fprintf(w, "Payload Body: \n%s", hex.Dump(e.Payload))
 
-	decoder, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
-	payloadUncompressed, _ := decoder.DecodeAll(e.Payload, nil)
+	payloadUncompressed, err := zstd.Decompress(nil, e.Payload)
+	if err != nil {
+		fmt.Fprintf(w, "Decompressed failed: %s\n", err)
+	}
 	fmt.Fprintf(w, "Decompressed: \n%s", hex.Dump(payloadUncompressed))
 
 	// The uncompressed data needs to be split up into individual events for Parse()
