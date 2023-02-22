@@ -296,7 +296,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 			case INTVAR_EVENT:
 				e = &IntVarEvent{}
 			case TRANSACTION_PAYLOAD_EVENT:
-				e = &TransactionPayloadEvent{}
+				e = p.newTransactionPayloadEvent()
 			default:
 				e = &GenericEvent{}
 			}
@@ -416,6 +416,13 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 	case DELETE_ROWS_EVENTv2:
 		e.Version = 2
 	}
+
+	return e
+}
+
+func (p *BinlogParser) newTransactionPayloadEvent() *TransactionPayloadEvent {
+	e := &TransactionPayloadEvent{}
+	e.parser = p
 
 	return e
 }

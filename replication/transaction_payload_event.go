@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -40,6 +41,7 @@ func fieldTypeName(ft uint64) string {
 }
 
 type TransactionPayloadEvent struct {
+	parser           *BinlogParser
 	Data             []byte
 	Size             uint64
 	UncompressedSize uint64
@@ -63,11 +65,34 @@ func (e *TransactionPayloadEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Payload Uncompressed Size: %d\n", e.UncompressedSize)
 	fmt.Fprintf(w, "Payload CompressionType: %s\n", e.compressionType())
 	fmt.Fprintf(w, "Payload Body: \n%s", hex.Dump(e.Payload))
-	// fmt.Fprintf(w, "Transaction Payload Event data: \n%s", hex.Dump(e.Data))
 
 	decoder, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 	payloadUncompressed, _ := decoder.DecodeAll(e.Payload, nil)
 	fmt.Fprintf(w, "Decompressed: \n%s", hex.Dump(payloadUncompressed))
+
+	// The uncompressed data needs to be split up into individual events for Parsse()
+	// to work on them. We can't use a NewBinlogParser() as we need the initialization
+	// from the FormatDescriptionEvent. And we need to disable the binlog checksum
+	// algorithm as otherwise the XidEvent's get truncated and fail to parse.
+	offset := uint32(0)
+	for {
+		if offset >= uint32(len(payloadUncompressed)) {
+			break
+		}
+		eventLength := binary.LittleEndian.Uint32(payloadUncompressed[offset+9 : offset+13])
+		data := payloadUncompressed[offset : offset+eventLength]
+
+		e.parser.format.ChecksumAlgorithm = BINLOG_CHECKSUM_ALG_OFF
+		pe, err := e.parser.Parse(data)
+		if err != nil {
+			fmt.Fprintf(w, "Failed to parse payload: %s\n", err)
+		} else {
+			pe.Dump(w)
+		}
+
+		offset += eventLength
+	}
+
 	fmt.Fprintln(w)
 }
 
