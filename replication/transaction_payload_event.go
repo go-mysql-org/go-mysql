@@ -25,21 +25,6 @@ const (
 	NONE = 255
 )
 
-func fieldTypeName(ft uint64) string {
-	switch ft {
-	case OTW_PAYLOAD_HEADER_END_MARK:
-		return "HeaderEndMark"
-	case OTW_PAYLOAD_SIZE_FIELD:
-		return "SizeField"
-	case OTW_PAYLOAD_COMPRESSION_TYPE_FIELD:
-		return "CompressionType"
-	case OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD:
-		return "UncompressedSize"
-	default:
-		return "Unknown"
-	}
-}
-
 type TransactionPayloadEvent struct {
 	parser           *BinlogParser
 	Data             []byte
