@@ -61,7 +61,7 @@ func (e *TransactionPayloadEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	return e.decodePayload(data)
+	return e.decodePayload()
 }
 
 func (e *TransactionPayloadEvent) decodeFields(data []byte) error {
@@ -94,7 +94,7 @@ func (e *TransactionPayloadEvent) decodeFields(data []byte) error {
 	return nil
 }
 
-func (e *TransactionPayloadEvent) decodePayload(data []byte) error {
+func (e *TransactionPayloadEvent) decodePayload() error {
 	payloadUncompressed, err := zstd.Decompress(nil, e.Payload)
 	if err != nil {
 		return err
