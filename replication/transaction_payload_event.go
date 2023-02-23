@@ -57,14 +57,14 @@ func (e *TransactionPayloadEvent) Dump(w io.Writer) {
 }
 
 func (e *TransactionPayloadEvent) Decode(data []byte) error {
-	err := e.decodeTransactionHeader(data)
+	err := e.decodeFields(data)
 	if err != nil {
 		return err
 	}
-	return e.decodeTransactionPayload(data)
+	return e.decodePayload(data)
 }
 
-func (e *TransactionPayloadEvent) decodeTransactionHeader(data []byte) error {
+func (e *TransactionPayloadEvent) decodeFields(data []byte) error {
 	offset := uint64(0)
 
 	for {
@@ -94,7 +94,7 @@ func (e *TransactionPayloadEvent) decodeTransactionHeader(data []byte) error {
 	return nil
 }
 
-func (e *TransactionPayloadEvent) decodeTransactionPayload(data []byte) error {
+func (e *TransactionPayloadEvent) decodePayload(data []byte) error {
 	payloadUncompressed, err := zstd.Decompress(nil, e.Payload)
 	if err != nil {
 		return err
