@@ -422,7 +422,7 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 
 func (p *BinlogParser) newTransactionPayloadEvent() *TransactionPayloadEvent {
 	e := &TransactionPayloadEvent{}
-	e.parser = p
+	e.format = *p.format
 
 	return e
 }

@@ -28,7 +28,7 @@ const (
 )
 
 type TransactionPayloadEvent struct {
-	parser           *BinlogParser
+	format           FormatDescriptionEvent
 	Size             uint64
 	UncompressedSize uint64
 	CompressionType  uint64
@@ -115,11 +115,11 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 	// modify e.parser as it is used elsewhere.
 	parser := NewBinlogParser()
 	parser.format = &FormatDescriptionEvent{
-		Version:                e.parser.format.Version,
-		ServerVersion:          e.parser.format.ServerVersion,
-		CreateTimestamp:        e.parser.format.CreateTimestamp,
-		EventHeaderLength:      e.parser.format.EventHeaderLength,
-		EventTypeHeaderLengths: e.parser.format.EventTypeHeaderLengths,
+		Version:                e.format.Version,
+		ServerVersion:          e.format.ServerVersion,
+		CreateTimestamp:        e.format.CreateTimestamp,
+		EventHeaderLength:      e.format.EventHeaderLength,
+		EventTypeHeaderLengths: e.format.EventTypeHeaderLengths,
 		ChecksumAlgorithm:      BINLOG_CHECKSUM_ALG_OFF,
 	}
 
