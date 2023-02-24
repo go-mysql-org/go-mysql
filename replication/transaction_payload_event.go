@@ -99,6 +99,11 @@ func (e *TransactionPayloadEvent) decodeFields(data []byte) error {
 }
 
 func (e *TransactionPayloadEvent) decodePayload() error {
+	if e.CompressionType != ZSTD {
+		return fmt.Errorf("TransactionPayloadEvent has compression type %d (%s)",
+			e.CompressionType, e.compressionType())
+	}
+
 	payloadUncompressed, err := zstd.Decompress(nil, e.Payload)
 	if err != nil {
 		return err
@@ -120,10 +125,15 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 
 	offset := uint32(0)
 	for {
-		if offset+13 > uint32(len(payloadUncompressed)) {
+		payloadUncompressedLength := uint32(len(payloadUncompressed))
+		if offset+13 > payloadUncompressedLength {
 			break
 		}
 		eventLength := binary.LittleEndian.Uint32(payloadUncompressed[offset+9 : offset+13])
+		if offset+eventLength > payloadUncompressedLength {
+			return fmt.Errorf("Event length of %d with offset %d in uncompressed payload exceeds payload length of %d",
+				eventLength, offset, payloadUncompressedLength)
+		}
 		data := payloadUncompressed[offset : offset+eventLength]
 
 		pe, err := parser.Parse(data)
