@@ -12,6 +12,8 @@ import (
 )
 
 // On The Wire: Field Types
+// See also binary_log::codecs::binary::Transaction_payload::fields in MySQL
+// https://dev.mysql.com/doc/dev/mysql-server/latest/classbinary__log_1_1codecs_1_1binary_1_1Transaction__payload.html#a9fff7ac12ba064f40e9216565c53d07b
 const (
 	OTW_PAYLOAD_HEADER_END_MARK = iota
 	OTW_PAYLOAD_SIZE_FIELD
@@ -50,9 +52,11 @@ func (e *TransactionPayloadEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Payload Uncompressed Size: %d\n", e.UncompressedSize)
 	fmt.Fprintf(w, "Payload CompressionType: %s\n", e.compressionType())
 	fmt.Fprintf(w, "Payload Body: \n%s", hex.Dump(e.Payload))
+	fmt.Fprintln(w, "=== Start of events decoded from compressed payload ===")
 	for _, event := range e.Events {
 		event.Dump(w)
 	}
+	fmt.Fprintln(w, "=== End of events decoded from compressed payload ===")
 	fmt.Fprintln(w)
 }
 
@@ -116,7 +120,7 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 
 	offset := uint32(0)
 	for {
-		if offset >= uint32(len(payloadUncompressed)) {
+		if offset+13 > uint32(len(payloadUncompressed)) {
 			break
 		}
 		eventLength := binary.LittleEndian.Uint32(payloadUncompressed[offset+9 : offset+13])

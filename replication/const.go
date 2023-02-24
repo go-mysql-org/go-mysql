@@ -195,6 +195,8 @@ func (e EventType) String() string {
 		return "PartialUpdateRowsEvent"
 	case TRANSACTION_PAYLOAD_EVENT:
 		return "TransactionPayloadEvent"
+	case HEARTBEAT_LOG_EVENT_V2:
+		return "HeartbeatLogEventV2"
 
 	default:
 		return "UnknownEvent"
