@@ -194,7 +194,7 @@ func (e EventType) String() string {
 	case PARTIAL_UPDATE_ROWS_EVENT:
 		return "PartialUpdateRowsEvent"
 	case TRANSACTION_PAYLOAD_EVENT:
-		return "TransactionPlayloadEvent"
+		return "TransactionPayloadEvent"
 
 	default:
 		return "UnknownEvent"
