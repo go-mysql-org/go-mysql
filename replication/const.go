@@ -90,6 +90,9 @@ const (
 	TRANSACTION_CONTEXT_EVENT
 	VIEW_CHANGE_EVENT
 	XA_PREPARE_LOG_EVENT
+	PARTIAL_UPDATE_ROWS_EVENT
+	TRANSACTION_PAYLOAD_EVENT
+	HEARTBEAT_LOG_EVENT_V2
 )
 
 const (
@@ -188,6 +191,12 @@ func (e EventType) String() string {
 		return "ViewChangeEvent"
 	case XA_PREPARE_LOG_EVENT:
 		return "XAPrepareLogEvent"
+	case PARTIAL_UPDATE_ROWS_EVENT:
+		return "PartialUpdateRowsEvent"
+	case TRANSACTION_PAYLOAD_EVENT:
+		return "TransactionPayloadEvent"
+	case HEARTBEAT_LOG_EVENT_V2:
+		return "HeartbeatLogEventV2"
 
 	default:
 		return "UnknownEvent"
