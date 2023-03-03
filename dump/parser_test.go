@@ -170,8 +170,14 @@ func (s *parserTestSuite) TestParseTable(c *C) {
 			expected: "CREATE TABLE `t1` (p1 varchar(100) NOT NULL COMMENT 'p1', p2 int(10) NOT NULL DEFAULT 0 COMMENT 'p2', PRIMARY KEY(p1)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
 		{input: []string{"CREATE TABLE `t1` (p1 int(10)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
 			expected: "CREATE TABLE `t1` (p1 int(10)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
+		{input: []string{"CREATE TABLE `t1` (p1 int(10) COMMENT 'p1;') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
+			expected: "CREATE TABLE `t1` (p1 int(10) COMMENT 'p1;') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
+		{input: []string{"CREATE TABLE `t1` (p1 int(10) COMMENT " + "p1;" + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
+			expected: "CREATE TABLE `t1` (p1 int(10) COMMENT " + "p1;" + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"},
 	}
 	tableStartExp := regexp.MustCompile("^CREATE TABLE `(.+)` \\(")
+	comment1Exp := regexp.MustCompile("COMMENT '[" + `\s\S` + "]*?'")
+	comment2Exp := regexp.MustCompile(`COMMENT "[` + `\s\S` + `]*?"`)
 
 	for _, t := range tables {
 		var inTableParsing bool
@@ -184,7 +190,9 @@ func (s *parserTestSuite) TestParseTable(c *C) {
 			}
 
 			if inTableParsing {
-				if i := strings.IndexByte(line, byte(';')); i > 0 {
+				l := comment1Exp.ReplaceAllString(line, "")
+				l = comment2Exp.ReplaceAllString(l, "")
+				if i := strings.IndexByte(l, byte(';')); i > 0 {
 					query += line
 					inTableParsing = false
 					continue

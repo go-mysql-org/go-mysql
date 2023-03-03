@@ -27,6 +27,8 @@ type ParseHandler interface {
 var binlogExp *regexp.Regexp
 var useExp *regexp.Regexp
 var tableStartExp *regexp.Regexp
+var comment1Exp *regexp.Regexp
+var comment2Exp *regexp.Regexp
 var valuesExp *regexp.Regexp
 var gtidExp *regexp.Regexp
 
@@ -34,6 +36,8 @@ func init() {
 	binlogExp = regexp.MustCompile(`^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\d+);`)
 	useExp = regexp.MustCompile("^USE `(.+)`;")
 	tableStartExp = regexp.MustCompile("^CREATE TABLE `(.+)` \\(")
+	comment1Exp = regexp.MustCompile("COMMENT '[" + `\s\S` + "]*?'")
+	comment2Exp = regexp.MustCompile(`COMMENT "[` + `\s\S` + `]*?"`)
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
 	// The pattern will only match MySQL GTID, as you know SET GLOBAL gtid_slave_pos='0-1-4' is used for MariaDB.
 	// SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150';
@@ -95,12 +99,15 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 		}
 
 		if inTableParsing {
-			if i := strings.IndexByte(line, byte(';')); i > 0 {
+			l := comment1Exp.ReplaceAllString(line, "")
+			l = comment2Exp.ReplaceAllString(l, "")
+			if i := strings.IndexByte(l, byte(';')); i > 0 {
 				query += line
 				inTableParsing = false
 				if err = h.Table(db, query); err != nil && err != ErrSkip {
 					return errors.Trace(err)
 				}
+				query = ""
 				continue
 			}
 			query += line
