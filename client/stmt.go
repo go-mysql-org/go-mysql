@@ -31,6 +31,10 @@ func (s *Stmt) WarningsNum() int {
 	return s.warnings
 }
 
+func (s *Stmt) ID() uint32 {
+	return s.id
+}
+
 func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 	if err := s.write(args...); err != nil {
 		return nil, errors.Trace(err)
