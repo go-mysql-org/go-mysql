@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 )
@@ -377,6 +378,23 @@ func ErrorEqual(err1, err2 error) bool {
 	}
 
 	return e1.Error() == e2.Error()
+}
+
+func CompareServerVersions(a, b string) (int, error) {
+	var (
+		aVer, bVer *semver.Version
+		err        error
+	)
+
+	if aVer, err = semver.NewVersion(a); err != nil {
+		return 0, fmt.Errorf("cannot parse %q as semver: %w", a, err)
+	}
+
+	if bVer, err = semver.NewVersion(b); err != nil {
+		return 0, fmt.Errorf("cannot parse %q as semver: %w", b, err)
+	}
+
+	return aVer.Compare(bVer), nil
 }
 
 var encodeRef = map[byte]byte{
