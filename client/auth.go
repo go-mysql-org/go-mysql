@@ -26,7 +26,7 @@ func authPluginAllowed(pluginName string) bool {
 	return false
 }
 
-// See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
+// See: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_v10.html
 func (c *Conn) readInitialHandshake() error {
 	data, err := c.ReadPacket()
 	if err != nil {
@@ -40,24 +40,28 @@ func (c *Conn) readInitialHandshake() error {
 	if data[0] < MinProtocolVersion {
 		return errors.Errorf("invalid protocol version %d, must >= 10", data[0])
 	}
+	pos := 1
 
 	// skip mysql version
 	// mysql version end with 0x00
-	version := data[1 : bytes.IndexByte(data[1:], 0x00)+1]
+	version := data[pos : bytes.IndexByte(data[pos:], 0x00)+1]
 	c.serverVersion = string(version)
-	pos := 1 + len(version)
+	pos += len(version) + 1 /*trailing zero byte*/
 
 	// connection id length is 4
 	c.connectionID = binary.LittleEndian.Uint32(data[pos : pos+4])
 	pos += 4
 
-	c.salt = []byte{}
-	c.salt = append(c.salt, data[pos:pos+8]...)
+	// first 8 bytes of the plugin provided data (scramble)
+	c.salt = append(c.salt[:0], data[pos:pos+8]...)
+	pos += 8
 
-	// skip filter
-	pos += 8 + 1
+	if data[pos] != 0 { // 	0x00 byte, terminating the first part of a scramble
+		return errors.Errorf("expect 0x00 after scramble, got %q", rune(data[pos]))
+	}
+	pos++
 
-	// capability lower 2 bytes
+	// The lower 2 bytes of the Capabilities Flags
 	c.capability = uint32(binary.LittleEndian.Uint16(data[pos : pos+2]))
 	// check protocol
 	if c.capability&CLIENT_PROTOCOL_41 == 0 {
@@ -69,35 +73,51 @@ func (c *Conn) readInitialHandshake() error {
 	pos += 2
 
 	if len(data) > pos {
-		// skip server charset
+		// default server a_protocol_character_set, only the lower 8-bits
 		// c.charset = data[pos]
 		pos += 1
 
 		c.status = binary.LittleEndian.Uint16(data[pos : pos+2])
 		pos += 2
-		// capability flags (upper 2 bytes)
+
+		// The upper 2 bytes of the Capabilities Flags
 		c.capability = uint32(binary.LittleEndian.Uint16(data[pos:pos+2]))<<16 | c.capability
 		pos += 2
 
-		// auth_data is end with 0x00, min data length is 13 + 8 = 21
-		// ref to https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
-		maxAuthDataLen := 21
-		if c.capability&CLIENT_PLUGIN_AUTH != 0 && int(data[pos]) > maxAuthDataLen {
-			maxAuthDataLen = int(data[pos])
+		// length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
+		authPluginDataLen := data[pos]
+		if (c.capability&CLIENT_PLUGIN_AUTH == 0) && (authPluginDataLen > 0) {
+			return errors.Errorf("invalid auth plugin data filler %d", authPluginDataLen)
 		}
+		pos++
 
 		// skip reserved (all [00])
-		pos += 10 + 1
+		pos += 6
 
-		// auth_data is end with 0x00, so we need to trim 0x00
-		resetOfAuthDataEndPos := pos + maxAuthDataLen - 8 - 1
-		c.salt = append(c.salt, data[pos:resetOfAuthDataEndPos]...)
+		// https://github.com/vapor/mysql-nio/blob/main/Sources/MySQLNIO/Protocol/MySQLProtocol%2BHandshakeV10.swift
+		if c.capability&CLIENT_LONG_PASSWORD != 0 {
+			// skip reserved (all [00])
+			pos += 4
+		} else {
+			// unknown
+			pos += 4
+		}
 
-		// skip reset of end pos
-		pos = resetOfAuthDataEndPos + 1
+		if rest := int(authPluginDataLen) - 8; rest > 0 {
+			authPluginDataPart2 := data[pos : pos+rest]
+			pos += rest
+
+			c.salt = append(c.salt, authPluginDataPart2...)
+		}
 
 		if c.capability&CLIENT_PLUGIN_AUTH != 0 {
-			c.authPluginName = string(data[pos : len(data)-1])
+			c.authPluginName = string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
+			pos += len(c.authPluginName)
+
+			if data[pos] != 0 {
+				return errors.Errorf("expect 0x00 after scramble, got %q", rune(data[pos]))
+			}
+			pos++
 		}
 	}
 
