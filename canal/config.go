@@ -96,6 +96,9 @@ type Config struct {
 
 	//Set Dialer
 	Dialer client.Dialer
+
+	//Set Localhost
+	Localhost string
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
