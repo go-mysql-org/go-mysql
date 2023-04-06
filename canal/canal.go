@@ -450,6 +450,7 @@ func (c *Canal) prepareSyncer() error {
 		TLSConfig:               c.cfg.TLSConfig,
 		Logger:                  c.cfg.Logger,
 		Dialer:                  c.cfg.Dialer,
+		Localhost:               c.cfg.Localhost,
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {
