@@ -103,7 +103,11 @@ func (c *Conn) readInitialHandshake() error {
 			pos += 4
 		}
 
+		// Rest of the plugin provided data (scramble)
 		if rest := int(authPluginDataLen) - 8; rest > 0 {
+			if max := 13; rest > max { // $len=MAX(13, length of auth-plugin-data - 8)
+				rest = max
+			}
 			authPluginDataPart2 := data[pos : pos+rest]
 			pos += rest
 
