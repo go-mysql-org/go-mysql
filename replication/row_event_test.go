@@ -1315,7 +1315,7 @@ func (_ *testDecodeSuite) BenchmarkUseDecimal(c *C) {
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range decimalData {
-			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
 		}
 	}
 }
@@ -1325,7 +1325,7 @@ func (_ *testDecodeSuite) BenchmarkNotUseDecimal(c *C) {
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range decimalData {
-			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
 		}
 	}
 }
@@ -1334,14 +1334,14 @@ func (_ *testDecodeSuite) TestDecimal(c *C) {
 	e := &RowsEvent{useDecimal: true}
 	e2 := &RowsEvent{useDecimal: false}
 	for _, d := range decimalData {
-		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
 		c.Assert(err, IsNil)
 		// no trailing zero
 		dec, err := decimal.NewFromString(d.num)
 		c.Assert(err, IsNil)
 		c.Assert(dec.Equal(v.(decimal.Decimal)), IsTrue)
 
-		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
 		c.Assert(err, IsNil)
 		c.Assert(v.(string), Equals, d.num)
 	}
@@ -1367,7 +1367,7 @@ func (_ *testDecodeSuite) BenchmarkInt(c *C) {
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range intData {
-			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0)
+			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0, false)
 		}
 	}
 }
