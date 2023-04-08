@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/errors"
+
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/go-mysql-org/go-mysql/utils"
-	"github.com/pingcap/errors"
 )
 
 type Conn struct {
@@ -196,6 +197,10 @@ func (c *Conn) GetDB() string {
 
 func (c *Conn) GetServerVersion() string {
 	return c.serverVersion
+}
+
+func (c *Conn) CompareServerVersion(v string) (int, error) {
+	return CompareServerVersions(c.serverVersion, v)
 }
 
 func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
