@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	. "github.com/pingcap/check"
-	"golang.org/x/mod/semver"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -59,7 +58,9 @@ func (t *testSyncerSuite) TearDownTest(c *C) {
 
 func (t *testSyncerSuite) testExecute(c *C, query string) {
 	_, err := t.c.Execute(query)
-	c.Assert(err, IsNil)
+	if err != nil {
+		c.Assert(fmt.Errorf("query %q execution failed: %w", query, err), IsNil)
+	}
 }
 
 func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
@@ -126,11 +127,14 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		"2012-05-07", "2012-05-07 14:01:01", "2012-05-07 14:01:01",
 		"14:01:01", -45363.64, "abc", "12345", "a,b")`)
 
-	id := 100
-
 	if t.flavor == mysql.MySQLFlavor {
 		t.testExecute(c, "SET SESSION binlog_row_image = 'MINIMAL'")
 
+		if eq, err := t.c.CompareServerVersion("8.0.0"); (err == nil) && (eq >= 0) {
+			t.testExecute(c, "SET SESSION binlog_row_value_options = 'PARTIAL_JSON'")
+		}
+
+		const id = 100
 		t.testExecute(c, fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb, de) VALUES (%d, "4", -3.14, 100, "abc", -45635.64)`, id))
 		t.testExecute(c, fmt.Sprintf(`UPDATE test_replication SET f = -12.14, de = 555.34 WHERE id = %d`, id))
 		t.testExecute(c, fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))
@@ -156,7 +160,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 
 	str = `CREATE TABLE test_json_v2 (
 			id INT, 
-			c JSON, 
+			c JSON,
 			PRIMARY KEY (id)
 			) ENGINE=InnoDB`
 
@@ -205,6 +209,21 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 			`INSERT INTO test_json_v2 VALUES (100, CONCAT('{\"', REPEAT('a', 64 * 1024 - 1), '\":123}'))`,
 		}
 
+		for _, query := range tbls {
+			t.testExecute(c, query)
+		}
+
+		// "Partial Updates of JSON Values" from https://dev.mysql.com/doc/refman/8.0/en/json.html
+		jsonOrig := `'{"a":"aaaaaaaaaaaaa", "c":"ccccccccccccccc", "ab":["abababababababa", "babababababab"]}'`
+		tbls = []string{
+			`ALTER TABLE test_json_v2 ADD COLUMN d JSON DEFAULT NULL, ADD COLUMN e JSON DEFAULT NULL`,
+			`INSERT INTO test_json_v2 VALUES (101, ` + jsonOrig + `, ` + jsonOrig + `, ` + jsonOrig + `)`,
+			`UPDATE test_json_v2 SET c = JSON_SET(c, '$.ab', '["ab_updatedccc"]') WHERE id = 101`,
+			`UPDATE test_json_v2 SET d = JSON_SET(d, '$.ab', '["ab_updatedddd"]') WHERE id = 101`,
+			`UPDATE test_json_v2 SET e = JSON_SET(e, '$.ab', '["ab_updatedeee"]') WHERE id = 101`,
+			`UPDATE test_json_v2 SET d = JSON_SET(d, '$.ab', '["ab_ddd"]'), e = json_set(e, '$.ab', '["ab_eee"]') WHERE id = 101`,
+			// ToDo(atercattus): add more tests with JSON_REPLACE() and JSON_REMOVE()
+		}
 		for _, query := range tbls {
 			t.testExecute(c, query)
 		}
@@ -311,10 +330,12 @@ func (t *testSyncerSuite) testPositionSync(c *C) {
 	c.Assert(r.Values, Not(HasLen), 0)
 
 	// Slave_UUID is empty for mysql 8.0.28+ (8.0.32 still broken)
-	if semver.Compare(t.c.GetServerVersion(), "8.0.28") < 0 {
+	if eq, err := t.c.CompareServerVersion("8.0.28"); (err == nil) && (eq < 0) {
 		// check we have set Slave_UUID
 		slaveUUID, _ := r.GetString(0, 4)
 		c.Assert(slaveUUID, HasLen, 36)
+	} else if err != nil {
+		c.Error("Cannot compare with server version: %w", err)
 	}
 
 	// Test re-sync.

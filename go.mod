@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DataDog/zstd v1.5.2
+	github.com/Masterminds/semver v1.5.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/jmoiron/sqlx v1.3.3
@@ -16,6 +17,5 @@ require (
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07
 	github.com/stretchr/testify v1.8.0
-	golang.org/x/mod v0.3.0
 	golang.org/x/tools v0.0.0-20201125231158-b5590deeca9b // indirect
 )

@@ -6,7 +6,7 @@ jobs:
     strategy:
       matrix:
         go: [ 1.19, 1.18, 1.17, 1.16 ]
-        os: [ ubuntu-18.04, ubuntu-20.04 ]
+        os: [ ubuntu-22.04, ubuntu-20.04 ]
     name: Tests Go ${{ matrix.go }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}
 
@@ -48,3 +48,4 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         with:
           version: latest
+          args: --timeout=3m
