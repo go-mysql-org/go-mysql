@@ -26,7 +26,11 @@ func authPluginAllowed(pluginName string) bool {
 	return false
 }
 
-// See: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_v10.html
+// See:
+//   - https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_v10.html
+//   - https://github.com/alibaba/canal/blob/0ec46991499a22870dde4ae736b2586cbcbfea94/driver/src/main/java/com/alibaba/otter/canal/parse/driver/mysql/packets/server/HandshakeInitializationPacket.java#L89
+//   - https://github.com/vapor/mysql-nio/blob/main/Sources/MySQLNIO/Protocol/MySQLProtocol%2BHandshakeV10.swift
+//   - https://github.com/github/vitess-gh/blob/70ae1a2b3a116ff6411b0f40852d6e71382f6e07/go/mysql/client.go
 func (c *Conn) readInitialHandshake() error {
 	data, err := c.ReadPacket()
 	if err != nil {
@@ -91,24 +95,22 @@ func (c *Conn) readInitialHandshake() error {
 		}
 		pos++
 
-		// skip reserved (all [00])
-		pos += 6
+		// skip reserved (all [00] ?)
+		pos += 10
 
-		// https://github.com/vapor/mysql-nio/blob/main/Sources/MySQLNIO/Protocol/MySQLProtocol%2BHandshakeV10.swift
-		if c.capability&CLIENT_LONG_PASSWORD != 0 {
-			// skip reserved (all [00])
-			pos += 4
-		} else {
-			// unknown
-			pos += 4
-		}
+		if c.capability&CLIENT_SECURE_CONNECTION != 0 {
+			// Rest of the plugin provided data (scramble)
 
-		// Rest of the plugin provided data (scramble)
-		if rest := int(authPluginDataLen) - 8; rest > 0 {
-			if max := 13; rest > max { // $len=MAX(13, length of auth-plugin-data - 8)
+			// $len=MAX(13, length of auth-plugin-data - 8)
+			rest := int(authPluginDataLen) - 8
+			if max := 13; rest > max {
 				rest = max
 			}
-			authPluginDataPart2 := data[pos : pos+rest]
+			if data[pos+rest-1] != 0 {
+				return errors.Errorf("expect 0x00 after scramble, got %q", rune(data[pos]))
+			}
+
+			authPluginDataPart2 := data[pos : pos+rest-1]
 			pos += rest
 
 			c.salt = append(c.salt, authPluginDataPart2...)
@@ -119,7 +121,7 @@ func (c *Conn) readInitialHandshake() error {
 			pos += len(c.authPluginName)
 
 			if data[pos] != 0 {
-				return errors.Errorf("expect 0x00 after scramble, got %q", rune(data[pos]))
+				return errors.Errorf("expect 0x00 after authPluginName, got %q", rune(data[pos]))
 			}
 			// pos++ // ineffectual
 		}
