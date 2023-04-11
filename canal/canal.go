@@ -321,11 +321,12 @@ func (c *Canal) checkTableMatch(key string) bool {
 }
 
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
-	key := buildCacheKey(db, table)
 	// if table is excluded, return error and skip parsing event or dump
+	key := fmt.Sprintf("%s.%s", db, table)
 	if !c.checkTableMatch(key) {
 		return nil, ErrExcludedTable
 	}
+	key = buildCacheKey(db, table)
 	c.tableLock.RLock()
 	t, ok := _tableMetaData[key]
 	c.tableLock.RUnlock()
