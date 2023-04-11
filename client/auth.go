@@ -101,16 +101,18 @@ func (c *Conn) readInitialHandshake() error {
 		if c.capability&CLIENT_SECURE_CONNECTION != 0 {
 			// Rest of the plugin provided data (scramble)
 
+			// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_v10.html
 			// $len=MAX(13, length of auth-plugin-data - 8)
+			//
+			// https://github.com/mysql/mysql-server/blob/1bfe02bdad6604d54913c62614bde57a055c8332/sql/auth/sql_authentication.cc#L1641-L1642
+			// the first packet *must* have at least 20 bytes of a scramble.
+			// if a plugin provided less, we pad it to 20 with zeros
 			rest := int(authPluginDataLen) - 8
-			if max := 13; rest < max {
+			if max := 12 + 1; rest < max {
 				rest = max
 			}
-			if data[pos+rest-1] != 0 {
-				return errors.Errorf("expect 0x00 after scramble, got %q", rune(data[pos]))
-			}
 
-			authPluginDataPart2 := data[pos : pos+rest-1]
+			authPluginDataPart2 := data[pos : pos+rest]
 			pos += rest
 
 			c.salt = append(c.salt, authPluginDataPart2...)
