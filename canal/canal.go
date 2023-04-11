@@ -27,8 +27,17 @@ import (
 // MySQL must open row format for binlog
 
 var (
-	GlobalTableMetaData = make(map[string]*schema.Table)
+	_tableMetaData = make(map[string]*schema.Table)
 )
+
+func buildCacheKey(schema string, table string) string {
+	//如果是mamba_rent的库
+	if strings.Contains(schema, "mamba_rent") {
+		schema = "mamba"
+	}
+	//key 的列子 mamba:t_sale_bill:26
+	return strings.ToLower(fmt.Sprintf("%s:%s", schema, table))
+}
 
 type Canal struct {
 	m sync.Mutex
@@ -312,13 +321,13 @@ func (c *Canal) checkTableMatch(key string) bool {
 }
 
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
-	key := fmt.Sprintf("%s.%s", db, table)
+	key := buildCacheKey(db, table)
 	// if table is excluded, return error and skip parsing event or dump
 	if !c.checkTableMatch(key) {
 		return nil, ErrExcludedTable
 	}
 	c.tableLock.RLock()
-	t, ok := GlobalTableMetaData[key]
+	t, ok := _tableMetaData[key]
 	c.tableLock.RUnlock()
 
 	if ok {
@@ -356,7 +365,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 			ta.AddColumn("id", "bigint(20)", "", "")
 			ta.AddColumn("type", "char(1)", "", "")
 			c.tableLock.Lock()
-			GlobalTableMetaData[key] = ta
+			_tableMetaData[key] = ta
 			c.tableLock.Unlock()
 			return ta, nil
 		}
@@ -373,7 +382,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	}
 
 	c.tableLock.Lock()
-	GlobalTableMetaData[key] = t
+	_tableMetaData[key] = t
 	if c.cfg.DiscardNoMetaRowEvent {
 		// if get table info success, delete this key from errorTablesGetTime
 		delete(c.errorTablesGetTime, key)
@@ -385,9 +394,9 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 
 // ClearTableCache clear table cache
 func (c *Canal) ClearTableCache(db []byte, table []byte) {
-	key := fmt.Sprintf("%s.%s", db, table)
+	key := buildCacheKey(string(db), string(table))
 	c.tableLock.Lock()
-	delete(GlobalTableMetaData, key)
+	delete(_tableMetaData, key)
 	if c.cfg.DiscardNoMetaRowEvent {
 		delete(c.errorTablesGetTime, key)
 	}
@@ -396,9 +405,9 @@ func (c *Canal) ClearTableCache(db []byte, table []byte) {
 
 // SetTableCache sets table cache value for the given table
 func (c *Canal) SetTableCache(db []byte, table []byte, schema *schema.Table) {
-	key := fmt.Sprintf("%s.%s", db, table)
+	key := buildCacheKey(string(db), string(table))
 	c.tableLock.Lock()
-	GlobalTableMetaData[key] = schema
+	_tableMetaData[key] = schema
 	if c.cfg.DiscardNoMetaRowEvent {
 		// if get table info success, delete this key from errorTablesGetTime
 		delete(c.errorTablesGetTime, key)
