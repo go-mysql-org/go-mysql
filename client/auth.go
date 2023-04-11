@@ -103,7 +103,7 @@ func (c *Conn) readInitialHandshake() error {
 
 			// $len=MAX(13, length of auth-plugin-data - 8)
 			rest := int(authPluginDataLen) - 8
-			if max := 13; rest > max {
+			if max := 13; rest < max {
 				rest = max
 			}
 			if data[pos+rest-1] != 0 {
