@@ -270,7 +270,11 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				WRITE_ROWS_EVENTv2,
 				UPDATE_ROWS_EVENTv2,
 				DELETE_ROWS_EVENTv2,
+				MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1,
+				MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1,
+				MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1,
 				PARTIAL_UPDATE_ROWS_EVENT: // Extension of UPDATE_ROWS_EVENT, allowing partial values according to binlog_row_value_options
+
 				e = p.newRowsEvent(h)
 			case ROWS_QUERY_EVENT:
 				e = &RowsQueryEvent{}
@@ -411,6 +415,16 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 		e.Version = 1
 	case UPDATE_ROWS_EVENTv1:
 		e.Version = 1
+		e.needBitmap2 = true
+	case MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
+		e.Version = 1
+		e.compressed = true
+	case MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
+		e.Version = 1
+		e.compressed = true
+	case MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
+		e.Version = 1
+		e.compressed = true
 		e.needBitmap2 = true
 	case WRITE_ROWS_EVENTv2:
 		e.Version = 2
