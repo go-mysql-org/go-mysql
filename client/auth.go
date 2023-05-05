@@ -330,7 +330,6 @@ func (c *Conn) writeAuthHandshake() error {
 	if c.ccaps&CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
 		// zstd_compression_level
 		data[pos] = 0x03
-		pos++
 	}
 
 	return c.WritePacket(data)
