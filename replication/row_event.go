@@ -1,8 +1,6 @@
 package replication
 
 import (
-	"bytes"
-	"compress/zlib"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -1008,7 +1006,7 @@ func (e *RowsEvent) Decode(data []byte) error {
 		return err
 	}
 	if e.compressed {
-		uncompressedData, err := e.decompressData(pos, data)
+		uncompressedData, err := DecompressMariadbData(data[pos:])
 		if err != nil {
 			return err
 		}
@@ -1113,28 +1111,6 @@ func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
 
 	// return Golang time directly
 	return v.Time
-}
-
-func (e *RowsEvent) decompressData(pos int, data []byte) ([]byte, error) {
-	// algorithm always 0=zlib
-	// algorithm := (data[pos] & 0x07) >> 4
-	headerSize := int(data[pos] & 0x07)
-	pos++
-
-	uncompressedDataSize := BFixedLengthInt(data[pos : pos+headerSize])
-
-	pos += headerSize
-	uncompressedData := make([]byte, uncompressedDataSize)
-	r, err := zlib.NewReader(bytes.NewReader(data[pos:]))
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	_, err = io.ReadFull(r, uncompressedData)
-	if err != nil {
-		return nil, err
-	}
-	return uncompressedData, nil
 }
 
 // see mysql sql/log_event.cc log_event_print_value

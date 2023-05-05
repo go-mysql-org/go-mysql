@@ -249,6 +249,10 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 			switch h.EventType {
 			case QUERY_EVENT:
 				e = &QueryEvent{}
+			case MARIADB_QUERY_COMPRESSED_EVENT:
+				e = &QueryEvent{
+					compressed: true,
+				}
 			case XID_EVENT:
 				e = &XIDEvent{}
 			case TABLE_MAP_EVENT:

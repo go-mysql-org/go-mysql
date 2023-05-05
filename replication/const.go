@@ -202,6 +202,10 @@ func (e EventType) String() string {
 		return "TransactionPayloadEvent"
 	case HEARTBEAT_LOG_EVENT_V2:
 		return "HeartbeatLogEventV2"
+	case MARIADB_START_ENCRYPTION_EVENT:
+		return "MariadbStartEncryptionEvent"
+	case MARIADB_QUERY_COMPRESSED_EVENT:
+		return "MariadbQueryCompressedEvent"
 	case MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
 		return "MariadbWriteRowsCompressedEventV1"
 	case MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
