@@ -253,11 +253,11 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	}
 	var action string
 	switch e.Header.EventType {
-	case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
+	case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2, replication.MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
 		action = InsertAction
-	case replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
+	case replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2, replication.MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
 		action = DeleteAction
-	case replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
+	case replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2, replication.MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
 		action = UpdateAction
 	default:
 		return errors.Errorf("%s not supported now", e.Header.EventType)
