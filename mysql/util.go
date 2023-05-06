@@ -1,6 +1,8 @@
 package mysql
 
 import (
+	"bytes"
+	"compress/zlib"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -90,6 +92,24 @@ func EncryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, 
 	}
 	sha1v := sha1.New()
 	return rsa.EncryptOAEP(sha1v, rand.Reader, pub, plain, nil)
+}
+
+func DecompressMariadbData(data []byte) ([]byte, error) {
+	// algorithm always 0=zlib
+	// algorithm := (data[pos] & 0x07) >> 4
+	headerSize := int(data[0] & 0x07)
+	uncompressedDataSize := BFixedLengthInt(data[1 : 1+headerSize])
+	uncompressedData := make([]byte, uncompressedDataSize)
+	r, err := zlib.NewReader(bytes.NewReader(data[1+headerSize:]))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	_, err = io.ReadFull(r, uncompressedData)
+	if err != nil {
+		return nil, err
+	}
+	return uncompressedData, nil
 }
 
 // AppendLengthEncodedInteger: encodes a uint64 value and appends it to the given bytes slice

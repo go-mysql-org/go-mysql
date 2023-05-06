@@ -297,6 +297,9 @@ type QueryEvent struct {
 	Schema        []byte
 	Query         []byte
 
+	// for mariadb QUERY_COMPRESSED_EVENT
+	compressed bool
+
 	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
 	GSet GTIDSet
 }
@@ -328,7 +331,15 @@ func (e *QueryEvent) Decode(data []byte) error {
 	//skip 0x00
 	pos++
 
-	e.Query = data[pos:]
+	if e.compressed {
+		decompressedQuery, err := DecompressMariadbData(data[pos:])
+		if err != nil {
+			return err
+		}
+		e.Query = decompressedQuery
+	} else {
+		e.Query = data[pos:]
+	}
 	return nil
 }
 
