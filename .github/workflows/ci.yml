@@ -5,7 +5,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ 1.19, 1.18, 1.17, 1.16 ]
+        go: [ "1.20", "1.19", "1.18", "1.17", "1.16" ]
         os: [ ubuntu-22.04, ubuntu-20.04 ]
     name: Tests Go ${{ matrix.go }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}
@@ -31,7 +31,7 @@ jobs:
         run: |
           sudo apt-get install -y make gcc
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
       - name: Checkout code
