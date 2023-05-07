@@ -97,6 +97,9 @@ func (s *connTestSuite) TestExecuteMultiple(c *C) {
 		`THIS IS BOGUS()`,
 	}
 
+	_, err := s.c.Execute("USE " + *testDB)
+	c.Assert(err, IsNil)
+
 	count := 0
 	result, err := s.c.ExecuteMultiple(strings.Join(queries, "; "), func(result *mysql.Result, err error) {
 		switch count {
