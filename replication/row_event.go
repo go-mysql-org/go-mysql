@@ -830,6 +830,9 @@ type RowsEvent struct {
 	tables      map[uint64]*TableMapEvent
 	needBitmap2 bool
 
+	// for mariadb *_COMPRESSED_EVENT_V1
+	compressed bool
+
 	eventType EventType
 
 	Table *TableMapEvent
@@ -970,9 +973,9 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 
 	var rowImageType EnumRowImageType
 	switch e.eventType {
-	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2:
+	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2, MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
 		rowImageType = EnumRowImageTypeWriteAI
-	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2:
+	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2, MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
 		rowImageType = EnumRowImageTypeDeleteBI
 	default:
 		rowImageType = EnumRowImageTypeUpdateBI
@@ -1001,6 +1004,13 @@ func (e *RowsEvent) Decode(data []byte) error {
 	pos, err := e.DecodeHeader(data)
 	if err != nil {
 		return err
+	}
+	if e.compressed {
+		uncompressedData, err := DecompressMariadbData(data[pos:])
+		if err != nil {
+			return err
+		}
+		return e.DecodeData(0, uncompressedData)
 	}
 	return e.DecodeData(pos, data)
 }

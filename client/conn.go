@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"runtime"
 	"strings"
 	"time"
 
@@ -77,6 +78,14 @@ type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 // Connect to a MySQL server using the given Dialer.
 func ConnectWithDialer(ctx context.Context, network string, addr string, user string, password string, dbName string, dialer Dialer, options ...func(*Conn)) (*Conn, error) {
 	c := new(Conn)
+
+	c.attributes = map[string]string{
+		"_client_name": "go-mysql",
+		// "_client_version": "0.1",
+		"_os":              runtime.GOOS,
+		"_platform":        runtime.GOARCH,
+		"_runtime_version": runtime.Version(),
+	}
 
 	if network == "" {
 		network = getNetProto(addr)
@@ -330,7 +339,9 @@ func (c *Conn) Rollback() error {
 }
 
 func (c *Conn) SetAttributes(attributes map[string]string) {
-	c.attributes = attributes
+	for k, v := range attributes {
+		c.attributes[k] = v
+	}
 }
 
 func (c *Conn) SetCharset(charset string) error {

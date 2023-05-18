@@ -21,6 +21,7 @@ func (s *connTestSuite) SetUpSuite(c *C) {
 	s.c, err = Connect(addr, *testUser, *testPassword, "", func(c *Conn) {
 		// required for the ExecuteMultiple test
 		c.SetCapability(mysql.CLIENT_MULTI_STATEMENTS)
+		c.SetAttributes(map[string]string{"attrtest": "attrvalue"})
 	})
 	if err != nil {
 		c.Fatal(err)
@@ -174,4 +175,10 @@ func (s *connTestSuite) TestExecuteSelectStreaming(c *C) {
 
 	// Check perResultCallback call count
 	c.Assert(perResultCallbackCalledTimes, Equals, 1)
+}
+
+func (s *connTestSuite) TestAttributes(c *C) {
+	// Test that both custom attributes and library set attributes are visible
+	c.Assert(s.c.attributes["_client_name"], Equals, "go-mysql")
+	c.Assert(s.c.attributes["attrtest"], Equals, "attrvalue")
 }

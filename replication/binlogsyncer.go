@@ -891,6 +891,7 @@ func (b *BinlogSyncer) newConnection(ctx context.Context) (*client.Conn, error) 
 	return client.ConnectWithDialer(timeoutCtx, "", addr, b.cfg.User, b.cfg.Password,
 		"", b.cfg.Dialer, func(c *client.Conn) {
 			c.SetTLSConfig(b.cfg.TLSConfig)
+			c.SetAttributes(map[string]string{"_client_role": "binary_log_listener"})
 		})
 }
 
