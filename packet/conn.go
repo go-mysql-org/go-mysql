@@ -263,9 +263,7 @@ func (c *Conn) WritePacket(data []byte) error {
 		} else if n != len(data) {
 			return errors.Wrapf(ErrBadConn, "Write failed. only %v bytes written, while %v expected", n, len(data))
 		}
-	case MYSQL_COMPRESS_ZLIB:
-		fallthrough
-	case MYSQL_COMPRESS_ZSTD:
+	case MYSQL_COMPRESS_ZLIB, MYSQL_COMPRESS_ZSTD:
 		if n, err := c.writeCompressed(data); err != nil {
 			return errors.Wrapf(ErrBadConn, "Write failed. err %v", err)
 		} else if n != len(data) {
