@@ -201,7 +201,8 @@ func (c *Conn) writeAuthHandshake() error {
 	// in the library are supported here
 	capability |= c.ccaps&CLIENT_FOUND_ROWS | c.ccaps&CLIENT_IGNORE_SPACE |
 		c.ccaps&CLIENT_MULTI_STATEMENTS | c.ccaps&CLIENT_MULTI_RESULTS |
-		c.ccaps&CLIENT_PS_MULTI_RESULTS | c.ccaps&CLIENT_CONNECT_ATTRS
+		c.ccaps&CLIENT_PS_MULTI_RESULTS | c.ccaps&CLIENT_CONNECT_ATTRS |
+		c.ccaps&CLIENT_COMPRESS | c.ccaps&CLIENT_ZSTD_COMPRESSION_ALGORITHM
 
 	// To enable TLS / SSL
 	if c.tlsConfig != nil {
@@ -246,6 +247,9 @@ func (c *Conn) writeAuthHandshake() error {
 	if len(attrData) > 0 {
 		capability |= CLIENT_CONNECT_ATTRS
 		length += len(attrData)
+	}
+	if c.ccaps&CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
+		length++
 	}
 
 	data := make([]byte, length+4)
@@ -320,7 +324,12 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// connection attributes
 	if len(attrData) > 0 {
-		copy(data[pos:], attrData)
+		pos += copy(data[pos:], attrData)
+	}
+
+	if c.ccaps&CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
+		// zstd_compression_level
+		data[pos] = 0x03
 	}
 
 	return c.WritePacket(data)
