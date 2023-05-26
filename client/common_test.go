@@ -7,7 +7,7 @@ import (
 
 	. "github.com/pingcap/check"
 
-	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/instructure/mc-go-mysql/test_util"
 )
 
 var testUser = flag.String("user", "root", "MySQL user")

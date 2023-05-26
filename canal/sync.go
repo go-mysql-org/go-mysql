@@ -5,10 +5,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/google/uuid"
+	"github.com/instructure/mc-go-mysql/mysql"
+	"github.com/instructure/mc-go-mysql/replication"
+	"github.com/instructure/mc-go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/parser/ast"
 )

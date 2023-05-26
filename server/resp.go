@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
+	. "github.com/instructure/mc-go-mysql/mysql"
+	"github.com/instructure/mc-go-mysql/replication"
 )
 
 func (c *Conn) writeOK(r *Result) error {

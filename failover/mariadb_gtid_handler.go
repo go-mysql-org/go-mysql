@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	. "github.com/instructure/mc-go-mysql/mysql"
 	"github.com/pingcap/errors"
 )
 
@@ -73,9 +73,9 @@ func (h *MariadbGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error)
 	return bestSlaves, nil
 }
 
-const changeMasterToWithCurrentPos = `CHANGE MASTER TO 
-    MASTER_HOST = "%s", MASTER_PORT = %s, 
-    MASTER_USER = "%s", MASTER_PASSWORD = "%s", 
+const changeMasterToWithCurrentPos = `CHANGE MASTER TO
+    MASTER_HOST = "%s", MASTER_PORT = %s,
+    MASTER_USER = "%s", MASTER_PASSWORD = "%s",
     MASTER_USE_GTID = current_pos`
 
 func (h *MariadbGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {

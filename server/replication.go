@@ -3,7 +3,7 @@ package server
 import (
 	"encoding/binary"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/instructure/mc-go-mysql/mysql"
 )
 
 func parseBinlogDump(data []byte) (mysql.Position, error) {
