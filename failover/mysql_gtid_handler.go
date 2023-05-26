@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	. "github.com/instructure/mc-go-mysql/mysql"
 	"github.com/pingcap/errors"
 )
 
@@ -62,9 +62,9 @@ func (h *MysqlGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
 	return bestSlaves, nil
 }
 
-const changeMasterToWithAuto = `CHANGE MASTER TO 
-    MASTER_HOST = "%s", MASTER_PORT = %s, 
-    MASTER_USER = "%s", MASTER_PASSWORD = "%s", 
+const changeMasterToWithAuto = `CHANGE MASTER TO
+    MASTER_HOST = "%s", MASTER_PORT = %s,
+    MASTER_USER = "%s", MASTER_PASSWORD = "%s",
     MASTER_AUTO_POSITION = 1`
 
 func (h *MysqlGTIDHandler) ChangeMasterTo(s *Server, m *Server) error {

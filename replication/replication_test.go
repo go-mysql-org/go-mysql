@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	. "github.com/pingcap/check"
 
-	"github.com/go-mysql-org/go-mysql/client"
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/instructure/mc-go-mysql/client"
+	"github.com/instructure/mc-go-mysql/mysql"
+	"github.com/instructure/mc-go-mysql/test_util"
 )
 
 var testOutputLogs = flag.Bool("out", false, "output binlog event")
@@ -159,7 +159,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	t.testExecute(c, "DROP TABLE IF EXISTS test_json_v2")
 
 	str = `CREATE TABLE test_json_v2 (
-			id INT, 
+			id INT,
 			c JSON,
 			PRIMARY KEY (id)
 			) ENGINE=InnoDB`
@@ -252,20 +252,20 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	// Must allow zero time.
 	t.testExecute(c, `SET sql_mode=''`)
 	str = `CREATE TABLE test_parse_time (
-			a1 DATETIME, 
-			a2 DATETIME(3), 
-			a3 DATETIME(6), 
-			b1 TIMESTAMP, 
-			b2 TIMESTAMP(3) , 
+			a1 DATETIME,
+			a2 DATETIME(3),
+			a3 DATETIME(6),
+			b1 TIMESTAMP,
+			b2 TIMESTAMP(3) ,
 			b3 TIMESTAMP(6))`
 	t.testExecute(c, str)
 
 	t.testExecute(c, `INSERT INTO test_parse_time VALUES
-		("2014-09-08 17:51:04.123456", "2014-09-08 17:51:04.123456", "2014-09-08 17:51:04.123456", 
+		("2014-09-08 17:51:04.123456", "2014-09-08 17:51:04.123456", "2014-09-08 17:51:04.123456",
 		"2014-09-08 17:51:04.123456","2014-09-08 17:51:04.123456","2014-09-08 17:51:04.123456"),
 		("0000-00-00 00:00:00.000000", "0000-00-00 00:00:00.000000", "0000-00-00 00:00:00.000000",
 		"0000-00-00 00:00:00.000000", "0000-00-00 00:00:00.000000", "0000-00-00 00:00:00.000000"),
-		("2014-09-08 17:51:04.000456", "2014-09-08 17:51:04.000456", "2014-09-08 17:51:04.000456", 
+		("2014-09-08 17:51:04.000456", "2014-09-08 17:51:04.000456", "2014-09-08 17:51:04.000456",
 		"2014-09-08 17:51:04.000456","2014-09-08 17:51:04.000456","2014-09-08 17:51:04.000456")`)
 
 	t.wg.Wait()

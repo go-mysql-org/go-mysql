@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	mysql "github.com/go-mysql-org/go-mysql/mysql"
+	mysql "github.com/instructure/mc-go-mysql/mysql"
 	mock "github.com/stretchr/testify/mock"
 )
 
