@@ -36,6 +36,8 @@ const (
 	TYPE_MEDIUM_INT
 	TYPE_BINARY // binary, varbinary
 	TYPE_POINT  // coordinates
+	TYPE_TEXT   // text (base64 encoded)
+	TYPE_BLOB   // blob (base64 encoded)
 )
 
 type TableColumn struct {
@@ -123,6 +125,10 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].Type = TYPE_BIT
 	} else if strings.HasPrefix(columnType, "json") {
 		ta.Columns[index].Type = TYPE_JSON
+	} else if strings.HasPrefix(columnType, "text") {
+		ta.Columns[index].Type = TYPE_TEXT
+	} else if strings.HasPrefix(columnType, "blob") {
+		ta.Columns[index].Type = TYPE_BLOB
 	} else if strings.Contains(columnType, "point") {
 		ta.Columns[index].Type = TYPE_POINT
 	} else if strings.Contains(columnType, "mediumint") {
