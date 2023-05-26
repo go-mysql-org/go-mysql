@@ -307,6 +307,29 @@ func (c *Canal) checkTableMatch(key string) bool {
 	return matchFlag
 }
 
+func (c *Canal) GetTableForEvent(te *replication.TableMapEvent) (*schema.Table, error) {
+	key := fmt.Sprintf("%s.%s", te.Schema, te.Table)
+	c.tableLock.Lock()
+	t, ok := c.tables[key]
+	c.tableLock.Unlock()
+
+	// return if we already have the table info and the columns count matches
+	if ok && (te == nil || te.ColumnCount == uint64(len(t.Columns))) {
+		return t, nil
+	}
+
+	t, err := schema.NewTable(c, string(te.Schema), string(te.Table))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	c.tableLock.Lock()
+	c.tables[key] = t
+	c.tableLock.Unlock()
+
+	return t, nil
+}
+
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	// if table is excluded, return error and skip parsing event or dump
