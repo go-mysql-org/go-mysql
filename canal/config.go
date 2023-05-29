@@ -99,6 +99,9 @@ type Config struct {
 
 	//Set Localhost
 	Localhost string
+
+	// allow the master info loading to be configured
+	InfoLoader MasterInfoLoader
 }
 
 func NewConfigWithFile(name string) (*Config, error) {

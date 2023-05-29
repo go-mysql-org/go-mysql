@@ -83,6 +83,12 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	}
 	c.master = &masterInfo{logger: c.cfg.Logger}
 
+	// allow the master info to be loaded from a configured loader
+	c.master.infoLoader = cfg.InfoLoader
+	if c.master.infoLoader == nil {
+		c.master.infoLoader = NewFsInfoLoader(c.masterInfoPath())
+	}
+
 	c.delay = new(uint32)
 
 	var err error
