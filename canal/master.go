@@ -10,6 +10,8 @@ import (
 type masterInfo struct {
 	sync.RWMutex
 
+	Addr string
+
 	pos mysql.Position
 
 	gset mysql.GTIDSet

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -510,6 +511,10 @@ func (c *Canal) connect(options ...func(*client.Conn)) (*client.Conn, error) {
 
 	return client.ConnectWithDialer(ctx, "", c.cfg.Addr,
 		c.cfg.User, c.cfg.Password, "", c.cfg.Dialer, options...)
+}
+
+func (c *Canal) masterInfoPath() string {
+	return path.Join(c.cfg.DataDir, "master.info")
 }
 
 // Execute a SQL

@@ -5,9 +5,9 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/MasteryConnect/go-mysql/mysql"
+	"github.com/instructure/mc-go-mysql/mysql"
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go/ioutil2"
 )
 
