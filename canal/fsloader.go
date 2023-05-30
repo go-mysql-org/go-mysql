@@ -48,7 +48,10 @@ func (l *fsInfoLoader) Save(addr, name string, position uint32, force bool) erro
 		pos:  pos,
 	}
 
-	e.Encode(m)
+	enc_err := e.Encode(m)
+	if enc_err != nil {
+		log.Errorf("canal save master info to file %s err %v", l.path, enc_err)
+	}
 
 	var err error
 	if err = ioutil2.WriteFileAtomic(l.path, buf.Bytes(), 0644); err != nil {
