@@ -6,7 +6,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/instructure/mc-go-mysql/mysql"
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go/ioutil2"
 )
