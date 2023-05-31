@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -82,6 +83,12 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
 	c.master = &masterInfo{logger: c.cfg.Logger}
+
+	// allow the master info to be loaded from a configured loader
+	c.master.infoLoader = cfg.InfoLoader
+	if c.master.infoLoader == nil {
+		c.master.infoLoader = NewFsInfoLoader(c.masterInfoPath())
+	}
 
 	c.delay = new(uint32)
 
@@ -504,6 +511,10 @@ func (c *Canal) connect(options ...func(*client.Conn)) (*client.Conn, error) {
 
 	return client.ConnectWithDialer(ctx, "", c.cfg.Addr,
 		c.cfg.User, c.cfg.Password, "", c.cfg.Dialer, options...)
+}
+
+func (c *Canal) masterInfoPath() string {
+	return path.Join(c.cfg.DataDir, "master.info")
 }
 
 // Execute a SQL

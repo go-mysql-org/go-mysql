@@ -57,6 +57,7 @@ type Config struct {
 	Charset         string        `toml:"charset"`
 	ServerID        uint32        `toml:"server_id"`
 	Flavor          string        `toml:"flavor"`
+	DataDir         string        `toml:"data_dir"`
 	HeartbeatPeriod time.Duration `toml:"heartbeat_period"`
 	ReadTimeout     time.Duration `toml:"read_timeout"`
 
@@ -99,6 +100,9 @@ type Config struct {
 
 	//Set Localhost
 	Localhost string
+
+	// allow the master info loading to be configured
+	InfoLoader MasterInfoLoader
 }
 
 func NewConfigWithFile(name string) (*Config, error) {

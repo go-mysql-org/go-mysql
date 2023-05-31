@@ -10,6 +10,8 @@ import (
 type masterInfo struct {
 	sync.RWMutex
 
+	Addr string
+
 	pos mysql.Position
 
 	gset mysql.GTIDSet
@@ -17,6 +19,21 @@ type masterInfo struct {
 	timestamp uint32
 
 	logger loggers.Advanced
+
+	infoLoader MasterInfoLoader
+}
+
+// abstract the way in which the master info is loaded and saved
+type MasterInfoSetter func(addr, name string, position uint32) error
+type MasterInfoLoader interface {
+	Load(setValues MasterInfoSetter) error
+	Save(addr, name string, position uint32, force bool) error
+}
+
+func (m *masterInfo) Setter(addr, name string, position uint32) error {
+	m.Addr = addr
+	m.pos = mysql.Position{Name: name, Pos: position}
+	return nil
 }
 
 func (m *masterInfo) Update(pos mysql.Position) {
