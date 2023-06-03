@@ -330,6 +330,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	key = buildCacheKey(db, table)
 	tableLock.RLock()
 	t, ok := _tableMetaData[key]
+	t.Schema = db
 	tableLock.RUnlock()
 
 	if ok {
@@ -346,6 +347,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	}
 
 	t, err := schema.NewTable(c, db, table)
+	t.Schema = db
 	if err != nil {
 		// check table not exists
 		if ok, err1 := schema.IsTableExist(c, db, table); err1 == nil && !ok {
