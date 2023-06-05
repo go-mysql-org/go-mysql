@@ -330,10 +330,12 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	key = buildCacheKey(db, table)
 	tableLock.RLock()
 	t, ok := _tableMetaData[key]
+	if ok {
+		t.Schema = db
+	}
 	tableLock.RUnlock()
 
 	if ok {
-		t.Schema = db
 		return t, nil
 	}
 
@@ -390,8 +392,8 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 		// if get table info success, delete this key from errorTablesGetTime
 		delete(c.errorTablesGetTime, key)
 	}
-	tableLock.Unlock()
 	t.Schema = db
+	tableLock.Unlock()
 	return t, nil
 }
 
