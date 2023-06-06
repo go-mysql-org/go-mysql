@@ -321,6 +321,10 @@ func (c *Canal) checkTableMatch(key string) bool {
 	return matchFlag
 }
 
+func (c *Canal) GetSimpleTable(db string, table string) (*schema.Table, error) {
+	return schema.NewTable(c, db, table)
+}
+
 func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	// if table is excluded, return error and skip parsing event or dump
 	key := fmt.Sprintf("%s.%s", db, table)
