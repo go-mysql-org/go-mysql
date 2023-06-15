@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -42,6 +43,7 @@ type (
 		}
 
 		readyConnection chan Connection
+		closed          uint32
 	}
 
 	ConnectionStats struct {
@@ -143,6 +145,9 @@ func (pool *Pool) GetStats(stats *ConnectionStats) {
 // GetConn returns connection from the pool or create new
 func (pool *Pool) GetConn(ctx context.Context) (*Conn, error) {
 	for {
+		if atomic.LoadUint32(&pool.closed) == 1 {
+			return nil, errors.Errorf("failed get conn, pool closed")
+		}
 		connection, err := pool.getConnection(ctx)
 		if err != nil {
 			return nil, err
@@ -228,6 +233,9 @@ func (pool *Pool) newConnectionProducer() {
 	var err error
 
 	for {
+		if atomic.LoadUint32(&pool.closed) == 1 {
+			return
+		}
 		connection.conn = nil
 
 		pool.synchro.Lock()
@@ -474,4 +482,27 @@ func (pool *Pool) ping(conn *Conn) error {
 		_ = conn.SetDeadline(time.Time{})
 	}
 	return err
+}
+
+// Close only shutdown idle connections. we couldn't control the connection which not in the pool.
+// So before call Close, Call PutConn to put all connections that in use back to connection pool first.
+func (pool *Pool) Close() {
+	//already closed, return.
+	if !atomic.CompareAndSwapUint32(&pool.closed, 0, 1) {
+		return
+	}
+	//close idle connections
+	pool.synchro.Lock()
+	for _, connection := range pool.synchro.idleConnections {
+		pool.synchro.stats.TotalCount--
+		_ = connection.conn.Close()
+	}
+	pool.synchro.idleConnections = nil
+	pool.synchro.Unlock()
+	//close connection in ready
+	select {
+	case connection := <-pool.readyConnection:
+		pool.closeConn(connection.conn)
+	default:
+	}
 }
