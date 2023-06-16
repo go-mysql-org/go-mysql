@@ -10,7 +10,6 @@ import (
 )
 
 type poolTestSuite struct {
-	c    *Conn
 	port string
 }
 
@@ -27,6 +26,6 @@ func (s poolTestSuite) TestPool_Close(c *C) {
 	pool.GetStats(&poolStats)
 	c.Assert(poolStats.TotalCount, Equals, 0)
 	c.Assert(pool.readyConnection, HasLen, 0)
-	conn, err = pool.GetConn(context.Background())
+	_, err = pool.GetConn(context.Background())
 	c.Assert(err, NotNil)
 }
