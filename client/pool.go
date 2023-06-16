@@ -306,6 +306,9 @@ func (pool *Pool) closeOldIdleConnections() {
 	ticker := time.NewTicker(5 * time.Second)
 
 	for range ticker.C {
+		if atomic.LoadUint32(&pool.closed) == 1 {
+			return
+		}
 		toPing = pool.getOldIdleConnections(toPing[:0])
 		if len(toPing) == 0 {
 			continue
