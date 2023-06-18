@@ -13,9 +13,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/DataDog/zstd"
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
+	"github.com/klauspost/compress/zstd"
 	"github.com/pingcap/errors"
 )
 
@@ -125,7 +125,7 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 				case MYSQL_COMPRESS_ZLIB:
 					c.compressedReader, err = zlib.NewReader(c.reader)
 				case MYSQL_COMPRESS_ZSTD:
-					c.compressedReader = zstd.NewReader(c.reader)
+					c.compressedReader, err = zstd.NewReader(c.reader)
 				}
 				if err != nil {
 					return nil, err
@@ -290,7 +290,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	case MYSQL_COMPRESS_ZLIB:
 		w, err = zlib.NewWriterLevel(&payload, zlib.HuffmanOnly)
 	case MYSQL_COMPRESS_ZSTD:
-		w = zstd.NewWriter(&payload)
+		w, err = zstd.NewWriter(&payload)
 	}
 	if err != nil {
 		return 0, err

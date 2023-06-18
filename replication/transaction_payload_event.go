@@ -1,12 +1,13 @@
 package replication
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
 
-	"github.com/DataDog/zstd"
+	"github.com/klauspost/compress/zstd"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 )
@@ -104,7 +105,13 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 			e.CompressionType, e.compressionType())
 	}
 
-	payloadUncompressed, err := zstd.Decompress(nil, e.Payload)
+	reader, err := zstd.NewReader(bytes.NewBuffer(e.Payload))
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	payloadUncompressed, err := io.ReadAll(reader)
 	if err != nil {
 		return err
 	}
