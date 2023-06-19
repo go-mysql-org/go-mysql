@@ -44,6 +44,7 @@ type (
 
 		readyConnection chan Connection
 		closed          uint32
+		wg              sync.WaitGroup
 	}
 
 	ConnectionStats struct {
@@ -120,6 +121,7 @@ func NewPool(
 
 	pool.synchro.idleConnections = make([]Connection, 0, pool.maxIdle)
 
+	pool.wg.Add(1)
 	go pool.newConnectionProducer()
 
 	if pool.minAlive > 0 {
@@ -229,6 +231,7 @@ func (pool *Pool) putConnectionUnsafe(connection Connection) {
 }
 
 func (pool *Pool) newConnectionProducer() {
+	defer pool.wg.Done()
 	var connection Connection
 	var err error
 
@@ -494,6 +497,16 @@ func (pool *Pool) Close() {
 	if !atomic.CompareAndSwapUint32(&pool.closed, 0, 1) {
 		return
 	}
+	//close connection in ready. after we drain readyConnection channel, newConnectionProducer will not block on
+	//readyConnection channel and when finding pool closed it will exit.
+	select {
+	case connection := <-pool.readyConnection:
+		pool.closeConn(connection.conn)
+	default:
+	}
+
+	//wait newConnectionProducer exit for other cases except blocking on readyConnection channel.
+	pool.wg.Wait()
 	//close idle connections
 	pool.synchro.Lock()
 	for _, connection := range pool.synchro.idleConnections {
@@ -502,10 +515,4 @@ func (pool *Pool) Close() {
 	}
 	pool.synchro.idleConnections = nil
 	pool.synchro.Unlock()
-	//close connection in ready
-	select {
-	case connection := <-pool.readyConnection:
-		pool.closeConn(connection.conn)
-	default:
-	}
 }
