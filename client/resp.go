@@ -344,7 +344,7 @@ func (c *Conn) readResultColumns(result *Result) (err error) {
 		rawPkgLen := len(result.RawPkg)
 		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
 		if err != nil {
-			return
+			return err
 		}
 		data = result.RawPkg[rawPkgLen:]
 
@@ -361,7 +361,7 @@ func (c *Conn) readResultColumns(result *Result) (err error) {
 				err = ErrMalformPacket
 			}
 
-			return
+			return err
 		}
 
 		if result.Fields[i] == nil {
@@ -369,7 +369,7 @@ func (c *Conn) readResultColumns(result *Result) (err error) {
 		}
 		err = result.Fields[i].Parse(data)
 		if err != nil {
-			return
+			return err
 		}
 
 		result.FieldNames[hack.String(result.Fields[i].Name)] = i
@@ -385,7 +385,7 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 		rawPkgLen := len(result.RawPkg)
 		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
 		if err != nil {
-			return
+			return err
 		}
 		data = result.RawPkg[rawPkgLen:]
 
@@ -434,7 +434,7 @@ func (c *Conn) readResultRowsStreaming(result *Result, isBinary bool, perRowCb S
 	for {
 		data, err = c.ReadPacketReuseMem(data[:0])
 		if err != nil {
-			return
+			return err
 		}
 
 		// EOF Packet
