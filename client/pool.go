@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -43,7 +42,8 @@ type (
 		}
 
 		readyConnection chan Connection
-		closed          uint32
+		ctx             context.Context
+		cancel          context.CancelFunc
 		wg              sync.WaitGroup
 	}
 
@@ -119,6 +119,8 @@ func NewPool(
 		readyConnection: make(chan Connection),
 	}
 
+	pool.ctx, pool.cancel = context.WithCancel(context.Background())
+
 	pool.synchro.idleConnections = make([]Connection, 0, pool.maxIdle)
 
 	pool.wg.Add(1)
@@ -147,7 +149,7 @@ func (pool *Pool) GetStats(stats *ConnectionStats) {
 // GetConn returns connection from the pool or create new
 func (pool *Pool) GetConn(ctx context.Context) (*Conn, error) {
 	for {
-		if atomic.LoadUint32(&pool.closed) == 1 {
+		if pool.ctx.Err() != nil {
 			return nil, errors.Errorf("failed get conn, pool closed")
 		}
 		connection, err := pool.getConnection(ctx)
@@ -236,9 +238,6 @@ func (pool *Pool) newConnectionProducer() {
 	var err error
 
 	for {
-		if atomic.LoadUint32(&pool.closed) == 1 {
-			return
-		}
 		connection.conn = nil
 
 		pool.synchro.Lock()
@@ -267,8 +266,12 @@ func (pool *Pool) newConnectionProducer() {
 				continue
 			}
 		}
-
-		pool.readyConnection <- connection
+		select {
+		case pool.readyConnection <- connection:
+		case <-pool.ctx.Done():
+			pool.closeConn(connection.conn)
+			return
+		}
 	}
 }
 
@@ -309,7 +312,7 @@ func (pool *Pool) closeOldIdleConnections() {
 	ticker := time.NewTicker(5 * time.Second)
 
 	for range ticker.C {
-		if atomic.LoadUint32(&pool.closed) == 1 {
+		if pool.ctx.Err() != nil {
 			return
 		}
 		toPing = pool.getOldIdleConnections(toPing[:0])
@@ -493,19 +496,8 @@ func (pool *Pool) ping(conn *Conn) error {
 // Close only shutdown idle connections. we couldn't control the connection which not in the pool.
 // So before call Close, Call PutConn to put all connections that in use back to connection pool first.
 func (pool *Pool) Close() {
-	//already closed, return.
-	if !atomic.CompareAndSwapUint32(&pool.closed, 0, 1) {
-		return
-	}
-	//close connection in ready. after we drain readyConnection channel, newConnectionProducer will not block on
-	//readyConnection channel and when finding pool closed it will exit.
-	select {
-	case connection := <-pool.readyConnection:
-		pool.closeConn(connection.conn)
-	default:
-	}
-
-	//wait newConnectionProducer exit for other cases except blocking on readyConnection channel.
+	pool.cancel()
+	//wait newConnectionProducer exit.
 	pool.wg.Wait()
 	//close idle connections
 	pool.synchro.Lock()
