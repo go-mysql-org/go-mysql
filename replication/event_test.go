@@ -3,7 +3,6 @@ package replication
 import (
 	"testing"
 
-	. "github.com/pingcap/check"
 	"github.com/stretchr/testify/require"
 )
 

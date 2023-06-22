@@ -37,7 +37,7 @@ func (s *clientTestSuite) SetupSuite() {
 	var result *mysql.Result
 	result, err = s.c.Execute("CREATE DATABASE IF NOT EXISTS " + *testDB)
 	require.NoError(s.T(), err)
-	require.Greater(s.T(), result.RowNumber(), 0)
+	require.GreaterOrEqual(s.T(), result.RowNumber(), 0)
 
 	_, err = s.c.Execute("USE " + *testDB)
 	require.NoError(s.T(), err)

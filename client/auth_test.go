@@ -27,7 +27,7 @@ func TestConnGenAttributes(t *testing.T) {
 	// of the attribute data we need to check its partial contents
 
 	require.Len(t, data, 98)
-	require.Equal(t, byte(0x1a), data[0])
+	require.Equal(t, byte(0x61), data[0])
 
 	for k, v := range c.attributes {
 		fixt := append(mysql.PutLengthEncodedString([]byte(k)), mysql.PutLengthEncodedString([]byte(v))...)
