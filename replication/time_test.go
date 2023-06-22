@@ -54,12 +54,12 @@ func TestTimeStringLocation(tt *testing.T) {
 		nil,
 	}
 
-	require.Equal(tt, "2018-07-30 15:00:00", t.String())
+	require.Equal(tt, "2018-07-30 10:00:00", t.String())
 
 	t = fracTime{
 		time.Date(2018, time.Month(7), 30, 10, 0, 0, 0, time.FixedZone("EST", -5*3600)),
 		0,
 		time.UTC,
 	}
-	require.Equal(tt, "2018-07-30 10:00:00", t.String())
+	require.Equal(tt, "2018-07-30 15:00:00", t.String())
 }

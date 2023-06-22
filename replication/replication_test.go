@@ -316,7 +316,7 @@ func (t *testSyncerSuite) testPositionSync() {
 	require.NoError(t.T(), err)
 
 	// List of replicas must not be empty
-	require.Len(t.T(), r.Values, 0)
+	require.Greater(t.T(), len(r.Values), 0)
 
 	// Slave_UUID is empty for mysql 8.0.28+ (8.0.32 still broken)
 	if eq, err := t.c.CompareServerVersion("8.0.28"); (err == nil) && (eq < 0) {

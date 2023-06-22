@@ -31,6 +31,6 @@ func TestConnGenAttributes(t *testing.T) {
 
 	for k, v := range c.attributes {
 		fixt := append(mysql.PutLengthEncodedString([]byte(k)), mysql.PutLengthEncodedString([]byte(v))...)
-		require.Contains(t, data, fixt)
+		require.Subset(t, data, fixt)
 	}
 }
