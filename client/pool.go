@@ -131,6 +131,7 @@ func NewPool(
 		pool.startNewConnections(pool.minAlive)
 	}
 
+	pool.wg.Add(1)
 	go pool.closeOldIdleConnections()
 
 	return pool
@@ -307,22 +308,25 @@ func (pool *Pool) getIdleConnectionUnsafe() Connection {
 }
 
 func (pool *Pool) closeOldIdleConnections() {
+	defer pool.wg.Done()
 	var toPing []Connection
 
 	ticker := time.NewTicker(5 * time.Second)
 
-	for range ticker.C {
-		if pool.ctx.Err() != nil {
+	for {
+		select {
+		case <-pool.ctx.Done():
 			return
-		}
-		toPing = pool.getOldIdleConnections(toPing[:0])
-		if len(toPing) == 0 {
-			continue
-		}
-		pool.recheckConnections(toPing)
+		case <-ticker.C:
+			toPing = pool.getOldIdleConnections(toPing[:0])
+			if len(toPing) == 0 {
+				continue
+			}
+			pool.recheckConnections(toPing)
 
-		if !pool.spawnConnectionsIfNeeded() {
-			pool.closeIdleConnectionsIfCan()
+			if !pool.spawnConnectionsIfNeeded() {
+				pool.closeIdleConnectionsIfCan()
+			}
 		}
 	}
 }
