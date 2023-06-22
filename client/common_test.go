@@ -25,6 +25,7 @@ func Test(t *testing.T) {
 	for _, seg := range segs {
 		Suite(&clientTestSuite{port: seg})
 		Suite(&connTestSuite{port: seg})
+		Suite(&poolTestSuite{port: seg})
 	}
 	TestingT(t)
 }
