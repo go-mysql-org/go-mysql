@@ -79,7 +79,7 @@ type cacheTestSuite struct {
 	l net.Listener
 }
 
-func (s *cacheTestSuite) SetUpSuite(c *C) {
+func (s *cacheTestSuite) SetupSuite(c *C) {
 	s.serverAddr = fmt.Sprintf("%s:%s", *test_util.MysqlFakeHost, *test_util.MysqlFakePort)
 
 	var err error

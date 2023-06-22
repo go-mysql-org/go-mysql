@@ -98,7 +98,7 @@ type serverTestSuite struct {
 	l net.Listener
 }
 
-func (s *serverTestSuite) SetUpSuite(c *C) {
+func (s *serverTestSuite) SetupSuite(c *C) {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlFakeHost, *test_util.MysqlFakePort)
 
 	var err error

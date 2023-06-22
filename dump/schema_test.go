@@ -24,7 +24,7 @@ func TestSchemaSuite(t *testing.T) {
 	suite.Run(t, new(schemaTestSuite))
 }
 
-func (s *schemaTestSuite) SetUpSuite() {
+func (s *schemaTestSuite) SetupSuite() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
 
 	var err error

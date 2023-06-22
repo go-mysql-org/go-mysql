@@ -34,7 +34,7 @@ const (
 	umiC = 16777215
 )
 
-func (s *canalTestSuite) SetUpSuite() {
+func (s *canalTestSuite) SetupSuite() {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
 	cfg.User = "root"

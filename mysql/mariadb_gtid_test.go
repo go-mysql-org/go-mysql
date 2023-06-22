@@ -9,7 +9,7 @@ type mariaDBTestSuite struct {
 
 var _ = check.Suite(&mariaDBTestSuite{})
 
-func (t *mariaDBTestSuite) SetUpSuite(c *check.C) {
+func (t *mariaDBTestSuite) SetupSuite(c *check.C) {
 
 }
 

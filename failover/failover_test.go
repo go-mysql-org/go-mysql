@@ -22,7 +22,7 @@ func TestFailoverSuite(t *testing.T) {
 	suite.Run(t, new(failoverTestSuite))
 }
 
-func (s *failoverTestSuite) SetUpSuite() {
+func (s *failoverTestSuite) SetupSuite() {
 	if !*enable_failover_test {
 		s.T().Skip("skip test failover")
 	}

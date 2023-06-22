@@ -28,7 +28,7 @@ func TestClientSuite(t *testing.T) {
 	}
 }
 
-func (s *clientTestSuite) SetUpSuite() {
+func (s *clientTestSuite) SetupSuite() {
 	var err error
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	s.c, err = Connect(addr, *testUser, *testPassword, "")

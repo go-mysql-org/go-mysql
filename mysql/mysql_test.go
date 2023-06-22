@@ -20,7 +20,7 @@ type mysqlTestSuite struct {
 
 var _ = check.Suite(&mysqlTestSuite{})
 
-func (t *mysqlTestSuite) SetUpSuite(c *check.C) {
+func (t *mysqlTestSuite) SetupSuite(c *check.C) {
 
 }
 

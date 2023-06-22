@@ -27,7 +27,7 @@ type schemaTestSuite struct {
 
 var _ = Suite(&schemaTestSuite{})
 
-func (s *schemaTestSuite) SetUpSuite(c *C) {
+func (s *schemaTestSuite) SetupSuite(c *C) {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
 
 	var err error

@@ -26,7 +26,7 @@ type testDriverSuite struct {
 	db *sqlx.DB
 }
 
-func (s *testDriverSuite) SetUpSuite() {
+func (s *testDriverSuite) SetupSuite() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
 	dsn := fmt.Sprintf("%s:%s@%s/%s", *testUser, *testPassword, addr, *testDB)
 
