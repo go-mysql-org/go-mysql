@@ -5,25 +5,24 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/parser"
 	"github.com/siddontang/go-log/log"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/test_util"
 )
 
-func Test(t *testing.T) {
-	TestingT(t)
-}
-
 type canalTestSuite struct {
+	suite.Suite
 	c *Canal
 }
 
-var _ = Suite(&canalTestSuite{})
+func TestCanal(t *testing.T) {
+	suite.Run(t, new(canalTestSuite))
+}
 
 const (
 	miA = 0
@@ -35,7 +34,7 @@ const (
 	umiC = 16777215
 )
 
-func (s *canalTestSuite) SetUpSuite(c *C) {
+func (s *canalTestSuite) SetUpSuite() {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
 	cfg.User = "root"
@@ -55,8 +54,8 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 
 	var err error
 	s.c, err = NewCanal(cfg)
-	c.Assert(err, IsNil)
-	s.execute(c, "DROP TABLE IF EXISTS test.canal_test")
+	require.NoError(s.T(), err)
+	s.execute("DROP TABLE IF EXISTS test.canal_test")
 	sql := `
         CREATE TABLE IF NOT EXISTS test.canal_test (
 			id int AUTO_INCREMENT,
@@ -68,28 +67,28 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
             )ENGINE=innodb;
     `
 
-	s.execute(c, sql)
+	s.execute(sql)
 
-	s.execute(c, "DELETE FROM test.canal_test")
-	s.execute(c, "INSERT INTO test.canal_test (content, name, mi, umi) VALUES (?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?)",
+	s.execute("DELETE FROM test.canal_test")
+	s.execute("INSERT INTO test.canal_test (content, name, mi, umi) VALUES (?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?)",
 		"1", "a", miA, umiA,
 		`\0\ndsfasdf`, "b", miC, umiC,
 		"", "c", miB, umiB,
 	)
 
-	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
+	s.execute("SET GLOBAL binlog_format = 'ROW'")
 
-	s.c.SetEventHandler(&testEventHandler{c: c})
+	s.c.SetEventHandler(&testEventHandler{t: s.T()})
 	go func() {
 		set, _ := mysql.ParseGTIDSet("mysql", "")
 		err = s.c.StartFromGTID(set)
-		c.Assert(err, IsNil)
+		require.NoError(s.T(), err)
 	}()
 }
 
-func (s *canalTestSuite) TearDownSuite(c *C) {
+func (s *canalTestSuite) TearDownSuite() {
 	// To test the heartbeat and read timeout,so need to sleep 1 seconds without data transmission
-	c.Logf("Start testing the heartbeat and read timeout")
+	s.T().Logf("Start testing the heartbeat and read timeout")
 	time.Sleep(time.Second)
 
 	if s.c != nil {
@@ -98,15 +97,15 @@ func (s *canalTestSuite) TearDownSuite(c *C) {
 	}
 }
 
-func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql.Result {
+func (s *canalTestSuite) execute(query string, args ...interface{}) *mysql.Result {
 	r, err := s.c.Execute(query, args...)
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 	return r
 }
 
 type testEventHandler struct {
 	DummyEventHandler
-	c *C
+	t *testing.T
 }
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
@@ -126,41 +125,41 @@ func (h *testEventHandler) OnPosSynced(header *replication.EventHeader, p mysql.
 	return nil
 }
 
-func (s *canalTestSuite) TestCanal(c *C) {
+func (s *canalTestSuite) TestCanal() {
 	<-s.c.WaitDumpDone()
 
 	for i := 1; i < 10; i++ {
-		s.execute(c, "INSERT INTO test.canal_test (name) VALUES (?)", fmt.Sprintf("%d", i))
+		s.execute("INSERT INTO test.canal_test (name) VALUES (?)", fmt.Sprintf("%d", i))
 	}
-	s.execute(c, "INSERT INTO test.canal_test (mi,umi) VALUES (?,?), (?,?), (?,?)",
+	s.execute("INSERT INTO test.canal_test (mi,umi) VALUES (?,?), (?,?), (?,?)",
 		miA, umiA,
 		miC, umiC,
 		miB, umiB,
 	)
-	s.execute(c, "ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
-	s.execute(c, "INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
+	s.execute("ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
+	s.execute("INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
 
 	err := s.c.CatchMasterPos(10 * time.Second)
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 }
 
-func (s *canalTestSuite) TestCanalFilter(c *C) {
+func (s *canalTestSuite) TestCanalFilter() {
 	// included
 	sch, err := s.c.GetTable("test", "canal_test")
-	c.Assert(err, IsNil)
-	c.Assert(sch, NotNil)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), sch)
 	_, err = s.c.GetTable("not_exist_db", "canal_test")
-	c.Assert(errors.Trace(err), Not(Equals), ErrExcludedTable)
+	require.NotErrorIs(s.T(), err, ErrExcludedTable)
 	// excluded
 	sch, err = s.c.GetTable("test", "canal_test_inner")
-	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
-	c.Assert(sch, IsNil)
+	require.ErrorIs(s.T(), err, ErrExcludedTable)
+	require.Nil(s.T(), sch)
 	sch, err = s.c.GetTable("mysql", "canal_test")
-	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
-	c.Assert(sch, IsNil)
+	require.ErrorIs(s.T(), err, ErrExcludedTable)
+	require.Nil(s.T(), sch)
 	sch, err = s.c.GetTable("not_exist_db", "not_canal_test")
-	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
-	c.Assert(sch, IsNil)
+	require.ErrorIs(s.T(), err, ErrExcludedTable)
+	require.Nil(s.T(), sch)
 }
 
 func TestCreateTableExp(t *testing.T) {
@@ -170,22 +169,20 @@ func TestCreateTableExp(t *testing.T) {
 		"CREATE TABLE IF NOT EXISTS mydb.`mytable` (`id` int(10)) ENGINE=InnoDB",
 		"CREATE TABLE IF NOT EXISTS `mydb`.mytable (`id` int(10)) ENGINE=InnoDB",
 	}
-	table := "mytable"
-	db := "mydb"
+	expected := &node{
+		db:    "mydb",
+		table: "mytable",
+	}
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(s, "", "")
-		if err != nil {
-			t.Fatalf("TestCreateTableExp:case %s failed\n", s)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
-			if nodes[0].db != db || nodes[0].table != table {
-				t.Fatalf("TestCreateTableExp:case %s failed\n", s)
-			}
+			require.Equal(t, expected, nodes[0])
 		}
 	}
 }
@@ -203,9 +200,7 @@ func TestAlterTableExp(t *testing.T) {
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(s, "", "")
-		if err != nil {
-			t.Fatalf("TestAlterTableExp:case %s failed\n", s)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
@@ -237,9 +232,7 @@ func TestRenameTableExp(t *testing.T) {
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(s, "", "")
-		if err != nil {
-			t.Fatalf("TestRenameTableExp:case %s failed\n", s)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
@@ -281,9 +274,7 @@ func TestDropTableExp(t *testing.T) {
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(s, "", "")
-		if err != nil {
-			t.Fatalf("TestDropTableExp:case %s failed\n", s)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
@@ -325,9 +316,7 @@ func TestWithoutSchemeExp(t *testing.T) {
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(string(s.Query), "", "")
-		if err != nil {
-			t.Fatalf("TestCreateTableExp:case %s failed\n", s.Query)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {

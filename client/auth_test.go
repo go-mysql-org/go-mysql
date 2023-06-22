@@ -1,10 +1,10 @@
 package client
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConnGenAttributes(t *testing.T) {
@@ -26,17 +26,11 @@ func TestConnGenAttributes(t *testing.T) {
 	// the order of the attributes map cannot be guaranteed so to test the content
 	// of the attribute data we need to check its partial contents
 
-	if len(data) != 98 {
-		t.Fatalf("unexpected data length, got %d", len(data))
-	}
-	if data[0] != 0x61 {
-		t.Fatalf("unexpected length-encoded int, got %#x", data[0])
-	}
+	require.Len(t, data, 98)
+	require.Equal(t, byte(0x1a), data[0])
 
 	for k, v := range c.attributes {
 		fixt := append(mysql.PutLengthEncodedString([]byte(k)), mysql.PutLengthEncodedString([]byte(v))...)
-		if !bytes.Contains(data, fixt) {
-			t.Fatalf("%s attribute not found", k)
-		}
+		require.Contains(t, data, fixt)
 	}
 }

@@ -4,11 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
-	"reflect"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/go-mysql-org/go-mysql/test_util"
 )
@@ -18,64 +18,63 @@ var testPassword = flag.String("pass", "", "MySQL password")
 var testDB = flag.String("db", "test", "MySQL test database")
 
 func TestDriver(t *testing.T) {
-	TestingT(t)
+	suite.Run(t, new(testDriverSuite))
 }
 
 type testDriverSuite struct {
+	suite.Suite
 	db *sqlx.DB
 }
 
-var _ = Suite(&testDriverSuite{})
-
-func (s *testDriverSuite) SetUpSuite(c *C) {
+func (s *testDriverSuite) SetUpSuite() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
 	dsn := fmt.Sprintf("%s:%s@%s/%s", *testUser, *testPassword, addr, *testDB)
 
 	var err error
 	s.db, err = sqlx.Open("mysql", dsn)
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 }
 
-func (s *testDriverSuite) TearDownSuite(c *C) {
+func (s *testDriverSuite) TearDownSuite() {
 	if s.db != nil {
 		s.db.Close()
 	}
 }
 
-func (s *testDriverSuite) TestConn(c *C) {
+func (s *testDriverSuite) TestConn() {
 	var n int
 	err := s.db.Get(&n, "SELECT 1")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 1)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), 1, n)
 
 	_, err = s.db.Exec("USE test")
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 }
 
-func (s *testDriverSuite) TestStmt(c *C) {
+func (s *testDriverSuite) TestStmt() {
 	stmt, err := s.db.Preparex("SELECT ? + ?")
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 
 	var n int
 	err = stmt.Get(&n, 1, 1)
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 2)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), 2, n)
 
 	err = stmt.Close()
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 }
 
-func (s *testDriverSuite) TestTransaction(c *C) {
+func (s *testDriverSuite) TestTransaction() {
 	tx, err := s.db.Beginx()
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 
 	var n int
 	err = tx.Get(&n, "SELECT 1")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 1)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), 1, n)
 
 	err = tx.Commit()
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 }
 
 func TestParseDSN(t *testing.T) {
@@ -93,12 +92,8 @@ func TestParseDSN(t *testing.T) {
 
 	for supplied, expected := range testDSNs {
 		actual, err := parseDSN(supplied)
-		if err != nil {
-			t.Errorf("TestParseDSN failed. Got error: %s", err)
-		}
+		require.NoError(t, err)
 		// Compare that with expected
-		if !reflect.DeepEqual(actual, expected) {
-			t.Errorf("TestParseDSN failed.\nExpected:\n%#v\nGot:\n%#v", expected, actual)
-		}
+		require.Equal(t, expected, actual)
 	}
 }
