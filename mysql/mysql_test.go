@@ -125,7 +125,7 @@ func TestMysqlUpdate(t *testing.T) {
 	err = g1.Update("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58")
 	require.NoError(t, err)
 
-	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58", g1.String())
+	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58", strings.ToUpper(g1.String()))
 
 	g1, err = ParseMysqlGTIDSet(`
 		519CE70F-A893-11E9-A95A-B32DC65A7026:1-1154661,
@@ -161,13 +161,13 @@ func TestMysqlAddGTID(t *testing.T) {
 	require.NoError(t, err)
 
 	g1.AddGTID(u, 58)
-	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58", g1.String())
+	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58", strings.ToUpper(g1.String()))
 
 	g1.AddGTID(u, 60)
-	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58:60", g1.String())
+	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58:60", strings.ToUpper(g1.String()))
 
 	g1.AddGTID(u, 59)
-	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-60", g1.String())
+	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-60", strings.ToUpper(g1.String()))
 
 	u2, err := uuid.Parse("519CE70F-A893-11E9-A95A-B32DC65A7026")
 	require.NoError(t, err)
