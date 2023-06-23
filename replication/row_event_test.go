@@ -1,57 +1,13 @@
 package replication
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 )
-
-func check(params []interface{}, names []string) error {
-	var test int
-	val := struct {
-		Value  decimal.Decimal
-		Pos    int
-		Err    error
-		EValue decimal.Decimal
-		EPos   int
-		EErr   error
-	}{}
-
-	for i, name := range names {
-		switch name {
-		case "obtainedValue":
-			val.Value, _ = params[i].(decimal.Decimal)
-		case "obtainedPos":
-			val.Pos, _ = params[i].(int)
-		case "obtainedErr":
-			val.Err, _ = params[i].(error)
-		case "expectedValue":
-			val.EValue, _ = params[i].(decimal.Decimal)
-		case "expectedPos":
-			val.EPos, _ = params[i].(int)
-		case "expectedErr":
-			val.EErr, _ = params[i].(error)
-		case "caseNumber":
-			test = params[i].(int)
-		}
-	}
-	errorMsgFmt := fmt.Sprintf("For Test %v: ", test) + "Did not get expected %v(%v), got %v instead."
-	if val.Err != val.EErr {
-		return errors.Errorf(errorMsgFmt, "error", val.EErr, val.Err)
-	}
-	if val.Pos != val.EPos {
-		return errors.Errorf(errorMsgFmt, "position", val.EPos, val.Pos)
-	}
-	if !val.Value.Equal(val.EValue) {
-		return errors.Errorf(errorMsgFmt, "value", val.EValue, val.Value)
-	}
-	return nil
-}
 
 func TestDecodeDecimal(t *testing.T) {
 	// _PLACEHOLDER_ := 0
@@ -1180,7 +1136,7 @@ func TestInvalidEvent(t *testing.T) {
 	e2.tables = map[uint64]*TableMapEvent{}
 	e2.tables[0x140] = table
 	err := e2.Decode([]byte(data))
-	require.NoError(t, err)
+	require.Error(t, err)
 }
 
 func TestDecodeTime2(t *testing.T) {
