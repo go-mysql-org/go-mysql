@@ -336,10 +336,10 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *Result, 
 	return nil
 }
 
-func (c *Conn) readResultColumns(result *Result) (err error) {
+func (c *Conn) readResultColumns(result *Result) error {
 	var i = 0
 	var data []byte
-
+	var err error
 	for {
 		rawPkgLen := len(result.RawPkg)
 		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
@@ -378,8 +378,9 @@ func (c *Conn) readResultColumns(result *Result) (err error) {
 	}
 }
 
-func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
+func (c *Conn) readResultRows(result *Result, isBinary bool) error {
 	var data []byte
+	var err error
 
 	for {
 		rawPkgLen := len(result.RawPkg)
@@ -425,10 +426,11 @@ func (c *Conn) readResultRows(result *Result, isBinary bool) (err error) {
 	return nil
 }
 
-func (c *Conn) readResultRowsStreaming(result *Result, isBinary bool, perRowCb SelectPerRowCallback) (err error) {
+func (c *Conn) readResultRowsStreaming(result *Result, isBinary bool, perRowCb SelectPerRowCallback) error {
 	var (
 		data []byte
 		row  []FieldValue
+		err  error
 	)
 
 	for {

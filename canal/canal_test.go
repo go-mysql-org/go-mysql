@@ -179,7 +179,7 @@ func TestCreateTableExp(t *testing.T) {
 			t.Fatalf("TestCreateTableExp:case %s failed\n", s)
 		}
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
@@ -207,7 +207,7 @@ func TestAlterTableExp(t *testing.T) {
 			t.Fatalf("TestAlterTableExp:case %s failed\n", s)
 		}
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
@@ -241,7 +241,7 @@ func TestRenameTableExp(t *testing.T) {
 			t.Fatalf("TestRenameTableExp:case %s failed\n", s)
 		}
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
@@ -285,7 +285,7 @@ func TestDropTableExp(t *testing.T) {
 			t.Fatalf("TestDropTableExp:case %s failed\n", s)
 		}
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
@@ -329,7 +329,7 @@ func TestWithoutSchemeExp(t *testing.T) {
 			t.Fatalf("TestCreateTableExp:case %s failed\n", s.Query)
 		}
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}

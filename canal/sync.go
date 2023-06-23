@@ -141,25 +141,29 @@ func (c *Canal) runSyncBinlog() error {
 				c.cfg.Logger.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
 				continue
 			}
+			posInfo := &Position{
+				Position: pos,
+				SavePos:  savePos,
+				Force:    force,
+			}
 			for _, stmt := range stmts {
-				nodes := parseStmt(stmt)
-				for _, node := range nodes {
-					if node.db == "" {
-						node.db = string(e.Schema)
-					}
-					if err = c.updateTable(ev.Header, node.db, node.table); err != nil {
-						return errors.Trace(err)
-					}
-				}
+				nodes := parseDDLStmt(stmt)
 				if len(nodes) > 0 {
-					savePos = true
-					force = true
-					// Now we only handle Table Changed DDL, maybe we will support more later.
-					if err = c.eventHandler.OnDDL(ev.Header, pos, e); err != nil {
-						return errors.Trace(err)
+					posInfo.SavePos = true
+					posInfo.Force = true
+					err := c.handleDDLEvent(ev, e, nodes, posInfo)
+					if err != nil {
+						c.cfg.Logger.Errorf("handle ddl event err %v", err)
+					}
+				} else {
+					err := c.handleQueryEvent(ev, e, stmt, posInfo)
+					if err != nil {
+						c.cfg.Logger.Errorf("handle query event err %v", err)
 					}
 				}
 			}
+			savePos = posInfo.SavePos
+			force = posInfo.Force
 			if savePos && e.GSet != nil {
 				c.master.UpdateGTIDSet(e.GSet)
 			}
@@ -183,7 +187,7 @@ type node struct {
 	table string
 }
 
-func parseStmt(stmt ast.StmtNode) (ns []*node) {
+func parseDDLStmt(stmt ast.StmtNode) (ns []*node) {
 	switch t := stmt.(type) {
 	case *ast.RenameTableStmt:
 		for _, tableInfo := range t.TableToTables {
@@ -231,6 +235,7 @@ func (c *Canal) updateTable(header *replication.EventHeader, db, table string) (
 	}
 	return
 }
+
 func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	var newDelay uint32
 	now := uint32(time.Now().Unix())
@@ -335,4 +340,38 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
+}
+
+type Position struct {
+	mysql.Position
+	SavePos bool
+	Force   bool
+}
+
+// handleDDLEvent is handle DDL event
+func (c *Canal) handleDDLEvent(ev *replication.BinlogEvent, e *replication.QueryEvent, nodes []*node, pos *Position) error {
+	for _, node := range nodes {
+		if node.db == "" {
+			node.db = string(e.Schema)
+		}
+		if err := c.updateTable(ev.Header, node.db, node.table); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	if len(nodes) > 0 {
+		// Now we only handle Table Changed DDL, maybe we will support more later.
+		if err := c.eventHandler.OnDDL(ev.Header, pos.Position, e); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+// handleQueryEvent is handle some common query events (e.g., DDL,CREATE or DROP USER,GRANT)
+// DDL event use handleDDLEvent, others use the handleQueryEvent
+func (c *Canal) handleQueryEvent(ev *replication.BinlogEvent, e *replication.QueryEvent, stmt ast.StmtNode, pos *Position) error {
+	if err := c.eventHandler.OnQueryEvent(ev, e, stmt, pos); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }

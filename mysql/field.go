@@ -41,10 +41,11 @@ const (
 	FieldValueTypeString
 )
 
-func (f *Field) Parse(p FieldData) (err error) {
+func (f *Field) Parse(p FieldData) error {
 	f.Data = p
 
 	var n int
+	var err error
 	pos := 0
 	//skip catelog, always def
 	n, err = SkipLengthEncodedString(p)
