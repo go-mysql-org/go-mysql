@@ -20,7 +20,7 @@ type canalTestSuite struct {
 	c *Canal
 }
 
-func TestCanal(t *testing.T) {
+func TestCanalSuite(t *testing.T) {
 	suite.Run(t, new(canalTestSuite))
 }
 
@@ -78,7 +78,7 @@ func (s *canalTestSuite) SetupSuite() {
 
 	s.execute("SET GLOBAL binlog_format = 'ROW'")
 
-	s.c.SetEventHandler(&testEventHandler{t: s.T()})
+	s.c.SetEventHandler(&testEventHandler{})
 	go func() {
 		set, _ := mysql.ParseGTIDSet("mysql", "")
 		err = s.c.StartFromGTID(set)
@@ -105,7 +105,6 @@ func (s *canalTestSuite) execute(query string, args ...interface{}) *mysql.Resul
 
 type testEventHandler struct {
 	DummyEventHandler
-	t *testing.T
 }
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
@@ -119,10 +118,6 @@ func (h *testEventHandler) OnRow(e *RowsEvent) error {
 
 func (h *testEventHandler) String() string {
 	return "testEventHandler"
-}
-
-func (h *testEventHandler) OnPosSynced(header *replication.EventHeader, p mysql.Position, set mysql.GTIDSet, f bool) error {
-	return nil
 }
 
 func (s *canalTestSuite) TestCanal() {
