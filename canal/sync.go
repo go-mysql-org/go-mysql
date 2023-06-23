@@ -251,6 +251,10 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	if err != nil {
 		return err
 	}
+	//Skip if the number of fields is different
+	if len(t.Columns) != int(ev.ColumnCount) {
+		return nil
+	}
 	var action string
 	switch e.Header.EventType {
 	case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2, replication.MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
