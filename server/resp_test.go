@@ -49,7 +49,7 @@ func TestConnWriteEOF(t *testing.T) {
 	conn.SetStatus(mysql.SERVER_MORE_RESULTS_EXISTS)
 	err = conn.writeEOF()
 	require.NoError(t, err)
-	expected = []byte{5, 0, 0, 1, mysql.EOF_HEADER, 0, 8, 0, 0}
+	expected = []byte{5, 0, 0, 1, mysql.EOF_HEADER, 0, 0, 8, 0}
 	require.Equal(t, expected, clientConn.WriteBuffered)
 }
 
@@ -74,7 +74,7 @@ func TestConnWriteError(t *testing.T) {
 	// unknown error
 	err = conn.writeError(errors.New("test"))
 	require.NoError(t, err)
-	expected = []byte{13, 0, 0, 1, mysql.ERR_HEADER, 81, 4, 35, 72, 89, 48, 48, 48, 116, 101, 115, 116}
+	expected = []byte{13, 0, 0, 2, mysql.ERR_HEADER, 81, 4, 35, 72, 89, 48, 48, 48, 116, 101, 115, 116}
 	require.Equal(t, expected, clientConn.WriteBuffered)
 }
 
@@ -167,7 +167,7 @@ func TestConnWriteResultset(t *testing.T) {
 	err = conn.writeResultset(r)
 	require.NoError(t, err)
 	// column length 1
-	require.Equal(t, []byte{1, 0, 0, 0, 1}, clientConn.WriteBuffered[:5])
+	require.Equal(t, []byte{1, 0, 0, 3, 1}, clientConn.WriteBuffered[:5])
 	// fields and EOF
 	require.Equal(t, []byte{23, 0, 0, 4, 3, 100, 101, 102, 0, 0, 0, 1, 'a', 0, 12, 33, 0, 0, 0, 0, 0, 253, 0, 0, 0, 0, 0}, clientConn.WriteBuffered[5:32])
 	require.Equal(t, []byte{1, 0, 0, 5, mysql.EOF_HEADER}, clientConn.WriteBuffered[32:37])
@@ -224,7 +224,7 @@ func TestConnWriteFieldValues(t *testing.T) {
 	require.Equal(t, []byte{2, 0, 0, 2, 1, 'd'}, clientConn.WriteBuffered[32:38])
 
 	// second row with NULL value
-	require.Equal(t, []byte{2, 0, 0, 3, 251}, clientConn.WriteBuffered[38:43])
+	require.Equal(t, []byte{1, 0, 0, 3, 251}, clientConn.WriteBuffered[38:43])
 
 	// EOF
 	require.Equal(t, []byte{1, 0, 0, 4, mysql.EOF_HEADER}, clientConn.WriteBuffered[43:])

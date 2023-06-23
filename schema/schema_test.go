@@ -105,7 +105,7 @@ func (s *schemaTestSuite) TestSchema() {
 	require.True(s.T(), ta.Columns[9].IsUnsigned)
 	require.Contains(s.T(), ta.Columns[10].Collation, "ucs2")
 	require.Equal(s.T(), uint(256), ta.Columns[10].MaxSize)
-	require.Equal(s.T(), uint(0), ta.Columns[10].MaxSize)
+	require.Equal(s.T(), uint(0), ta.Columns[10].FixedSize)
 	require.Contains(s.T(), ta.Columns[11].Collation, "utf8")
 	require.Equal(s.T(), TYPE_STRING, ta.Columns[12].Type)
 	require.Equal(s.T(), uint(10), ta.Columns[12].MaxSize)
