@@ -18,7 +18,7 @@ type EventHandler interface {
 	OnGTID(header *replication.EventHeader, gtid mysql.GTIDSet) error
 	// OnPosSynced Use your own way to sync position. When force is true, sync position immediately.
 	OnPosSynced(header *replication.EventHeader, pos mysql.Position, set mysql.GTIDSet, force bool) error
-	// OnQueryEvent is query event include(create user,drop user,create index event,etd.)
+	// OnQueryEvent is query event include (create user, drop user, create index, etc.)
 	// Note: the OnQueryEvent has lower priority than OnDDL event
 	OnQueryEvent(ev *replication.BinlogEvent, e *replication.QueryEvent, stmt ast.StmtNode, pos *Position) error
 	String() string
