@@ -19,8 +19,8 @@ type EventHandler interface {
 	// OnPosSynced Use your own way to sync position. When force is true, sync position immediately.
 	OnPosSynced(header *replication.EventHeader, pos mysql.Position, set mysql.GTIDSet, force bool) error
 	// OnQueryEvent is query event include (create user, drop user, create index, etc.)
-	// Note: the OnQueryEvent has lower priority than OnDDL event
-	OnQueryEvent(ev *replication.BinlogEvent, e *replication.QueryEvent, stmt ast.StmtNode, pos *Position) error
+	// Note: the OnQueryEvent has lower priority than OnDDL even
+	OnQueryEvent(header *replication.EventHeader, stmt ast.StmtNode, pos mysql.Position, e *replication.QueryEvent) (bool, bool, error)
 	String() string
 }
 
@@ -43,9 +43,9 @@ func (h *DummyEventHandler) OnGTID(*replication.EventHeader, mysql.GTIDSet) erro
 func (h *DummyEventHandler) OnPosSynced(*replication.EventHeader, mysql.Position, mysql.GTIDSet, bool) error {
 	return nil
 }
-
-func (h *DummyEventHandler) OnQueryEvent(*replication.BinlogEvent, *replication.QueryEvent, ast.StmtNode, *Position) error {
-	return nil
+func (h *DummyEventHandler) OnQueryEvent(*replication.EventHeader, ast.StmtNode, mysql.Position, *replication.QueryEvent) (bool, bool, error) {
+	savePos, force := false, false
+	return savePos, force, nil
 }
 func (h *DummyEventHandler) String() string { return "DummyEventHandler" }
 
