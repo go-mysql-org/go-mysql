@@ -1,23 +1,12 @@
 package mysql
 
 import (
-	"github.com/pingcap/check"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-type mariaDBTestSuite struct {
-}
-
-var _ = check.Suite(&mariaDBTestSuite{})
-
-func (t *mariaDBTestSuite) SetUpSuite(c *check.C) {
-
-}
-
-func (t *mariaDBTestSuite) TearDownSuite(c *check.C) {
-
-}
-
-func (t *mariaDBTestSuite) TestParseMariaDBGTID(c *check.C) {
+func TestParseMariaDBGTID(t *testing.T) {
 	cases := []struct {
 		gtidStr   string
 		hashError bool
@@ -32,15 +21,15 @@ func (t *mariaDBTestSuite) TestParseMariaDBGTID(c *check.C) {
 	for _, cs := range cases {
 		gtid, err := ParseMariadbGTID(cs.gtidStr)
 		if cs.hashError {
-			c.Assert(err, check.NotNil)
+			require.Error(t, err)
 		} else {
-			c.Assert(err, check.IsNil)
-			c.Assert(gtid.String(), check.Equals, cs.gtidStr)
+			require.NoError(t, err)
+			require.Equal(t, cs.gtidStr, gtid.String())
 		}
 	}
 }
 
-func (t *mariaDBTestSuite) TestMariaDBGTIDConatin(c *check.C) {
+func TestMariaDBGTIDConatin(t *testing.T) {
 	cases := []struct {
 		originGTIDStr, otherGTIDStr string
 		contain                     bool
@@ -54,23 +43,23 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDConatin(c *check.C) {
 
 	for _, cs := range cases {
 		originGTID, err := ParseMariadbGTID(cs.originGTIDStr)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 		otherGTID, err := ParseMariadbGTID(cs.otherGTIDStr)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 
-		c.Assert(originGTID.Contain(otherGTID), check.Equals, cs.contain)
+		require.Equal(t, cs.contain, originGTID.Contain(otherGTID))
 	}
 }
 
-func (t *mariaDBTestSuite) TestMariaDBGTIDClone(c *check.C) {
+func TestMariaDBGTIDClone(t *testing.T) {
 	gtid, err := ParseMariadbGTID("1-1-1")
-	c.Assert(err, check.IsNil)
+	require.NoError(t, err)
 
 	clone := gtid.Clone()
-	c.Assert(gtid, check.DeepEquals, clone)
+	require.Equal(t, gtid, clone)
 }
 
-func (t *mariaDBTestSuite) TestMariaDBForward(c *check.C) {
+func TestMariaDBForward(t *testing.T) {
 	cases := []struct {
 		currentGTIDStr, newerGTIDStr string
 		hashError                    bool
@@ -84,22 +73,22 @@ func (t *mariaDBTestSuite) TestMariaDBForward(c *check.C) {
 
 	for _, cs := range cases {
 		currentGTID, err := ParseMariadbGTID(cs.currentGTIDStr)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 		newerGTID, err := ParseMariadbGTID(cs.newerGTIDStr)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 
 		err = currentGTID.forward(newerGTID)
 		if cs.hashError {
-			c.Assert(err, check.NotNil)
-			c.Assert(currentGTID.String(), check.Equals, cs.currentGTIDStr)
+			require.Error(t, err)
+			require.Equal(t, cs.currentGTIDStr, currentGTID.String())
 		} else {
-			c.Assert(err, check.IsNil)
-			c.Assert(currentGTID.String(), check.Equals, cs.newerGTIDStr)
+			require.NoError(t, err)
+			require.Equal(t, cs.newerGTIDStr, currentGTID.String())
 		}
 	}
 }
 
-func (t *mariaDBTestSuite) TestParseMariaDBGTIDSet(c *check.C) {
+func TestParseMariaDBGTIDSet(t *testing.T) {
 	cases := []struct {
 		gtidStr     string
 		subGTIDs    map[uint32]string //domain ID => gtid string
@@ -115,17 +104,17 @@ func (t *mariaDBTestSuite) TestParseMariaDBGTIDSet(c *check.C) {
 	for _, cs := range cases {
 		gtidSet, err := ParseMariadbGTIDSet(cs.gtidStr)
 		if cs.hasError {
-			c.Assert(err, check.NotNil)
+			require.Error(t, err)
 		} else {
-			c.Assert(err, check.IsNil)
+			require.NoError(t, err)
 			mariadbGTIDSet, ok := gtidSet.(*MariadbGTIDSet)
-			c.Assert(ok, check.IsTrue)
+			require.True(t, ok)
 
 			// check sub gtid
-			c.Assert(mariadbGTIDSet.Sets, check.HasLen, len(cs.subGTIDs))
+			require.Len(t, mariadbGTIDSet.Sets, len(cs.subGTIDs))
 			for domainID, gtid := range mariadbGTIDSet.Sets {
-				c.Assert(mariadbGTIDSet.Sets, check.HasKey, domainID)
-				c.Assert(gtid.String(), check.Equals, cs.subGTIDs[domainID])
+				require.Contains(t, mariadbGTIDSet.Sets, domainID)
+				require.Equal(t, cs.subGTIDs[domainID], gtid.String())
 			}
 
 			// check String() function
@@ -137,12 +126,12 @@ func (t *mariaDBTestSuite) TestParseMariaDBGTIDSet(c *check.C) {
 					break
 				}
 			}
-			c.Assert(inExpectedResult, check.IsTrue)
+			require.True(t, inExpectedResult)
 		}
 	}
 }
 
-func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
+func TestMariaDBGTIDSetUpdate(t *testing.T) {
 	cases := []struct {
 		isNilGTID bool
 		gtidStr   string
@@ -157,26 +146,26 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetUpdate(c *check.C) {
 
 	for _, cs := range cases {
 		gtidSet, err := ParseMariadbGTIDSet("1-1-1,2-2-2")
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 		mariadbGTIDSet, ok := gtidSet.(*MariadbGTIDSet)
-		c.Assert(ok, check.IsTrue)
+		require.True(t, ok)
 
 		if cs.isNilGTID {
-			c.Assert(mariadbGTIDSet.AddSet(nil), check.IsNil)
+			require.NoError(t, mariadbGTIDSet.AddSet(nil))
 		} else {
 			err := gtidSet.Update(cs.gtidStr)
-			c.Assert(err, check.IsNil)
+			require.NoError(t, err)
 		}
 		// check sub gtid
-		c.Assert(mariadbGTIDSet.Sets, check.HasLen, len(cs.subGTIDs))
+		require.Len(t, mariadbGTIDSet.Sets, len(cs.subGTIDs))
 		for domainID, gtid := range mariadbGTIDSet.Sets {
-			c.Assert(mariadbGTIDSet.Sets, check.HasKey, domainID)
-			c.Assert(gtid.String(), check.Equals, cs.subGTIDs[domainID])
+			require.Contains(t, mariadbGTIDSet.Sets, domainID)
+			require.Equal(t, cs.subGTIDs[domainID], gtid.String())
 		}
 	}
 }
 
-func (t *mariaDBTestSuite) TestMariaDBGTIDSetEqual(c *check.C) {
+func TestMariaDBGTIDSetEqual(t *testing.T) {
 	cases := []struct {
 		originGTIDStr, otherGTIDStr string
 		equals                      bool
@@ -190,16 +179,16 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetEqual(c *check.C) {
 
 	for _, cs := range cases {
 		originGTID, err := ParseMariadbGTIDSet(cs.originGTIDStr)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 
 		otherGTID, err := ParseMariadbGTIDSet(cs.otherGTIDStr)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 
-		c.Assert(originGTID.Equal(otherGTID), check.Equals, cs.equals)
+		require.Equal(t, cs.equals, originGTID.Equal(otherGTID))
 	}
 }
 
-func (t *mariaDBTestSuite) TestMariaDBGTIDSetContain(c *check.C) {
+func TestMariaDBGTIDSetContain(t *testing.T) {
 	cases := []struct {
 		originGTIDStr, otherGTIDStr string
 		contain                     bool
@@ -214,33 +203,33 @@ func (t *mariaDBTestSuite) TestMariaDBGTIDSetContain(c *check.C) {
 
 	for _, cs := range cases {
 		originGTIDSet, err := ParseMariadbGTIDSet(cs.originGTIDStr)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 
 		otherGTIDSet, err := ParseMariadbGTIDSet(cs.otherGTIDStr)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 
-		c.Assert(originGTIDSet.Contain(otherGTIDSet), check.Equals, cs.contain)
+		require.Equal(t, cs.contain, originGTIDSet.Contain(otherGTIDSet))
 	}
 }
 
-func (t *mariaDBTestSuite) TestMariaDBGTIDSetClone(c *check.C) {
+func TestMariaDBGTIDSetClone(t *testing.T) {
 	cases := []string{"", "1-1-1", "1-1-1,2-2-2"}
 
 	for _, str := range cases {
 		gtidSet, err := ParseMariadbGTIDSet(str)
-		c.Assert(err, check.IsNil)
+		require.NoError(t, err)
 
-		c.Assert(gtidSet.Clone(), check.DeepEquals, gtidSet)
+		require.Equal(t, gtidSet, gtidSet.Clone())
 	}
 }
 
-func (t *mariaDBTestSuite) TestMariaDBGTIDSetSortedString(c *check.C) {
+func TestMariaDBGTIDSetSortedString(t *testing.T) {
 	cases := [][]string{{"", ""}, {"1-1-1", "1-1-1"},
 		{"2-2-2,1-1-1,3-2-1", "1-1-1,2-2-2,3-2-1"}}
 
 	for _, strs := range cases {
 		gtidSet, err := ParseMariadbGTIDSet(strs[0])
-		c.Assert(err, check.IsNil)
-		c.Assert(gtidSet.String(), check.Equals, strs[1])
+		require.NoError(t, err)
+		require.Equal(t, strs[1], gtidSet.String())
 	}
 }

@@ -121,6 +121,12 @@ func ConnectWithDialer(ctx context.Context, network string, addr string, user st
 		return nil, errors.Trace(err)
 	}
 
+	if c.ccaps&CLIENT_COMPRESS > 0 {
+		c.Conn.Compression = MYSQL_COMPRESS_ZLIB
+	} else if c.ccaps&CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
+		c.Conn.Compression = MYSQL_COMPRESS_ZSTD
+	}
+
 	return c, nil
 }
 
@@ -147,6 +153,13 @@ func (c *Conn) handshake() error {
 
 func (c *Conn) Close() error {
 	return c.Conn.Close()
+}
+
+func (c *Conn) Quit() error {
+	if err := c.writeCommand(COM_QUIT); err != nil {
+		return err
+	}
+	return c.Close()
 }
 
 func (c *Conn) Ping() error {

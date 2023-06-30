@@ -7,6 +7,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mocks"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadAuthData(t *testing.T) {
@@ -18,18 +19,12 @@ func TestReadAuthData(t *testing.T) {
 
 	// test out of range index returns 'bad handshake' error
 	_, _, _, err := c.readAuthData(data, len(data))
-	if err == nil || err.Error() != "ERROR 1043 (08S01): Bad handshake" {
-		t.Fatal("expected error, got nil")
-	}
+	require.ErrorContains(t, err, "ERROR 1043 (08S01): Bad handshake")
 
 	// test good index position reads auth data
 	_, _, readBytes, err := c.readAuthData(data, len(data)-1)
-	if err != nil {
-		t.Fatalf("expected nil error, got %v", err)
-	}
-	if readBytes != len(data)-1 {
-		t.Fatalf("expected %d read bytes, got %d", len(data)-1, readBytes)
-	}
+	require.NoError(t, err)
+	require.Equal(t, len(data)-1, readBytes)
 }
 
 func TestDecodeFirstPart(t *testing.T) {

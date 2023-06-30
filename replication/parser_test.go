@@ -2,11 +2,12 @@ package replication
 
 import (
 	"bytes"
+	"testing"
 
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-func (t *testSyncerSuite) TestIndexOutOfRange(c *C) {
+func TestIndexOutOfRange(t *testing.T) {
 	parser := NewBinlogParser()
 
 	parser.format = &FormatDescriptionEvent{
@@ -40,10 +41,10 @@ func (t *testSyncerSuite) TestIndexOutOfRange(c *C) {
 		0x65, 0x6d, 0xb1, 0x3c, 0x38, 0xcb,
 	})
 
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 }
 
-func (t *testSyncerSuite) TestParseEvent(c *C) {
+func TestParseEvent(t *testing.T) {
 	parser := NewBinlogParser()
 	parser.format = &FormatDescriptionEvent{
 		Version:                0x4,
@@ -64,20 +65,20 @@ func (t *testSyncerSuite) TestParseEvent(c *C) {
 	for _, tc := range testCases {
 		r := bytes.NewReader(tc.byteData)
 		_, err := parser.ParseSingleEvent(r, func(e *BinlogEvent) error {
-			c.Assert(e.Header.EventType, Equals, STOP_EVENT)
-			c.Assert(e.Header.EventSize, Equals, tc.eventSize)
+			require.Equal(t, STOP_EVENT, e.Header.EventType)
+			require.Equal(t, tc.eventSize, e.Header.EventSize)
 			return nil
 		})
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		e, err2 := parser.Parse(tc.byteData)
-		c.Assert(e.Header.EventType, Equals, STOP_EVENT)
-		c.Assert(e.Header.EventSize, Equals, tc.eventSize)
-		c.Assert(err2, IsNil)
+		require.NoError(t, err2)
+		require.Equal(t, STOP_EVENT, e.Header.EventType)
+		require.Equal(t, tc.eventSize, e.Header.EventSize)
 	}
 }
 
-func (t *testSyncerSuite) TestRowsEventDecodeFunc(c *C) {
+func TestRowsEventDecodeFunc(t *testing.T) {
 	testCases := []struct {
 		byteData  []byte
 		eventSize uint32
@@ -103,13 +104,13 @@ func (t *testSyncerSuite) TestRowsEventDecodeFunc(c *C) {
 	})
 	for _, tc := range testCases {
 		e, err := parser.Parse(tc.byteData)
-		c.Assert(err, IsNil)
-		c.Assert(e.Header.EventType, Equals, tc.eventType)
-		c.Assert(e.Header.EventSize, Equals, tc.eventSize)
+		require.NoError(t, err)
+		require.Equal(t, tc.eventType, e.Header.EventType)
+		require.Equal(t, tc.eventSize, e.Header.EventSize)
 	}
 }
 
-func (t *testSyncerSuite) TestRowsEventDecodeImageWithEmptyJSON(c *C) {
+func TestRowsEventDecodeImageWithEmptyJSON(t *testing.T) {
 	data := []byte("\x01\a\x00\xf6+\x0f\x00\xeb\xafP\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x99\xac\xfa\xbeÙ\xaf\xab1\x184\x11\x00\x00")
 
 	bitmap := []byte{255}
@@ -125,17 +126,17 @@ func (t *testSyncerSuite) TestRowsEventDecodeImageWithEmptyJSON(c *C) {
 		ColumnCount: uint64(len(table.ColumnType)),
 	}
 	n, err := e.decodeImage(data, bitmap, EnumRowImageTypeUpdateAI)
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, len(data))
+	require.NoError(t, err)
+	require.Len(t, data, n)
 
-	c.Assert(len(e.Rows), Equals, 1)
-	c.Assert(len(e.Rows[0]), Equals, len(table.ColumnType))
+	require.Len(t, e.Rows, 1)
+	require.Len(t, e.Rows[0], len(table.ColumnType))
 
 	row := e.Rows[0]
-	c.Assert(row[0], Equals, int32(994294))
-	c.Assert(row[1], Equals, int32(38842347))
-	c.Assert(row[2], DeepEquals, []byte{}) // empty json
-	c.Assert(row[3], DeepEquals, []byte{}) // empty json
-	c.Assert(row[4], DeepEquals, []byte{}) // empty json
-	c.Assert(row[7], Equals, int32(4404))
+	require.Equal(t, int32(994294), row[0])
+	require.Equal(t, int32(38842347), row[1])
+	require.Equal(t, []byte{}, row[2]) // empty json
+	require.Equal(t, []byte{}, row[3]) // empty json
+	require.Equal(t, []byte{}, row[4]) // empty json
+	require.Equal(t, int32(4404), row[7])
 }
