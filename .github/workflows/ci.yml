@@ -37,7 +37,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v1
       - name: Run tests
-        run: go test ./...
+        run: |
+          # separate test to avoid RESET MASTER conflict
+          go test $(go list ./... | grep -v canal)
+          go test $(go list ./... | grep canal)
 
   golangci:
     name: golangci

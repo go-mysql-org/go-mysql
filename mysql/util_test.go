@@ -1,15 +1,12 @@
 package mysql
 
 import (
-	"github.com/pingcap/check"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-type utilTestSuite struct {
-}
-
-var _ = check.Suite(&utilTestSuite{})
-
-func (s *utilTestSuite) TestCompareServerVersions(c *check.C) {
+func TestCompareServerVersions(t *testing.T) {
 	tests := []struct {
 		A      string
 		B      string
@@ -21,10 +18,8 @@ func (s *utilTestSuite) TestCompareServerVersions(c *check.C) {
 	}
 
 	for _, test := range tests {
-		comment := check.Commentf("%q vs. %q", test.A, test.B)
-
 		got, err := CompareServerVersions(test.A, test.B)
-		c.Assert(err, check.IsNil, comment)
-		c.Assert(got, check.Equals, test.Expect, comment)
+		require.NoError(t, err)
+		require.Equal(t, test.Expect, got)
 	}
 }

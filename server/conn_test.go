@@ -1,16 +1,13 @@
 package server
 
 import (
+	"testing"
+
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-type connTestSuite struct {
-}
-
-var _ = check.Suite(&connTestSuite{})
-
-func (t *connTestSuite) TestStatus(c *check.C) {
+func TestStatus(t *testing.T) {
 	conn := Conn{}
 
 	flags := []uint16{
@@ -29,35 +26,35 @@ func (t *connTestSuite) TestStatus(c *check.C) {
 	}
 
 	for _, f := range flags {
-		c.Assert(conn.HasStatus(f), check.IsFalse)
+		require.False(t, conn.HasStatus(f))
 		conn.SetStatus(f)
-		c.Assert(conn.HasStatus(f), check.IsTrue)
+		require.True(t, conn.HasStatus(f))
 		conn.UnsetStatus(f)
-		c.Assert(conn.HasStatus(f), check.IsFalse)
+		require.False(t, conn.HasStatus(f))
 	}
 
 	// check special flag setters
 	// IsAutoCommit
-	c.Assert(conn.IsAutoCommit(), check.IsFalse)
+	require.False(t, conn.IsAutoCommit())
 	conn.SetStatus(mysql.SERVER_STATUS_AUTOCOMMIT)
-	c.Assert(conn.IsAutoCommit(), check.IsTrue)
+	require.True(t, conn.IsAutoCommit())
 	conn.UnsetStatus(mysql.SERVER_STATUS_AUTOCOMMIT)
 
 	// IsInTransaction
-	c.Assert(conn.IsInTransaction(), check.IsFalse)
+	require.False(t, conn.IsInTransaction())
 	conn.SetStatus(mysql.SERVER_STATUS_IN_TRANS)
-	c.Assert(conn.IsInTransaction(), check.IsTrue)
+	require.True(t, conn.IsInTransaction())
 	conn.UnsetStatus(mysql.SERVER_STATUS_IN_TRANS)
 
 	// SetInTransaction & ClearInTransaction
-	c.Assert(conn.HasStatus(mysql.SERVER_STATUS_IN_TRANS), check.IsFalse)
+	require.False(t, conn.HasStatus(mysql.SERVER_STATUS_IN_TRANS))
 	conn.SetInTransaction()
-	c.Assert(conn.HasStatus(mysql.SERVER_STATUS_IN_TRANS), check.IsTrue)
+	require.True(t, conn.HasStatus(mysql.SERVER_STATUS_IN_TRANS))
 	conn.ClearInTransaction()
-	c.Assert(conn.HasStatus(mysql.SERVER_STATUS_IN_TRANS), check.IsFalse)
+	require.False(t, conn.HasStatus(mysql.SERVER_STATUS_IN_TRANS))
 }
 
-func (t *connTestSuite) TestCapability(c *check.C) {
+func TestCapability(t *testing.T) {
 	conn := Conn{}
 
 	caps := []uint32{
@@ -86,11 +83,11 @@ func (t *connTestSuite) TestCapability(c *check.C) {
 	}
 
 	for _, capI := range caps {
-		c.Assert(conn.HasCapability(capI), check.IsFalse)
+		require.False(t, conn.HasCapability(capI))
 		conn.SetCapability(capI)
-		c.Assert(conn.HasCapability(capI), check.IsTrue)
-		c.Assert(conn.Capability()&capI > 0, check.IsTrue)
+		require.True(t, conn.HasCapability(capI))
+		require.True(t, conn.Capability()&capI > 0)
 		conn.UnsetCapability(capI)
-		c.Assert(conn.HasCapability(capI), check.IsFalse)
+		require.False(t, conn.HasCapability(capI))
 	}
 }
