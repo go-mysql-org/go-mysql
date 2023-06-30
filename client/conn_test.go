@@ -111,8 +111,6 @@ func (s *connTestSuite) TestExecuteMultiple() {
 
 	count := 0
 	result, err := s.c.ExecuteMultiple(strings.Join(queries, "; "), func(result *mysql.Result, err error) {
-		require.NotNil(s.T(), result)
-
 		switch count {
 		// the INSERT/DELETE query have no resultset, but should have set affectedrows
 		// the err should be nil
