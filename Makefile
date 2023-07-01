@@ -11,7 +11,7 @@ build:
 test:
 	go test --race -timeout 2m ./...
 
-MYSQL_VERSION ?= 5.7
+MYSQL_VERSION ?= 8.0
 test-local:
 	docker run --rm -d --network=host --name go-mysql-server \
 		-e MYSQL_ALLOW_EMPTY_PASSWORD=true \
