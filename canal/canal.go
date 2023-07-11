@@ -93,6 +93,13 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.delay = new(uint32)
 
 	var err error
+	if err = c.master.infoLoader.Load(c.master.Setter); err != nil {
+		return nil, errors.Trace(err)
+	} else if len(c.master.Addr) != 0 && c.master.Addr != c.cfg.Addr {
+		c.cfg.Logger.Infof("MySQL addr %s in old master.info, but new %s, reset", c.master.Addr, c.cfg.Addr)
+		// may use another MySQL, reset
+		c.master = &masterInfo{infoLoader: c.master.infoLoader} // keep the configured info loader
+	}
 
 	if err = c.prepareDumper(); err != nil {
 		return nil, errors.Trace(err)
