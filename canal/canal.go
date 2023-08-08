@@ -451,6 +451,8 @@ func (c *Canal) prepareSyncer() error {
 		Logger:                  c.cfg.Logger,
 		Dialer:                  c.cfg.Dialer,
 		Localhost:               c.cfg.Localhost,
+		ThrottleCap:             c.cfg.ThrottleCap,
+		ThrottleDuration:        c.cfg.ThrottleDuration,
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {

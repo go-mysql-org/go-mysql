@@ -88,6 +88,10 @@ type Config struct {
 	// whether disable re-sync for broken connection
 	DisableRetrySync bool `toml:"disable_retry_sync"`
 
+	// do throttle when the event channel is more than this value. 0 means no throttle
+	ThrottleCap int `toml:"throttle_cap"`
+	// delay read for this duration when throttle is triggered
+	ThrottleDuration time.Duration `toml:"throttle_duration"`
 	// Set TLS config
 	TLSConfig *tls.Config
 

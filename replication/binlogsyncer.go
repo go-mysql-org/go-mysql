@@ -122,6 +122,11 @@ type BinlogSyncerConfig struct {
 	RowsEventDecodeFunc func(*RowsEvent, []byte) error
 
 	DiscardGTIDSet bool
+
+	// do throttle when the event channel is more than this value. 0 means no throttle
+	ThrottleCap int
+	// delay read for this duration when throttle is triggered
+	ThrottleDuration time.Duration
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -852,6 +857,11 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 	}
 
 	needStop := false
+	// throttle the event, prevent cpu flood
+	if b.cfg.ThrottleCap > 0 && len(s.ch) >= b.cfg.ThrottleCap {
+		b.cfg.Logger.Infof(`throttling binlog read`)
+		time.Sleep(b.cfg.ThrottleDuration)
+	}
 	select {
 	case s.ch <- e:
 	case <-b.ctx.Done():
