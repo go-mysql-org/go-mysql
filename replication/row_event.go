@@ -81,6 +81,9 @@ type TableMapEvent struct {
 	// EnumSetDefaultCharset/EnumSetColumnCharset is similar to DefaultCharset/ColumnCharset but for enum/set columns.
 	EnumSetDefaultCharset []uint64
 	EnumSetColumnCharset  []uint64
+
+	// VisibilityBitmap stores bits that are set if corresponding column is not invisible (MySQL 8.0.23+)
+	VisibilityBitmap []byte
 }
 
 func (e *TableMapEvent) Decode(data []byte) error {
@@ -312,6 +315,9 @@ func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
 				return err
 			}
 
+		case TABLE_MAP_OPT_META_COLUMN_VISIBILITY:
+			e.VisibilityBitmap = v
+
 		default:
 			// Ignore for future extension
 		}
@@ -421,6 +427,7 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Primary key prefix: %v\n", e.PrimaryKeyPrefix)
 	fmt.Fprintf(w, "Enum/set default charset: %v\n", e.EnumSetDefaultCharset)
 	fmt.Fprintf(w, "Enum/set column charset: %v\n", e.EnumSetColumnCharset)
+	fmt.Fprintf(w, "Invisible Column bitmap: \n%s", hex.Dump(e.VisibilityBitmap))
 
 	unsignedMap := e.UnsignedMap()
 	fmt.Fprintf(w, "UnsignedMap: %#v\n", unsignedMap)
@@ -439,6 +446,9 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 
 	geometryTypeMap := e.GeometryTypeMap()
 	fmt.Fprintf(w, "GeometryTypeMap: %#v\n", geometryTypeMap)
+
+	visibilityMap := e.VisibilityMap()
+	fmt.Fprintf(w, "VisibilityMap: %#v\n", visibilityMap)
 
 	nameMaxLen := 0
 	for _, name := range e.ColumnName {
@@ -725,6 +735,22 @@ func (e *TableMapEvent) GeometryTypeMap() map[int]uint64 {
 		}
 
 		ret[i] = e.GeometryType[p]
+		p++
+	}
+	return ret
+}
+
+// VisibilityMap returns a map: column index -> visiblity.
+// Invisible column was introduced in MySQL 8.0.23
+// nil is returned if not available.
+func (e *TableMapEvent) VisibilityMap() map[int]bool {
+	if len(e.VisibilityBitmap) == 0 {
+		return nil
+	}
+	p := 0
+	ret := make(map[int]bool)
+	for i := 0; i < int(e.ColumnCount); i++ {
+		ret[i] = e.VisibilityBitmap[p/8]&(1<<uint(7-p%8)) != 0
 		p++
 	}
 	return ret
