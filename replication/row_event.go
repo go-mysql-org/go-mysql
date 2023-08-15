@@ -618,14 +618,19 @@ func (e *TableMapEvent) UnsignedMap() map[int]bool {
 	if len(e.SignednessBitmap) == 0 {
 		return nil
 	}
-	p := 0
 	ret := make(map[int]bool)
-	for i := 0; i < int(e.ColumnCount); i++ {
-		if !e.IsNumericColumn(i) {
-			continue
+	i := 0
+	for _, field := range e.SignednessBitmap {
+		for c := 0x80; c != 0; {
+			if e.IsNumericColumn(i) {
+				ret[i] = field&byte(c) != 0
+				c >>= 1
+			}
+			i++
+			if i >= int(e.ColumnCount) {
+				return ret
+			}
 		}
-		ret[i] = e.SignednessBitmap[p/8]&(1<<uint(7-p%8)) != 0
-		p++
 	}
 	return ret
 }
@@ -747,11 +752,16 @@ func (e *TableMapEvent) VisibilityMap() map[int]bool {
 	if len(e.VisibilityBitmap) == 0 {
 		return nil
 	}
-	p := 0
 	ret := make(map[int]bool)
-	for i := 0; i < int(e.ColumnCount); i++ {
-		ret[i] = e.VisibilityBitmap[p/8]&(1<<uint(7-p%8)) != 0
-		p++
+	i := 0
+	for _, field := range e.VisibilityBitmap {
+		for c := 0x80; c != 0; c >>= 1 {
+			ret[i] = field&byte(c) != 0
+			i++
+			if uint64(i) >= e.ColumnCount {
+				return ret
+			}
+		}
 	}
 	return ret
 }
