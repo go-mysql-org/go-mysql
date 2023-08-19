@@ -939,6 +939,61 @@ func TestTableMapOptMetaPrimaryKey(t *testing.T) {
 	}
 }
 
+func TestTableMapOptMetaVisibility(t *testing.T) {
+	/*
+		CREATE TABLE _visibility(
+		    `col0` INT INVISIBLE,
+		    `col1` INT,
+		    `col2` INT INVISIBLE,
+		    `col3` INT,
+		    `col4` INT,
+		    `col5` INT INVISIBLE,
+		    `col6` INT INVISIBLE,
+		    `col7` INT INVISIBLE,
+		    `col8` INT,
+		    `col9` INT INVISIBLE,
+		    `col10` INT INVISIBLE
+		);
+	*/
+	case1VisibilityBitmap := []byte("X\x80")
+	case1VisibilityMap := map[int]bool{
+		0:  false,
+		1:  true,
+		2:  false,
+		3:  true,
+		4:  true,
+		5:  false,
+		6:  false,
+		7:  false,
+		8:  true,
+		9:  false,
+		10: false,
+	}
+
+	// Invisible column and INVISIBLE keyword is available only on MySQL 8.0.23+
+	testcases := []struct {
+		data                     []byte
+		expectedVisibilityBitmap []byte
+		expectedVisibilityMap    map[int]bool
+	}{
+		{
+			// mysql 8.0, case1
+			data:                     []byte("^\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07\x01\x02\x00\x00\x048\x04col0\x04col1\x04col2\x04col3\x04col4\x04col5\x04col6\x04col7\x04col8\x04col9\x05col10\x0c\x02X\x80"),
+			expectedVisibilityBitmap: case1VisibilityBitmap,
+			expectedVisibilityMap:    case1VisibilityMap,
+		},
+	}
+
+	for _, tc := range testcases {
+		tableMapEvent := new(TableMapEvent)
+		tableMapEvent.tableIDSize = 6
+		err := tableMapEvent.Decode(tc.data)
+		require.NoError(t, err)
+		require.Equal(t, tc.expectedVisibilityBitmap, tableMapEvent.VisibilityBitmap)
+		require.Equal(t, tc.expectedVisibilityMap, tableMapEvent.VisibilityMap())
+	}
+}
+
 func TestTableMapHelperMaps(t *testing.T) {
 	/*
 		CREATE TABLE `_types` (
