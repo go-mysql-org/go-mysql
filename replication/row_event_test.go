@@ -941,6 +941,14 @@ func TestTableMapOptMetaPrimaryKey(t *testing.T) {
 
 func TestTableMapOptMetaVisibility(t *testing.T) {
 	/*
+		SET GLOBAL binlog_row_image = FULL;
+		SET GLOBAL binlog_row_metadata = FULL;	-- if applicable
+
+		CREATE DATABASE test;
+		USE test;
+	*/
+
+	/*
 		CREATE TABLE _visibility(
 		    `col0` INT INVISIBLE,
 		    `col1` INT,
@@ -955,7 +963,7 @@ func TestTableMapOptMetaVisibility(t *testing.T) {
 		    `col10` INT INVISIBLE
 		);
 	*/
-	case1VisibilityBitmap := []byte("X\x80")
+	case1VisibilityBitmap := []byte{0x58, 0x80}
 	case1VisibilityMap := map[int]bool{
 		0:  false,
 		1:  true,
@@ -970,6 +978,36 @@ func TestTableMapOptMetaVisibility(t *testing.T) {
 		10: false,
 	}
 
+	/*
+		CREATE TABLE _visibility(
+		    `col0` INT,
+		    `col1` INT,
+		    `col2` INT,
+		    `col3` INT,
+		    `col4` INT,
+		    `col5` INT,
+		    `col6` INT,
+		    `col7` INT,
+		    `col8` INT,
+		    `col9` INT,
+		    `col10` INT
+		);
+	*/
+	case2VisibilityBitmap := []byte{0xff, 0xe0}
+	case2VisibilityMap := map[int]bool{
+		0:  true,
+		1:  true,
+		2:  true,
+		3:  true,
+		4:  true,
+		5:  true,
+		6:  true,
+		7:  true,
+		8:  true,
+		9:  true,
+		10: true,
+	}
+
 	// Invisible column and INVISIBLE keyword is available only on MySQL 8.0.23+
 	testcases := []struct {
 		data                     []byte
@@ -981,6 +1019,30 @@ func TestTableMapOptMetaVisibility(t *testing.T) {
 			data:                     []byte("^\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07\x01\x02\x00\x00\x048\x04col0\x04col1\x04col2\x04col3\x04col4\x04col5\x04col6\x04col7\x04col8\x04col9\x05col10\x0c\x02X\x80"),
 			expectedVisibilityBitmap: case1VisibilityBitmap,
 			expectedVisibilityMap:    case1VisibilityMap,
+		},
+		{
+			// mysql 5.7, case2
+			data:                     []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07"),
+			expectedVisibilityBitmap: []byte(nil),
+			expectedVisibilityMap:    map[int]bool(nil),
+		},
+		{
+			// mysql 8.0, case2
+			data:                     []byte("^\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07\x01\x02\x00\x00\x048\x04col0\x04col1\x04col2\x04col3\x04col4\x04col5\x04col6\x04col7\x04col8\x04col9\x05col10\x0c\x02\xff\xe0"),
+			expectedVisibilityBitmap: case2VisibilityBitmap,
+			expectedVisibilityMap:    case2VisibilityMap,
+		},
+		{
+			// mariadb 10.4, case2
+			data:                     []byte("\x12\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07"),
+			expectedVisibilityBitmap: []byte(nil),
+			expectedVisibilityMap:    map[int]bool(nil),
+		},
+		{
+			// mariadb 10.5, case2
+			data:                     []byte("\x12\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07\x01\x02\x00\x00\x048\x04col0\x04col1\x04col2\x04col3\x04col4\x04col5\x04col6\x04col7\x04col8\x04col9\x05col10"),
+			expectedVisibilityBitmap: []byte(nil),
+			expectedVisibilityMap:    map[int]bool(nil),
 		},
 	}
 
