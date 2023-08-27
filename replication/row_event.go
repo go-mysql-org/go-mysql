@@ -879,6 +879,12 @@ type RowsEvent struct {
 
 	// if version == 2
 	ExtraData []byte
+	NdbLength uint16
+	NdbFormat []byte
+	NdbData  []byte
+	PartitionId uint16
+	SourceParitionId uint16
+
 
 	// lenenc_int
 	ColumnCount uint64
@@ -957,6 +963,25 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 		pos += 2
 
 		e.ExtraData = data[pos : pos+int(dataLen-2)]
+		if len(e.ExtraData) > 2 {
+			extraDataType := binary.LittleEndian.Uint16(e.ExtraData[:2])
+			switch extraDataType {
+			case 0:
+				e.NdbLength = binary.LittleEndian.Uint16(e.ExtraData[2:3])
+				e.NdbFormat = e.ExtraData[3:4]
+				var rangeData int = int(e.NdbLength) - 3
+				e.NdbData = e.ExtraData[4:rangeData]
+			case 1:
+				if e.eventType == PARTIAL_UPDATE_ROWS_EVENT {
+					e.PartitionId = binary.LittleEndian.Uint16(e.ExtraData[:3])
+					e.SourceParitionId = binary.LittleEndian.Uint16(e.ExtraData[3:5])
+				}else {
+					e.PartitionId = binary.LittleEndian.Uint16(e.ExtraData[:3])
+				}
+			default :
+				
+			}
+		}
 		pos += int(dataLen - 2)
 	}
 
