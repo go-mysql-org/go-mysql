@@ -878,8 +878,9 @@ type RowsEvent struct {
 	Flags uint16
 
 	// if version == 2
+	DataLen uint16
 	ExtraData []byte
-	NdbLength uint16
+	NdbLength uint8
 	NdbFormat []byte
 	NdbData  []byte
 	PartitionId uint16
@@ -961,28 +962,10 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 	if e.Version == 2 {
 		dataLen := binary.LittleEndian.Uint16(data[pos:])
 		pos += 2
-
-		e.ExtraData = data[pos : pos+int(dataLen-2)]
-		if len(e.ExtraData) > 2 {
-			extraDataType := binary.LittleEndian.Uint16(e.ExtraData[:2])
-			switch extraDataType {
-			case 0:
-				e.NdbLength = binary.LittleEndian.Uint16(e.ExtraData[2:3])
-				e.NdbFormat = e.ExtraData[3:4]
-				var rangeData int = int(e.NdbLength) - 3
-				e.NdbData = e.ExtraData[4:rangeData]
-			case 1:
-				if e.eventType == PARTIAL_UPDATE_ROWS_EVENT {
-					e.PartitionId = binary.LittleEndian.Uint16(e.ExtraData[:3])
-					e.SourceParitionId = binary.LittleEndian.Uint16(e.ExtraData[3:5])
-				}else {
-					e.PartitionId = binary.LittleEndian.Uint16(e.ExtraData[:3])
-				}
-			default :
-				
-			}
+		if dataLen > 2 {
+			e.decodeExtraData(pos,data)
 		}
-		pos += int(dataLen - 2)
+		pos += int(e.DataLen - 2)
 	}
 
 	var n int
@@ -1008,6 +991,31 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 		}
 	}
 	return pos, nil
+}
+
+func (e *RowsEvent) decodeExtraData(pos int, data []byte) (err2 error) {
+	extraDataType := uint8(data[pos])
+	pos +=1
+	switch extraDataType {
+	case 0:
+		e.NdbLength = uint8(data[pos])
+		pos +=1
+		e.NdbFormat = data[pos:]
+		pos +=1
+		e.NdbData = data[pos:]
+		pos += int(e.NdbLength-2)
+	case 1:
+		if e.eventType == PARTIAL_UPDATE_ROWS_EVENT {
+			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
+			pos +=2
+			e.SourceParitionId = binary.LittleEndian.Uint16(data[pos:])
+			pos +=2
+		}else {
+			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
+			pos +=2
+		}
+	}
+	return nil
 }
 
 func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
