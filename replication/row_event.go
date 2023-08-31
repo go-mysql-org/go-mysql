@@ -962,7 +962,10 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 		dataLen := binary.LittleEndian.Uint16(data[pos:])
 		pos += 2
 		if dataLen > 2 {
-			e.decodeExtraData(pos,data)
+			err := e.decodeExtraData(pos,data)
+			if err != nil {
+				return 0, err
+			}
 		}
 		pos += int(dataLen - 2)
 	}
@@ -993,16 +996,15 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 }
 
 func (e *RowsEvent) decodeExtraData(pos int, data []byte) (err2 error) {
-	extraDataType := uint8(data[pos])
+	extraDataType := data[pos]
 	pos +=1
 	switch extraDataType {
 	case 0:
-		e.NdbLength = uint8(data[pos])
+		e.NdbLength = data[pos]
 		pos +=1
 		e.NdbFormat = data[pos:]
 		pos +=1
-		e.NdbData = data[pos:]
-		pos += int(e.NdbLength-2)
+		e.NdbData = data[pos:e.NdbLength-2]
 	case 1:
 		if e.eventType == UPDATE_ROWS_EVENTv2 {
 			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
