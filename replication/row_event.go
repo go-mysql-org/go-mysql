@@ -878,8 +878,7 @@ type RowsEvent struct {
 	Flags uint16
 
 	// if version == 2
-	DataLen uint16
-	ExtraData []byte
+	// Use when DataLen value is greater than 2
 	NdbLength uint8
 	NdbFormat []byte
 	NdbData  []byte
@@ -965,7 +964,7 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 		if dataLen > 2 {
 			e.decodeExtraData(pos,data)
 		}
-		pos += int(e.DataLen - 2)
+		pos += int(dataLen - 2)
 	}
 
 	var n int
@@ -1005,7 +1004,7 @@ func (e *RowsEvent) decodeExtraData(pos int, data []byte) (err2 error) {
 		e.NdbData = data[pos:]
 		pos += int(e.NdbLength-2)
 	case 1:
-		if e.eventType == PARTIAL_UPDATE_ROWS_EVENT {
+		if e.eventType == UPDATE_ROWS_EVENTv2 {
 			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
 			pos +=2
 			e.SourceParitionId = binary.LittleEndian.Uint16(data[pos:])
