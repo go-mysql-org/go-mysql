@@ -879,12 +879,12 @@ type RowsEvent struct {
 
 	// if version == 2
 	// Use when DataLen value is greater than 2
-	NdbLength uint8
 	NdbFormat []byte
-	NdbData  []byte
-	PartitionId uint16
-	SourceParitionId uint16
+	NdbData   []byte
+	NdbLength byte
 
+	PartitionId      uint16
+	SourceParitionId uint16
 
 	// lenenc_int
 	ColumnCount uint64
@@ -962,7 +962,7 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 		dataLen := binary.LittleEndian.Uint16(data[pos:])
 		pos += 2
 		if dataLen > 2 {
-			err := e.decodeExtraData(pos,data)
+			err := e.decodeExtraData(pos, data)
 			if err != nil {
 				return 0, err
 			}
@@ -997,23 +997,21 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 
 func (e *RowsEvent) decodeExtraData(pos int, data []byte) (err2 error) {
 	extraDataType := data[pos]
-	pos +=1
+	pos += 1
 	switch extraDataType {
 	case 0:
 		e.NdbLength = data[pos]
-		pos +=1
+		pos += 1
 		e.NdbFormat = data[pos:]
-		pos +=1
-		e.NdbData = data[pos:e.NdbLength-2]
+		pos += 1
+		e.NdbData = data[pos : e.NdbLength-2]
 	case 1:
 		if e.eventType == UPDATE_ROWS_EVENTv2 {
 			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
-			pos +=2
+			pos += 2
 			e.SourceParitionId = binary.LittleEndian.Uint16(data[pos:])
-			pos +=2
-		}else {
+		} else {
 			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
-			pos +=2
 		}
 	}
 	return nil
