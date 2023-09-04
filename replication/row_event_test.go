@@ -1056,6 +1056,126 @@ func TestTableMapOptMetaVisibility(t *testing.T) {
 	}
 }
 
+func TestRowsDataExtraData(t *testing.T) {
+	// Only after mysql 8.0.16 version can be parsed from extradata to 'partition info' and 'ndb info'
+	testcases := []struct {
+		data                    []byte
+		tableData               []byte
+		eventType               EventType
+		expectPartitionId       uint16
+		expectSourcePartitionId uint16
+		expectNdbFormat         byte
+		expectNdbData           []byte
+	}{
+		/*
+			mysql-cluster 8.0.32
+
+			+-------+------+------+-----+---------+-------+
+			| Field | Type | Null | Key | Default | Extra |
+			+-------+------+------+-----+---------+-------+
+			| p     | int  | NO   | PRI | NULL    |       |
+			| c     | int  | YES  | UNI | NULL    |       |
+			+-------+------+------+-----+---------+-------+
+
+			CREATE TABLE t (
+				p INT PRIMARY KEY,
+				c INT,
+				UNIQUE KEY u (c)
+			)   ENGINE NDB;
+
+			INSERT INTO t VALUES (1,1), (2,2), (3,3), (4,4), (5,5);
+		*/
+		{
+			data:                    []byte("s\x00\x00\x00\x00\x00\x01\x00\x0f\x00\x00\f\x00\x01\x00\x00\x04\x80\x00\x04\x00\x00\x00\x02\xff\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x02\x00\x00\x00\x02\x00\x00\x00\x00\x04\x00\x00\x00\x04\x00\x00\x00\x00\x03\x00\x00\x00\x03\x00\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00"),
+			tableData:               []byte("s\x00\x00\x00\x00\x00\x01\x00\abdteste\x00\x01t\x00\x02\x03\x03\x00\x02\x01\x01\x00"),
+			eventType:               WRITE_ROWS_EVENTv2,
+			expectPartitionId:       0x0,
+			expectSourcePartitionId: 0x0,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte("\x01\x00\x00\x04\x80\x00\x04\x00\x00\x00"),
+		},
+		/*
+				mysql 8.0.16
+
+				+-------+------+------+-----+---------+-------+
+				| Field | Type | Null | Key | Default | Extra |
+				+-------+------+------+-----+---------+-------+
+				| id    | int  | YES  |     | NULL    |       |
+				+-------+------+------+-----+---------+-------+
+
+				CREATE TABLE test (id INTEGER)
+			            PARTITION BY RANGE (id) (
+			                PARTITION p0 VALUES LESS THAN (1),
+			                PARTITION p1 VALUES LESS THAN (2),
+			                PARTITION p2 VALUES LESS THAN (3),
+			                PARTITION p3 VALUES LESS THAN (4),
+			                PARTITION p4 VALUES LESS THAN (5)
+			            );
+
+				INSERT INTO test (id) VALUES(3);
+				UPDATE test set id = 1 WHERE id = 3;
+		*/
+		{
+			data:                    []byte("p\x03\x00\x00\x00\x00\x01\x00\x05\x00\x01\x03\x00\x01\xff\x00\x03\x00\x00\x00"),
+			tableData:               []byte("p\x03\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01\x01\x01\x00"),
+			eventType:               WRITE_ROWS_EVENTv2,
+			expectPartitionId:       0x3,
+			expectSourcePartitionId: 0x0,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte(nil),
+		},
+		{
+			data:                    []byte("p\x03\x00\x00\x00\x00\x01\x00\a\x00\x01\x01\x00\x03\x00\x01\xff\xff\x00\x03\x00\x00\x00\x00\x01\x00\x00\x00"),
+			tableData:               []byte("p\x03\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01\x01\x01\x00"),
+			eventType:               UPDATE_ROWS_EVENTv2,
+			expectPartitionId:       0x1,
+			expectSourcePartitionId: 0x3,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte(nil),
+		},
+		// mysql 5.7 and mariadb 14(15) does not surpot extra data
+		{
+			data:                    []byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x01\xff\xfe\x03\x00\x00\x00"),
+			tableData:               []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01"),
+			eventType:               WRITE_ROWS_EVENTv2,
+			expectPartitionId:       0x0,
+			expectSourcePartitionId: 0x0,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte(nil),
+		},
+		{
+			data:                    []byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x01\xff\xff\xfe\x03\x00\x00\x00\xfe\x01\x00\x00\x00"),
+			tableData:               []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01"),
+			eventType:               UPDATE_ROWS_EVENTv2,
+			expectPartitionId:       0x0,
+			expectSourcePartitionId: 0x0,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte(nil),
+		},
+	}
+
+	for _, tc := range testcases {
+		tableMapEvent := new(TableMapEvent)
+		tableMapEvent.tableIDSize = 6
+		err := tableMapEvent.Decode(tc.tableData)
+		require.NoError(t, err)
+
+		rowsEvent := new(RowsEvent)
+		rowsEvent.tableIDSize = 6
+		rowsEvent.tables = make(map[uint64]*TableMapEvent)
+		rowsEvent.tables[tableMapEvent.TableID] = tableMapEvent
+		rowsEvent.Version = 2
+		rowsEvent.eventType = tc.eventType
+
+		err = rowsEvent.Decode(tc.data)
+		require.NoError(t, err)
+		require.Equal(t, tc.expectPartitionId, rowsEvent.PartitionId)
+		require.Equal(t, tc.expectSourcePartitionId, rowsEvent.SourcePartitionId)
+		require.Equal(t, tc.expectNdbFormat, rowsEvent.NdbFormat)
+		require.Equal(t, tc.expectNdbData, rowsEvent.NdbData)
+	}
+}
+
 func TestTableMapHelperMaps(t *testing.T) {
 	/*
 		CREATE TABLE `_types` (
