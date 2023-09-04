@@ -879,12 +879,11 @@ type RowsEvent struct {
 
 	// if version == 2
 	// Use when DataLen value is greater than 2
-	NdbFormat []byte
+	NdbFormat byte
 	NdbData   []byte
-	NdbLength byte
 
-	PartitionId      uint16
-	SourceParitionId uint16
+	PartitionId       uint16
+	SourcePartitionId uint16
 
 	// lenenc_int
 	ColumnCount uint64
@@ -1000,16 +999,16 @@ func (e *RowsEvent) decodeExtraData(pos int, data []byte) (err2 error) {
 	pos += 1
 	switch extraDataType {
 	case 0:
-		e.NdbLength = data[pos]
+		var ndbLength int = int(data[pos])
 		pos += 1
-		e.NdbFormat = data[pos:]
+		e.NdbFormat = data[pos]
 		pos += 1
-		e.NdbData = data[pos : e.NdbLength-2]
+		e.NdbData = data[pos : pos+ndbLength-2]
 	case 1:
 		if e.eventType == UPDATE_ROWS_EVENTv2 {
 			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
 			pos += 2
-			e.SourceParitionId = binary.LittleEndian.Uint16(data[pos:])
+			e.SourcePartitionId = binary.LittleEndian.Uint16(data[pos:])
 		} else {
 			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
 		}
@@ -1774,6 +1773,7 @@ func (e *RowsEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "TableID: %d\n", e.TableID)
 	fmt.Fprintf(w, "Flags: %d\n", e.Flags)
 	fmt.Fprintf(w, "Column count: %d\n", e.ColumnCount)
+	fmt.Fprintf(w, "NDB data: %s\n", e.NdbData)
 
 	fmt.Fprintf(w, "Values:\n")
 	for _, rows := range e.Rows {
