@@ -60,8 +60,13 @@ func (c *Conn) readFirstPart() ([]byte, int, error) {
 	return c.decodeFirstPart(data)
 }
 
-func (c *Conn) decodeFirstPart(data []byte) ([]byte, int, error) {
-	pos := 0
+func (c *Conn) decodeFirstPart(data []byte) (newData []byte, pos int, err error) {
+	// prevent 'panic: runtime error: index out of range' error
+	defer func() {
+		if recover() != nil {
+			err = NewDefaultError(ER_HANDSHAKE_ERROR)
+		}
+	}()
 
 	// check CLIENT_PROTOCOL_41
 	if uint32(binary.LittleEndian.Uint16(data[:2]))&CLIENT_PROTOCOL_41 == 0 {

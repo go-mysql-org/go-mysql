@@ -28,9 +28,16 @@ func TestReadAuthData(t *testing.T) {
 }
 
 func TestDecodeFirstPart(t *testing.T) {
-	data := []byte{141, 174, 255, 1, 0, 0, 0, 1, 8}
-
 	c := &Conn{}
+
+	// test out of range index returns 'bad handshake' error
+	_, _, err := c.decodeFirstPart([]byte{141, 174})
+	if err == nil || err.Error() != "ERROR 1043 (08S01): Bad handshake" {
+		t.Fatal("expected error, got nil")
+	}
+
+	// test good index position
+	data := []byte{141, 174, 255, 1, 0, 0, 0, 1, 8}
 
 	result, pos, err := c.decodeFirstPart(data)
 	if err != nil {
