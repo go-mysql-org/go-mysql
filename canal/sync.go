@@ -1,14 +1,12 @@
 package canal
 
 import (
-	"fmt"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
-	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/parser/ast"
 )
@@ -118,21 +116,11 @@ func (c *Canal) runSyncBinlog() error {
 				c.master.UpdateGTIDSet(e.GSet)
 			}
 		case *replication.MariadbGTIDEvent:
-			// try to save the GTID later
-			gtid, err := mysql.ParseMariadbGTIDSet(e.GTID.String())
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err := c.eventHandler.OnGTID(ev.Header, gtid); err != nil {
+			if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.GTIDEvent:
-			u, _ := uuid.FromBytes(e.SID)
-			gtid, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err := c.eventHandler.OnGTID(ev.Header, gtid); err != nil {
+			if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:

@@ -462,6 +462,14 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
+func (e *GTIDEvent) GTIDNext() (GTIDSet, error) {
+	u, err := uuid.FromBytes(e.SID)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMysqlGTIDSet(strings.Join([]string{u.String(), strconv.FormatInt(e.GNO, 10)}, ":"))
+}
+
 // ImmediateCommitTime returns the commit time of this trx on the immediate server
 // or zero time if not available.
 func (e *GTIDEvent) ImmediateCommitTime() time.Time {
@@ -623,6 +631,10 @@ func (e *MariadbGTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Flags: %v\n", e.Flags)
 	fmt.Fprintf(w, "CommitID: %v\n", e.CommitID)
 	fmt.Fprintln(w)
+}
+
+func (e *MariadbGTIDEvent) GTIDNext() (GTIDSet, error) {
+	return ParseMariadbGTIDSet(e.GTID.String())
 }
 
 type MariadbGTIDListEvent struct {
