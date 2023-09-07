@@ -1006,7 +1006,7 @@ func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 		pos += 1
 		e.NdbData = data[pos : pos+ndbLength-2]
 	case ENUM_EXTRA_ROW_INFO_TYPECODE_PARTITION:
-		if e.eventType == UPDATE_ROWS_EVENTv2 || e.eventType == PARTIAL_UPDATE_ROWS_EVENT {
+		if e.eventType == UPDATE_ROWS_EVENTv1 || e.eventType == UPDATE_ROWS_EVENTv2 || e.eventType == PARTIAL_UPDATE_ROWS_EVENT {
 			e.PartitionId = binary.LittleEndian.Uint16(data[pos:])
 			pos += 2
 			e.SourcePartitionId = binary.LittleEndian.Uint16(data[pos:])
