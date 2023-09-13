@@ -1,8 +1,10 @@
 package replication
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,6 +51,9 @@ func TestMariadbGTIDEvent(t *testing.T) {
 	require.True(t, ev.IsStandalone())
 	require.True(t, ev.IsGroupCommit())
 	require.Equal(t, uint64(0x1716151413121110), ev.CommitID)
+	set, err := ev.GTIDNext()
+	require.NoError(t, err)
+	require.Equal(t, "70975786-0-578437695752307201", set.String())
 }
 
 func TestGTIDEventMysql8NewFields(t *testing.T) {
@@ -59,6 +64,9 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 		expectTransactionLength        uint64
 		expectImmediateServerVersion   uint32
 		expectOriginalServerVersion    uint32
+		expectGTID                     string
+		expectSequnceNumber            int64
+		expectLastCommitted            int64
 	}{
 		{
 			// master: mysql-5.7, slave: mysql-8.0
@@ -68,6 +76,9 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 			expectTransactionLength:        965,
 			expectImmediateServerVersion:   80019,
 			expectOriginalServerVersion:    0,
+			expectGTID:                     "5aa72a7f-44a8-11ea-947f-0242ac190002:258",
+			expectSequnceNumber:            119,
+			expectLastCommitted:            118,
 		},
 		{
 			// mysql-5.7 only
@@ -77,6 +88,9 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 			expectTransactionLength:        0,
 			expectImmediateServerVersion:   0,
 			expectOriginalServerVersion:    0,
+			expectGTID:                     "5aa72a7f-44a8-11ea-947f-0242ac190002:259",
+			expectSequnceNumber:            54,
+			expectLastCommitted:            53,
 		},
 		{
 			// mysql-8.0 only
@@ -86,10 +100,13 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 			expectTransactionLength:        963,
 			expectImmediateServerVersion:   80019,
 			expectOriginalServerVersion:    80019,
+			expectGTID:                     "5ccc1033-44a8-11ea-bd59-0242ac190003:119",
+			expectSequnceNumber:            121,
+			expectLastCommitted:            120,
 		},
 	}
 
-	for _, tc := range testcases {
+	for i, tc := range testcases {
 		ev := new(GTIDEvent)
 		err := ev.Decode(tc.data)
 		require.NoError(t, err)
@@ -98,6 +115,11 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 		require.Equal(t, tc.expectTransactionLength, ev.TransactionLength)
 		require.Equal(t, tc.expectImmediateServerVersion, ev.ImmediateServerVersion)
 		require.Equal(t, tc.expectOriginalServerVersion, ev.OriginalServerVersion)
+		set, err := ev.GTIDNext()
+		require.NoError(t, err)
+		assert.Equal(t, tc.expectGTID, set.String(), fmt.Sprintf("testcase: %d", i))
+		assert.Equal(t, tc.expectSequnceNumber, ev.SequenceNumber, fmt.Sprintf("testcase: %d", i))
+		assert.Equal(t, tc.expectLastCommitted, ev.LastCommitted, fmt.Sprintf("testcase: %d", i))
 	}
 }
 
