@@ -196,6 +196,10 @@ func (fv *FieldValue) AsString() []byte {
 	return fv.str
 }
 
+func (fv *FieldValue) Raw() []byte {
+	return fv.str
+}
+
 func (fv *FieldValue) Value() interface{} {
 	switch fv.Type {
 	case FieldValueTypeUnsigned:

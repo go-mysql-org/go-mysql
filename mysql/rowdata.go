@@ -40,6 +40,7 @@ func (p RowData) ParseText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
 			data[i].Type = FieldValueTypeNull
 		} else {
 			isUnsigned := f[i].Flag&UNSIGNED_FLAG != 0
+			data[i].str = append(data[i].str[:0], v...)
 
 			switch f[i].Type {
 			case MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_INT24,
