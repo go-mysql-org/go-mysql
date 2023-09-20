@@ -213,7 +213,6 @@ func (s *clientTestSuite) TestConn_Select2() {
 			require.Equal(s.T(), v.String(), ss[idx])
 		}
 	}
-
 }
 
 func (s *clientTestSuite) TestConn_Escape() {
