@@ -203,6 +203,20 @@ func (s *clientTestSuite) TestConn_Select() {
 	require.Equal(s.T(), "test1", e)
 }
 
+func (s *clientTestSuite) TestConn_Select2() {
+	str := `select id, str, f, e from mixer_test_conn where id = 1`
+	ss := []string{"1", "a", "3.14", "test1"}
+	result, err := s.c.Execute(str)
+	require.NoError(s.T(), err)
+
+	for _, row := range result.Values {
+		for idx, v := range row {
+			require.Equal(s.T(), v.String(), ss[idx])
+		}
+	}
+
+}
+
 func (s *clientTestSuite) TestConn_Escape() {
 	e := `""''\abc`
 	str := fmt.Sprintf(`insert into mixer_test_conn (id, str) values(5, "%s")`,

@@ -63,7 +63,6 @@ func (p RowData) ParseText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
 				data[i].value = utils.Float64ToUint64(val)
 			default:
 				data[i].Type = FieldValueTypeString
-				data[i].str = append(data[i].str[:0], v...)
 			}
 
 			if err != nil {
