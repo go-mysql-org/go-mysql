@@ -208,7 +208,6 @@ func (s *clientTestSuite) TestConn_Select2() {
 	ss := []string{"1", "a", "3.14", "test1"}
 	result, err := s.c.Execute(str)
 	require.NoError(s.T(), err)
-
 	for _, row := range result.Values {
 		for idx, v := range row {
 			require.Equal(s.T(), v.String(), ss[idx])
