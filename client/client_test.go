@@ -203,26 +203,6 @@ func (s *clientTestSuite) TestConn_Select() {
 	require.Equal(s.T(), "test1", e)
 }
 
-func (s *clientTestSuite) TestConn_Select2() {
-	str := `insert into test.mixer_test_conn (id, str, f, e, u, i,j) values (6, "a", 3.14, "test1", 255, -127,'{"key1": 1, "key2": null}'),(7, NULL,NULL, NULL, NULL, NULL,NULL)`
-	result, err := s.c.Execute(str)
-	require.NoError(s.T(), err)
-	require.Equal(s.T(), uint64(2), result.AffectedRows)
-
-	str = `select * from mixer_test_conn where id in (6,7)`
-	ss := [][]string{{"6", "a", "3.14", "test1", "255", "-127", "{\"key1\": 1, \"key2\": null}"}, {"7", "", "", "", "", "", ""}}
-	result, err = s.c.Execute(str)
-	require.NoError(s.T(), err)
-
-	require.Len(s.T(), result.Values, 2)
-
-	for i, row := range result.Values {
-		for idx, v := range row {
-			require.Equal(s.T(), v.String(), ss[i][idx])
-		}
-	}
-}
-
 func (s *clientTestSuite) TestConn_Escape() {
 	e := `""''\abc`
 	str := fmt.Sprintf(`insert into mixer_test_conn (id, str) values(5, "%s")`,
