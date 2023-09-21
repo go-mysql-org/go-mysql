@@ -65,7 +65,7 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 		expectImmediateServerVersion   uint32
 		expectOriginalServerVersion    uint32
 		expectGTID                     string
-		expectSequnceNumber            int64
+		expectSequenceNumber           int64
 		expectLastCommitted            int64
 	}{
 		{
@@ -77,7 +77,7 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 			expectImmediateServerVersion:   80019,
 			expectOriginalServerVersion:    0,
 			expectGTID:                     "5aa72a7f-44a8-11ea-947f-0242ac190002:258",
-			expectSequnceNumber:            119,
+			expectSequenceNumber:           119,
 			expectLastCommitted:            118,
 		},
 		{
@@ -89,7 +89,7 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 			expectImmediateServerVersion:   0,
 			expectOriginalServerVersion:    0,
 			expectGTID:                     "5aa72a7f-44a8-11ea-947f-0242ac190002:259",
-			expectSequnceNumber:            54,
+			expectSequenceNumber:           54,
 			expectLastCommitted:            53,
 		},
 		{
@@ -101,7 +101,7 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 			expectImmediateServerVersion:   80019,
 			expectOriginalServerVersion:    80019,
 			expectGTID:                     "5ccc1033-44a8-11ea-bd59-0242ac190003:119",
-			expectSequnceNumber:            121,
+			expectSequenceNumber:           121,
 			expectLastCommitted:            120,
 		},
 	}
@@ -118,7 +118,7 @@ func TestGTIDEventMysql8NewFields(t *testing.T) {
 		set, err := ev.GTIDNext()
 		require.NoError(t, err)
 		assert.Equal(t, tc.expectGTID, set.String(), fmt.Sprintf("testcase: %d", i))
-		assert.Equal(t, tc.expectSequnceNumber, ev.SequenceNumber, fmt.Sprintf("testcase: %d", i))
+		assert.Equal(t, tc.expectSequenceNumber, ev.SequenceNumber, fmt.Sprintf("testcase: %d", i))
 		assert.Equal(t, tc.expectLastCommitted, ev.LastCommitted, fmt.Sprintf("testcase: %d", i))
 	}
 }
