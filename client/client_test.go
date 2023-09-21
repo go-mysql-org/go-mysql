@@ -204,7 +204,6 @@ func (s *clientTestSuite) TestConn_Select() {
 }
 
 func (s *clientTestSuite) TestConn_Select2() {
-
 	str := `insert into test.mixer_test_conn (id, str, f, e, u, i,j) values (6, "a", 3.14, "test1", 255, -127,'{"key1": 1, "key2": null}'),(7, NULL,NULL, NULL, NULL, NULL,NULL)`
 	result, err := s.c.Execute(str)
 	require.NoError(s.T(), err)
