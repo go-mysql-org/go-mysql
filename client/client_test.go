@@ -450,7 +450,7 @@ CREATE TABLE field_value_test (
 )`)
 	require.NoError(s.T(), err)
 	s.T().Cleanup(func() {
-		s.c.Execute(
+		_, _ = s.c.Execute(
 			`DROP TABLE field_value_test`)
 	})
 
