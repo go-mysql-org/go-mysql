@@ -423,3 +423,71 @@ func (s *clientTestSuite) TestStmt_Trans() {
 	str, _ = r.GetString(0, 0)
 	require.Equal(s.T(), `abc`, str)
 }
+
+func (s *clientTestSuite) TestFieldValueString() {
+	_, err := s.c.Execute(
+		`
+CREATE TABLE field_value_test (
+    c_int int,
+    c_bit bit(8),
+    c_tinyint_u tinyint unsigned,
+    c_decimal decimal(10, 5),
+    c_float float(10),
+    c_date date,
+    c_datetime datetime(3),
+    c_timestamp timestamp(4),
+    c_time time(5),
+    c_year year,
+    c_char char(10),
+    c_varchar varchar(10),
+    c_binary binary(10),
+    c_varbinary varbinary(10),
+    c_blob blob,
+    c_enum enum('a', 'b', 'c'),
+    c_set set('a', 'b', 'c'),
+    c_json json,
+    c_null int
+)`)
+	require.NoError(s.T(), err)
+	s.T().Cleanup(func() {
+		s.c.Execute(
+			`DROP TABLE field_value_test`)
+	})
+
+	_, err = s.c.Execute(`
+INSERT INTO field_value_test VALUES (
+    1, 2, 3, 4.5, 6.7, 
+    '2019-01-01', '2019-01-01 01:01:01.123', '2019-01-01 01:01:01.1234', '01:01:01.12345', 2019,
+    'char', 'varchar', 'binary', 'varbinary', 'blob', 'a', 'a,b', '{"a": 1}',
+    NULL
+)`)
+	require.NoError(s.T(), err)
+
+	result, err := s.c.Execute(`SELECT * FROM field_value_test`)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), result.Values, 1)
+	expected := []string{
+		`1`, "'\x02'", `3`, `'4.50000'`, `6.7`,
+		`'2019-01-01'`, `'2019-01-01 01:01:01.123'`, `'2019-01-01 01:01:01.1234'`, `'01:01:01.12345'`, `2019`,
+		`'char'`, `'varchar'`, "'binary\x00\x00\x00\x00'", `'varbinary'`, `'blob'`, `'a'`, `'a,b'`, `'{"a": 1}'`,
+		`NULL`,
+	}
+	for i, v := range result.Values[0] {
+		require.Equal(s.T(), expected[i], v.String())
+	}
+
+	// test can directly use to build a SQL, through it's not safe in most cases
+	sql := fmt.Sprintf("INSERT INTO field_value_test VALUES (%s)", strings.Join(expected, ","))
+	_, err = s.c.Execute(sql)
+	require.NoError(s.T(), err)
+	result, err = s.c.Execute(`SELECT * FROM field_value_test`)
+	require.NoError(s.T(), err)
+	// check again, everything is same
+	require.Len(s.T(), result.Values, 2)
+	for i, v := range result.Values[0] {
+		require.Equal(s.T(), expected[i], v.String())
+	}
+	for i, v := range result.Values[1] {
+		require.Equal(s.T(), expected[i], v.String())
+	}
+}

@@ -2,6 +2,8 @@ package mysql
 
 import (
 	"encoding/binary"
+	"fmt"
+	"strconv"
 
 	"github.com/go-mysql-org/go-mysql/utils"
 )
@@ -208,5 +210,23 @@ func (fv *FieldValue) Value() interface{} {
 		return fv.AsString()
 	default: // FieldValueTypeNull
 		return nil
+	}
+}
+
+// String returns a MySQL literal string that equals the value.
+func (fv *FieldValue) String() string {
+	switch fv.Type {
+	case FieldValueTypeNull:
+		return "NULL"
+	case FieldValueTypeUnsigned:
+		return strconv.FormatUint(fv.AsUint64(), 10)
+	case FieldValueTypeSigned:
+		return strconv.FormatInt(fv.AsInt64(), 10)
+	case FieldValueTypeFloat:
+		return strconv.FormatFloat(fv.AsFloat64(), 'f', -1, 64)
+	case FieldValueTypeString:
+		return "'" + string(fv.AsString()) + "'"
+	default:
+		return fmt.Sprintf("unknown type %d of FieldValue", fv.Type)
 	}
 }
