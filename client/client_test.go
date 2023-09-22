@@ -458,7 +458,7 @@ CREATE TABLE field_value_test (
 INSERT INTO field_value_test VALUES (
     1, 2, 3, 4.5, 6.7, 
     '2019-01-01', '2019-01-01 01:01:01.123', '2019-01-01 01:01:01.1234', '01:01:01.12345', 2019,
-    'char', 'varchar', 'binary', 'varbinary', 'blob', 'a', 'a,b', '{"a": 1}',
+    'cha\'r', 'varchar', 'binary', 'varbinary', 'blob', 'a', 'a,b', '{"a": 1}',
     NULL
 )`)
 	require.NoError(s.T(), err)
@@ -469,14 +469,14 @@ INSERT INTO field_value_test VALUES (
 	expected := []string{
 		`1`, "'\x02'", `3`, `'4.50000'`, `6.7`,
 		`'2019-01-01'`, `'2019-01-01 01:01:01.123'`, `'2019-01-01 01:01:01.1234'`, `'01:01:01.12345'`, `2019`,
-		`'char'`, `'varchar'`, "'binary\x00\x00\x00\x00'", `'varbinary'`, `'blob'`, `'a'`, `'a,b'`, `'{"a": 1}'`,
+		`'cha\'r'`, `'varchar'`, "'binary\x00\x00\x00\x00'", `'varbinary'`, `'blob'`, `'a'`, `'a,b'`, `'{"a": 1}'`,
 		`NULL`,
 	}
 	for i, v := range result.Values[0] {
 		require.Equal(s.T(), expected[i], v.String())
 	}
 
-	// test can directly use to build a SQL, through it's not safe in most cases
+	// test can directly use to build a SQL, though it's not safe in most cases
 	sql := fmt.Sprintf("INSERT INTO field_value_test VALUES (%s)", strings.Join(expected, ","))
 	_, err = s.c.Execute(sql)
 	require.NoError(s.T(), err)

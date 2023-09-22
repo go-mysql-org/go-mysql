@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/go-mysql-org/go-mysql/utils"
 )
@@ -225,7 +226,17 @@ func (fv *FieldValue) String() string {
 	case FieldValueTypeFloat:
 		return strconv.FormatFloat(fv.AsFloat64(), 'f', -1, 64)
 	case FieldValueTypeString:
-		return "'" + string(fv.AsString()) + "'"
+		b := strings.Builder{}
+		b.Grow(len(fv.str) + 2)
+		b.WriteByte('\'')
+		for i := range fv.str {
+			if fv.str[i] == '\'' {
+				b.WriteByte('\\')
+			}
+			b.WriteByte(fv.str[i])
+		}
+		b.WriteByte('\'')
+		return b.String()
 	default:
 		return fmt.Sprintf("unknown type %d of FieldValue", fv.Type)
 	}
