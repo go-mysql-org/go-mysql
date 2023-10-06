@@ -106,6 +106,23 @@ func (c *Canal) runSyncBinlog() error {
 				}
 			}
 			continue
+		case *replication.TransactionPayloadEvent:
+			// handle subevent row by row
+			ev := ev.Event.(*replication.TransactionPayloadEvent)
+			for _, subEvent := range ev.Events {
+				err = c.handleRowsEvent(subEvent)
+				if err != nil {
+					e := errors.Cause(err)
+					// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
+					if e != ErrExcludedTable &&
+						e != schema.ErrTableNotExist &&
+						e != schema.ErrMissingTableMeta {
+						c.cfg.Logger.Errorf("handle transaction payload rows event at (%s, %d) error %v", pos.Name, curPos, err)
+						return errors.Trace(err)
+					}
+				}
+			}
+			continue
 		case *replication.XIDEvent:
 			savePos = true
 			// try to save the position later
