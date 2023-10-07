@@ -122,7 +122,7 @@ func NewConfig(data string) (*Config, error) {
 	return &c, nil
 }
 
-// NewDefaultConfig Init some default config for Canal
+// NewDefaultConfig initiates some default config for Canal
 func NewDefaultConfig() *Config {
 	c := new(Config)
 
