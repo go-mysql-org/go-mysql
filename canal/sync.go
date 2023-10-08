@@ -96,14 +96,8 @@ func (c *Canal) runSyncBinlog() error {
 			// we only focus row based event
 			err = c.handleRowsEvent(ev)
 			if err != nil {
-				e := errors.Cause(err)
-				// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
-				if e != ErrExcludedTable &&
-					e != schema.ErrTableNotExist &&
-					e != schema.ErrMissingTableMeta {
-					c.cfg.Logger.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
-					return errors.Trace(err)
-				}
+				c.cfg.Logger.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+				return errors.Trace(err)
 			}
 			continue
 		case *replication.TransactionPayloadEvent:
@@ -112,14 +106,8 @@ func (c *Canal) runSyncBinlog() error {
 			for _, subEvent := range ev.Events {
 				err = c.handleRowsEvent(subEvent)
 				if err != nil {
-					e := errors.Cause(err)
-					// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
-					if e != ErrExcludedTable &&
-						e != schema.ErrTableNotExist &&
-						e != schema.ErrMissingTableMeta {
-						c.cfg.Logger.Errorf("handle transaction payload rows event at (%s, %d) error %v", pos.Name, curPos, err)
-						return errors.Trace(err)
-					}
+					c.cfg.Logger.Errorf("handle transaction payload rows event at (%s, %d) error %v", pos.Name, curPos, err)
+					return errors.Trace(err)
 				}
 			}
 			continue
@@ -249,10 +237,10 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	ev := e.Event.(*replication.RowsEvent)
 
 	// Caveat: table may be altered at runtime.
-	schema := string(ev.Table.Schema)
-	table := string(ev.Table.Table)
+	schemaName := string(ev.Table.Schema)
+	tableName := string(ev.Table.Table)
 
-	t, err := c.GetTable(schema, table)
+	t, err := c.GetTable(schemaName, tableName)
 	if err != nil {
 		return err
 	}
@@ -268,7 +256,17 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
 	events := newRowsEvent(t, action, ev.Rows, e.Header)
-	return c.eventHandler.OnRow(events)
+	err = c.eventHandler.OnRow(events)
+	if err != nil {
+		e := errors.Cause(err)
+		if e != ErrExcludedTable &&
+			e != schema.ErrTableNotExist &&
+			e != schema.ErrMissingTableMeta {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (c *Canal) FlushBinlog() error {
