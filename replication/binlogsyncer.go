@@ -122,6 +122,8 @@ type BinlogSyncerConfig struct {
 	RowsEventDecodeFunc func(*RowsEvent, []byte) error
 
 	DiscardGTIDSet bool
+
+	StreamerChanSize int
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -165,6 +167,9 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	if cfg.Dialer == nil {
 		dialer := &net.Dialer{}
 		cfg.Dialer = dialer.DialContext
+	}
+	if cfg.StreamerChanSize == 0 {
+		cfg.StreamerChanSize = 10240
 	}
 
 	// Clear the Password to avoid outputing it in log.
@@ -393,7 +398,7 @@ func (b *BinlogSyncer) prepare() error {
 func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
 	b.running = true
 
-	s := NewBinlogStreamer()
+	s := NewBinlogStreamerWithChanSize(b.cfg.StreamerChanSize)
 
 	b.wg.Add(1)
 	go b.onStream(s)
