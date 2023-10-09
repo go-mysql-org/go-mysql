@@ -858,6 +858,36 @@ func (e *TableMapEvent) JsonColumnCount() uint64 {
 // RowsEventStmtEndFlag is set in the end of the statement.
 const RowsEventStmtEndFlag = 0x01
 
+// RowsEvent represents a MySQL rows event like DELETE_ROWS_EVENT,
+// UPDATE_ROWS_EVENT, etc.
+// RowsEvent.Rows saves the rows data, and the MySQL type to golang type mapping
+// is
+// - MYSQL_TYPE_NULL: nil
+// - MYSQL_TYPE_LONG: int32
+// - MYSQL_TYPE_TINY: int8
+// - MYSQL_TYPE_SHORT: int16
+// - MYSQL_TYPE_INT24: int32
+// - MYSQL_TYPE_LONGLONG: int64
+// - MYSQL_TYPE_NEWDECIMAL: string / "github.com/shopspring/decimal".Decimal
+// - MYSQL_TYPE_FLOAT: float32
+// - MYSQL_TYPE_DOUBLE: float64
+// - MYSQL_TYPE_BIT: int64
+// - MYSQL_TYPE_TIMESTAMP: string / time.Time
+// - MYSQL_TYPE_TIMESTAMP2: string / time.Time
+// - MYSQL_TYPE_DATETIME: string / time.Time
+// - MYSQL_TYPE_DATETIME2: string / time.Time
+// - MYSQL_TYPE_TIME: string
+// - MYSQL_TYPE_TIME2: string
+// - MYSQL_TYPE_DATE: string
+// - MYSQL_TYPE_YEAR: int
+// - MYSQL_TYPE_ENUM: int64
+// - MYSQL_TYPE_SET: int64
+// - MYSQL_TYPE_BLOB: []byte
+// - MYSQL_TYPE_VARCHAR: string
+// - MYSQL_TYPE_VAR_STRING: string
+// - MYSQL_TYPE_STRING: string
+// - MYSQL_TYPE_JSON: []byte / *replication.JsonDiff
+// - MYSQL_TYPE_GEOMETRY: []byte
 type RowsEvent struct {
 	// 0, 1, 2
 	Version int
