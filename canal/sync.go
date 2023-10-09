@@ -242,6 +242,12 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 
 	t, err := c.GetTable(schemaName, tableName)
 	if err != nil {
+		e := errors.Cause(err)
+		// ignore errors below
+		if e == ErrExcludedTable || e == schema.ErrTableNotExist || e == schema.ErrMissingTableMeta {
+			err = nil
+		}
+
 		return err
 	}
 	var action string
@@ -256,17 +262,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
 	events := newRowsEvent(t, action, ev.Rows, e.Header)
-	err = c.eventHandler.OnRow(events)
-	if err != nil {
-		e := errors.Cause(err)
-		if e != ErrExcludedTable &&
-			e != schema.ErrTableNotExist &&
-			e != schema.ErrMissingTableMeta {
-			return err
-		}
-	}
-
-	return nil
+	return c.eventHandler.OnRow(events)
 }
 
 func (c *Canal) FlushBinlog() error {
