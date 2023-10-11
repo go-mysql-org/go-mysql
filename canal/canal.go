@@ -451,6 +451,19 @@ func (c *Canal) prepareSyncer() error {
 		Logger:                  c.cfg.Logger,
 		Dialer:                  c.cfg.Dialer,
 		Localhost:               c.cfg.Localhost,
+		RowsEventDecodeFunc: func(event *replication.RowsEvent, data []byte) error {
+			pos, err := event.DecodeHeader(data)
+			if err != nil {
+				return err
+			}
+
+			key := fmt.Sprintf("%s.%s", string(event.Table.Schema), string(event.Table.Table))
+			if !c.checkTableMatch(key) {
+				return nil
+			}
+
+			return event.DecodeData(pos, data)
+		},
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {
