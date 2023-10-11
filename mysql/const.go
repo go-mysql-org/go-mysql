@@ -170,9 +170,17 @@ const (
 )
 
 const (
+	DEFAULT_ADDR                  = "127.0.0.1:3306"
+	DEFAULT_USER                  = "root"
+	DEFAULT_PASSWORD              = ""
+	DEFAULT_FLAVOR                = "mysql"
 	DEFAULT_CHARSET               = "utf8"
 	DEFAULT_COLLATION_ID   uint8  = 33
 	DEFAULT_COLLATION_NAME string = "utf8_general_ci"
+)
+
+const (
+	DEFAULT_DUMP_EXECUTION_PATH = "mysqldump"
 )
 
 // Like vitess, use flavor for different MySQL versions,
