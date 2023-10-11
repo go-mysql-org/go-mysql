@@ -1018,6 +1018,14 @@ func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 }
 
 func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
+	if e.compressed {
+		data, err2 = DecompressMariadbData(data[pos:])
+		if err2 != nil {
+			//nolint:nakedret
+			return
+		}
+	}
+
 	// Rows_log_event::print_verbose()
 
 	var (
@@ -1072,13 +1080,6 @@ func (e *RowsEvent) Decode(data []byte) error {
 	pos, err := e.DecodeHeader(data)
 	if err != nil {
 		return err
-	}
-	if e.compressed {
-		uncompressedData, err := DecompressMariadbData(data[pos:])
-		if err != nil {
-			return err
-		}
-		return e.DecodeData(0, uncompressedData)
 	}
 	return e.DecodeData(pos, data)
 }
