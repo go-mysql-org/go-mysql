@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/go-mysql-org/go-mysql/client"
-	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-log/loggers"
+
+	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 type DumpConfig struct {
@@ -91,13 +92,13 @@ type Config struct {
 	// Set TLS config
 	TLSConfig *tls.Config
 
-	//Set Logger
+	// Set Logger
 	Logger loggers.Advanced
 
-	//Set Dialer
+	// Set Dialer
 	Dialer client.Dialer
 
-	//Set Localhost
+	// Set Localhost
 	Localhost string
 }
 
@@ -121,19 +122,18 @@ func NewConfig(data string) (*Config, error) {
 	return &c, nil
 }
 
+// NewDefaultConfig initiates some default config for Canal
 func NewDefaultConfig() *Config {
 	c := new(Config)
 
-	c.Addr = "127.0.0.1:3306"
-	c.User = "root"
-	c.Password = ""
-
+	c.Addr = mysql.DEFAULT_ADDR
+	c.User = mysql.DEFAULT_USER
+	c.Password = mysql.DEFAULT_PASSWORD
 	c.Charset = mysql.DEFAULT_CHARSET
 	c.ServerID = uint32(rand.New(rand.NewSource(time.Now().Unix())).Intn(1000)) + 1001
+	c.Flavor = mysql.DEFAULT_FLAVOR
 
-	c.Flavor = "mysql"
-
-	c.Dump.ExecutionPath = "mysqldump"
+	c.Dump.ExecutionPath = mysql.DEFAULT_DUMP_EXECUTION_PATH
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
 
