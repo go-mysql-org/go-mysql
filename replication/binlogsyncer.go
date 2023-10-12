@@ -123,7 +123,7 @@ type BinlogSyncerConfig struct {
 
 	DiscardGTIDSet bool
 
-	EventCacheSize int
+	EventCacheCount int
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -168,8 +168,8 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 		dialer := &net.Dialer{}
 		cfg.Dialer = dialer.DialContext
 	}
-	if cfg.EventCacheSize == 0 {
-		cfg.EventCacheSize = 10240
+	if cfg.EventCacheCount == 0 {
+		cfg.EventCacheCount = 10240
 	}
 
 	// Clear the Password to avoid outputing it in log.
@@ -398,7 +398,7 @@ func (b *BinlogSyncer) prepare() error {
 func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
 	b.running = true
 
-	s := NewBinlogStreamerWithChanSize(b.cfg.EventCacheSize)
+	s := NewBinlogStreamerWithChanSize(b.cfg.EventCacheCount)
 
 	b.wg.Add(1)
 	go b.onStream(s)
