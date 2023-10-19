@@ -84,6 +84,8 @@ type TableMapEvent struct {
 
 	// VisibilityBitmap stores bits that are set if corresponding column is not invisible (MySQL 8.0.23+)
 	VisibilityBitmap []byte
+
+	optionalMetaDecodeFunc func(data []byte) (err error)
 }
 
 func (e *TableMapEvent) Decode(data []byte) error {
@@ -140,8 +142,14 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	pos += nullBitmapSize
 
-	if err = e.decodeOptionalMeta(data[pos:]); err != nil {
-		return err
+	if e.optionalMetaDecodeFunc != nil {
+		if err = e.optionalMetaDecodeFunc(data[pos:]); err != nil {
+			return err
+		}
+	} else {
+		if err = e.decodeOptionalMeta(data[pos:]); err != nil {
+			return err
+		}
 	}
 
 	return nil

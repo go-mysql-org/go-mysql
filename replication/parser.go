@@ -42,6 +42,8 @@ type BinlogParser struct {
 	verifyChecksum      bool
 
 	rowsEventDecodeFunc func(*RowsEvent, []byte) error
+
+	tableMapOptionalMetaDecodeFunc func([]byte) error
 }
 
 func NewBinlogParser() *BinlogParser {
@@ -218,6 +220,10 @@ func (p *BinlogParser) SetRowsEventDecodeFunc(rowsEventDecodeFunc func(*RowsEven
 	p.rowsEventDecodeFunc = rowsEventDecodeFunc
 }
 
+func (p *BinlogParser) SetTableMapOptionalMetaDecodeFunc(tableMapOptionalMetaDecondeFunc func([]byte) error) {
+	p.tableMapOptionalMetaDecodeFunc = tableMapOptionalMetaDecondeFunc
+}
+
 func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
 	h := new(EventHeader)
 	err := h.Decode(data)
@@ -257,7 +263,8 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = &XIDEvent{}
 			case TABLE_MAP_EVENT:
 				te := &TableMapEvent{
-					flavor: p.flavor,
+					flavor:                 p.flavor,
+					optionalMetaDecodeFunc: p.tableMapOptionalMetaDecodeFunc,
 				}
 				if p.format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {
 					te.tableIDSize = 4

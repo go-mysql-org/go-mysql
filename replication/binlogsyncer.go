@@ -121,6 +121,8 @@ type BinlogSyncerConfig struct {
 
 	RowsEventDecodeFunc func(*RowsEvent, []byte) error
 
+	TableMapOptionalMetaDecodeFunc func([]byte) error
+
 	DiscardGTIDSet bool
 
 	EventCacheCount int
@@ -189,6 +191,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
 	b.parser.SetRowsEventDecodeFunc(b.cfg.RowsEventDecodeFunc)
+	b.parser.SetTableMapOptionalMetaDecodeFunc(b.cfg.TableMapOptionalMetaDecodeFunc)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 
