@@ -121,7 +121,11 @@ type BinlogSyncerConfig struct {
 
 	RowsEventDecodeFunc func(*RowsEvent, []byte) error
 
+	TableMapOptionalMetaDecodeFunc func([]byte) error
+
 	DiscardGTIDSet bool
+
+	EventCacheCount int
 }
 
 // BinlogSyncer syncs binlog event from server.
@@ -166,6 +170,9 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 		dialer := &net.Dialer{}
 		cfg.Dialer = dialer.DialContext
 	}
+	if cfg.EventCacheCount == 0 {
+		cfg.EventCacheCount = 10240
+	}
 
 	// Clear the Password to avoid outputing it in log.
 	pass := cfg.Password
@@ -184,6 +191,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
 	b.parser.SetRowsEventDecodeFunc(b.cfg.RowsEventDecodeFunc)
+	b.parser.SetTableMapOptionalMetaDecodeFunc(b.cfg.TableMapOptionalMetaDecodeFunc)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 
@@ -393,7 +401,7 @@ func (b *BinlogSyncer) prepare() error {
 func (b *BinlogSyncer) startDumpStream() *BinlogStreamer {
 	b.running = true
 
-	s := NewBinlogStreamer()
+	s := NewBinlogStreamerWithChanSize(b.cfg.EventCacheCount)
 
 	b.wg.Add(1)
 	go b.onStream(s)
