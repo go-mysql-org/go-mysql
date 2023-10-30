@@ -5,7 +5,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ "1.20", "1.19", "1.18" ]
+        go: [ "1.21", "1.20", "1.19", "1.18" ]
         os: [ ubuntu-22.04, ubuntu-20.04 ]
     name: Tests Go ${{ matrix.go }} on ${{ matrix.os }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}
@@ -18,10 +18,10 @@ jobs:
 
           echo -e '[mysqld]\nserver-id=1\nlog-bin=mysql\nbinlog-format=row\ngtid-mode=ON\nenforce_gtid_consistency=ON\n' | sudo tee /etc/mysql/conf.d/replication.cnf
           sudo service mysql start
-          
+
           # apply this for mysql5 & mysql8 compatibility
           sudo mysql -h 127.0.0.1 -uroot -proot -e "DROP USER IF EXISTS 'mysql.infoschema'@'localhost'; CREATE USER IF NOT EXISTS 'mysql.infoschema'@'localhost' IDENTIFIED BY ''; GRANT SELECT ON *.* TO 'mysql.infoschema'@'localhost';"
-          
+
           sudo mysql -h 127.0.0.1 -uroot -proot -e "use mysql; update user set authentication_string=null where User='root'; update user set plugin='mysql_native_password'; FLUSH PRIVILEGES;"
           # create ssl/rsa files for mysql ssl support
           sudo mysql_ssl_rsa_setup --uid=mysql
