@@ -84,6 +84,8 @@ type TableMapEvent struct {
 
 	// VisibilityBitmap stores bits that are set if corresponding column is not invisible (MySQL 8.0.23+)
 	VisibilityBitmap []byte
+
+	optionalMetaDecodeFunc func(data []byte) (err error)
 }
 
 func (e *TableMapEvent) Decode(data []byte) error {
@@ -140,8 +142,14 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	pos += nullBitmapSize
 
-	if err = e.decodeOptionalMeta(data[pos:]); err != nil {
-		return err
+	if e.optionalMetaDecodeFunc != nil {
+		if err = e.optionalMetaDecodeFunc(data[pos:]); err != nil {
+			return err
+		}
+	} else {
+		if err = e.decodeOptionalMeta(data[pos:]); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1048,6 +1056,14 @@ func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 }
 
 func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
+	if e.compressed {
+		data, err2 = DecompressMariadbData(data[pos:])
+		if err2 != nil {
+			//nolint:nakedret
+			return
+		}
+	}
+
 	// Rows_log_event::print_verbose()
 
 	var (
@@ -1102,13 +1118,6 @@ func (e *RowsEvent) Decode(data []byte) error {
 	pos, err := e.DecodeHeader(data)
 	if err != nil {
 		return err
-	}
-	if e.compressed {
-		uncompressedData, err := DecompressMariadbData(data[pos:])
-		if err != nil {
-			return err
-		}
-		return e.DecodeData(0, uncompressedData)
 	}
 	return e.DecodeData(pos, data)
 }
