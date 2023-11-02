@@ -535,7 +535,7 @@ func (c *Canal) SyncedPosition() mysql.Position {
 }
 
 func (c *Canal) SyncedTimestamp() uint32 {
-	return c.master.timestamp
+	return c.master.Timestamp()
 }
 
 func (c *Canal) SyncedGTIDSet() mysql.GTIDSet {
