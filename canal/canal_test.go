@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
