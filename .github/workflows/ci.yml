@@ -5,7 +5,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ "1.21", "1.20", "1.19" ]
+        go: [ "1.21", "1.20", "1.19", "1.18" ]
         os: [ ubuntu-22.04, ubuntu-20.04 ]
     name: Tests Go ${{ matrix.go }} on ${{ matrix.os }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}

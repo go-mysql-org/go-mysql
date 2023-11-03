@@ -8,7 +8,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
