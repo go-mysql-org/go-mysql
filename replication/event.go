@@ -301,6 +301,9 @@ type QueryEvent struct {
 	Schema        []byte
 	Query         []byte
 
+	// for mariadb QUERY_COMPRESSED_EVENT
+	compressed bool
+
 	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
 	GSet GTIDSet
 }
@@ -332,7 +335,15 @@ func (e *QueryEvent) Decode(data []byte) error {
 	//skip 0x00
 	pos++
 
-	e.Query = data[pos:]
+	if e.compressed {
+		decompressedQuery, err := DecompressMariadbData(data[pos:])
+		if err != nil {
+			return err
+		}
+		e.Query = decompressedQuery
+	} else {
+		e.Query = data[pos:]
+	}
 	return nil
 }
 
@@ -453,6 +464,14 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Immediate server version: %d\n", e.ImmediateServerVersion)
 	fmt.Fprintf(w, "Orignal server version: %d\n", e.OriginalServerVersion)
 	fmt.Fprintln(w)
+}
+
+func (e *GTIDEvent) GTIDNext() (GTIDSet, error) {
+	u, err := uuid.FromBytes(e.SID)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMysqlGTIDSet(strings.Join([]string{u.String(), strconv.FormatInt(e.GNO, 10)}, ":"))
 }
 
 // ImmediateCommitTime returns the commit time of this trx on the immediate server
@@ -616,6 +635,10 @@ func (e *MariadbGTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Flags: %v\n", e.Flags)
 	fmt.Fprintf(w, "CommitID: %v\n", e.CommitID)
 	fmt.Fprintln(w)
+}
+
+func (e *MariadbGTIDEvent) GTIDNext() (GTIDSet, error) {
+	return ParseMariadbGTIDSet(e.GTID.String())
 }
 
 type MariadbGTIDListEvent struct {

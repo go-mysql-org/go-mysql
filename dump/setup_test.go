@@ -2,17 +2,11 @@ package dump
 
 import (
 	"flag"
-	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
-	. "github.com/pingcap/check"
 )
 
 var execution = flag.String("exec", "mysqldump", "mysqldump execution path")
-
-func Test(t *testing.T) {
-	TestingT(t)
-}
 
 type testParseHandler struct {
 	gset mysql.GTIDSet

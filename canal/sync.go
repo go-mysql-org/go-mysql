@@ -1,16 +1,14 @@
 package canal
 
 import (
-	"fmt"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
-	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -98,12 +96,17 @@ func (c *Canal) runSyncBinlog() error {
 			// we only focus row based event
 			err = c.handleRowsEvent(ev)
 			if err != nil {
-				e := errors.Cause(err)
-				// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
-				if e != ErrExcludedTable &&
-					e != schema.ErrTableNotExist &&
-					e != schema.ErrMissingTableMeta {
-					c.cfg.Logger.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+				c.cfg.Logger.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+				return errors.Trace(err)
+			}
+			continue
+		case *replication.TransactionPayloadEvent:
+			// handle subevent row by row
+			ev := ev.Event.(*replication.TransactionPayloadEvent)
+			for _, subEvent := range ev.Events {
+				err = c.handleRowsEvent(subEvent)
+				if err != nil {
+					c.cfg.Logger.Errorf("handle transaction payload rows event at (%s, %d) error %v", pos.Name, curPos, err)
 					return errors.Trace(err)
 				}
 			}
@@ -118,21 +121,11 @@ func (c *Canal) runSyncBinlog() error {
 				c.master.UpdateGTIDSet(e.GSet)
 			}
 		case *replication.MariadbGTIDEvent:
-			// try to save the GTID later
-			gtid, err := mysql.ParseMariadbGTIDSet(e.GTID.String())
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err := c.eventHandler.OnGTID(ev.Header, gtid); err != nil {
+			if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.GTIDEvent:
-			u, _ := uuid.FromBytes(e.SID)
-			gtid, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err := c.eventHandler.OnGTID(ev.Header, gtid); err != nil {
+			if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
 				return errors.Trace(err)
 			}
 		case *replication.QueryEvent:
@@ -244,20 +237,26 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	ev := e.Event.(*replication.RowsEvent)
 
 	// Caveat: table may be altered at runtime.
-	schema := string(ev.Table.Schema)
-	table := string(ev.Table.Table)
+	schemaName := string(ev.Table.Schema)
+	tableName := string(ev.Table.Table)
 
-	t, err := c.GetTable(schema, table)
+	t, err := c.GetTable(schemaName, tableName)
 	if err != nil {
+		e := errors.Cause(err)
+		// ignore errors below
+		if e == ErrExcludedTable || e == schema.ErrTableNotExist || e == schema.ErrMissingTableMeta {
+			err = nil
+		}
+
 		return err
 	}
 	var action string
 	switch e.Header.EventType {
-	case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
+	case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2, replication.MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
 		action = InsertAction
-	case replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
+	case replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2, replication.MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
 		action = DeleteAction
-	case replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
+	case replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2, replication.MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
 		action = UpdateAction
 	default:
 		return errors.Errorf("%s not supported now", e.Header.EventType)

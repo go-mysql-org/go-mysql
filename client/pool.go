@@ -42,6 +42,9 @@ type (
 		}
 
 		readyConnection chan Connection
+		ctx             context.Context
+		cancel          context.CancelFunc
+		wg              sync.WaitGroup
 	}
 
 	ConnectionStats struct {
@@ -116,8 +119,11 @@ func NewPool(
 		readyConnection: make(chan Connection),
 	}
 
+	pool.ctx, pool.cancel = context.WithCancel(context.Background())
+
 	pool.synchro.idleConnections = make([]Connection, 0, pool.maxIdle)
 
+	pool.wg.Add(1)
 	go pool.newConnectionProducer()
 
 	if pool.minAlive > 0 {
@@ -125,6 +131,7 @@ func NewPool(
 		pool.startNewConnections(pool.minAlive)
 	}
 
+	pool.wg.Add(1)
 	go pool.closeOldIdleConnections()
 
 	return pool
@@ -143,6 +150,9 @@ func (pool *Pool) GetStats(stats *ConnectionStats) {
 // GetConn returns connection from the pool or create new
 func (pool *Pool) GetConn(ctx context.Context) (*Conn, error) {
 	for {
+		if pool.ctx.Err() != nil {
+			return nil, errors.Errorf("failed get conn, pool closed")
+		}
 		connection, err := pool.getConnection(ctx)
 		if err != nil {
 			return nil, err
@@ -224,6 +234,7 @@ func (pool *Pool) putConnectionUnsafe(connection Connection) {
 }
 
 func (pool *Pool) newConnectionProducer() {
+	defer pool.wg.Done()
 	var connection Connection
 	var err error
 
@@ -256,8 +267,12 @@ func (pool *Pool) newConnectionProducer() {
 				continue
 			}
 		}
-
-		pool.readyConnection <- connection
+		select {
+		case pool.readyConnection <- connection:
+		case <-pool.ctx.Done():
+			pool.closeConn(connection.conn)
+			return
+		}
 	}
 }
 
@@ -293,19 +308,25 @@ func (pool *Pool) getIdleConnectionUnsafe() Connection {
 }
 
 func (pool *Pool) closeOldIdleConnections() {
+	defer pool.wg.Done()
 	var toPing []Connection
 
 	ticker := time.NewTicker(5 * time.Second)
 
-	for range ticker.C {
-		toPing = pool.getOldIdleConnections(toPing[:0])
-		if len(toPing) == 0 {
-			continue
-		}
-		pool.recheckConnections(toPing)
+	for {
+		select {
+		case <-pool.ctx.Done():
+			return
+		case <-ticker.C:
+			toPing = pool.getOldIdleConnections(toPing[:0])
+			if len(toPing) == 0 {
+				continue
+			}
+			pool.recheckConnections(toPing)
 
-		if !pool.spawnConnectionsIfNeeded() {
-			pool.closeIdleConnectionsIfCan()
+			if !pool.spawnConnectionsIfNeeded() {
+				pool.closeIdleConnectionsIfCan()
+			}
 		}
 	}
 }
@@ -474,4 +495,20 @@ func (pool *Pool) ping(conn *Conn) error {
 		_ = conn.SetDeadline(time.Time{})
 	}
 	return err
+}
+
+// Close only shutdown idle connections. we couldn't control the connection which not in the pool.
+// So before call Close, Call PutConn to put all connections that in use back to connection pool first.
+func (pool *Pool) Close() {
+	pool.cancel()
+	//wait newConnectionProducer exit.
+	pool.wg.Wait()
+	//close idle connections
+	pool.synchro.Lock()
+	for _, connection := range pool.synchro.idleConnections {
+		pool.synchro.stats.TotalCount--
+		_ = connection.conn.Close()
+	}
+	pool.synchro.idleConnections = nil
+	pool.synchro.Unlock()
 }

@@ -1,15 +1,12 @@
 package mysql
 
 import (
-	"github.com/pingcap/check"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-type positionCompareSuite struct {
-}
-
-var _ = check.Suite(&positionCompareSuite{})
-
-func (t *positionCompareSuite) TestPosCompare(c *check.C) {
+func TestPosCompare(t *testing.T) {
 	ascendingPositions := []Position{
 		{
 			"",
@@ -42,10 +39,10 @@ func (t *positionCompareSuite) TestPosCompare(c *check.C) {
 	}
 
 	for i := 1; i < len(ascendingPositions); i++ {
-		c.Assert(ascendingPositions[i-1].Compare(ascendingPositions[i]), check.Equals, -1)
+		require.Equal(t, -1, ascendingPositions[i-1].Compare(ascendingPositions[i]))
 	}
 
 	for _, p := range ascendingPositions {
-		c.Assert(p.Compare(p), check.Equals, 0)
+		require.Equal(t, 0, p.Compare(p))
 	}
 }

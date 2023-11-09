@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -20,11 +21,8 @@ import (
 
 var testOutputLogs = flag.Bool("out", false, "output binlog event")
 
-func TestBinLogSyncer(t *testing.T) {
-	TestingT(t)
-}
-
 type testSyncerSuite struct {
+	suite.Suite
 	b *BinlogSyncer
 	c *client.Conn
 
@@ -33,18 +31,11 @@ type testSyncerSuite struct {
 	flavor string
 }
 
-var _ = Suite(&testSyncerSuite{})
-
-func (t *testSyncerSuite) SetUpSuite(c *C) {
+func TestSyncerSuite(t *testing.T) {
+	suite.Run(t, new(testSyncerSuite))
 }
 
-func (t *testSyncerSuite) TearDownSuite(c *C) {
-}
-
-func (t *testSyncerSuite) SetUpTest(c *C) {
-}
-
-func (t *testSyncerSuite) TearDownTest(c *C) {
+func (t *testSyncerSuite) TearDownTest() {
 	if t.b != nil {
 		t.b.Close()
 		t.b = nil
@@ -56,12 +47,12 @@ func (t *testSyncerSuite) TearDownTest(c *C) {
 	}
 }
 
-func (t *testSyncerSuite) testExecute(c *C, query string) {
+func (t *testSyncerSuite) testExecute(query string) {
 	_, err := t.c.Execute(query)
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 }
 
-func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
+func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
@@ -79,7 +70,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 				return
 			}
 
-			c.Assert(err, IsNil)
+			require.NoError(t.T(), err)
 
 			if *testOutputLogs {
 				e.Dump(os.Stdout)
@@ -88,11 +79,11 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		}
 	}()
 
-	//use mixed format
-	t.testExecute(c, "SET SESSION binlog_format = 'MIXED'")
+	// use mixed format
+	t.testExecute("SET SESSION binlog_format = 'MIXED'")
 
 	str := `DROP TABLE IF EXISTS test_replication`
-	t.testExecute(c, str)
+	t.testExecute(str)
 
 	str = `CREATE TABLE test_replication (
 			id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
@@ -115,29 +106,32 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8`
 
-	t.testExecute(c, str)
+	t.testExecute(str)
 
-	//use row format
-	t.testExecute(c, "SET SESSION binlog_format = 'ROW'")
+	// use row format
+	t.testExecute("SET SESSION binlog_format = 'ROW'")
 
-	t.testExecute(c, `INSERT INTO test_replication (str, f, i, e, b, y, da, ts, dt, tm, de, t, bb, se)
+	t.testExecute(`INSERT INTO test_replication (str, f, i, e, b, y, da, ts, dt, tm, de, t, bb, se)
 		VALUES ("3", -3.14, 10, "e1", 0b0011, 1985,
 		"2012-05-07", "2012-05-07 14:01:01", "2012-05-07 14:01:01",
 		"14:01:01", -45363.64, "abc", "12345", "a,b")`)
 
-	id := 100
-
 	if t.flavor == mysql.MySQLFlavor {
-		t.testExecute(c, "SET SESSION binlog_row_image = 'MINIMAL'")
+		t.testExecute("SET SESSION binlog_row_image = 'MINIMAL'")
 
-		t.testExecute(c, fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb, de) VALUES (%d, "4", -3.14, 100, "abc", -45635.64)`, id))
-		t.testExecute(c, fmt.Sprintf(`UPDATE test_replication SET f = -12.14, de = 555.34 WHERE id = %d`, id))
-		t.testExecute(c, fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))
+		if eq, err := t.c.CompareServerVersion("8.0.0"); (err == nil) && (eq >= 0) {
+			t.testExecute("SET SESSION binlog_row_value_options = 'PARTIAL_JSON'")
+		}
+
+		const id = 100
+		t.testExecute(fmt.Sprintf(`INSERT INTO test_replication (id, str, f, i, bb, de) VALUES (%d, "4", -3.14, 100, "abc", -45635.64)`, id))
+		t.testExecute(fmt.Sprintf(`UPDATE test_replication SET f = -12.14, de = 555.34 WHERE id = %d`, id))
+		t.testExecute(fmt.Sprintf(`DELETE FROM test_replication WHERE id = %d`, id))
 	}
 
 	// check whether we can create the table including the json field
 	str = `DROP TABLE IF EXISTS test_json`
-	t.testExecute(c, str)
+	t.testExecute(str)
 
 	str = `CREATE TABLE test_json (
 			id BIGINT(64) UNSIGNED  NOT NULL AUTO_INCREMENT,
@@ -147,15 +141,15 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 			) ENGINE=InnoDB`
 
 	if _, err := t.c.Execute(str); err == nil {
-		t.testExecute(c, `INSERT INTO test_json (c2) VALUES (1)`)
-		t.testExecute(c, `INSERT INTO test_json (c1, c2) VALUES ('{"key1": "value1", "key2": "value2"}', 1)`)
+		t.testExecute(`INSERT INTO test_json (c2) VALUES (1)`)
+		t.testExecute(`INSERT INTO test_json (c1, c2) VALUES ('{"key1": "value1", "key2": "value2"}', 1)`)
 	}
 
-	t.testExecute(c, "DROP TABLE IF EXISTS test_json_v2")
+	t.testExecute("DROP TABLE IF EXISTS test_json_v2")
 
 	str = `CREATE TABLE test_json_v2 (
 			id INT, 
-			c JSON, 
+			c JSON,
 			PRIMARY KEY (id)
 			) ENGINE=InnoDB`
 
@@ -205,15 +199,30 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		}
 
 		for _, query := range tbls {
-			t.testExecute(c, query)
+			t.testExecute(query)
+		}
+
+		// "Partial Updates of JSON Values" from https://dev.mysql.com/doc/refman/8.0/en/json.html
+		jsonOrig := `'{"a":"aaaaaaaaaaaaa", "c":"ccccccccccccccc", "ab":["abababababababa", "babababababab"]}'`
+		tbls = []string{
+			`ALTER TABLE test_json_v2 ADD COLUMN d JSON DEFAULT NULL, ADD COLUMN e JSON DEFAULT NULL`,
+			`INSERT INTO test_json_v2 VALUES (101, ` + jsonOrig + `, ` + jsonOrig + `, ` + jsonOrig + `)`,
+			`UPDATE test_json_v2 SET c = JSON_SET(c, '$.ab', '["ab_updatedccc"]') WHERE id = 101`,
+			`UPDATE test_json_v2 SET d = JSON_SET(d, '$.ab', '["ab_updatedddd"]') WHERE id = 101`,
+			`UPDATE test_json_v2 SET e = JSON_SET(e, '$.ab', '["ab_updatedeee"]') WHERE id = 101`,
+			`UPDATE test_json_v2 SET d = JSON_SET(d, '$.ab', '["ab_ddd"]'), e = json_set(e, '$.ab', '["ab_eee"]') WHERE id = 101`,
+			// ToDo(atercattus): add more tests with JSON_REPLACE() and JSON_REMOVE()
+		}
+		for _, query := range tbls {
+			t.testExecute(query)
 		}
 
 		// If MySQL supports JSON, it must supports GEOMETRY.
-		t.testExecute(c, "DROP TABLE IF EXISTS test_geo")
+		t.testExecute("DROP TABLE IF EXISTS test_geo")
 
 		str = `CREATE TABLE test_geo (g GEOMETRY)`
 		_, err = t.c.Execute(str)
-		c.Assert(err, IsNil)
+		require.NoError(t.T(), err)
 
 		tbls = []string{
 			`INSERT INTO test_geo VALUES (POINT(1, 1))`,
@@ -222,15 +231,15 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 		}
 
 		for _, query := range tbls {
-			t.testExecute(c, query)
+			t.testExecute(query)
 		}
 	}
 
 	str = `DROP TABLE IF EXISTS test_parse_time`
-	t.testExecute(c, str)
+	t.testExecute(str)
 
 	// Must allow zero time.
-	t.testExecute(c, `SET sql_mode=''`)
+	t.testExecute(`SET sql_mode=''`)
 	str = `CREATE TABLE test_parse_time (
 			a1 DATETIME, 
 			a2 DATETIME(3), 
@@ -238,9 +247,9 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 			b1 TIMESTAMP, 
 			b2 TIMESTAMP(3) , 
 			b3 TIMESTAMP(6))`
-	t.testExecute(c, str)
+	t.testExecute(str)
 
-	t.testExecute(c, `INSERT INTO test_parse_time VALUES
+	t.testExecute(`INSERT INTO test_parse_time VALUES
 		("2014-09-08 17:51:04.123456", "2014-09-08 17:51:04.123456", "2014-09-08 17:51:04.123456", 
 		"2014-09-08 17:51:04.123456","2014-09-08 17:51:04.123456","2014-09-08 17:51:04.123456"),
 		("0000-00-00 00:00:00.000000", "0000-00-00 00:00:00.000000", "0000-00-00 00:00:00.000000",
@@ -251,7 +260,7 @@ func (t *testSyncerSuite) testSync(c *C, s *BinlogStreamer) {
 	t.wg.Wait()
 }
 
-func (t *testSyncerSuite) setupTest(c *C, flavor string) {
+func (t *testSyncerSuite) setupTest(flavor string) {
 	var port uint16 = 3306
 	switch flavor {
 	case mysql.MariaDBFlavor:
@@ -267,14 +276,14 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 
 	t.c, err = client.Connect(fmt.Sprintf("%s:%d", *test_util.MysqlHost, port), "root", "", "")
 	if err != nil {
-		c.Skip(err.Error())
+		t.T().Skip(err.Error())
 	}
 
 	_, err = t.c.Execute("CREATE DATABASE IF NOT EXISTS test")
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
 	_, err = t.c.Execute("USE test")
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
 	if t.b != nil {
 		t.b.Close()
@@ -293,102 +302,111 @@ func (t *testSyncerSuite) setupTest(c *C, flavor string) {
 	t.b = NewBinlogSyncer(cfg)
 }
 
-func (t *testSyncerSuite) testPositionSync(c *C) {
-	//get current master binlog file and position
+func (t *testSyncerSuite) testPositionSync() {
+	// get current master binlog file and position
 	r, err := t.c.Execute("SHOW MASTER STATUS")
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 	binFile, _ := r.GetString(0, 0)
 	binPos, _ := r.GetInt(0, 1)
 
 	s, err := t.b.StartSync(mysql.Position{Name: binFile, Pos: uint32(binPos)})
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
-	// check we have set Slave_UUID
 	r, err = t.c.Execute("SHOW SLAVE HOSTS")
-	c.Assert(err, IsNil)
-	slaveUUID, _ := r.GetString(0, 4)
-	c.Assert(slaveUUID, HasLen, 36)
+	require.NoError(t.T(), err)
+
+	// List of replicas must not be empty
+	require.Greater(t.T(), len(r.Values), 0)
+
+	// Slave_UUID is empty for mysql 8.0.28+ (8.0.32 still broken)
+	if eq, err := t.c.CompareServerVersion("8.0.28"); (err == nil) && (eq < 0) {
+		// check we have set Slave_UUID
+		slaveUUID, _ := r.GetString(0, 4)
+		require.Len(t.T(), slaveUUID, 36)
+	} else if err != nil {
+		require.NoError(t.T(), err)
+	}
 
 	// Test re-sync.
 	time.Sleep(100 * time.Millisecond)
 	_ = t.b.c.SetReadDeadline(time.Now().Add(time.Millisecond))
 	time.Sleep(100 * time.Millisecond)
 
-	t.testSync(c, s)
+	t.testSync(s)
 }
 
-func (t *testSyncerSuite) TestMysqlPositionSync(c *C) {
-	t.setupTest(c, mysql.MySQLFlavor)
-	t.testPositionSync(c)
+func (t *testSyncerSuite) TestMysqlPositionSync() {
+	t.setupTest(mysql.MySQLFlavor)
+	t.testPositionSync()
 }
 
-func (t *testSyncerSuite) TestMysqlGTIDSync(c *C) {
-	t.setupTest(c, mysql.MySQLFlavor)
+func (t *testSyncerSuite) TestMysqlGTIDSync() {
+	t.setupTest(mysql.MySQLFlavor)
 
 	r, err := t.c.Execute("SELECT @@gtid_mode")
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 	modeOn, _ := r.GetString(0, 0)
 	if modeOn != "ON" {
-		c.Skip("GTID mode is not ON")
+		t.T().Skip("GTID mode is not ON")
 	}
 
 	r, err = t.c.Execute("SHOW GLOBAL VARIABLES LIKE 'SERVER_UUID'")
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
 	var masterUuid uuid.UUID
 	if s, _ := r.GetString(0, 1); len(s) > 0 && s != "NONE" {
 		masterUuid, err = uuid.Parse(s)
-		c.Assert(err, IsNil)
+		require.NoError(t.T(), err)
 	}
 
 	set, _ := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d-%d", masterUuid.String(), 1, 2))
 
 	s, err := t.b.StartSyncGTID(set)
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
-	t.testSync(c, s)
+	t.testSync(s)
 }
 
-func (t *testSyncerSuite) TestMariadbPositionSync(c *C) {
-	t.setupTest(c, mysql.MariaDBFlavor)
+func (t *testSyncerSuite) TestMariadbPositionSync() {
+	t.setupTest(mysql.MariaDBFlavor)
 
-	t.testPositionSync(c)
+	t.testPositionSync()
 }
 
-func (t *testSyncerSuite) TestMariadbGTIDSync(c *C) {
-	t.setupTest(c, mysql.MariaDBFlavor)
+func (t *testSyncerSuite) TestMariadbGTIDSync() {
+	t.setupTest(mysql.MariaDBFlavor)
 
 	// get current master gtid binlog pos
 	r, err := t.c.Execute("SELECT @@gtid_binlog_pos")
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
 	str, _ := r.GetString(0, 0)
 	set, _ := mysql.ParseMariadbGTIDSet(str)
 
 	s, err := t.b.StartSyncGTID(set)
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
-	t.testSync(c, s)
+	t.testSync(s)
 }
 
-func (t *testSyncerSuite) TestMariadbAnnotateRows(c *C) {
-	t.setupTest(c, mysql.MariaDBFlavor)
+func (t *testSyncerSuite) TestMariadbAnnotateRows() {
+	t.setupTest(mysql.MariaDBFlavor)
 	t.b.cfg.DumpCommandFlag = BINLOG_SEND_ANNOTATE_ROWS_EVENT
-	t.testPositionSync(c)
+	t.testPositionSync()
 }
 
-func (t *testSyncerSuite) TestMysqlSemiPositionSync(c *C) {
-	t.setupTest(c, mysql.MySQLFlavor)
+func (t *testSyncerSuite) TestMysqlSemiPositionSync() {
+	t.setupTest(mysql.MySQLFlavor)
 
 	t.b.cfg.SemiSyncEnabled = true
 
-	t.testPositionSync(c)
+	t.testPositionSync()
 }
 
-func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
-	t.setupTest(c, mysql.MySQLFlavor)
+func (t *testSyncerSuite) TestMysqlBinlogCodec() {
+	t.setupTest(mysql.MySQLFlavor)
 
-	t.testExecute(c, "RESET MASTER")
+	t.testExecute("RESET MASTER")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -397,11 +415,11 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 	go func() {
 		defer wg.Done()
 
-		t.testSync(c, nil)
+		t.testSync(nil)
 
-		t.testExecute(c, "FLUSH LOGS")
+		t.testExecute("FLUSH LOGS")
 
-		t.testSync(c, nil)
+		t.testSync(nil)
 	}()
 
 	binlogDir := "./var"
@@ -409,7 +427,7 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 	os.RemoveAll(binlogDir)
 
 	err := t.b.StartBackup(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, 2*time.Second)
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
 	p := NewBinlogParser()
 	p.SetVerifyChecksum(true)
@@ -423,14 +441,14 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec(c *C) {
 	}
 
 	dir, err := os.Open(binlogDir)
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 	defer dir.Close()
 
 	files, err := dir.Readdirnames(-1)
-	c.Assert(err, IsNil)
+	require.NoError(t.T(), err)
 
 	for _, file := range files {
 		err = p.ParseFile(path.Join(binlogDir, file), 0, f)
-		c.Assert(err, IsNil)
+		require.NoError(t.T(), err)
 	}
 }
