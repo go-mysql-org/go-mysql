@@ -65,7 +65,11 @@ type EventHeader struct {
 	ServerID  uint32
 	EventSize uint32
 	LogPos    uint32
+	LogName   string
 	Flags     uint16
+
+	// options
+	Query string
 }
 
 func (h *EventHeader) Decode(data []byte) error {

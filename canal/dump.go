@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
@@ -35,7 +37,7 @@ func (h *dumpParseHandler) GtidSet(gtidsets string) (err error) {
 	return err
 }
 
-func (h *dumpParseHandler) Data(db string, table string, values []string) error {
+func (h *dumpParseHandler) Data(context context.Context, db string, table string, values []string) error {
 	if err := h.c.ctx.Err(); err != nil {
 		return err
 	}
@@ -109,7 +111,19 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		}
 	}
 
-	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs}, nil)
+	var query string
+	if _query, ok := context.Value("curLine").(string); !ok {
+		query = ""
+	} else {
+		query = _query
+	}
+
+	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs}, &replication.EventHeader{
+		Query:   query,
+		LogName: h.name,
+		LogPos:  uint32(h.pos),
+	})
+
 	return h.c.eventHandler.OnRow(events)
 }
 

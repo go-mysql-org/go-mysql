@@ -2,6 +2,7 @@ package dump
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"regexp"
@@ -20,7 +21,7 @@ type ParseHandler interface {
 	// Parse CHANGE MASTER TO MASTER_LOG_FILE=name, MASTER_LOG_POS=pos;
 	BinLog(name string, pos uint64) error
 	GtidSet(gtidsets string) error
-	Data(schema string, table string, values []string) error
+	Data(ctx context.Context, schema string, table string, values []string) error
 }
 
 var binlogExp *regexp.Regexp
@@ -58,6 +59,8 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 		line = strings.TrimRightFunc(line, func(c rune) bool {
 			return c == '\r' || c == '\n'
 		})
+
+		ctx := context.WithValue(context.Background(), "curLine", line)
 
 		if parseBinlogPos && !binlogParsed {
 			// parsed gtid set from mysqldump
@@ -97,7 +100,7 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 				return errors.Errorf("parse values %v err", line)
 			}
 
-			if err = h.Data(db, table, values); err != nil && err != ErrSkip {
+			if err = h.Data(ctx, db, table, values); err != nil && err != ErrSkip {
 				return errors.Trace(err)
 			}
 		}
