@@ -12,8 +12,8 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/go-mysql-org/go-mysql/client"
-	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/dumbmachine/go-mysql/client"
+	"github.com/dumbmachine/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 )

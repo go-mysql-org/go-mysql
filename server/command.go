@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
+	. "github.com/dumbmachine/go-mysql/mysql"
+	"github.com/dumbmachine/go-mysql/replication"
 	"github.com/siddontang/go/hack"
 )
 

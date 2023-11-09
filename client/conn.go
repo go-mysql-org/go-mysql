@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/packet"
-	"github.com/go-mysql-org/go-mysql/utils"
+	. "github.com/dumbmachine/go-mysql/mysql"
+	"github.com/dumbmachine/go-mysql/packet"
+	"github.com/dumbmachine/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
 

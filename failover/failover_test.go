@@ -7,7 +7,7 @@ import (
 
 	. "github.com/pingcap/check"
 
-	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/dumbmachine/go-mysql/test_util"
 )
 
 var enable_failover_test = flag.Bool("test-failover", false, "enable test failover")

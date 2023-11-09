@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	. "github.com/dumbmachine/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 )

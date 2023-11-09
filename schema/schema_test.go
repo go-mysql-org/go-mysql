@@ -8,9 +8,9 @@ import (
 
 	. "github.com/pingcap/check"
 
-	"github.com/go-mysql-org/go-mysql/client"
-	_ "github.com/go-mysql-org/go-mysql/driver"
-	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/dumbmachine/go-mysql/client"
+	_ "github.com/dumbmachine/go-mysql/driver"
+	"github.com/dumbmachine/go-mysql/test_util"
 )
 
 var schema = flag.String("schema", "test", "MySQL Database")

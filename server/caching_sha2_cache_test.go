@@ -14,9 +14,9 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/test_util"
-	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
+	"github.com/dumbmachine/go-mysql/mysql"
+	"github.com/dumbmachine/go-mysql/test_util"
+	"github.com/dumbmachine/go-mysql/test_util/test_keys"
 )
 
 var delay = 50

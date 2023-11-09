@@ -11,8 +11,8 @@ import (
 
 	"github.com/pingcap/errors"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/dumbmachine/go-mysql/mysql"
+	"github.com/dumbmachine/go-mysql/replication"
 )
 
 var host = flag.String("host", "127.0.0.1", "MySQL host")

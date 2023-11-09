@@ -3,13 +3,13 @@
 A pure go library to handle MySQL network protocol and replication.
 
 ![semver](https://img.shields.io/github/v/tag/go-mysql-org/go-mysql)
-![example workflow](https://github.com/go-mysql-org/go-mysql/actions/workflows/ci.yml/badge.svg)
+![example workflow](https://github.com/dumbmachine/go-mysql/actions/workflows/ci.yml/badge.svg)
 ![gomod version](https://img.shields.io/github/go-mod/go-version/go-mysql-org/go-mysql/master)
 
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
 ```
-replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.7.0
+replace github.com/siddontang/go-mysql => github.com/dumbmachine/go-mysql v1.7.0
 ```
 
 v1.7.0 - is the last tag in repo, feel free to choose what you want.
@@ -36,7 +36,7 @@ You can use it as a MySQL slave to sync binlog from master then do something, li
 
 ```go
 import (
-	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/dumbmachine/go-mysql/replication"
 	"os"
 )
 // Create a binlog syncer with a unique server id, the server id must be different from other MySQL's. 
@@ -123,7 +123,7 @@ A simple example:
 package main
 
 import (
-	"github.com/go-mysql-org/go-mysql/canal"
+	"github.com/dumbmachine/go-mysql/canal"
 	"github.com/siddontang/go-log/log"
 )
 
@@ -171,7 +171,7 @@ Client package supports a simple MySQL connection driver which you can use it to
 
 ```go
 import (
-	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/dumbmachine/go-mysql/client"
 )
 
 // Connect MySQL at 127.0.0.1:3306, with user root, an empty password and database test
@@ -247,7 +247,7 @@ err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &r
 
 ```go
 import (
-    "github.com/go-mysql-org/go-mysql/client"
+    "github.com/dumbmachine/go-mysql/client"
 )
 
 pool := client.NewPool(log.Debugf, 100, 400, 5, "127.0.0.1:3306", `root`, ``, `test`)
@@ -275,7 +275,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/go-mysql-org/go-mysql/server"
+	"github.com/dumbmachine/go-mysql/server"
 )
 
 func main() {
@@ -349,7 +349,7 @@ package main
 import (
 	"database/sql"
 
-	_ "github.com/go-mysql-org/go-mysql/driver"
+	_ "github.com/dumbmachine/go-mysql/driver"
 )
 
 func main() {

@@ -10,7 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	. "github.com/pingcap/check"
 
-	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/dumbmachine/go-mysql/test_util"
 )
 
 var testUser = flag.String("user", "root", "MySQL user")

@@ -7,7 +7,7 @@ import (
 	"path"
 	"time"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	. "github.com/dumbmachine/go-mysql/mysql"
 	"github.com/pingcap/errors"
 )
 
