@@ -5,20 +5,19 @@ import (
 	"os"
 	"time"
 
-	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dumbmachine/go-mysql/mysql"
 )
 
-func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
-	t.setupTest(c, mysql.MySQLFlavor)
+func (t *testSyncerSuite) TestStartBackupEndInGivenTime() {
+	t.setupTest(mysql.MySQLFlavor)
 
-	t.testExecute(c, "RESET MASTER")
+	t.testExecute("RESET MASTER")
 
 	for times := 1; times <= 2; times++ {
-		t.testSync(c, nil)
-		t.testExecute(c, "FLUSH LOGS")
+		t.testSync(nil)
+		t.testExecute("FLUSH LOGS")
 	}
 
 	binlogDir := "./var"
@@ -30,7 +29,7 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 
 	go func() {
 		err := t.b.StartBackup(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, timeout)
-		c.Assert(err, IsNil)
+		require.NoError(t.T(), err)
 		done <- true
 	}()
 	failTimeout := 5 * timeout
@@ -39,6 +38,6 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime(c *C) {
 	case <-done:
 		return
 	case <-ctx.Done():
-		c.Assert(errors.New("time out error"), IsNil)
+		t.T().Fatal("time out error")
 	}
 }

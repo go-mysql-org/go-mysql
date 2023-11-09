@@ -2,17 +2,14 @@ package dump
 
 import (
 	"strings"
+	"testing"
 
 	"github.com/dumbmachine/go-mysql/mysql"
 	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-type parserTestSuite struct {
-}
-
-var _ = Suite(&parserTestSuite{})
-
-func (s *parserTestSuite) TestParseGtidExp(c *C) {
+func TestParseGtidExp(t *testing.T) {
 	//	binlogExp := regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
 	//	gtidExp := regexp.MustCompile("(\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)")
 	tbls := []struct {
@@ -56,22 +53,22 @@ e7574090-b123-11e8-8bb4-005056a29643:1'
 		var handler = new(testParseHandler)
 
 		err := Parse(reader, handler, true)
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		if tt.expected == "" {
 			if handler.gset != nil {
-				c.Assert(handler.gset, IsNil)
+				require.Nil(t, handler.gset)
 			} else {
 				continue
 			}
 		}
 		expectedGtidset, err := mysql.ParseGTIDSet("mysql", tt.expected)
-		c.Assert(err, IsNil)
-		c.Assert(expectedGtidset.Equal(handler.gset), IsTrue)
+		require.NoError(t, err)
+		require.True(t, expectedGtidset.Equal(handler.gset))
 	}
 }
 
-func (s *parserTestSuite) TestParseFindTable(c *C) {
+func TestParseFindTable(t *testing.T) {
 	tbl := []struct {
 		sql   string
 		table string
@@ -81,13 +78,13 @@ func (s *parserTestSuite) TestParseFindTable(c *C) {
 		{"INSERT INTO `a.b` VALUES ('1');", "a.b"},
 	}
 
-	for _, t := range tbl {
-		res := valuesExp.FindAllStringSubmatch(t.sql, -1)[0][1]
-		c.Assert(res, Equals, t.table)
+	for _, te := range tbl {
+		res := valuesExp.FindAllStringSubmatch(te.sql, -1)[0][1]
+		require.Equal(t, te.table, res)
 	}
 }
 
-func (s *parserTestSuite) TestUnescape(c *C) {
+func TestUnescape(t *testing.T) {
 	tbl := []struct {
 		escaped  string
 		expected string
@@ -106,29 +103,29 @@ func (s *parserTestSuite) TestUnescape(c *C) {
 		{`\abc`, `abc`},
 	}
 
-	for _, t := range tbl {
-		unesacped := unescapeString(t.escaped)
-		c.Assert(unesacped, Equals, t.expected)
+	for _, te := range tbl {
+		unesacped := unescapeString(te.escaped)
+		require.Equal(t, te.expected, unesacped)
 	}
 }
 
-func (s *parserTestSuite) TestParseValue(c *C) {
+func TestParseValue(t *testing.T) {
 	str := `'abc\\',''`
 	values, err := parseValues(str)
-	c.Assert(err, IsNil)
-	c.Assert(values, DeepEquals, []string{`'abc\'`, `''`})
+	require.NoError(t, err)
+	require.Equal(t, []string{`'abc\'`, `''`}, values)
 
 	str = `123,'\Z#÷QÎx£. Æ‘ÇoPâÅ_\r—\\','','qn'`
 	values, err = parseValues(str)
-	c.Assert(err, IsNil)
-	c.Assert(values, HasLen, 4)
+	require.NoError(t, err)
+	require.Len(t, values, 4)
 
 	str = `123,'\Z#÷QÎx£. Æ‘ÇoPâÅ_\r—\\','','qn\'`
 	_, err = parseValues(str)
-	c.Assert(err, NotNil)
+	require.Error(t, err)
 }
 
-func (s *parserTestSuite) TestParseLine(c *C) {
+func TestParseLine(t *testing.T) {
 	lines := []struct {
 		line     string
 		expected string
@@ -143,13 +140,13 @@ func (s *parserTestSuite) TestParseLine(c *C) {
 		return c == '\r' || c == '\n'
 	}
 
-	for _, t := range lines {
-		l := strings.TrimRightFunc(t.line, f)
+	for _, te := range lines {
+		l := strings.TrimRightFunc(te.line, f)
 
 		m := valuesExp.FindAllStringSubmatch(l, -1)
 
-		c.Assert(m, HasLen, 1)
-		c.Assert(m[0][1], Matches, "test")
-		c.Assert(m[0][2], Matches, t.expected)
+		require.Len(t, m, 1)
+		require.Equal(t, "test", m[0][1])
+		require.Equal(t, te.expected, m[0][2])
 	}
 }

@@ -8,18 +8,22 @@ import (
 
 	"github.com/dumbmachine/go-mysql/dump"
 	"github.com/pingcap/errors"
+
+	"github.com/dumbmachine/go-mysql/dump"
 )
 
-var addr = flag.String("addr", "127.0.0.1:3306", "MySQL addr")
-var user = flag.String("user", "root", "MySQL user")
-var password = flag.String("password", "", "MySQL password")
-var execution = flag.String("exec", "mysqldump", "mysqldump execution path")
-var output = flag.String("o", "", "dump output, empty for stdout")
+var (
+	addr      = flag.String("addr", "127.0.0.1:3306", "MySQL addr")
+	user      = flag.String("user", "root", "MySQL user")
+	password  = flag.String("password", "", "MySQL password")
+	execution = flag.String("exec", "mysqldump", "mysqldump execution path")
+	output    = flag.String("o", "", "dump output, empty for stdout")
 
-var dbs = flag.String("dbs", "", "dump databases, separated by comma")
-var tables = flag.String("tables", "", "dump tables, separated by comma, will overwrite dbs")
-var tableDB = flag.String("table_db", "", "database for dump tables")
-var ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be database.table format, separated by comma")
+	dbs          = flag.String("dbs", "", "dump databases, separated by comma")
+	tables       = flag.String("tables", "", "dump tables, separated by comma, will overwrite dbs")
+	tableDB      = flag.String("table_db", "", "database for dump tables")
+	ignoreTables = flag.String("ignore_tables", "", "ignore tables, must be database.table format, separated by comma")
+)
 
 func main() {
 	flag.Parse()

@@ -1,16 +1,13 @@
 package replication
 
 import (
+	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-type testTimeSuite struct{}
-
-var _ = Suite(&testTimeSuite{})
-
-func (s *testTimeSuite) TestTime(c *C) {
+func TestTime(tt *testing.T) {
 	tbls := []struct {
 		year     int
 		month    int
@@ -29,7 +26,7 @@ func (s *testTimeSuite) TestTime(c *C) {
 
 	for _, t := range tbls {
 		t1 := fracTime{time.Date(t.year, time.Month(t.month), t.day, t.hour, t.min, t.sec, t.microSec*1000, time.UTC), t.frac, nil}
-		c.Assert(t1.String(), Equals, t.expected)
+		require.Equal(tt, t.expected, t1.String())
 	}
 
 	zeroTbls := []struct {
@@ -46,25 +43,23 @@ func (s *testTimeSuite) TestTime(c *C) {
 	}
 
 	for _, t := range zeroTbls {
-		c.Assert(formatZeroTime(t.frac, t.dec), Equals, t.expected)
+		require.Equal(tt, t.expected, formatZeroTime(t.frac, t.dec))
 	}
 }
 
-func (s *testTimeSuite) TestTimeStringLocation(c *C) {
+func TestTimeStringLocation(tt *testing.T) {
 	t := fracTime{
 		time.Date(2018, time.Month(7), 30, 10, 0, 0, 0, time.FixedZone("EST", -5*3600)),
 		0,
 		nil,
 	}
 
-	c.Assert(t.String(), Equals, "2018-07-30 10:00:00")
+	require.Equal(tt, "2018-07-30 10:00:00", t.String())
 
 	t = fracTime{
 		time.Date(2018, time.Month(7), 30, 10, 0, 0, 0, time.FixedZone("EST", -5*3600)),
 		0,
 		time.UTC,
 	}
-	c.Assert(t.String(), Equals, "2018-07-30 15:00:00")
+	require.Equal(tt, "2018-07-30 15:00:00", t.String())
 }
-
-var _ = Suite(&testTimeSuite{})

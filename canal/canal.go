@@ -19,7 +19,7 @@ import (
 	"github.com/dumbmachine/go-mysql/replication"
 	"github.com/dumbmachine/go-mysql/schema"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/siddontang/go-log/log"
 )
 
@@ -450,6 +450,20 @@ func (c *Canal) prepareSyncer() error {
 		TLSConfig:               c.cfg.TLSConfig,
 		Logger:                  c.cfg.Logger,
 		Dialer:                  c.cfg.Dialer,
+		Localhost:               c.cfg.Localhost,
+		RowsEventDecodeFunc: func(event *replication.RowsEvent, data []byte) error {
+			pos, err := event.DecodeHeader(data)
+			if err != nil {
+				return err
+			}
+
+			key := fmt.Sprintf("%s.%s", string(event.Table.Schema), string(event.Table.Table))
+			if !c.checkTableMatch(key) {
+				return nil
+			}
+
+			return event.DecodeData(pos, data)
+		},
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {
@@ -521,7 +535,7 @@ func (c *Canal) SyncedPosition() mysql.Position {
 }
 
 func (c *Canal) SyncedTimestamp() uint32 {
-	return c.master.timestamp
+	return c.master.Timestamp()
 }
 
 func (c *Canal) SyncedGTIDSet() mysql.GTIDSet {

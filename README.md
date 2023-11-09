@@ -19,7 +19,7 @@ This repo uses [Changelog](CHANGELOG.md).
 
 ---
 # Content
-* [Slave replication](#replication)
+* [Replication](#replication)
 * [Incremental dumping](#canal)
 * [Client](#client)
 * [Fake server](#server)
@@ -30,7 +30,7 @@ This repo uses [Changelog](CHANGELOG.md).
 
 Replication package handles MySQL replication protocol like [python-mysql-replication](https://github.com/noplay/python-mysql-replication).
 
-You can use it as a MySQL slave to sync binlog from master then do something, like updating cache, etc...
+You can use it as a MySQL replica to sync binlog from master then do something, like updating cache, etc...
 
 ### Example
 
@@ -330,13 +330,13 @@ MySQL [(none)]>
 
 ## Failover
 
-Failover supports to promote a new master and let other slaves replicate from it automatically when the old master was down.
+Failover supports to promote a new master and let replicas replicate from it automatically when the old master was down.
 
 Failover supports MySQL >= 5.6.9 with GTID mode, if you use lower version, e.g, MySQL 5.0 - 5.5, please use [MHA](http://code.google.com/p/mysql-master-ha/) or [orchestrator](https://github.com/outbrain/orchestrator).
 
 At the same time, Failover supports MariaDB >= 10.0.9 with GTID mode too. 
 
-Why only GTID? Supporting failover with no GTID mode is very hard, because slave can not find the proper binlog filename and position with the new master. 
+Why only GTID? Supporting failover with no GTID mode is very hard, because replicas can not find the proper binlog filename and position with the new master.
 Although there are many companies use MySQL 5.0 - 5.5, I think upgrade MySQL to 5.6 or higher is easy. 
 
 ## Driver

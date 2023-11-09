@@ -7,8 +7,10 @@ import (
 	"github.com/dumbmachine/go-mysql/replication"
 )
 
-var name = flag.String("name", "", "binlog file name")
-var offset = flag.Int64("offset", 0, "parse start offset")
+var (
+	name   = flag.String("name", "", "binlog file name")
+	offset = flag.Int64("offset", 0, "parse start offset")
+)
 
 func main() {
 	flag.Parse()
