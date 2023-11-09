@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dumbmachine/go-mysql/mysql"
+
 	"github.com/dumbmachine/go-mysql/replication"
 	"github.com/dumbmachine/go-mysql/schema"
 	"github.com/pingcap/errors"

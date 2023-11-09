@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	. "github.com/dumbmachine/go-mysql/mysql"
+
 	"github.com/dumbmachine/go-mysql/utils"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pingcap/errors"

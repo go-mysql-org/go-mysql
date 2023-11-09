@@ -8,10 +8,10 @@ import (
 	"encoding/pem"
 	"fmt"
 
+	. "github.com/dumbmachine/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 
-	. "github.com/dumbmachine/go-mysql/mysql"
 	"github.com/dumbmachine/go-mysql/utils"
 )
 

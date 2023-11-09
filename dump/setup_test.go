@@ -1,10 +1,10 @@
 package dump
 
 import (
+	"context"
 	"flag"
 
 	"github.com/dumbmachine/go-mysql/mysql"
-	. "github.com/pingcap/check"
 )
 
 var execution = flag.String("exec", "mysqldump", "mysqldump execution path")
@@ -26,6 +26,6 @@ func (h *testParseHandler) GtidSet(gtidsets string) (err error) {
 	return err
 }
 
-func (h *testParseHandler) Data(schema string, table string, values []string) error {
+func (h *testParseHandler) Data(ctx context.Context, string, table string, values []string) error {
 	return nil
 }

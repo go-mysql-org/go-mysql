@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/pingcap/check"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 

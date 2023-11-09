@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dumbmachine/go-mysql/dump"
 	"github.com/pingcap/errors"
 
 	"github.com/dumbmachine/go-mysql/dump"

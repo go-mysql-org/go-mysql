@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/dumbmachine/go-mysql/mysql"
-	. "github.com/pingcap/check"
+
 	"github.com/stretchr/testify/require"
 )
 

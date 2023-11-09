@@ -5,10 +5,9 @@ import (
 	"net"
 	"sync/atomic"
 
-	"github.com/siddontang/go/sync2"
-
 	. "github.com/dumbmachine/go-mysql/mysql"
 	"github.com/dumbmachine/go-mysql/packet"
+	"github.com/siddontang/go/sync2"
 )
 
 // Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.

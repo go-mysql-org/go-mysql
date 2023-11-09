@@ -2,8 +2,6 @@ package client
 
 import (
 	"flag"
-
-	. "github.com/pingcap/check"
 )
 
 var testUser = flag.String("user", "root", "MySQL user")

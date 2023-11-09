@@ -10,10 +10,9 @@ import (
 	"time"
 	"unicode"
 
+	. "github.com/dumbmachine/go-mysql/mysql"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-
-	. "github.com/dumbmachine/go-mysql/mysql"
 )
 
 const (

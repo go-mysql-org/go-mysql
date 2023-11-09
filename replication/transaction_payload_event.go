@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/klauspost/compress/zstd"
-
 	. "github.com/dumbmachine/go-mysql/mysql"
+	"github.com/klauspost/compress/zstd"
 )
 
 // On The Wire: Field Types
