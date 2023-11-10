@@ -135,21 +135,18 @@ func (c *Canal) runSyncBinlog() error {
 				continue
 			}
 			for _, stmt := range stmts {
-				nodes := parseStmt(stmt)
-				for _, node := range nodes {
-					if node.db == "" {
-						node.db = string(e.Schema)
-					}
-					if err = c.updateTable(ev.Header, node.db, node.table); err != nil {
-						return errors.Trace(err)
-					}
-				}
+				nodes := parseDDLStmt(stmt)
 				if len(nodes) > 0 {
 					savePos = true
 					force = true
-					// Now we only handle Table Changed DDL, maybe we will support more later.
-					if err = c.eventHandler.OnDDL(ev.Header, pos, e); err != nil {
-						return errors.Trace(err)
+					err := c.handleDDLEvent(ev, e, nodes, pos)
+					if err != nil {
+						c.cfg.Logger.Errorf("handle ddl event err %v", err)
+					}
+				} else {
+					savePos, force, err = c.handleQueryEvent(ev.Header, stmt, pos, e)
+					if err != nil {
+						c.cfg.Logger.Errorf("handle query event err %v", err)
 					}
 				}
 			}
@@ -176,7 +173,7 @@ type node struct {
 	table string
 }
 
-func parseStmt(stmt ast.StmtNode) (ns []*node) {
+func parseDDLStmt(stmt ast.StmtNode) (ns []*node) {
 	switch t := stmt.(type) {
 	case *ast.RenameTableStmt:
 		for _, tableInfo := range t.TableToTables {
@@ -224,6 +221,7 @@ func (c *Canal) updateTable(header *replication.EventHeader, db, table string) (
 	}
 	return
 }
+
 func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	var newDelay uint32
 	now := uint32(time.Now().Unix())
@@ -334,4 +332,33 @@ func (c *Canal) CatchMasterPos(timeout time.Duration) error {
 	}
 
 	return c.WaitUntilPos(pos, timeout)
+}
+
+// handleDDLEvent is handle DDL event
+func (c *Canal) handleDDLEvent(ev *replication.BinlogEvent, e *replication.QueryEvent, nodes []*node, pos mysql.Position) error {
+	for _, node := range nodes {
+		if node.db == "" {
+			node.db = string(e.Schema)
+		}
+		if err := c.updateTable(ev.Header, node.db, node.table); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	if len(nodes) > 0 {
+		// Now we only handle Table Changed DDL, maybe we will support more later.
+		if err := c.eventHandler.OnDDL(ev.Header, pos, e); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+// handleQueryEvent is handle some common query events (e.g., DDL,CREATE or DROP USER,GRANT)
+// DDL event use handleDDLEvent, others use the handleQueryEvent
+func (c *Canal) handleQueryEvent(header *replication.EventHeader, stmt ast.StmtNode, pos mysql.Position, e *replication.QueryEvent) (bool, bool, error) {
+	savePos, force, err := c.eventHandler.OnQueryEvent(header, stmt, pos, e)
+	if err != nil {
+		return savePos, force, errors.Trace(err)
+	}
+	return savePos, force, nil
 }

@@ -173,7 +173,7 @@ func TestCreateTableExp(t *testing.T) {
 		stmts, _, err := pr.Parse(s, "", "")
 		require.NoError(t, err)
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
@@ -197,7 +197,7 @@ func TestAlterTableExp(t *testing.T) {
 		stmts, _, err := pr.Parse(s, "", "")
 		require.NoError(t, err)
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
@@ -229,7 +229,7 @@ func TestRenameTableExp(t *testing.T) {
 		stmts, _, err := pr.Parse(s, "", "")
 		require.NoError(t, err)
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
@@ -271,7 +271,7 @@ func TestDropTableExp(t *testing.T) {
 		stmts, _, err := pr.Parse(s, "", "")
 		require.NoError(t, err)
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
@@ -313,7 +313,7 @@ func TestWithoutSchemeExp(t *testing.T) {
 		stmts, _, err := pr.Parse(string(s.Query), "", "")
 		require.NoError(t, err)
 		for _, st := range stmts {
-			nodes := parseStmt(st)
+			nodes := parseDDLStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}

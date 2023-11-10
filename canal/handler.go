@@ -3,6 +3,7 @@ package canal
 import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/pingcap/tidb/parser/ast"
 )
 
 type EventHandler interface {
@@ -17,18 +18,22 @@ type EventHandler interface {
 	OnGTID(header *replication.EventHeader, gtidEvent mysql.BinlogGTIDEvent) error
 	// OnPosSynced Use your own way to sync position. When force is true, sync position immediately.
 	OnPosSynced(header *replication.EventHeader, pos mysql.Position, set mysql.GTIDSet, force bool) error
+	// OnQueryEvent is query event include (create user, drop user, create index, etc.)
+	// Note: the OnQueryEvent has lower priority than OnDDL even
+	OnQueryEvent(header *replication.EventHeader, stmt ast.StmtNode, pos mysql.Position, e *replication.QueryEvent) (bool, bool, error)
 	String() string
 }
 
-type DummyEventHandler struct {
-}
+type DummyEventHandler struct{}
 
 func (h *DummyEventHandler) OnRotate(*replication.EventHeader, *replication.RotateEvent) error {
 	return nil
 }
+
 func (h *DummyEventHandler) OnTableChanged(*replication.EventHeader, string, string) error {
 	return nil
 }
+
 func (h *DummyEventHandler) OnDDL(*replication.EventHeader, mysql.Position, *replication.QueryEvent) error {
 	return nil
 }
@@ -40,7 +45,10 @@ func (h *DummyEventHandler) OnGTID(*replication.EventHeader, mysql.BinlogGTIDEve
 func (h *DummyEventHandler) OnPosSynced(*replication.EventHeader, mysql.Position, mysql.GTIDSet, bool) error {
 	return nil
 }
-
+func (h *DummyEventHandler) OnQueryEvent(*replication.EventHeader, ast.StmtNode, mysql.Position, *replication.QueryEvent) (bool, bool, error) {
+	savePos, force := false, false
+	return savePos, force, nil
+}
 func (h *DummyEventHandler) String() string { return "DummyEventHandler" }
 
 // `SetEventHandler` registers the sync handler, you must register your
