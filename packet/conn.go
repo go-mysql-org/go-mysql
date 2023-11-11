@@ -12,9 +12,9 @@ import (
 	"net"
 	"sync"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
+	. "github.com/salamin-tr-galt/go-mysql/mysql"
+	"github.com/salamin-tr-galt/go-mysql/utils"
 )
 
 type BufPool struct {
@@ -41,7 +41,7 @@ func (b *BufPool) Return(buf *bytes.Buffer) {
 }
 
 /*
-	Conn is the base class to handle MySQL protocol.
+Conn is the base class to handle MySQL protocol.
 */
 type Conn struct {
 	net.Conn

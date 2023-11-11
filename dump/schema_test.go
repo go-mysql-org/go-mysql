@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/go-mysql-org/go-mysql/client"
 	. "github.com/pingcap/check"
+	"github.com/salamin-tr-galt/go-mysql/client"
 )
 
 type schemaTestSuite struct {

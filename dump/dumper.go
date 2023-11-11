@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"strings"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
+	. "github.com/salamin-tr-galt/go-mysql/mysql"
 	"github.com/siddontang/go-log/log"
 )
 
@@ -186,7 +186,8 @@ func (d *Dumper) Dump(w io.Writer) error {
 
 	// Disable uncessary data
 	args = append(args, "--compact")
-	args = append(args, "--skip-opt")
+	// remove for v1.6.1 mysql 8
+	// args = append(args, "--skip-opt")
 	args = append(args, "--quick")
 
 	// We only care about data

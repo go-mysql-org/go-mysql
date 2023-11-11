@@ -5,12 +5,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
+	"github.com/salamin-tr-galt/go-mysql/mysql"
+	"github.com/salamin-tr-galt/go-mysql/replication"
+	"github.com/salamin-tr-galt/go-mysql/schema"
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {

@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
+	"github.com/salamin-tr-galt/go-mysql/mysql"
+	"github.com/salamin-tr-galt/go-mysql/replication"
 	"github.com/siddontang/go-log/log"
 )
 

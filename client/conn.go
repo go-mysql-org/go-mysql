@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/packet"
-	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
+	. "github.com/salamin-tr-galt/go-mysql/mysql"
+	"github.com/salamin-tr-galt/go-mysql/packet"
+	"github.com/salamin-tr-galt/go-mysql/utils"
 )
 
 type Conn struct {
@@ -214,11 +214,10 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 //
 // Example:
 //
-//      queries := "SELECT 1; SELECT NOW();"
-//      conn.ExecuteMultiple(queries, func(result *mysql.Result, err error) {
-//          // Use the result as you want
-//      })
-//
+//	queries := "SELECT 1; SELECT NOW();"
+//	conn.ExecuteMultiple(queries, func(result *mysql.Result, err error) {
+//	    // Use the result as you want
+//	})
 func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCallback) (*Result, error) {
 	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
 		return nil, errors.Trace(err)
@@ -268,20 +267,21 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 }
 
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset
-//   WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
-// When given, perResultCallback will be called once per result
+//
+//	WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
+//
+// # When given, perResultCallback will be called once per result
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
 //
 // Example:
 //
-// 		var result mysql.Result
-// 		conn.ExecuteSelectStreaming(`SELECT ... LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
-//   		// Use the row as you want.
-//   		// You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
-//   		return nil
-// 		}, nil)
-//
+//			var result mysql.Result
+//			conn.ExecuteSelectStreaming(`SELECT ... LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
+//	  		// Use the row as you want.
+//	  		// You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
+//	  		return nil
+//			}, nil)
 func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
 	if err := c.writeCommandStr(COM_QUERY, command); err != nil {
 		return errors.Trace(err)

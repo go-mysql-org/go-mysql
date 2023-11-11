@@ -14,8 +14,8 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
 
-	"github.com/go-mysql-org/go-mysql/client"
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/salamin-tr-galt/go-mysql/client"
+	. "github.com/salamin-tr-galt/go-mysql/mysql"
 )
 
 var (

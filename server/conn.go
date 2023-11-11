@@ -5,13 +5,13 @@ import (
 	"net"
 	"sync/atomic"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/packet"
+	. "github.com/salamin-tr-galt/go-mysql/mysql"
+	"github.com/salamin-tr-galt/go-mysql/packet"
 	"github.com/siddontang/go/sync2"
 )
 
 /*
-   Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
+Conn acts like a MySQL server connection, you can use MySQL client to communicate with it.
 */
 type Conn struct {
 	*packet.Conn

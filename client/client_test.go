@@ -8,8 +8,8 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
+	"github.com/salamin-tr-galt/go-mysql/mysql"
+	"github.com/salamin-tr-galt/go-mysql/test_util/test_keys"
 )
 
 type clientTestSuite struct {
@@ -112,8 +112,9 @@ func (s *clientTestSuite) TestConn_SetCapability(c *C) {
 }
 
 // NOTE for MySQL 5.5 and 5.6, server side has to config SSL to pass the TLS test, otherwise, it will throw error that
-//      MySQL server does not support TLS required by the client. However, for MySQL 5.7 and above, auto generated certificates
-//      are used by default so that manual config is no longer necessary.
+//
+//	MySQL server does not support TLS required by the client. However, for MySQL 5.7 and above, auto generated certificates
+//	are used by default so that manual config is no longer necessary.
 func (s *clientTestSuite) TestConn_TLS_Verify(c *C) {
 	// Verify that the provided tls.Config is used when attempting to connect to mysql.
 	// An empty tls.Config will result in a connection error.
