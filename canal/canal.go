@@ -19,7 +19,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/siddontang/go-log/log"
 )
 
@@ -535,7 +535,7 @@ func (c *Canal) SyncedPosition() mysql.Position {
 }
 
 func (c *Canal) SyncedTimestamp() uint32 {
-	return c.master.timestamp
+	return c.master.Timestamp()
 }
 
 func (c *Canal) SyncedGTIDSet() mysql.GTIDSet {
