@@ -1,10 +1,10 @@
 package replication
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 
+	json "github.com/json-iterator/go"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 
