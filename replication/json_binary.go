@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	json "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 
