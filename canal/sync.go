@@ -128,6 +128,10 @@ func (c *Canal) runSyncBinlog() error {
 			if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
 				return errors.Trace(err)
 			}
+		case *replication.RowsQueryEvent:
+			if err := c.eventHandler.OnRowsQueryEvent(e); err != nil {
+				return errors.Trace(err)
+			}
 		case *replication.QueryEvent:
 			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 			if err != nil {
