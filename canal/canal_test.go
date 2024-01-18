@@ -352,16 +352,12 @@ func TestCreateIndexExp(t *testing.T) {
 		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
-			if len(nodes) == 0 {
-				t.Fatalf("TestCreateIndexExp: parse fail\n")
-				continue
-			}
+			require.NotZero(t, nodes)
 			for _, node := range nodes {
 				rdb := node.db
 				rtable := node.table
-				if (len(rdb) != 0 && rdb != db) || rtable != baseTable {
-					t.Fatalf("TestCreateIndexExp:case %s failed db %s,table %s\n", s, rdb, rtable)
-				}
+				require.Equal(t, db, rdb)
+				require.Equal(t, baseTable, rtable)
 			}
 		}
 	}
@@ -399,16 +395,12 @@ func TestDropIndexExp(t *testing.T) {
 		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
-			if len(nodes) == 0 {
-				t.Fatalf("TestDropIndexExp: parse fail\n")
-				continue
-			}
+			require.NotZero(t, nodes)
 			for _, node := range nodes {
 				rdb := node.db
 				rtable := node.table
-				if (len(rdb) != 0 && rdb != db) || rtable != baseTable {
-					t.Fatalf("TestDropIndexExp:case %s failed db %s,table %s\n", s, rdb, rtable)
-				}
+				require.Equal(t, db, rdb)
+				require.Equal(t, baseTable, rtable)
 			}
 		}
 	}
