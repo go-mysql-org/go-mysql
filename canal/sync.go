@@ -216,6 +216,18 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 			table: t.Table.Name.String(),
 		}
 		ns = []*node{n}
+	case *ast.CreateIndexStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Name.String(),
+		}
+		ns = []*node{n}
+	case *ast.DropIndexStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Name.String(),
+		}
+		ns = []*node{n}
 	}
 	return ns
 }
