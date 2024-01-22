@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"log"
 	"math"
 	"math/rand"
 	"sync"
@@ -85,12 +86,13 @@ func NewPoolWithOptions(
 	dbName string,
 	options ...PoolOption,
 ) (*Pool, error) {
-	po := poolOptions{
-		addr:     addr,
-		user:     user,
-		password: password,
-		dbName:   dbName,
-	}
+	po := getDefaultPoolOptions()
+
+	po.addr = addr
+	po.user = user
+	po.password = password
+	po.dbName = dbName
+
 	for _, o := range options {
 		o(&po)
 	}
@@ -596,5 +598,15 @@ func (pool *Pool) checkConnection(ctx context.Context) error {
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// getDefaultPoolOptions returns pool config for low load services
+func getDefaultPoolOptions() poolOptions {
+	return poolOptions{
+		logFunc:  log.Printf,
+		minAlive: 1,
+		maxAlive: 10,
+		maxIdle:  2,
 	}
 }
