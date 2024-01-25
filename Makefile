@@ -19,7 +19,7 @@ test-local:
 		-v $${PWD}/docker/resources/replication.cnf:/etc/mysql/conf.d/replication.cnf \
 		mysql:$(MYSQL_VERSION)
 	docker/resources/waitfor.sh 127.0.0.1 3306 \
-		&& go test -race -v -timeout 2m ./client/...
+		&& go test -race -v -timeout 2m ./...
 	docker stop go-mysql-server
 
 fmt:
