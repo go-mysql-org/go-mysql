@@ -57,9 +57,7 @@ func (s *poolTestSuite) TestPool_WrongPassword() {
 		WithNewPoolPingTimeout(time.Second),
 	)
 
-	if (err == nil) || !strings.Contains(err.Error(), "ERROR 1045 (28000): Access denied for user") {
-		require.FailNow(s.T(), "unexpected error", "%v", err)
-	}
+	require.ErrorContains(s.T(), err, "ERROR 1045 (28000): Access denied for user")
 }
 
 func (s *poolTestSuite) TestPool_WrongAddr() {
