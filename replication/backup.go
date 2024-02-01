@@ -14,11 +14,11 @@ import (
 // StartBackup: Like mysqlbinlog remote raw backup
 // Backup remote binlog from position (filename, offset) and write in backupDir
 func (b *BinlogSyncer) StartBackupToFile(backupDir string, p Position, timeout time.Duration) error {
+	err := os.MkdirAll(backupDir, 0755)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	return b.StartBackup(p, timeout, func(filename string) (io.WriteCloser, error) {
-		err := os.MkdirAll(backupDir, 0755)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
 		return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
 	})
 }
