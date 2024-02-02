@@ -45,7 +45,7 @@ func (b *BinlogSyncer) StartBackupToFile(backupDir string, p Position, timeout t
 // The function writes the raw data of each event to the current file and handles errors such as context deadline exceeded (timeout),
 // write errors, or short writes.
 func (b *BinlogSyncer) StartBackup(p Position, timeout time.Duration,
-	handler func(filename string) (io.WriteCloser, error)) error {
+	handler func(filename string) (io.WriteCloser, error)) (retErr error) {
 	if timeout == 0 {
 		// a very long timeout here
 		timeout = 30 * 3600 * 24 * time.Second
@@ -64,8 +64,12 @@ func (b *BinlogSyncer) StartBackup(p Position, timeout time.Duration,
 
 	var w io.WriteCloser
 	defer func() {
+		var closeErr error
 		if w != nil {
-			w.Close()
+			closeErr = w.Close()
+		}
+		if retErr == nil {
+			retErr = closeErr
 		}
 	}()
 
@@ -96,7 +100,10 @@ func (b *BinlogSyncer) StartBackup(p Position, timeout time.Duration,
 			// FormateDescriptionEvent is the first event in binlog, we will close old one and create a new
 
 			if w != nil {
-				_ = w.Close()
+				if err = w.Close(); err != nil {
+					w = nil
+					return errors.Trace(err)
+				}
 			}
 
 			if len(filename) == 0 {
