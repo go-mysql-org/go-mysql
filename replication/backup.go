@@ -23,27 +23,14 @@ func (b *BinlogSyncer) StartBackupToFile(backupDir string, p Position, timeout t
 	})
 }
 
-// StartBackup initiates a backup process for binlog events starting from a specified position.
-// It continuously fetches binlog events and writes them to files managed by a provided handler function.
-// The backup process can be controlled with a timeout duration, after which the backup will stop if no new events are received.
+// StartBackup starts the backup process for the binary log using the specified position and handler.
+// The process will continue until the timeout is reached or an error occurs.
 //
 // Parameters:
-//   - p Position: The starting position in the binlog from which to begin the backup.
-//   - timeout time.Duration: The maximum duration to wait for new binlog events before stopping the backup process.
+//   - p: The starting position in the binlog from which to begin the backup.
+//   - timeout: The maximum duration to wait for new binlog events before stopping the backup process.
 //     If set to 0, a default very long timeout (30 days) is used instead.
-//   - handler func(filename string) (io.WriteCloser, error): A function provided by the caller to handle file creation and writing.
-//     This function is expected to return an io.WriteCloser for the specified filename, which will be used to write binlog events.
-//
-// The function first checks if a timeout is specified, setting a default if not. It then enables raw mode parsing for binlog events
-// to ensure that events are not parsed but passed as raw data for backup. It starts syncing binlog events from the specified position
-// and enters a loop to continuously fetch and write events.
-//
-// For each event, it checks the event type. If it's a ROTATE_EVENT, it updates the filename to the next log file as indicated by the event.
-// If it's a FORMAT_DESCRIPTION_EVENT, it signifies the start of a new binlog file, and the function closes the current file (if open) and opens
-// a new one using the handler function. It also writes the binlog file header to the new file.
-//
-// The function writes the raw data of each event to the current file and handles errors such as context deadline exceeded (timeout),
-// write errors, or short writes.
+//   - handler: A function that takes a binlog filename and returns an WriteCloser for writing raw events to.
 func (b *BinlogSyncer) StartBackup(p Position, timeout time.Duration,
 	handler func(binlogFilename string) (io.WriteCloser, error)) (retErr error) {
 	if timeout == 0 {
