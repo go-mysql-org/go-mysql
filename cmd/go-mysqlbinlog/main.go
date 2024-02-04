@@ -54,7 +54,7 @@ func main() {
 	pos := mysql.Position{Name: *file, Pos: uint32(*pos)}
 	if len(*backupPath) > 0 {
 		// Backup will always use RawMode.
-		err := b.StartBackupToFile(*backupPath, pos, 0)
+		err := b.StartBackup(*backupPath, pos, 0)
 		if err != nil {
 			fmt.Printf("Start backup error: %v\n", errors.ErrorStack(err))
 			return

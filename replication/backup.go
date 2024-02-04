@@ -13,17 +13,17 @@ import (
 
 // StartBackup: Like mysqlbinlog remote raw backup
 // Backup remote binlog from position (filename, offset) and write in backupDir
-func (b *BinlogSyncer) StartBackupToFile(backupDir string, p Position, timeout time.Duration) error {
+func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Duration) error {
 	err := os.MkdirAll(backupDir, 0755)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	return b.StartBackup(p, timeout, func(filename string) (io.WriteCloser, error) {
+	return b.StartBackupWithHandler(p, timeout, func(filename string) (io.WriteCloser, error) {
 		return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
 	})
 }
 
-// StartBackup starts the backup process for the binary log using the specified position and handler.
+// StartBackupWithHandler starts the backup process for the binary log using the specified position and handler.
 // The process will continue until the timeout is reached or an error occurs.
 //
 // Parameters:
@@ -31,7 +31,7 @@ func (b *BinlogSyncer) StartBackupToFile(backupDir string, p Position, timeout t
 //   - timeout: The maximum duration to wait for new binlog events before stopping the backup process.
 //     If set to 0, a default very long timeout (30 days) is used instead.
 //   - handler: A function that takes a binlog filename and returns an WriteCloser for writing raw events to.
-func (b *BinlogSyncer) StartBackup(p Position, timeout time.Duration,
+func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 	handler func(binlogFilename string) (io.WriteCloser, error)) (retErr error) {
 	if timeout == 0 {
 		// a very long timeout here

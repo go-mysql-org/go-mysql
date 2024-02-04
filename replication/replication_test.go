@@ -426,7 +426,7 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec() {
 
 	os.RemoveAll(binlogDir)
 
-	err := t.b.StartBackupToFile(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, 2*time.Second)
+	err := t.b.StartBackup(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, 2*time.Second)
 	require.NoError(t.T(), err)
 
 	p := NewBinlogParser()

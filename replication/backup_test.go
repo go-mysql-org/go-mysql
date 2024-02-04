@@ -28,7 +28,7 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime() {
 	done := make(chan bool)
 
 	go func() {
-		err := t.b.StartBackupToFile(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, timeout)
+		err := t.b.StartBackup(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, timeout)
 		require.NoError(t.T(), err)
 		done <- true
 	}()
