@@ -225,17 +225,17 @@ type PreviousGTIDsEvent struct {
 }
 
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
-	var previousGTIDSets []string
 	pos := 0
 	uuidCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 	pos += 8
 
+	previousGTIDSets := make([]string, uuidCount)
 	for i := uint16(0); i < uuidCount; i++ {
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
 		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 		pos += 8
-		var intervals []string
+		intervals := make([]string, sliceCount)
 		for i := uint16(0); i < sliceCount; i++ {
 			start := e.decodeInterval(data[pos : pos+8])
 			pos += 8
@@ -247,9 +247,9 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 			} else {
 				interval = fmt.Sprintf("%d-%d", start, stop-1)
 			}
-			intervals = append(intervals, interval)
+			intervals[i] = interval
 		}
-		previousGTIDSets = append(previousGTIDSets, fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":")))
+		previousGTIDSets[i] = fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":"))
 	}
 	e.GTIDSets = strings.Join(previousGTIDSets, ",")
 	return nil
