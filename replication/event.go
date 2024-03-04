@@ -230,13 +230,13 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos += 8
 
 	previousGTIDSets := make([]string, uuidCount)
-	for i := uint16(0); i < uuidCount; i++ {
+	for i := range previousGTIDSets {
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
 		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 		pos += 8
 		intervals := make([]string, sliceCount)
-		for i := uint16(0); i < sliceCount; i++ {
+		for i := range intervals {
 			start := e.decodeInterval(data[pos : pos+8])
 			pos += 8
 			stop := e.decodeInterval(data[pos : pos+8])

@@ -142,10 +142,8 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 		return false, errors.Errorf("invalid raw data size in event %s, need %d but got %d", h.EventType, h.EventSize, buf.Len())
 	}
 
-	rawData := make([]byte, buf.Len())
-	for i, b := range buf.Bytes() {
-		rawData[i] = b
-	}
+	var rawData []byte
+	rawData = append(rawData, buf.Bytes()...)
 	bodyLen := int(h.EventSize) - EventHeaderSize
 	body := rawData[EventHeaderSize:]
 	if len(body) != bodyLen {
