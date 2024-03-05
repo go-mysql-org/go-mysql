@@ -60,9 +60,9 @@ func (s *BinlogStreamer) GetEventWithStartTime(ctx context.Context, startTime ti
 // DumpEvents dumps all left events
 func (s *BinlogStreamer) DumpEvents() []*BinlogEvent {
 	count := len(s.ch)
-	events := make([]*BinlogEvent, 0, count)
-	for i := 0; i < count; i++ {
-		events = append(events, <-s.ch)
+	events := make([]*BinlogEvent, count)
+	for i := range events {
+		events[i] = <-s.ch
 	}
 	return events
 }

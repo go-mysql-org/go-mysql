@@ -183,12 +183,12 @@ type node struct {
 func parseStmt(stmt ast.StmtNode) (ns []*node) {
 	switch t := stmt.(type) {
 	case *ast.RenameTableStmt:
-		for _, tableInfo := range t.TableToTables {
-			n := &node{
+		ns = make([]*node, len(t.TableToTables))
+		for i, tableInfo := range t.TableToTables {
+			ns[i] = &node{
 				db:    tableInfo.OldTable.Schema.String(),
 				table: tableInfo.OldTable.Name.String(),
 			}
-			ns = append(ns, n)
 		}
 	case *ast.AlterTableStmt:
 		n := &node{
@@ -197,12 +197,12 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 		}
 		ns = []*node{n}
 	case *ast.DropTableStmt:
-		for _, table := range t.Tables {
-			n := &node{
+		ns = make([]*node, len(t.Tables))
+		for i, table := range t.Tables {
+			ns[i] = &node{
 				db:    table.Schema.String(),
 				table: table.Name.String(),
 			}
-			ns = append(ns, n)
 		}
 	case *ast.CreateTableStmt:
 		n := &node{

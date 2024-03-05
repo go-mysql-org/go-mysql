@@ -570,12 +570,9 @@ func (e *TableMapEvent) SetStrValueString() [][]string {
 		if len(e.SetStrValue) == 0 {
 			return nil
 		}
-		e.setStrValueString = make([][]string, 0, len(e.SetStrValue))
-		for _, vals := range e.SetStrValue {
-			e.setStrValueString = append(
-				e.setStrValueString,
-				e.bytesSlice2StrSlice(vals),
-			)
+		e.setStrValueString = make([][]string, len(e.SetStrValue))
+		for i, vals := range e.SetStrValue {
+			e.setStrValueString[i] = e.bytesSlice2StrSlice(vals)
 		}
 	}
 	return e.setStrValueString
@@ -588,12 +585,9 @@ func (e *TableMapEvent) EnumStrValueString() [][]string {
 		if len(e.EnumStrValue) == 0 {
 			return nil
 		}
-		e.enumStrValueString = make([][]string, 0, len(e.EnumStrValue))
-		for _, vals := range e.EnumStrValue {
-			e.enumStrValueString = append(
-				e.enumStrValueString,
-				e.bytesSlice2StrSlice(vals),
-			)
+		e.enumStrValueString = make([][]string, len(e.EnumStrValue))
+		for i, vals := range e.EnumStrValue {
+			e.enumStrValueString[i] = e.bytesSlice2StrSlice(vals)
 		}
 	}
 	return e.enumStrValueString
@@ -612,9 +606,9 @@ func (e *TableMapEvent) bytesSlice2StrSlice(src [][]byte) []string {
 	if src == nil {
 		return nil
 	}
-	ret := make([]string, 0, len(src))
-	for _, item := range src {
-		ret = append(ret, string(item))
+	ret := make([]string, len(src))
+	for i, item := range src {
+		ret[i] = string(item)
 	}
 	return ret
 }
