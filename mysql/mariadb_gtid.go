@@ -217,6 +217,9 @@ func (s *MariadbGTIDSet) Equal(o GTIDSet) bool {
 		if !ok {
 			return false
 		}
+		if len(serverSet) != len(set) {
+			return false
+		}
 		for serverID, gtid := range set {
 			if o, ok := serverSet[serverID]; !ok {
 				return false
