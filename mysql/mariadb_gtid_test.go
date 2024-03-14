@@ -181,6 +181,7 @@ func TestMariaDBGTIDSetEqual(t *testing.T) {
 		{"1-1-1,2-2-2", "1-1-1", false},
 		{"1-1-1,2-2-2", "1-1-1,2-2-2", true},
 		{"1-1-1,2-2-2", "1-1-1,2-2-3", false},
+		{"0-1-1,0-2-2", "0-2-2", false},
 	}
 
 	for _, cs := range cases {
