@@ -91,13 +91,13 @@ func TestMariaDBForward(t *testing.T) {
 func TestParseMariaDBGTIDSet(t *testing.T) {
 	cases := []struct {
 		gtidStr     string
-		subGTIDs    map[uint32]string //domain ID => gtid string
-		expectedStr []string          // test String()
+		subGTIDs    map[uint32]map[uint32]string //domain ID => gtid string
+		expectedStr []string                     // test String()
 		hasError    bool
 	}{
-		{"0-1-1", map[uint32]string{0: "0-1-1"}, []string{"0-1-1"}, false},
+		{"0-1-1", map[uint32]map[uint32]string{0: {1: "0-1-1"}}, []string{"0-1-1"}, false},
 		{"", nil, []string{""}, false},
-		{"0-1-1,1-2-3", map[uint32]string{0: "0-1-1", 1: "1-2-3"}, []string{"0-1-1,1-2-3", "1-2-3,0-1-1"}, false},
+		{"0-1-1,1-2-3", map[uint32]map[uint32]string{0: {1: "0-1-1"}, 1: {2: "1-2-3"}}, []string{"0-1-1,1-2-3", "1-2-3,0-1-1"}, false},
 		{"0-1--1", nil, nil, true},
 	}
 
@@ -112,9 +112,12 @@ func TestParseMariaDBGTIDSet(t *testing.T) {
 
 			// check sub gtid
 			require.Len(t, mariadbGTIDSet.Sets, len(cs.subGTIDs))
-			for domainID, gtid := range mariadbGTIDSet.Sets {
+			for domainID, set := range mariadbGTIDSet.Sets {
 				require.Contains(t, mariadbGTIDSet.Sets, domainID)
-				require.Equal(t, cs.subGTIDs[domainID], gtid.String())
+				for serverID, gtid := range set {
+					require.Contains(t, cs.subGTIDs, domainID)
+					require.Equal(t, cs.subGTIDs[domainID][serverID], gtid.String())
+				}
 			}
 
 			// check String() function
@@ -135,13 +138,13 @@ func TestMariaDBGTIDSetUpdate(t *testing.T) {
 	cases := []struct {
 		isNilGTID bool
 		gtidStr   string
-		subGTIDs  map[uint32]string
+		subGTIDs  map[uint32]map[uint32]string
 	}{
-		{true, "", map[uint32]string{1: "1-1-1", 2: "2-2-2"}},
-		{false, "1-2-2", map[uint32]string{1: "1-2-2", 2: "2-2-2"}},
-		{false, "1-2-1", map[uint32]string{1: "1-2-1", 2: "2-2-2"}},
-		{false, "3-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1"}},
-		{false, "3-2-1,4-2-1", map[uint32]string{1: "1-1-1", 2: "2-2-2", 3: "3-2-1", 4: "4-2-1"}},
+		{true, "", map[uint32]map[uint32]string{1: {1: "1-1-1"}, 2: {2: "2-2-2"}}},
+		{false, "1-2-2", map[uint32]map[uint32]string{1: {1: "1-1-1", 2: "1-2-2"}, 2: {2: "2-2-2"}}},
+		{false, "1-2-1", map[uint32]map[uint32]string{1: {1: "1-1-1", 2: "1-2-1"}, 2: {2: "2-2-2"}}},
+		{false, "3-2-1", map[uint32]map[uint32]string{1: {1: "1-1-1"}, 2: {2: "2-2-2"}, 3: {2: "3-2-1"}}},
+		{false, "3-2-1,4-2-1", map[uint32]map[uint32]string{1: {1: "1-1-1"}, 2: {2: "2-2-2"}, 3: {2: "3-2-1"}, 4: {2: "4-2-1"}}},
 	}
 
 	for _, cs := range cases {
@@ -158,9 +161,12 @@ func TestMariaDBGTIDSetUpdate(t *testing.T) {
 		}
 		// check sub gtid
 		require.Len(t, mariadbGTIDSet.Sets, len(cs.subGTIDs))
-		for domainID, gtid := range mariadbGTIDSet.Sets {
+		for domainID, set := range mariadbGTIDSet.Sets {
 			require.Contains(t, mariadbGTIDSet.Sets, domainID)
-			require.Equal(t, cs.subGTIDs[domainID], gtid.String())
+			for serverID, gtid := range set {
+				require.Contains(t, cs.subGTIDs, domainID)
+				require.Equal(t, cs.subGTIDs[domainID][serverID], gtid.String())
+			}
 		}
 	}
 }
