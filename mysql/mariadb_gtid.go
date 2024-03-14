@@ -192,10 +192,8 @@ func (s *MariadbGTIDSet) Clone() GTIDSet {
 		Sets: make(map[uint32]map[uint32]*MariadbGTID),
 	}
 	for domainID, set := range s.Sets {
+		clone.Sets[domainID] = make(map[uint32]*MariadbGTID)
 		for serverID, gtid := range set {
-			if clone.Sets[domainID] == nil {
-				clone.Sets[domainID] = make(map[uint32]*MariadbGTID)
-			}
 			clone.Sets[domainID][serverID] = gtid.Clone()
 		}
 	}
@@ -215,18 +213,14 @@ func (s *MariadbGTIDSet) Equal(o GTIDSet) bool {
 	}
 
 	for domainID, set := range other.Sets {
+		serverSet, ok := s.Sets[domainID]
+		if !ok {
+			return false
+		}
 		for serverID, gtid := range set {
-			serverSet, ok := s.Sets[domainID]
-			if !ok {
+			if o, ok := serverSet[serverID]; !ok {
 				return false
-			}
-
-			o, ok := serverSet[serverID]
-			if !ok {
-				return false
-			}
-
-			if *gtid != *o {
+			} else if *gtid != *o {
 				return false
 			}
 		}
@@ -243,12 +237,11 @@ func (s *MariadbGTIDSet) Contain(o GTIDSet) bool {
 	}
 
 	for doaminID, set := range other.Sets {
+		serverSet, ok := s.Sets[doaminID]
+		if !ok {
+			return false
+		}
 		for serverID, gtid := range set {
-			serverSet, ok := s.Sets[doaminID]
-			if !ok {
-				return false
-			}
-
 			if o, ok := serverSet[serverID]; !ok {
 				return false
 			} else if !o.Contain(gtid) {
