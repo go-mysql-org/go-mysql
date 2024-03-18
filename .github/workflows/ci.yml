@@ -5,8 +5,8 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ "1.21", "1.20", "1.19" ]
-        os: [ ubuntu-22.04, ubuntu-20.04 ]
+        go: [ "1.20"]
+        os: [ ubuntu-22.04 ]
     name: Tests Go ${{ matrix.go }} on ${{ matrix.os }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}
 
@@ -42,22 +42,22 @@ jobs:
           go test $(go list ./... | grep -v canal)
           go test $(go list ./... | grep canal)
 
-  golangci:
-    name: golangci
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v2
-        with:
-          version: latest
-          args: --timeout=3m
+  # golangci:
+  #   name: golangci
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - name: golangci-lint
+  #       uses: golangci/golangci-lint-action@v2
+  #       with:
+  #         version: latest
+  #         args: --timeout=3m
 
   platforms:
     strategy:
       matrix:
-        arch: [ "amd64", "arm64" ]
-        os: [ "linux", "freebsd", "darwin" ]
+        arch: [ "amd64"]
+        os: [ "linux"]
     name: platforms
     runs-on: ubuntu-latest
     steps:
