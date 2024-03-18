@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync/atomic"
 
+	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go/sync2"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
@@ -31,6 +32,9 @@ type Conn struct {
 	cachingSha2FullAuth bool
 
 	h Handler
+	// net connection
+	// connGetter NetConnGetter
+	db string
 
 	stmts  map[uint32]*Stmt
 	stmtID uint32
@@ -92,6 +96,7 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, 
 	c.closed.Set(false)
 
 	if err := c.handshake(); err != nil {
+		log.Error(err)
 		c.Close()
 		return nil, err
 	}
