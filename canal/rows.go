@@ -53,6 +53,13 @@ func (r *RowsEvent) handleUnsigned() {
 
 	for i := 0; i < len(r.Rows); i++ {
 		for _, columnIdx := range r.Table.UnsignedColumns {
+			// When Canal.delay is big, after call Canal.StartFromGTID(),
+			// we will get the newest table schema (for example, after DDL "alter table add column xxx unsigned..."),
+			// but the binlog data can be very old (before DDL "alter table add column xxx unsigned..."),
+			// results in max(columnIdx) >= len(r.Rows[i]), then r.Rows[i][columnIdx] panic.
+			if columnIdx >= len(r.Rows[i]) {
+				continue
+			}
 			switch value := r.Rows[i][columnIdx].(type) {
 			case int8:
 				r.Rows[i][columnIdx] = uint8(value)
