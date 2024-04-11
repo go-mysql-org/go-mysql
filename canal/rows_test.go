@@ -1,10 +1,11 @@
 package canal
 
 import (
+	"testing"
+
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
-	"reflect"
-	"testing"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRowsEvent_handleUnsigned(t *testing.T) {
@@ -53,9 +54,7 @@ func TestRowsEvent_handleUnsigned(t *testing.T) {
 				Header: tt.fields.Header,
 			}
 			r.handleUnsigned()
-			if !reflect.DeepEqual(tt.fields.Rows, tt.wantRows) {
-				t.Errorf("rows=%+v, wantRows=%+v, not equal", tt.fields.Rows, tt.wantRows)
-			}
+			require.Equal(t, tt.fields.Rows, tt.wantRows)
 		})
 	}
 }
