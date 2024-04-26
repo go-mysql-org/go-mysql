@@ -31,7 +31,11 @@ func TestClientSuite(t *testing.T) {
 func (s *clientTestSuite) SetupSuite() {
 	var err error
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
-	s.c, err = Connect(addr, *testUser, *testPassword, "")
+	s.c, err = Connect(addr, *testUser, *testPassword, "", func(conn *Conn) {
+		// test the collation logic, but this is essentially a no-op since
+		// the collation set is the default value
+		_ = conn.SetCollation(mysql.DEFAULT_COLLATION_NAME)
+	})
 	require.NoError(s.T(), err)
 
 	var result *mysql.Result
@@ -226,6 +230,21 @@ func (s *clientTestSuite) TestConn_SetCharset() {
 
 	err = s.c.SetCharset("utf8")
 	require.NoError(s.T(), err)
+}
+
+func (s *clientTestSuite) TestConn_SetCollationAfterConnect() {
+	err := s.c.SetCollation("latin1_swedish_ci")
+	require.Error(s.T(), err)
+}
+
+func (s *clientTestSuite) TestConn_SetCollation() {
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	_, err := Connect(addr, *testUser, *testPassword, "", func(conn *Conn) {
+		// test the collation logic
+		_ = conn.SetCollation("invalid_collation")
+	})
+
+	require.Error(s.T(), err)
 }
 
 func (s *clientTestSuite) testStmt_DropTable() {

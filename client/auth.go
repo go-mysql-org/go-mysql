@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
@@ -269,7 +270,16 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Charset [1 byte]
 	// use default collation id 33 here, is utf-8
-	data[12] = DEFAULT_COLLATION_ID
+	collationName := c.collation
+	if len(collationName) == 0 {
+		collationName = DEFAULT_COLLATION_NAME
+	}
+	collation, err := charset.GetCollationByName(collationName)
+	if err != nil {
+		return fmt.Errorf("invalid collation name %s", collationName)
+	}
+
+	data[12] = byte(collation.ID)
 
 	// SSL Connection Request Packet
 	// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::SSLRequest

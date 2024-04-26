@@ -37,6 +37,8 @@ type Conn struct {
 	status uint16
 
 	charset string
+	// sets the collation to be set on the auth handshake, this does not issue a 'set names' command
+	collation string
 
 	salt           []byte
 	authPluginName string
@@ -355,6 +357,20 @@ func (c *Conn) SetCharset(charset string) error {
 		c.charset = charset
 		return nil
 	}
+}
+
+func (c *Conn) SetCollation(collation string) error {
+	if c.status == 0 {
+		c.collation = collation
+	} else {
+		return errors.Trace(errors.Errorf("cannot set collation after connection is established"))
+	}
+
+	return nil
+}
+
+func (c *Conn) GetCollation() string {
+	return c.collation
 }
 
 func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
