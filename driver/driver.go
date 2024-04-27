@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"strconv"
 	"sync"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -21,7 +22,10 @@ import (
 var customTLSMutex sync.Mutex
 
 // Map of dsn address (makes more sense than full dsn?) to tls Config
-var customTLSConfigMap = make(map[string]*tls.Config)
+var (
+	customTLSConfigMap = make(map[string]*tls.Config)
+	options            = make(map[string]connOption)
+)
 
 type driver struct {
 }
@@ -34,6 +38,8 @@ type connInfo struct {
 	db          string
 	params      url.Values
 }
+
+type connOption func(c *client.Conn, value string)
 
 // ParseDSN takes a DSN string and splits it up into struct containing addr,
 // user, password and db.
@@ -92,27 +98,41 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	}
 
 	if ci.standardDSN {
-		if ci.params["ssl"] != nil {
-			tlsConfigName := ci.params.Get("ssl")
-			switch tlsConfigName {
-			case "true":
-				// This actually does insecureSkipVerify
-				// But not even sure if it makes sense to handle false? According to
-				// client_test.go it doesn't - it'd result in an error
-				c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, func(c *client.Conn) { c.UseSSL(true) })
-			case "custom":
-				// I was too concerned about mimicking what go-sql-driver/mysql does which will
-				// allow any name for a custom tls profile and maps the query parameter value to
-				// that TLSConfig variable... there is no need to be that clever.
-				// Instead of doing that, let's store required custom TLSConfigs in a map that
-				// uses the DSN address as the key
-				c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, func(c *client.Conn) { c.SetTLSConfig(customTLSConfigMap[ci.addr]) })
-			default:
-				return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
+		configuredOptions := make([]func(*client.Conn), 0, len(ci.params))
+		for key, value := range ci.params {
+			if key == "ssl" {
+				tlsConfigName := ci.params.Get("ssl")
+				switch tlsConfigName {
+				case "true":
+					// This actually does insecureSkipVerify
+					// But not even sure if it makes sense to handle false? According to
+					// client_test.go it doesn't - it'd result in an error
+					configuredOptions = append(configuredOptions, func(c *client.Conn) { c.UseSSL(true) })
+				case "custom":
+					// I was too concerned about mimicking what go-sql-driver/mysql does which will
+					// allow any name for a custom tls profile and maps the query parameter value to
+					// that TLSConfig variable... there is no need to be that clever.
+					// Instead of doing that, let's store required custom TLSConfigs in a map that
+					// uses the DSN address as the key
+					configuredOptions = append(configuredOptions, func(c *client.Conn) { c.SetTLSConfig(customTLSConfigMap[ci.addr]) })
+				default:
+					return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
+				}
+			} else {
+				if option, ok := options[key]; ok {
+					opt := func(o connOption, v string) func(c *client.Conn) {
+						return func(c *client.Conn) {
+							o(c, v)
+						}
+					}(option, value[0])
+					configuredOptions = append(configuredOptions, opt)
+				} else {
+					return nil, errors.Errorf("unsupported connection option: %s", key)
+				}
 			}
-		} else {
-			c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db)
 		}
+
+		c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, configuredOptions...)
 	} else {
 		// No more processing here. Let's only support url parameters with the newer style DSN
 		c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db)
@@ -296,6 +316,15 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 }
 
 func init() {
+	options["compress"] = func(c *client.Conn, value string) {
+		if b, err := strconv.ParseBool(value); err == nil && b {
+			c.SetCapability(mysql.CLIENT_COMPRESS)
+		}
+	}
+	options["collation"] = func(c *client.Conn, value string) {
+		c.SetCollation(value)
+	}
+
 	sql.Register("mysql", driver{})
 }
 
