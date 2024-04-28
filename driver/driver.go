@@ -100,8 +100,8 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	if ci.standardDSN {
 		configuredOptions := make([]func(*client.Conn), 0, len(ci.params))
 		for key, value := range ci.params {
-			if key == "ssl" {
-				tlsConfigName := ci.params.Get("ssl")
+			if key == "ssl" && len(value) > 0 {
+				tlsConfigName := value[0]
 				switch tlsConfigName {
 				case "true":
 					// This actually does insecureSkipVerify
