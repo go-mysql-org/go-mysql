@@ -1,13 +1,14 @@
 package client
 
 import (
-	"github.com/go-mysql-org/go-mysql/packet"
-	"github.com/pingcap/tidb/pkg/parser/charset"
 	"net"
 	"testing"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 	"github.com/stretchr/testify/require"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 )
 
 func TestConnGenAttributes(t *testing.T) {
