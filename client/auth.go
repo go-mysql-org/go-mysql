@@ -310,7 +310,7 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Filler [23 bytes] (all 0x00)
 	// the filler starts at position 13, but the first byte of the filler
-	// has been set earlier with collaction id earlier, so position 13 at this point
+	// has been set earlier with collation id earlier, so position 13 at this point
 	// will be either 0x00 or the right middle 8 bits of the collation id.
 	// Therefore, we start at position 14 and fill the remaining 22 bytes with 0x00.
 	pos := 14
