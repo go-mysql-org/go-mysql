@@ -285,7 +285,8 @@ func (c *Conn) writeAuthHandshake() error {
 	// see https://github.com/mysql/mysql-server/pull/541
 	data[12] = byte(collation.ID & 0xff)
 	// if the collation ID is <= 255 the middle 8 bits are 0s so this is the equivalent of
-	// padding the filler with a 0.
+	// padding the filler with a 0. If ID is > 255 then the first byte of filler will contain
+	// the right middle 8 bits of the collation ID.
 	data[13] = byte((collation.ID & 0xff00) >> 8)
 
 	// SSL Connection Request Packet
@@ -309,9 +310,9 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Filler [23 bytes] (all 0x00)
 	// the filler starts at position 13, but the first byte of the filler
-	// maybe have been set by the collation id earlier. So we only position 13
-	// will be either 0x00 or the right middle 8 bits of the collation id. Therefore
-	// here we start at position 14 and fill the remaining 22 bytes with 0x00.
+	// has been set earlier with collaction id earlier, so position 13 at this point
+	// will be either 0x00 or the right middle 8 bits of the collation id.
+	// Therefore, we start at position 14 and fill the remaining 22 bytes with 0x00.
 	pos := 14
 	for ; pos < 14+22; pos++ {
 		data[pos] = 0
