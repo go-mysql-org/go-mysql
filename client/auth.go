@@ -280,7 +280,7 @@ func (c *Conn) writeAuthHandshake() error {
 	}
 
 	// the MySQL protocol calls for the collation id to be sent as 1, where only the
-	// lower 8 bits are used in this field. But wireshark shows that the first by of
+	// lower 8 bits are used in this field. But wireshark shows that the first byte of
 	// the 23 bytes of filler is used to send the right middle 8 bits of the collation id.
 	// see https://github.com/mysql/mysql-server/pull/541
 	data[12] = byte(collation.ID & 0xff)
@@ -310,8 +310,8 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Filler [23 bytes] (all 0x00)
 	// the filler starts at position 13, but the first byte of the filler
-	// has been set earlier with collation id earlier, so position 13 at this point
-	// will be either 0x00 or the right middle 8 bits of the collation id.
+	// has been set with the collation id earlier, so position 13 at this point
+	// will be either 0x00, or the right middle 8 bits of the collation id.
 	// Therefore, we start at position 14 and fill the remaining 22 bytes with 0x00.
 	pos := 14
 	for ; pos < 14+22; pos++ {
