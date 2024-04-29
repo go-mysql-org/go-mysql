@@ -1,6 +1,9 @@
 package client
 
 import (
+	"github.com/go-mysql-org/go-mysql/packet"
+	"github.com/pingcap/tidb/pkg/parser/charset"
+	"net"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -33,4 +36,74 @@ func TestConnGenAttributes(t *testing.T) {
 		fixt := append(mysql.PutLengthEncodedString([]byte(k)), mysql.PutLengthEncodedString([]byte(v))...)
 		require.Subset(t, data, fixt)
 	}
+}
+
+func TestConnCollation(t *testing.T) {
+	collations := []string{"big5_chinese_ci",
+		"utf8_general_ci",
+		"utf8mb4_0900_ai_ci",
+		"utf8mb4_de_pb_0900_ai_ci",
+		"utf8mb4_ja_0900_as_cs",
+		"utf8mb4_0900_bin",
+		"utf8mb4_zh_pinyin_tidb_as_cs"}
+
+	// test all supported collations by calling writeAuthHandshake() and reading the bytes
+	// sent to the server to ensure the collation id is set correctly
+	for _, c := range collations {
+		collation, err := charset.GetCollationByName(c)
+		require.NoError(t, err)
+		server := sendAuthResponse(t, collation.Name)
+		// read the all the bytes of the handshake response so that client goroutine can complete without blocking
+		// on the server read.
+		handShakeResponse := make([]byte, 128)
+		_, err = server.Read(handShakeResponse)
+		require.NoError(t, err)
+
+		// validate the collation id is set correctly
+		// if the collation ID is <= 255 the collation ID is stored in the 12th byte
+		if collation.ID <= 255 {
+			require.Equal(t, byte(collation.ID), handShakeResponse[12])
+			// sanity check: validate the 23 bytes of filler with value 0x00 are set correctly
+			for i := 13; i < 13+23; i++ {
+				require.Equal(t, byte(0x00), handShakeResponse[i])
+			}
+		} else {
+			// if the collation ID is > 255 the collation ID is stored in the 12th and 13th bytes
+			require.Equal(t, byte(collation.ID&0xff), handShakeResponse[12])
+			require.Equal(t, byte(collation.ID>>8), handShakeResponse[13])
+
+			// sanity check: validate the 22 bytes of filler with value 0x00 are set correctly
+			for i := 14; i < 14+22; i++ {
+				require.Equal(t, byte(0x00), handShakeResponse[i])
+			}
+		}
+
+		// and finally the username
+		password := string(handShakeResponse[36:40])
+		require.Equal(t, "test", password)
+
+		require.NoError(t, server.Close())
+	}
+}
+
+func sendAuthResponse(t *testing.T, collation string) net.Conn {
+	server, client := net.Pipe()
+	c := &Conn{
+		Conn: &packet.Conn{
+			Conn: client,
+		},
+		authPluginName: "mysql_native_password",
+		user:           "test",
+		db:             "test",
+		password:       "test",
+		proto:          "tcp",
+		collation:      collation,
+		salt:           ([]byte)("123456781234567812345678"),
+	}
+
+	go func() {
+		err := c.writeAuthHandshake()
+		require.NoError(t, err)
+	}()
+	return server
 }
