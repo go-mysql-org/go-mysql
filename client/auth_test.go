@@ -41,12 +41,12 @@ func TestConnGenAttributes(t *testing.T) {
 
 func TestConnCollation(t *testing.T) {
 	collations := []string{
-		//"big5_chinese_ci",
-		//"utf8_general_ci",
-		//"utf8mb4_0900_ai_ci",
-		//"utf8mb4_de_pb_0900_ai_ci",
-		//"utf8mb4_ja_0900_as_cs",
-		//"utf8mb4_0900_bin",
+		"big5_chinese_ci",
+		"utf8_general_ci",
+		"utf8mb4_0900_ai_ci",
+		"utf8mb4_de_pb_0900_ai_ci",
+		"utf8mb4_ja_0900_as_cs",
+		"utf8mb4_0900_bin",
 		"utf8mb4_zh_pinyin_tidb_as_cs",
 	}
 
