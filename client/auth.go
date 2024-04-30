@@ -5,11 +5,11 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
-	"github.com/pingcap/tidb/pkg/parser/charset"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 )
 
 const defaultAuthPluginName = AUTH_NATIVE_PASSWORD
@@ -269,7 +269,7 @@ func (c *Conn) writeAuthHandshake() error {
 	data[11] = 0x00
 
 	// Charset [1 byte]
-	// use default collation id 33 here, is utf-8
+	// use default collation id 33 here, is `utf8mb3_general_ci`
 	collationName := c.collation
 	if len(collationName) == 0 {
 		collationName = DEFAULT_COLLATION_NAME
@@ -279,7 +279,15 @@ func (c *Conn) writeAuthHandshake() error {
 		return fmt.Errorf("invalid collation name %s", collationName)
 	}
 
-	data[12] = byte(collation.ID)
+	// the MySQL protocol calls for the collation id to be sent as 1, where only the
+	// lower 8 bits are used in this field. But wireshark shows that the first byte of
+	// the 23 bytes of filler is used to send the right middle 8 bits of the collation id.
+	// see https://github.com/mysql/mysql-server/pull/541
+	data[12] = byte(collation.ID & 0xff)
+	// if the collation ID is <= 255 the middle 8 bits are 0s so this is the equivalent of
+	// padding the filler with a 0. If ID is > 255 then the first byte of filler will contain
+	// the right middle 8 bits of the collation ID.
+	data[13] = byte((collation.ID & 0xff00) >> 8)
 
 	// SSL Connection Request Packet
 	// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::SSLRequest
@@ -301,8 +309,12 @@ func (c *Conn) writeAuthHandshake() error {
 	}
 
 	// Filler [23 bytes] (all 0x00)
-	pos := 13
-	for ; pos < 13+23; pos++ {
+	// the filler starts at position 13, but the first byte of the filler
+	// has been set with the collation id earlier, so position 13 at this point
+	// will be either 0x00, or the right middle 8 bits of the collation id.
+	// Therefore, we start at position 14 and fill the remaining 22 bytes with 0x00.
+	pos := 14
+	for ; pos < 14+22; pos++ {
 		data[pos] = 0
 	}
 

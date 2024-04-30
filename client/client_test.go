@@ -235,6 +235,7 @@ func (s *clientTestSuite) TestConn_SetCharset() {
 func (s *clientTestSuite) TestConn_SetCollationAfterConnect() {
 	err := s.c.SetCollation("latin1_swedish_ci")
 	require.Error(s.T(), err)
+	require.ErrorContains(s.T(), err, "cannot set collation after connection is established")
 }
 
 func (s *clientTestSuite) TestConn_SetCollation() {
