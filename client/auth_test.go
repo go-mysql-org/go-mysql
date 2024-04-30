@@ -105,6 +105,8 @@ func sendAuthResponse(t *testing.T, collation string) net.Conn {
 	go func() {
 		err := c.writeAuthHandshake()
 		require.NoError(t, err)
+		err = c.Close()
+		require.NoError(t, err)
 	}()
 	return server
 }

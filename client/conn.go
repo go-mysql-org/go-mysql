@@ -364,12 +364,11 @@ func (c *Conn) SetCharset(charset string) error {
 }
 
 func (c *Conn) SetCollation(collation string) error {
-	if c.status == 0 {
-		c.collation = collation
-	} else {
+	if len(c.serverVersion) != 0 {
 		return errors.Trace(errors.Errorf("cannot set collation after connection is established"))
 	}
 
+	c.collation = collation
 	return nil
 }
 
