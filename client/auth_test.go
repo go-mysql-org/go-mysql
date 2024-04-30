@@ -80,8 +80,8 @@ func TestConnCollation(t *testing.T) {
 		}
 
 		// and finally the username
-		password := string(handShakeResponse[36:40])
-		require.Equal(t, "test", password)
+		username := string(handShakeResponse[36:40])
+		require.Equal(t, "test", username)
 
 		require.NoError(t, server.Close())
 	}
