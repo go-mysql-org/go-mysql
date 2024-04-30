@@ -37,6 +37,8 @@ type Conn struct {
 	status uint16
 
 	charset string
+	// sets the collation to be set on the auth handshake, this does not issue a 'set names' command
+	collation string
 
 	salt           []byte
 	authPluginName string
@@ -67,15 +69,19 @@ func Connect(addr string, user string, password string, dbName string, options .
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	dialer := &net.Dialer{}
+	return ConnectWithContext(ctx, addr, user, password, dbName, options...)
+}
 
+// ConnectWithContext to a MySQL addr using the provided context.
+func ConnectWithContext(ctx context.Context, addr string, user string, password string, dbName string, options ...func(*Conn)) (*Conn, error) {
+	dialer := &net.Dialer{}
 	return ConnectWithDialer(ctx, "", addr, user, password, dbName, dialer.DialContext, options...)
 }
 
 // Dialer connects to the address on the named network using the provided context.
 type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 
-// Connect to a MySQL server using the given Dialer.
+// ConnectWithDialer to a MySQL server using the given Dialer.
 func ConnectWithDialer(ctx context.Context, network string, addr string, user string, password string, dbName string, dialer Dialer, options ...func(*Conn)) (*Conn, error) {
 	c := new(Conn)
 
@@ -355,6 +361,19 @@ func (c *Conn) SetCharset(charset string) error {
 		c.charset = charset
 		return nil
 	}
+}
+
+func (c *Conn) SetCollation(collation string) error {
+	if len(c.serverVersion) != 0 {
+		return errors.Trace(errors.Errorf("cannot set collation after connection is established"))
+	}
+
+	c.collation = collation
+	return nil
+}
+
+func (c *Conn) GetCollation() string {
+	return c.collation
 }
 
 func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
