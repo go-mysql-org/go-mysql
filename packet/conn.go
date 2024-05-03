@@ -194,7 +194,9 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 
 		if goErrors.Is(err, io.ErrUnexpectedEOF) && c.Compression != MYSQL_COMPRESS_NONE && rd < bcap {
 			c.CompressedSequence++
-			c.compressedReader, err = c.newCompressedPacketReader()
+			if c.compressedReader, err = c.newCompressedPacketReader(); err != nil {
+				return written, errors.Trace(err)
+			}
 			rd, err = io.ReadAtLeast(c.compressedReader, buf[rd:], bcap-rd)
 			n -= int64(rd)
 		}
