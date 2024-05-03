@@ -118,14 +118,8 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 		}
 	}
 
-	if c.compressedReader != nil {
-		if err := c.ReadPacketTo(buf); err != nil {
-			return nil, errors.Trace(err)
-		}
-	} else {
-		if err := c.ReadPacketTo(buf); err != nil {
-			return nil, errors.Trace(err)
-		}
+	if err := c.ReadPacketTo(buf); err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	readBytes := buf.Bytes()
@@ -178,7 +172,7 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 }
 
 func (c *Conn) currentPacketReader() io.Reader {
-	if c.Compression == MYSQL_COMPRESS_NONE && c.compressedReader == nil {
+	if c.Compression == MYSQL_COMPRESS_NONE || c.compressedReader == nil {
 		return c.reader
 	} else {
 		return c.compressedReader
