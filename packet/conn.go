@@ -150,6 +150,7 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 	return result, nil
 }
 
+// newCompressedPacketReader creates a new compressed packet reader.
 func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 	if _, err := io.ReadFull(c.reader, c.compressedHeader[:7]); err != nil {
 		return nil, errors.Wrapf(ErrBadConn, "io.ReadFull(compressedHeader) failed. err %v", err)
@@ -189,14 +190,19 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 
 		n -= int64(rd)
 
-		// if we've read to EOF and we have compression then advance the sequence number
+		// if we've read to EOF, and we have compression then advance the sequence number
 		// and reset the compressed reader to continue reading the remaining bytes
 		// in the next compressed packet.
 		if c.Compression != MYSQL_COMPRESS_NONE && rd < bcap && goErrors.Is(err, io.ErrUnexpectedEOF) {
+			// we have read to EOF and read an incomplete uncompressed packet
+			// so advance the compressed sequence number and reset the compressed reader
+			// to get the remaining unread uncompressed bytes from the next compressed packet.
 			c.CompressedSequence++
 			if c.compressedReader, err = c.newCompressedPacketReader(); err != nil {
 				return written, errors.Trace(err)
 			}
+
+			// now read the remaining bytes into the buffer containing the first read bytes
 			rd, err = io.ReadAtLeast(c.compressedReader, buf[rd:], bcap-rd)
 			n -= int64(rd)
 		}
