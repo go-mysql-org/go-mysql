@@ -9,6 +9,7 @@ import (
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/pem"
+	goErrors "errors"
 	"io"
 	"net"
 	"sync"
@@ -108,28 +109,10 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 
 	if c.Compression != MYSQL_COMPRESS_NONE {
 		if !c.compressedReaderActive {
-			if _, err := io.ReadFull(c.reader, c.compressedHeader[:7]); err != nil {
-				return nil, errors.Wrapf(ErrBadConn, "io.ReadFull(compressedHeader) failed. err %v", err)
-			}
-
-			compressedSequence := c.compressedHeader[3]
-			uncompressedLength := int(uint32(c.compressedHeader[4]) | uint32(c.compressedHeader[5])<<8 | uint32(c.compressedHeader[6])<<16)
-			if compressedSequence != c.CompressedSequence {
-				return nil, errors.Errorf("invalid compressed sequence %d != %d",
-					compressedSequence, c.CompressedSequence)
-			}
-
-			if uncompressedLength > 0 {
-				var err error
-				switch c.Compression {
-				case MYSQL_COMPRESS_ZLIB:
-					c.compressedReader, err = zlib.NewReader(c.reader)
-				case MYSQL_COMPRESS_ZSTD:
-					c.compressedReader, err = zstd.NewReader(c.reader)
-				}
-				if err != nil {
-					return nil, err
-				}
+			var err error
+			c.compressedReader, err = c.newCompressedPacketReader()
+			if err != nil {
+				return nil, err
 			}
 			c.compressedReaderActive = true
 		}
@@ -167,6 +150,32 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 	return result, nil
 }
 
+func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
+	if _, err := io.ReadFull(c.reader, c.compressedHeader[:7]); err != nil {
+		return nil, errors.Wrapf(ErrBadConn, "io.ReadFull(compressedHeader) failed. err %v", err)
+	}
+
+	compressedSequence := c.compressedHeader[3]
+	if compressedSequence != c.CompressedSequence {
+		return nil, errors.Errorf("invalid compressed sequence %d != %d",
+			compressedSequence, c.CompressedSequence)
+	}
+
+	compressedLength := int(uint32(c.compressedHeader[0]) | uint32(c.compressedHeader[1])<<8 | uint32(c.compressedHeader[2])<<16)
+	uncompressedLength := int(uint32(c.compressedHeader[4]) | uint32(c.compressedHeader[5])<<8 | uint32(c.compressedHeader[6])<<16)
+	if uncompressedLength > 0 {
+		limitedReader := io.LimitReader(c.reader, int64(compressedLength))
+		switch c.Compression {
+		case MYSQL_COMPRESS_ZLIB:
+			return zlib.NewReader(limitedReader)
+		case MYSQL_COMPRESS_ZSTD:
+			return zstd.NewReader(limitedReader)
+		}
+	}
+
+	return nil, nil
+}
+
 func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err error) {
 	for n > 0 {
 		bcap := cap(c.copyNBuf)
@@ -175,8 +184,20 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 		}
 		buf := c.copyNBuf[:bcap]
 
-		rd, err := io.ReadAtLeast(src, buf, bcap)
+		var rd int
+		rd, err = io.ReadAtLeast(src, buf, bcap)
+
 		n -= int64(rd)
+		// if we've read to EOF and we have compression then advance the sequence number
+		// and reset the compressed reader to continue reading the remaining bytes
+		// in the next compressed packet.
+
+		if goErrors.Is(err, io.ErrUnexpectedEOF) && c.Compression != MYSQL_COMPRESS_NONE && rd < bcap {
+			c.CompressedSequence++
+			c.compressedReader, err = c.newCompressedPacketReader()
+			rd, err = io.ReadAtLeast(c.compressedReader, buf[rd:], bcap-rd)
+			n -= int64(rd)
+		}
 
 		if err != nil {
 			return written, errors.Trace(err)
