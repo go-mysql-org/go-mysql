@@ -188,11 +188,11 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 		rd, err = io.ReadAtLeast(src, buf, bcap)
 
 		n -= int64(rd)
+
 		// if we've read to EOF and we have compression then advance the sequence number
 		// and reset the compressed reader to continue reading the remaining bytes
 		// in the next compressed packet.
-
-		if goErrors.Is(err, io.ErrUnexpectedEOF) && c.Compression != MYSQL_COMPRESS_NONE && rd < bcap {
+		if c.Compression != MYSQL_COMPRESS_NONE && rd < bcap && goErrors.Is(err, io.ErrUnexpectedEOF) {
 			c.CompressedSequence++
 			if c.compressedReader, err = c.newCompressedPacketReader(); err != nil {
 				return written, errors.Trace(err)
