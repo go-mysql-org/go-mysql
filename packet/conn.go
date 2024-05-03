@@ -119,11 +119,11 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 	}
 
 	if c.compressedReader != nil {
-		if err := c.ReadPacketTo(buf, c.compressedReader); err != nil {
+		if err := c.ReadPacketTo(buf); err != nil {
 			return nil, errors.Trace(err)
 		}
 	} else {
-		if err := c.ReadPacketTo(buf, c.reader); err != nil {
+		if err := c.ReadPacketTo(buf); err != nil {
 			return nil, errors.Trace(err)
 		}
 	}
@@ -177,6 +177,14 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 	return nil, nil
 }
 
+func (c *Conn) currentPacketReader() io.Reader {
+	if c.Compression == MYSQL_COMPRESS_NONE && c.compressedReader == nil {
+		return c.reader
+	} else {
+		return c.compressedReader
+	}
+}
+
 func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err error) {
 	for n > 0 {
 		bcap := cap(c.copyNBuf)
@@ -193,7 +201,8 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 		// if we've read to EOF, and we have compression then advance the sequence number
 		// and reset the compressed reader to continue reading the remaining bytes
 		// in the next compressed packet.
-		if c.Compression != MYSQL_COMPRESS_NONE && rd < bcap && goErrors.Is(err, io.ErrUnexpectedEOF) {
+		if c.Compression != MYSQL_COMPRESS_NONE && rd < bcap &&
+			(goErrors.Is(err, io.ErrUnexpectedEOF) || goErrors.Is(err, io.EOF)) {
 			// we have read to EOF and read an incomplete uncompressed packet
 			// so advance the compressed sequence number and reset the compressed reader
 			// to get the remaining unread uncompressed bytes from the next compressed packet.
@@ -221,9 +230,21 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 	return written, nil
 }
 
-func (c *Conn) ReadPacketTo(w io.Writer, r io.Reader) error {
-	if _, err := io.ReadFull(r, c.header[:4]); err != nil {
+func (c *Conn) ReadPacketTo(w io.Writer) error {
+	b := utils.BytesBufferGet()
+	defer func() {
+		utils.BytesBufferPut(b)
+	}()
+
+	// packets that come in a compressed packet may be partial
+	// so use the copyN function to read the packet header into a
+	// buffer, since copyN is capable of getting the next compressed
+	// packet and updating the Conn state with a new compressedReader.
+	if _, err := c.copyN(b, c.currentPacketReader(), 4); err != nil {
 		return errors.Wrapf(ErrBadConn, "io.ReadFull(header) failed. err %v", err)
+	} else {
+		// copy was successful so copy the 4 bytes from the buffer to the header
+		copy(c.header[:4], b.Bytes()[:4])
 	}
 
 	length := int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16)
@@ -240,7 +261,7 @@ func (c *Conn) ReadPacketTo(w io.Writer, r io.Reader) error {
 		buf.Grow(length)
 	}
 
-	if n, err := c.copyN(w, r, int64(length)); err != nil {
+	if n, err := c.copyN(w, c.currentPacketReader(), int64(length)); err != nil {
 		return errors.Wrapf(ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, n, length)
 	} else if n != int64(length) {
 		return errors.Wrapf(ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", n, length)
@@ -249,7 +270,7 @@ func (c *Conn) ReadPacketTo(w io.Writer, r io.Reader) error {
 			return nil
 		}
 
-		if err = c.ReadPacketTo(w, r); err != nil {
+		if err = c.ReadPacketTo(w); err != nil {
 			return errors.Wrap(err, "ReadPacketTo failed")
 		}
 	}
