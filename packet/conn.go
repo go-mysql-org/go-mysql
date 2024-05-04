@@ -206,7 +206,7 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 			}
 
 			// now read the remaining bytes into the buffer containing the first read bytes
-			rd, err = io.ReadAtLeast(c.compressedReader, buf[rd:], bcap-rd)
+			rd, err = io.ReadAtLeast(c.currentPacketReader(), buf[rd:], bcap-rd)
 			n -= int64(rd)
 		}
 
