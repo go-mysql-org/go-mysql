@@ -179,7 +179,9 @@ func (c *Conn) currentPacketReader() io.Reader {
 	}
 }
 
-func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err error) {
+func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
+	var written int64
+
 	for n > 0 {
 		bcap := cap(c.copyNBuf)
 		if int64(bcap) > n {
@@ -187,14 +189,16 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 		}
 		buf := c.copyNBuf[:bcap]
 
-		var rd int
-		rd, err = io.ReadAtLeast(src, buf, bcap)
+		// Call ReadAtLeast with the currentPacketReader as it may change on every iteration
+		// of this loop.
+		rd, err := io.ReadAtLeast(c.currentPacketReader(), buf, bcap)
 
 		n -= int64(rd)
 
-		// if we've read to EOF, and we have compression then advance the sequence number
-		// and reset the compressed reader to continue reading the remaining bytes
-		// in the next compressed packet.
+		// ReadAtLeast will return EOF or ErrUnexpectedEOF when fewer than the min
+		// bytes are read. In this case, and when we have compression then advance
+		// the sequence number and reset the compressed reader to continue reading
+		// the remaining bytes in the next compressed packet.
 		if c.Compression != MYSQL_COMPRESS_NONE && rd < bcap &&
 			(goErrors.Is(err, io.ErrUnexpectedEOF) || goErrors.Is(err, io.EOF)) {
 			// we have read to EOF and read an incomplete uncompressed packet
@@ -204,17 +208,14 @@ func (c *Conn) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err 
 			if c.compressedReader, err = c.newCompressedPacketReader(); err != nil {
 				return written, errors.Trace(err)
 			}
-
-			// now read the remaining bytes into the buffer containing the first read bytes
-			rd, err = io.ReadAtLeast(c.currentPacketReader(), buf[rd:], bcap-rd)
-			n -= int64(rd)
 		}
 
 		if err != nil {
 			return written, errors.Trace(err)
 		}
 
-		wr, err := dst.Write(buf)
+		// careful to only write from the buffer the number of bytes read
+		wr, err := dst.Write(buf[:rd])
 		written += int64(wr)
 		if err != nil {
 			return written, errors.Trace(err)
@@ -234,7 +235,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	// so use the copyN function to read the packet header into a
 	// buffer, since copyN is capable of getting the next compressed
 	// packet and updating the Conn state with a new compressedReader.
-	if _, err := c.copyN(b, c.currentPacketReader(), 4); err != nil {
+	if _, err := c.copyN(b, 4); err != nil {
 		return errors.Wrapf(ErrBadConn, "io.ReadFull(header) failed. err %v", err)
 	} else {
 		// copy was successful so copy the 4 bytes from the buffer to the header
@@ -255,7 +256,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 		buf.Grow(length)
 	}
 
-	if n, err := c.copyN(w, c.currentPacketReader(), int64(length)); err != nil {
+	if n, err := c.copyN(w, int64(length)); err != nil {
 		return errors.Wrapf(ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, n, length)
 	} else if n != int64(length) {
 		return errors.Wrapf(ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", n, length)
