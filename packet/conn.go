@@ -199,7 +199,7 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 		// bytes are read. In this case, and when we have compression then advance
 		// the sequence number and reset the compressed reader to continue reading
 		// the remaining bytes in the next compressed packet.
-		if c.Compression != MYSQL_COMPRESS_NONE && rd < bcap &&
+		if c.Compression != MYSQL_COMPRESS_NONE &&
 			(goErrors.Is(err, io.ErrUnexpectedEOF) || goErrors.Is(err, io.EOF)) {
 			// we have read to EOF and read an incomplete uncompressed packet
 			// so advance the compressed sequence number and reset the compressed reader
