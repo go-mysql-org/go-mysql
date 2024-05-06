@@ -66,8 +66,6 @@ type Conn struct {
 
 	compressedHeader [7]byte
 
-	compressedReaderActive bool
-
 	compressedReader io.Reader
 }
 
@@ -108,13 +106,12 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 	}()
 
 	if c.Compression != MYSQL_COMPRESS_NONE {
-		if !c.compressedReaderActive {
+		if c.compressedReader == nil {
 			var err error
 			c.compressedReader, err = c.newCompressedPacketReader()
 			if err != nil {
 				return nil, err
 			}
-			c.compressedReaderActive = true
 		}
 	}
 
@@ -315,7 +312,6 @@ func (c *Conn) WritePacket(data []byte) error {
 			return errors.Wrapf(ErrBadConn, "Write failed. only %v bytes written, while %v expected", n, len(data))
 		}
 		c.compressedReader = nil
-		c.compressedReaderActive = false
 	default:
 		return errors.Wrapf(ErrBadConn, "Write failed. Unsuppored compression algorithm set")
 	}
