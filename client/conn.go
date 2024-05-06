@@ -143,7 +143,9 @@ func ConnectWithDialer(ctx context.Context, network string, addr string, user st
 		}
 
 		if collation.ID > 255 {
-			c.SetCharset(c.collation)
+			if _, err := c.exec(fmt.Sprintf("SET NAMES %s COLLATE %s", c.charset, c.collation)); err != nil {
+				return nil, errors.Trace(err)
+			}
 		}
 	}
 
