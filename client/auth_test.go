@@ -66,16 +66,16 @@ func TestConnCollation(t *testing.T) {
 		// if the collation ID is <= 255 the collation ID is stored in the 12th byte
 		if collation.ID <= 255 {
 			require.Equal(t, byte(collation.ID), handShakeResponse[12])
-			// the 13th byte should always be 0x00
-			require.Equal(t, byte(0x00), handShakeResponse[13])
 		} else {
-			// if the collation ID is > 255 the collation ID is stored in the 12th and 13th bytes
+			// if the collation ID is > 255 the collation ID should just be the lower-8 bits
 			require.Equal(t, byte(collation.ID&0xff), handShakeResponse[12])
-			require.Equal(t, byte(collation.ID>>8), handShakeResponse[13])
 		}
 
+		// the 13th byte should always be 0x00
+		require.Equal(t, byte(0x00), handShakeResponse[13])
+
 		// sanity check: validate the 22 bytes of filler with value 0x00 are set correctly
-		for i := 14; i < 14+22; i++ {
+		for i := 13; i < 13+23; i++ {
 			require.Equal(t, byte(0x00), handShakeResponse[i])
 		}
 

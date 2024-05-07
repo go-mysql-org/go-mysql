@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
@@ -131,6 +132,21 @@ func ConnectWithDialer(ctx context.Context, network string, addr string, user st
 		c.Conn.Compression = MYSQL_COMPRESS_ZLIB
 	} else if c.ccaps&CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
 		c.Conn.Compression = MYSQL_COMPRESS_ZSTD
+	}
+
+	// if a collation was set with a ID of > 255, then we need to call SET NAMES ...
+	// since the auth handshake response only support collations with 1-byte ids
+	if len(c.collation) != 0 {
+		collation, err := charset.GetCollationByName(c.collation)
+		if err != nil {
+			return nil, errors.Trace(fmt.Errorf("invalid collation name %s", c.collation))
+		}
+
+		if collation.ID > 255 {
+			if _, err := c.exec(fmt.Sprintf("SET NAMES %s COLLATE %s", c.charset, c.collation)); err != nil {
+				return nil, errors.Trace(err)
+			}
+		}
 	}
 
 	return c, nil
