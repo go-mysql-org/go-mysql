@@ -69,6 +69,8 @@ type Conn struct {
 	compressedReader io.Reader
 
 	compressedReaderActive bool
+
+	Stats *Stats
 }
 
 func NewConn(conn net.Conn) *Conn {
@@ -283,6 +285,9 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 // will modify data inplace
 func (c *Conn) WritePacket(data []byte) error {
 	length := len(data) - 4
+	if c.Stats != nil {
+		c.Stats.AddTxUncompressedSize(uint64(length))
+	}
 
 	for length >= MaxPayloadLen {
 		data[0] = 0xff
@@ -388,6 +393,9 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 		return 0, err
 	}
 
+	if c.Stats != nil {
+		c.Stats.AddTxCompressedSize(uint64(compressedPacket.Len()))
+	}
 	_, err = c.Write(compressedPacket.Bytes())
 	if err != nil {
 		return 0, err
