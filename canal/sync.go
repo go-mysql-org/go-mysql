@@ -309,7 +309,12 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 }
 
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
-	rr, err := c.Execute("SHOW MASTER STATUS")
+	showBinlogStatus := "SHOW BINARY LOG STATUS"
+	if eq, err := c.conn.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+		showBinlogStatus = "SHOW MASTER STATUS"
+	}
+
+	rr, err := c.Execute(showBinlogStatus)
 	if err != nil {
 		return mysql.Position{}, errors.Trace(err)
 	}

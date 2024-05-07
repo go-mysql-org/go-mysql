@@ -13,7 +13,12 @@ import (
 func (t *testSyncerSuite) TestStartBackupEndInGivenTime() {
 	t.setupTest(mysql.MySQLFlavor)
 
-	t.testExecute("RESET MASTER")
+	resetBinaryLogs := "RESET BINARY LOGS AND GTIDS"
+	if eq, err := t.c.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+		resetBinaryLogs = "RESET MASTER"
+	}
+
+	t.testExecute(resetBinaryLogs)
 
 	for times := 1; times <= 2; times++ {
 		t.testSync(nil)
