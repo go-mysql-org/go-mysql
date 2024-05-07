@@ -304,7 +304,13 @@ func (t *testSyncerSuite) setupTest(flavor string) {
 
 func (t *testSyncerSuite) testPositionSync() {
 	// get current master binlog file and position
-	r, err := t.c.Execute("SHOW MASTER STATUS")
+	showBinlogStatus := "SHOW BINARY LOG STATUS"
+	showReplicas := "SHOW REPLICAS"
+	if eq, err := t.c.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+		showBinlogStatus = "SHOW MASTER STATUS"
+		showReplicas = "SHOW SLAVE HOSTS"
+	}
+	r, err := t.c.Execute(showBinlogStatus)
 	require.NoError(t.T(), err)
 	binFile, _ := r.GetString(0, 0)
 	binPos, _ := r.GetInt(0, 1)
@@ -312,7 +318,7 @@ func (t *testSyncerSuite) testPositionSync() {
 	s, err := t.b.StartSync(mysql.Position{Name: binFile, Pos: uint32(binPos)})
 	require.NoError(t.T(), err)
 
-	r, err = t.c.Execute("SHOW SLAVE HOSTS")
+	r, err = t.c.Execute(showReplicas)
 	require.NoError(t.T(), err)
 
 	// List of replicas must not be empty
@@ -406,7 +412,12 @@ func (t *testSyncerSuite) TestMysqlSemiPositionSync() {
 func (t *testSyncerSuite) TestMysqlBinlogCodec() {
 	t.setupTest(mysql.MySQLFlavor)
 
-	t.testExecute("RESET MASTER")
+	resetBinaryLogs := "RESET BINARY LOGS AND GTIDS"
+	if eq, err := t.c.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+		resetBinaryLogs = "RESET MASTER"
+	}
+
+	t.testExecute(resetBinaryLogs)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
