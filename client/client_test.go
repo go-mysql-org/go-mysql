@@ -89,6 +89,17 @@ func (s *clientTestSuite) TestConn_Ping() {
 	require.NoError(s.T(), err)
 }
 
+func (s *clientTestSuite) TestConn_Compress() {
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	conn, err := Connect(addr, *testUser, *testPassword, "", func(conn *Conn) {
+		conn.SetCapability(mysql.CLIENT_COMPRESS)
+	})
+	require.NoError(s.T(), err)
+
+	_, err = conn.Execute("SELECT VERSION()")
+	require.NoError(s.T(), err)
+}
+
 func (s *clientTestSuite) TestConn_SetCapability() {
 	caps := []uint32{
 		mysql.CLIENT_LONG_PASSWORD,
