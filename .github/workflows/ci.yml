@@ -42,6 +42,45 @@ jobs:
           go test $(go list ./... | grep -v canal)
           go test $(go list ./... | grep canal)
 
+  mysqltest:
+    strategy:
+      matrix:
+        mysql_version:
+          - 8.0.37
+          - 8.4.0
+    name: Tests with MySQL ${{ matrix.mysql_version }}
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql_version }}
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: MySQL versions
+        run: |
+          echo -n "mysql -v: " ; mysql -V
+          echo -n "mysqldump -V: " ; mysqldump -V
+          echo -n "MySQL Server (SELECT VERSION()): " ; mysql -h 127.0.0.1 -u root -BNe 'SELECT VERSION()'
+      - name: Prepare for Go
+        run: |
+          sudo apt-get install -y make gcc
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Run tests
+        run: |
+          # separate test to avoid RESET MASTER conflict
+          # TODO: Fix "dump/" and "canal/": mysqldump tries to run SHOW MASTER STATUS on v8.4.0
+          go test $(go list ./... | grep -v canal | grep -v dump)
+          # go test $(go list ./... | grep canal | grep -v dump)
+
   golangci:
     name: golangci
     runs-on: ubuntu-latest
