@@ -418,7 +418,7 @@ func TestIncludeExcludeTableRegex(t *testing.T) {
 
 	c := new(Canal)
 	c.cfg = cfg
-	c.initTableFilter()
+	require.Nil(t, c.initTableFilter())
 	require.True(t, c.checkTableMatch("test.canal_test"))
 	require.False(t, c.checkTableMatch("test.canal_test_inner"))
 	require.False(t, c.checkTableMatch("mysql.canal_test_inner"))
