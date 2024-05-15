@@ -2,7 +2,7 @@ package compress
 
 import (
 	"bytes"
-	"github.com/klauspost/compress/zlib"
+	"compress/zlib"
 	"io"
 	"sync"
 )

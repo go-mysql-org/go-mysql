@@ -2,6 +2,7 @@ package packet
 
 import (
 	"bytes"
+	"compress/zlib"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -11,7 +12,6 @@ import (
 	"github.com/go-mysql-org/go-mysql/compress"
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
-	"github.com/klauspost/compress/zlib"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pingcap/errors"
 	"io"
