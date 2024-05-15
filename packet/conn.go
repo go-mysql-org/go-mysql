@@ -157,8 +157,6 @@ func (c *Conn) setupCompressedPacketRead() error {
 		case MYSQL_COMPRESS_ZSTD:
 			c.compressedReader, err = zstd.NewReader(limitedReader)
 		}
-	} else {
-		c.compressedReader = nil
 	}
 
 	c.compressedReaderActive = true
