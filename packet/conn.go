@@ -11,6 +11,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/compress"
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
+	"github.com/klauspost/compress/zlib"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pingcap/errors"
 	"io"
@@ -42,6 +43,9 @@ type Conn struct {
 	compressedReader io.Reader
 
 	compressedReaderActive bool
+
+	connCompressedWriter io.WriteCloser
+	connCompressedReader io.Reader
 
 	Stats *Stats
 }
@@ -87,12 +91,9 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 		// compressed packet with uncompressed length of 0 is read, the compressedReader would
 		// be nil, and we'd incorrectly attempt to read the next packet as compressed.
 		if !c.compressedReaderActive {
-			var err error
-			c.compressedReader, err = c.newCompressedPacketReader()
-			if err != nil {
+			if err := c.setupCompressedPacketRead(); err != nil {
 				return nil, err
 			}
-			c.compressedReaderActive = true
 		}
 	}
 
@@ -123,30 +124,44 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 }
 
 // newCompressedPacketReader creates a new compressed packet reader.
-func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
+func (c *Conn) setupCompressedPacketRead() error {
+	var err error
+
 	if _, err := io.ReadFull(c.reader, c.compressedHeader[:7]); err != nil {
-		return nil, errors.Wrapf(ErrBadConn, "io.ReadFull(compressedHeader) failed. err %v", err)
+		return errors.Wrapf(ErrBadConn, "io.ReadFull(compressedHeader) failed. err %v", err)
 	}
 
 	compressedSequence := c.compressedHeader[3]
 	if compressedSequence != c.CompressedSequence {
-		return nil, errors.Errorf("invalid compressed sequence %d != %d",
+		return errors.Errorf("invalid compressed sequence %d != %d",
 			compressedSequence, c.CompressedSequence)
 	}
 
 	compressedLength := int(uint32(c.compressedHeader[0]) | uint32(c.compressedHeader[1])<<8 | uint32(c.compressedHeader[2])<<16)
 	uncompressedLength := int(uint32(c.compressedHeader[4]) | uint32(c.compressedHeader[5])<<8 | uint32(c.compressedHeader[6])<<16)
+
 	if uncompressedLength > 0 {
 		limitedReader := io.LimitReader(c.reader, int64(compressedLength))
+
 		switch c.Compression {
 		case MYSQL_COMPRESS_ZLIB:
-			return compress.NewDecompressor(limitedReader)
+			if c.connCompressedReader == nil {
+				c.connCompressedReader, err = compress.BorrowReader(limitedReader)
+				c.compressedReader = c.connCompressedReader
+			} else {
+				c.compressedReader = c.connCompressedReader
+				if c.compressedReader.(zlib.Resetter).Reset(limitedReader, nil) != nil {
+					return errors.Trace(err)
+				}
+			}
 		case MYSQL_COMPRESS_ZSTD:
-			return zstd.NewReader(limitedReader)
+			c.compressedReader, err = zstd.NewReader(limitedReader)
 		}
 	}
 
-	return nil, nil
+	c.compressedReaderActive = true
+
+	return err
 }
 
 func (c *Conn) currentPacketReader() io.Reader {
@@ -183,7 +198,7 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 			// so advance the compressed sequence number and reset the compressed reader
 			// to get the remaining unread uncompressed bytes from the next compressed packet.
 			c.CompressedSequence++
-			if c.compressedReader, err = c.newCompressedPacketReader(); err != nil {
+			if err = c.setupCompressedPacketRead(); err != nil {
 				return written, errors.Trace(err)
 			}
 		}
@@ -314,15 +329,19 @@ func (c *Conn) WritePacket(data []byte) error {
 func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	var compressedLength, uncompressedLength int
 	var payload, compressedPacket bytes.Buffer
-	var w io.WriteCloser
+
 	minCompressLength := 50
 	compressedHeader := make([]byte, 7)
 
 	switch c.Compression {
 	case MYSQL_COMPRESS_ZLIB:
-		w, err = compress.NewCompressor(&payload)
+		if c.connCompressedWriter == nil {
+			c.connCompressedWriter = compress.BorrowWriter(&payload)
+		} else {
+			c.connCompressedWriter.(*zlib.Writer).Reset(&payload)
+		}
 	case MYSQL_COMPRESS_ZSTD:
-		w, err = zstd.NewWriter(&payload)
+		c.connCompressedWriter, err = zstd.NewWriter(&payload)
 	}
 	if err != nil {
 		return 0, err
@@ -330,12 +349,12 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 
 	if len(data) > minCompressLength {
 		uncompressedLength = len(data)
-		n, err = w.Write(data)
+		n, err = c.connCompressedWriter.Write(data)
 		if err != nil {
-			_ = w.Close()
+			_ = c.connCompressedWriter.Close()
 			return 0, err
 		}
-		err = w.Close()
+		err = c.connCompressedWriter.Close()
 		if err != nil {
 			return 0, err
 		}
@@ -460,6 +479,8 @@ func (c *Conn) ResetSequence() {
 
 func (c *Conn) Close() error {
 	c.Sequence = 0
+	compress.ReturnWriter(c.connCompressedWriter)
+	compress.ReturnReader(c.connCompressedReader)
 	if c.Conn != nil {
 		return errors.Wrap(c.Conn.Close(), "Conn.Close failed")
 	}

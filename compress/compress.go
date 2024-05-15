@@ -2,7 +2,7 @@ package compress
 
 import (
 	"bytes"
-	"compress/zlib"
+	"github.com/klauspost/compress/zlib"
 	"io"
 	"sync"
 )
@@ -32,30 +32,13 @@ func init() {
 	}
 }
 
-var _ io.WriteCloser = Compressor{}
-var _ io.ReadCloser = Decompressor{}
-
-type Compressor struct {
-	target     io.Writer
-	zlibWriter *zlib.Writer
-}
-
-type Decompressor struct {
-	src        io.Reader
-	zlibReader io.ReadCloser
-}
-
-func NewCompressor(target io.Writer) (io.WriteCloser, error) {
+func BorrowWriter(target io.Writer) io.WriteCloser {
 	w := zlibWriterPool.Get().(*zlib.Writer)
 	w.Reset(target)
-
-	return Compressor{
-		target:     target,
-		zlibWriter: w,
-	}, nil
+	return w
 }
 
-func NewDecompressor(src io.Reader) (io.Reader, error) {
+func BorrowReader(src io.Reader) (io.Reader, error) {
 	var (
 		rc  io.ReadCloser
 		err error
@@ -72,28 +55,17 @@ func NewDecompressor(src io.Reader) (io.Reader, error) {
 		}
 	}
 
-	return Decompressor{
-		src:        src,
-		zlibReader: rc,
-	}, nil
+	return rc, nil
 }
 
-func (c Compressor) Write(data []byte) (n int, err error) {
-	return c.zlibWriter.Write(data)
+func ReturnWriter(w io.WriteCloser) {
+	if _, ok := w.(*zlib.Writer); !ok {
+		zlibWriterPool.Put(w)
+	}
 }
 
-func (c Compressor) Close() error {
-	err := c.zlibWriter.Close()
-	zlibWriterPool.Put(c.zlibWriter)
-	return err
-}
-
-func (d Decompressor) Read(buf []byte) (n int, err error) {
-	return d.zlibReader.Read(buf)
-}
-
-func (d Decompressor) Close() error {
-	err := d.zlibReader.Close()
-	zlibReaderPool.Put(d.zlibReader)
-	return err
+func ReturnReader(r io.Reader) {
+	if _, ok := r.(zlib.Resetter); ok {
+		zlibReaderPool.Put(r)
+	}
 }
