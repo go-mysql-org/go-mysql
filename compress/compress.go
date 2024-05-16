@@ -2,7 +2,7 @@ package compress
 
 import (
 	"bytes"
-	"compress/zlib"
+	"github.com/klauspost/compress/zlib"
 	"io"
 	"sync"
 )
@@ -36,12 +36,10 @@ var _ io.WriteCloser = Compressor{}
 var _ io.ReadCloser = Decompressor{}
 
 type Compressor struct {
-	target     io.Writer
 	zlibWriter *zlib.Writer
 }
 
 type Decompressor struct {
-	src        io.Reader
 	zlibReader io.ReadCloser
 }
 
@@ -50,7 +48,6 @@ func NewCompressor(target io.Writer) (io.WriteCloser, error) {
 	w.Reset(target)
 
 	return Compressor{
-		target:     target,
 		zlibWriter: w,
 	}, nil
 }
@@ -73,7 +70,6 @@ func NewDecompressor(src io.Reader) (io.Reader, error) {
 	}
 
 	return Decompressor{
-		src:        src,
 		zlibReader: rc,
 	}, nil
 }

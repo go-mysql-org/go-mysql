@@ -17,7 +17,8 @@ import (
 	"net"
 )
 
-const DefaultBufferSize = 4 * 1024
+const MinCompressionLength = 50
+const DefaultBufferSize = 16 * 1024
 
 // Conn is the base class to handle MySQL protocol.
 type Conn struct {
@@ -312,42 +313,45 @@ func (c *Conn) WritePacket(data []byte) error {
 }
 
 func (c *Conn) writeCompressed(data []byte) (n int, err error) {
-	var compressedLength, uncompressedLength int
-	var payload, compressedPacket bytes.Buffer
-	var w io.WriteCloser
-	minCompressLength := 50
-	compressedHeader := make([]byte, 7)
+	var (
+		compressedLength, uncompressedLength int
+		payload                              *bytes.Buffer
+		compressedHeader                     = make([]byte, 7)
+	)
 
-	switch c.Compression {
-	case MYSQL_COMPRESS_ZLIB:
-		w, err = compress.NewCompressor(&payload)
-	case MYSQL_COMPRESS_ZSTD:
-		w, err = zstd.NewWriter(&payload)
-	}
-	if err != nil {
-		return 0, err
-	}
+	if len(data) > MinCompressionLength {
+		var compressor io.WriteCloser
+		payload = utils.BytesBufferGet()
 
-	if len(data) > minCompressLength {
+		switch c.Compression {
+		case MYSQL_COMPRESS_ZLIB:
+			compressor, err = compress.NewCompressor(payload)
+		case MYSQL_COMPRESS_ZSTD:
+			compressor, err = zstd.NewWriter(payload)
+		default:
+			return 0, errors.Wrapf(ErrBadConn, "Write failed. Unsuppored compression algorithm set")
+		}
+		if err != nil {
+			return 0, err
+		}
+
 		uncompressedLength = len(data)
-		n, err = w.Write(data)
-		if err != nil {
-			_ = w.Close()
+		if n, err = compressor.Write(data); err != nil {
+			_ = compressor.Close()
 			return 0, err
 		}
-		err = w.Close()
-		if err != nil {
+		if err = compressor.Close(); err != nil {
 			return 0, err
 		}
-	}
 
-	if len(data) > minCompressLength {
-		compressedLength = len(payload.Bytes())
+		compressedLength = payload.Len()
 	} else {
 		compressedLength = len(data)
 	}
 
 	c.CompressedSequence = 0
+	// write the compressed packet header
+	compressedPacket := utils.BytesBufferGet()
 	compressedHeader[0] = byte(compressedLength)
 	compressedHeader[1] = byte(compressedLength >> 8)
 	compressedHeader[2] = byte(compressedLength >> 16)
@@ -361,11 +365,13 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	}
 	c.CompressedSequence++
 
-	if len(data) > minCompressLength {
+	if payload != nil {
 		_, err = compressedPacket.Write(payload.Bytes())
+		utils.BytesBufferPut(payload)
 	} else {
 		n, err = compressedPacket.Write(data)
 	}
+
 	if err != nil {
 		return 0, err
 	}
@@ -374,6 +380,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 		c.Stats.AddTxCompressedSize(uint64(compressedPacket.Len()))
 	}
 	_, err = c.Write(compressedPacket.Bytes())
+	utils.BytesBufferPut(compressedPacket)
 	if err != nil {
 		return 0, err
 	}
