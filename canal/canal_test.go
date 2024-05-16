@@ -405,3 +405,29 @@ func TestDropIndexExp(t *testing.T) {
 		}
 	}
 }
+
+func TestIncludeExcludeTableRegex(t *testing.T) {
+	cfg := NewDefaultConfig()
+
+	// include & exclude config
+	cfg.IncludeTableRegex = make([]string, 1)
+	cfg.IncludeTableRegex[0] = ".*\\.canal_test"
+	cfg.ExcludeTableRegex = make([]string, 2)
+	cfg.ExcludeTableRegex[0] = "mysql\\..*"
+	cfg.ExcludeTableRegex[1] = ".*\\..*_inner"
+
+	c := new(Canal)
+	c.cfg = cfg
+	require.Nil(t, c.initTableFilter())
+	require.True(t, c.checkTableMatch("test.canal_test"))
+	require.False(t, c.checkTableMatch("test.canal_test_inner"))
+	require.False(t, c.checkTableMatch("mysql.canal_test_inner"))
+
+	cfg.IncludeTableRegex = nil
+	c = new(Canal)
+	c.cfg = cfg
+	require.Nil(t, c.initTableFilter())
+	require.True(t, c.checkTableMatch("test.canal_test"))
+	require.False(t, c.checkTableMatch("test.canal_test_inner"))
+	require.False(t, c.checkTableMatch("mysql.canal_test_inner"))
+}

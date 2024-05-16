@@ -61,10 +61,12 @@ type Config struct {
 	HeartbeatPeriod time.Duration `toml:"heartbeat_period"`
 	ReadTimeout     time.Duration `toml:"read_timeout"`
 
-	// IncludeTableRegex or ExcludeTableRegex should contain database name
+	// IncludeTableRegex or ExcludeTableRegex should contain database name.
+	// IncludeTableRegex defines the tables that will be included, if empty, all tables will be included.
+	// ExcludeTableRegex defines the tables that will be excluded from the ones defined by IncludeTableRegex.
 	// Only a table which matches IncludeTableRegex and dismatches ExcludeTableRegex will be processed
 	// eg, IncludeTableRegex : [".*\\.canal"], ExcludeTableRegex : ["mysql\\..*"]
-	//     this will include all database's 'canal' table, except database 'mysql'
+	//     this will include all database's 'canal' table, except database 'mysql'.
 	// Default IncludeTableRegex and ExcludeTableRegex are empty, this will include all tables
 	IncludeTableRegex []string `toml:"include_table_regex"`
 	ExcludeTableRegex []string `toml:"exclude_table_regex"`
