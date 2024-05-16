@@ -42,8 +42,14 @@ func (c *Conn) readInitialHandshake() error {
 		return errors.Annotate(c.handleErrorPacket(data), "read initial handshake error")
 	}
 
-	if data[0] < MinProtocolVersion {
-		return errors.Errorf("invalid protocol version %d, must >= 10", data[0])
+	if data[0] != ClassicProtocolVersion {
+		if data[0] == XProtocolVersion {
+			return errors.Errorf(
+				"invalid protocol version %d, expected 10. "+
+					"This might be X Protocol, make sure to connect to the right port",
+				data[0])
+		}
+		return errors.Errorf("invalid protocol version %d, expected 10", data[0])
 	}
 	pos := 1
 

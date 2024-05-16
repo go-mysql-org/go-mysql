@@ -1,9 +1,10 @@
 package mysql
 
 const (
-	MinProtocolVersion byte   = 10
-	MaxPayloadLen      int    = 1<<24 - 1
-	TimeFormat         string = "2006-01-02 15:04:05"
+	ClassicProtocolVersion byte   = 10
+	XProtocolVersion       byte   = 11
+	MaxPayloadLen          int    = 1<<24 - 1
+	TimeFormat             string = "2006-01-02 15:04:05"
 )
 
 const (
