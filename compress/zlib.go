@@ -32,27 +32,27 @@ func init() {
 	}
 }
 
-var _ io.WriteCloser = Compressor{}
-var _ io.ReadCloser = Decompressor{}
+var _ io.WriteCloser = zlibWriter{}
+var _ io.ReadCloser = zlibReader{}
 
-type Compressor struct {
-	zlibWriter *zlib.Writer
+type zlibWriter struct {
+	w *zlib.Writer
 }
 
-type Decompressor struct {
-	zlibReader io.ReadCloser
+type zlibReader struct {
+	r io.ReadCloser
 }
 
-func NewCompressor(target io.Writer) (io.WriteCloser, error) {
+func GetPooledZlibWriter(target io.Writer) (io.WriteCloser, error) {
 	w := zlibWriterPool.Get().(*zlib.Writer)
 	w.Reset(target)
 
-	return Compressor{
-		zlibWriter: w,
+	return zlibWriter{
+		w: w,
 	}, nil
 }
 
-func NewDecompressor(src io.Reader) (io.Reader, error) {
+func GetPooledZlibReader(src io.Reader) (io.Reader, error) {
 	var (
 		rc  io.ReadCloser
 		err error
@@ -69,27 +69,27 @@ func NewDecompressor(src io.Reader) (io.Reader, error) {
 		}
 	}
 
-	return Decompressor{
-		zlibReader: rc,
+	return zlibReader{
+		r: rc,
 	}, nil
 }
 
-func (c Compressor) Write(data []byte) (n int, err error) {
-	return c.zlibWriter.Write(data)
+func (c zlibWriter) Write(data []byte) (n int, err error) {
+	return c.w.Write(data)
 }
 
-func (c Compressor) Close() error {
-	err := c.zlibWriter.Close()
-	zlibWriterPool.Put(c.zlibWriter)
+func (c zlibWriter) Close() error {
+	err := c.w.Close()
+	zlibWriterPool.Put(c.w)
 	return err
 }
 
-func (d Decompressor) Read(buf []byte) (n int, err error) {
-	return d.zlibReader.Read(buf)
+func (d zlibReader) Read(buf []byte) (n int, err error) {
+	return d.r.Read(buf)
 }
 
-func (d Decompressor) Close() error {
-	err := d.zlibReader.Close()
-	zlibReaderPool.Put(d.zlibReader)
+func (d zlibReader) Close() error {
+	err := d.r.Close()
+	zlibReaderPool.Put(d.r)
 	return err
 }

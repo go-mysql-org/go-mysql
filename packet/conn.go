@@ -43,8 +43,6 @@ type Conn struct {
 	compressedReader io.Reader
 
 	compressedReaderActive bool
-
-	Stats *Stats
 }
 
 func NewConn(conn net.Conn) *Conn {
@@ -106,13 +104,13 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 	var result []byte
 	if len(dst) > 0 {
 		result = append(dst, readBytes...)
-		// if read block is big, do not cache buf any more
+		// if read block is big, do not cache buf anymore
 		if readSize > utils.TooBigBlockSize {
 			buf = nil
 		}
 	} else {
 		if readSize > utils.TooBigBlockSize {
-			// if read block is big, use read block as result and do not cache buf any more
+			// if read block is big, use read block as result and do not cache buf anymore
 			result = readBytes
 			buf = nil
 		} else {
@@ -141,7 +139,7 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 		limitedReader := io.LimitReader(c.reader, int64(compressedLength))
 		switch c.Compression {
 		case MYSQL_COMPRESS_ZLIB:
-			return compress.NewDecompressor(limitedReader)
+			return compress.GetPooledZlibReader(limitedReader)
 		case MYSQL_COMPRESS_ZSTD:
 			return zstd.NewReader(limitedReader)
 		}
@@ -252,13 +250,9 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	return nil
 }
 
-// WritePacket: data already has 4 bytes header
-// will modify data inplace
+// WritePacket data already has 4 bytes header will modify data in-place
 func (c *Conn) WritePacket(data []byte) error {
 	length := len(data) - 4
-	if c.Stats != nil {
-		c.Stats.AddTxUncompressedSize(uint64(length))
-	}
 
 	for length >= MaxPayloadLen {
 		data[0] = 0xff
@@ -320,14 +314,14 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	)
 
 	if len(data) > MinCompressionLength {
-		var compressor io.WriteCloser
+		var w io.WriteCloser
 		payload = utils.BytesBufferGet()
 
 		switch c.Compression {
 		case MYSQL_COMPRESS_ZLIB:
-			compressor, err = compress.NewCompressor(payload)
+			w, err = compress.GetPooledZlibWriter(payload)
 		case MYSQL_COMPRESS_ZSTD:
-			compressor, err = zstd.NewWriter(payload)
+			w, err = zstd.NewWriter(payload)
 		default:
 			return 0, errors.Wrapf(ErrBadConn, "Write failed. Unsuppored compression algorithm set")
 		}
@@ -336,11 +330,11 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 		}
 
 		uncompressedLength = len(data)
-		if n, err = compressor.Write(data); err != nil {
-			_ = compressor.Close()
+		if n, err = w.Write(data); err != nil {
+			_ = w.Close()
 			return 0, err
 		}
-		if err = compressor.Close(); err != nil {
+		if err = w.Close(); err != nil {
 			return 0, err
 		}
 
@@ -375,10 +369,6 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-
-	if c.Stats != nil {
-		c.Stats.AddTxCompressedSize(uint64(compressedPacket.Len()))
-	}
 	_, err = c.Write(compressedPacket.Bytes())
 	utils.BytesBufferPut(compressedPacket)
 	if err != nil {
@@ -388,7 +378,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	return n, nil
 }
 
-// WriteClearAuthPacket: Client clear text authentication packet
+// WriteClearAuthPacket Client clear text authentication packet
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
 func (c *Conn) WriteClearAuthPacket(password string) error {
 	// Calculate the packet length and add a tailing 0
@@ -402,7 +392,7 @@ func (c *Conn) WriteClearAuthPacket(password string) error {
 	return errors.Wrap(c.WritePacket(data), "WritePacket failed")
 }
 
-// WritePublicKeyAuthPacket: Caching sha2 authentication. Public key request and send encrypted password
+// WritePublicKeyAuthPacket Caching sha2 authentication. Public key request and send encrypted password
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
 func (c *Conn) WritePublicKeyAuthPacket(password string, cipher []byte) error {
 	// request public key
@@ -444,7 +434,7 @@ func (c *Conn) WriteEncryptedPassword(password string, seed []byte, pub *rsa.Pub
 	return errors.Wrap(c.WriteAuthSwitchPacket(enc, false), "WriteAuthSwitchPacket failed")
 }
 
-// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
+// WriteAuthSwitchPacket see http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
 func (c *Conn) WriteAuthSwitchPacket(authData []byte, addNUL bool) error {
 	pktLen := 4 + len(authData)
 	if addNUL {
