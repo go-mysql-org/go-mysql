@@ -52,7 +52,7 @@ func GetPooledZlibWriter(target io.Writer) (io.WriteCloser, error) {
 	}, nil
 }
 
-func GetPooledZlibReader(src io.Reader) (io.Reader, error) {
+func GetPooledZlibReader(src io.Reader) (io.ReadCloser, error) {
 	var (
 		rc  io.ReadCloser
 		err error
