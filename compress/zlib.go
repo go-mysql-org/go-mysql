@@ -2,9 +2,10 @@ package compress
 
 import (
 	"bytes"
-	"github.com/klauspost/compress/zlib"
 	"io"
 	"sync"
+
+	"github.com/klauspost/compress/zlib"
 )
 
 const DefaultCompressionLevel = 6

@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
@@ -8,13 +9,14 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	goErrors "errors"
+	"io"
+	"net"
+
 	"github.com/go-mysql-org/go-mysql/compress"
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pingcap/errors"
-	"io"
-	"net"
 )
 
 const MinCompressionLength = 50
@@ -24,8 +26,9 @@ const DefaultBufferSize = 16 * 1024
 type Conn struct {
 	net.Conn
 
-	// we removed the buffer reader because it will cause the SSLRequest to block (tls connection handshake won't be
-	// able to read the "Client Hello" data since it has been buffered into the buffer reader)
+	// Buffered reader for net.Conn in Non-TLS connection only to address replication performance issue.
+	// See https://github.com/go-mysql-org/go-mysql/pull/422 for more details.
+	br     *bufio.Reader
 	reader io.Reader
 
 	copyNBuf []byte
@@ -50,6 +53,8 @@ func NewConn(conn net.Conn) *Conn {
 	c.Conn = conn
 
 	c.reader = c
+	c.br = bufio.NewReaderSize(c, 65536) // 64kb
+	c.reader = c.br
 
 	c.copyNBuf = make([]byte, DefaultBufferSize)
 
