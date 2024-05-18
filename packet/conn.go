@@ -383,7 +383,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 }
 
 // WriteClearAuthPacket Client clear text authentication packet
-// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_auth_switch_response.html
 func (c *Conn) WriteClearAuthPacket(password string) error {
 	// Calculate the packet length and add a tailing 0
 	pktLen := len(password) + 1
@@ -397,7 +397,7 @@ func (c *Conn) WriteClearAuthPacket(password string) error {
 }
 
 // WritePublicKeyAuthPacket Caching sha2 authentication. Public key request and send encrypted password
-// http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_auth_switch_response.html
 func (c *Conn) WritePublicKeyAuthPacket(password string, cipher []byte) error {
 	// request public key
 	data := make([]byte, 4+1)
@@ -438,7 +438,7 @@ func (c *Conn) WriteEncryptedPassword(password string, seed []byte, pub *rsa.Pub
 	return errors.Wrap(c.WriteAuthSwitchPacket(enc, false), "WriteAuthSwitchPacket failed")
 }
 
-// WriteAuthSwitchPacket see http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
+// WriteAuthSwitchPacket see https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_auth_switch_response.html
 func (c *Conn) WriteAuthSwitchPacket(authData []byte, addNUL bool) error {
 	pktLen := 4 + len(authData)
 	if addNUL {
