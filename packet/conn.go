@@ -52,7 +52,6 @@ func NewConn(conn net.Conn) *Conn {
 	c := new(Conn)
 	c.Conn = conn
 
-	c.reader = c
 	c.br = bufio.NewReaderSize(c, 65536) // 64kb
 	c.reader = c.br
 
