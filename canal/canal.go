@@ -99,13 +99,20 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		return nil, errors.Trace(err)
 	}
 
-	// init table filter
+	if err := c.initTableFilter(); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return c, nil
+}
+
+func (c *Canal) initTableFilter() error {
 	if n := len(c.cfg.IncludeTableRegex); n > 0 {
 		c.includeTableRegex = make([]*regexp.Regexp, n)
 		for i, val := range c.cfg.IncludeTableRegex {
 			reg, err := regexp.Compile(val)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return errors.Trace(err)
 			}
 			c.includeTableRegex[i] = reg
 		}
@@ -116,7 +123,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		for i, val := range c.cfg.ExcludeTableRegex {
 			reg, err := regexp.Compile(val)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return errors.Trace(err)
 			}
 			c.excludeTableRegex[i] = reg
 		}
@@ -125,8 +132,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	if c.includeTableRegex != nil || c.excludeTableRegex != nil {
 		c.tableMatchCache = make(map[string]bool)
 	}
-
-	return c, nil
+	return nil
 }
 
 func (c *Canal) prepareDumper() error {
@@ -143,7 +149,7 @@ func (c *Canal) prepareDumper() error {
 	}
 
 	if c.dumper == nil {
-		//no mysqldump, use binlog only
+		// no mysqldump, use binlog only
 		return nil
 	}
 
@@ -293,7 +299,10 @@ func (c *Canal) checkTableMatch(key string) bool {
 				break
 			}
 		}
+	} else {
+		matchFlag = true
 	}
+
 	// check exclude
 	if matchFlag && c.excludeTableRegex != nil {
 		for _, reg := range c.excludeTableRegex {

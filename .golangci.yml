@@ -2,13 +2,10 @@ linters:
   disable-all: true
   enable:
     # All code is ready for:
-    - deadcode
     - errcheck
     - staticcheck
-    - structcheck
     - typecheck
     - unused
-    - varcheck
     - misspell
     - nolintlint
     - goimports
