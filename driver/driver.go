@@ -10,8 +10,8 @@ import (
 	"io"
 	"net/url"
 	"regexp"
-	"strconv"
 	"sync"
+	"time"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -24,7 +24,7 @@ var customTLSMutex sync.Mutex
 // Map of dsn address (makes more sense than full dsn?) to tls Config
 var (
 	customTLSConfigMap = make(map[string]*tls.Config)
-	options            = make(map[string]connOption)
+	options            = make(map[string]DriverOption)
 )
 
 type driver struct {
@@ -38,8 +38,6 @@ type connInfo struct {
 	db          string
 	params      url.Values
 }
-
-type connOption func(c *client.Conn, value string)
 
 // ParseDSN takes a DSN string and splits it up into struct containing addr,
 // user, password and db.
@@ -98,7 +96,8 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	}
 
 	if ci.standardDSN {
-		configuredOptions := make([]func(*client.Conn), 0, len(ci.params))
+		var timeout time.Duration
+		configuredOptions := make([]client.Option, 0, len(ci.params))
 		for key, value := range ci.params {
 			if key == "ssl" && len(value) > 0 {
 				tlsConfigName := value[0]
@@ -107,22 +106,29 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 					// This actually does insecureSkipVerify
 					// But not even sure if it makes sense to handle false? According to
 					// client_test.go it doesn't - it'd result in an error
-					configuredOptions = append(configuredOptions, func(c *client.Conn) { c.UseSSL(true) })
+					configuredOptions = append(configuredOptions, UseSslOption)
 				case "custom":
 					// I was too concerned about mimicking what go-sql-driver/mysql does which will
 					// allow any name for a custom tls profile and maps the query parameter value to
 					// that TLSConfig variable... there is no need to be that clever.
 					// Instead of doing that, let's store required custom TLSConfigs in a map that
 					// uses the DSN address as the key
-					configuredOptions = append(configuredOptions, func(c *client.Conn) { c.SetTLSConfig(customTLSConfigMap[ci.addr]) })
+					configuredOptions = append(configuredOptions, func(c *client.Conn) error {
+						c.SetTLSConfig(customTLSConfigMap[ci.addr])
+						return nil
+					})
 				default:
 					return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
 				}
+			} else if key == "timeout" && len(value) > 0 {
+				if timeout, err = time.ParseDuration(value[0]); err != nil {
+					return nil, errors.Wrap(err, "invalid duration value for timeout option")
+				}
 			} else {
 				if option, ok := options[key]; ok {
-					opt := func(o connOption, v string) func(c *client.Conn) {
-						return func(c *client.Conn) {
-							o(c, v)
+					opt := func(o DriverOption, v string) client.Option {
+						return func(c *client.Conn) error {
+							return o(c, v)
 						}
 					}(option, value[0])
 					configuredOptions = append(configuredOptions, opt)
@@ -132,7 +138,11 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 			}
 		}
 
-		c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, configuredOptions...)
+		if timeout > 0 {
+			c, err = client.ConnectWithTimeout(ci.addr, ci.user, ci.password, ci.db, timeout, configuredOptions...)
+		} else {
+			c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, configuredOptions...)
+		}
 	} else {
 		// No more processing here. Let's only support url parameters with the newer style DSN
 		c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db)
@@ -316,14 +326,10 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 }
 
 func init() {
-	options["compress"] = func(c *client.Conn, value string) {
-		if b, err := strconv.ParseBool(value); err == nil && b {
-			c.SetCapability(mysql.CLIENT_COMPRESS)
-		}
-	}
-	options["collation"] = func(c *client.Conn, value string) {
-		c.SetCollation(value)
-	}
+	options["compress"] = CompressOption
+	options["collation"] = CollationOption
+	options["readTimeout"] = ReadTimeoutOption
+	options["writeTimeout"] = WriteTimeoutOption
 
 	sql.Register("mysql", driver{})
 }

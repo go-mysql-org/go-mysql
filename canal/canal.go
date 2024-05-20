@@ -499,7 +499,7 @@ func (c *Canal) prepareSyncer() error {
 	return nil
 }
 
-func (c *Canal) connect(options ...func(*client.Conn)) (*client.Conn, error) {
+func (c *Canal) connect(options ...client.Option) (*client.Conn, error) {
 	ctx, cancel := context.WithTimeout(c.ctx, time.Second*10)
 	defer cancel()
 
@@ -511,10 +511,11 @@ func (c *Canal) connect(options ...func(*client.Conn)) (*client.Conn, error) {
 func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
-	argF := make([]func(*client.Conn), 0)
+	argF := make([]client.Option, 0)
 	if c.cfg.TLSConfig != nil {
-		argF = append(argF, func(conn *client.Conn) {
+		argF = append(argF, func(conn *client.Conn) error {
 			conn.SetTLSConfig(c.cfg.TLSConfig)
+			return nil
 		})
 	}
 

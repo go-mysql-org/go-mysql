@@ -38,7 +38,8 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime() {
 		done <- true
 	}()
 	failTimeout := 5 * timeout
-	ctx, _ := context.WithTimeout(context.Background(), failTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), failTimeout)
+	defer cancel()
 	select {
 	case <-done:
 		return

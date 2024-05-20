@@ -166,7 +166,7 @@ func NewPool(
 	user string,
 	password string,
 	dbName string,
-	options ...func(conn *Conn),
+	options ...Option,
 ) *Pool {
 	pool, err := NewPoolWithOptions(
 		addr,

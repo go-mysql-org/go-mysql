@@ -897,12 +897,13 @@ func (b *BinlogSyncer) newConnection(ctx context.Context) (*client.Conn, error) 
 	defer cancel()
 
 	return client.ConnectWithDialer(timeoutCtx, "", addr, b.cfg.User, b.cfg.Password,
-		"", b.cfg.Dialer, func(c *client.Conn) {
+		"", b.cfg.Dialer, func(c *client.Conn) error {
 			c.SetTLSConfig(b.cfg.TLSConfig)
 			c.SetAttributes(map[string]string{"_client_role": "binary_log_listener"})
 			if b.cfg.ReadTimeout > 0 {
-				_ = c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
+				return c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
 			}
+			return nil
 		})
 }
 

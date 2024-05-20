@@ -360,6 +360,58 @@ func main() {
 }
 ```
 
+### Driver Options
+
+Configuration options can be provided by the standard DSN (Data Source Name).
+
+```
+[user[:password]@]addr[/db[?param=X]]
+```
+
+#### `compress`
+
+Enable zlib compression between the client and the server.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| boolean   | false     | user:pass@localhost/mydb?compress=true      |
+
+#### `readTimeout`
+
+I/O read timeout.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?readTimeout=10s    |
+
+#### `ssl`
+
+Enable TLS between client and server.
+
+| Type      | Default   | Allowed Values                              |
+| --------- | --------- | ------------------------------------------- |
+| string    |           | `true` or `custom`                          |
+
+
+#### `timeout`
+
+Timeout is the maximum amount of time a dial will wait for a connect to complete.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?timeout=1m         |
+
+#### `writeTimeout`
+
+I/O write timeout.
+
+| Type      | Default   | Example                                         |
+| --------- | --------- | ----------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?writeTimeout=1m30s     |
+
+
+
+
 We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)
 
 ## Donate

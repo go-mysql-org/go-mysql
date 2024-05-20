@@ -13,9 +13,10 @@ test:
 
 MYSQL_VERSION ?= 8.0
 test-local:
-	docker run --rm -d --network=host --name go-mysql-server \
+	docker run --rm --name go-mysql-server \
 		-e MYSQL_ALLOW_EMPTY_PASSWORD=true \
 		-e MYSQL_DATABASE=test \
+		-p 3306:3306 \
 		-v $${PWD}/docker/resources/replication.cnf:/etc/mysql/conf.d/replication.cnf \
 		mysql:$(MYSQL_VERSION)
 	docker/resources/waitfor.sh 127.0.0.1 3306 \
