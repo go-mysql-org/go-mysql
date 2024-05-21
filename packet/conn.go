@@ -320,6 +320,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	if len(data) > MinCompressionLength {
 		var w io.WriteCloser
 		payload = utils.BytesBufferGet()
+		defer utils.BytesBufferPut(payload)
 
 		switch c.Compression {
 		case MYSQL_COMPRESS_ZLIB:
@@ -350,6 +351,8 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	c.CompressedSequence = 0
 	// write the compressed packet header
 	compressedPacket := utils.BytesBufferGet()
+	defer utils.BytesBufferPut(compressedPacket)
+
 	compressedHeader[0] = byte(compressedLength)
 	compressedHeader[1] = byte(compressedLength >> 8)
 	compressedHeader[2] = byte(compressedLength >> 16)
@@ -357,15 +360,13 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	compressedHeader[4] = byte(uncompressedLength)
 	compressedHeader[5] = byte(uncompressedLength >> 8)
 	compressedHeader[6] = byte(uncompressedLength >> 16)
-	_, err = compressedPacket.Write(compressedHeader)
-	if err != nil {
+	if _, err = compressedPacket.Write(compressedHeader); err != nil {
 		return 0, err
 	}
 	c.CompressedSequence++
 
 	if payload != nil {
 		_, err = compressedPacket.Write(payload.Bytes())
-		utils.BytesBufferPut(payload)
 	} else {
 		n, err = compressedPacket.Write(data)
 	}
@@ -373,9 +374,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	_, err = c.Write(compressedPacket.Bytes())
-	utils.BytesBufferPut(compressedPacket)
-	if err != nil {
+	if _, err = c.Write(compressedPacket.Bytes()); err != nil {
 		return 0, err
 	}
 
