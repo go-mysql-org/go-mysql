@@ -118,7 +118,9 @@ func CreateMockServer(t *testing.T) *testServer {
 
 			go func() {
 				co, err := server.NewCustomizedConn(conn, defaultServer, inMemProvider, handler)
-				require.NoError(t, err)
+				if err != nil {
+					return
+				}
 				for {
 					err = co.HandleCommand()
 					if err != nil {
