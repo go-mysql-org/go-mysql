@@ -44,6 +44,8 @@ func CompressOption(c *client.Conn, value string) error {
 	}
 	if b {
 		c.SetCapability(mysql.CLIENT_COMPRESS)
+	} else {
+		c.UnsetCapability(mysql.CLIENT_COMPRESS)
 	}
 
 	return nil

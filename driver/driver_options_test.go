@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/server"
 	"github.com/pingcap/errors"
@@ -26,6 +27,23 @@ type testServer struct {
 }
 
 type mockHandler struct {
+}
+
+func TestDriverOptions_SetCollation(t *testing.T) {
+	c := &client.Conn{}
+	CollationOption(c, "latin2_bin")
+	require.Equal(t, "latin2_bin", c.GetCollation())
+}
+
+func TestDriverOptions_SetCompression(t *testing.T) {
+	c := &client.Conn{}
+	CompressOption(c, "true")
+	require.True(t, c.HasCapability(mysql.CLIENT_COMPRESS))
+
+	CompressOption(c, "false")
+	require.False(t, c.HasCapability(mysql.CLIENT_COMPRESS))
+
+	require.Error(t, CompressOption(c, "foo"))
 }
 
 func TestDriverOptions_ConnectTimeout(t *testing.T) {
