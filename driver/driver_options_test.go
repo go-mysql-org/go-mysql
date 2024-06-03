@@ -31,16 +31,20 @@ type mockHandler struct {
 
 func TestDriverOptions_SetCollation(t *testing.T) {
 	c := &client.Conn{}
-	CollationOption(c, "latin2_bin")
+	err := CollationOption(c, "latin2_bin")
+	require.NoError(t, err)
 	require.Equal(t, "latin2_bin", c.GetCollation())
 }
 
 func TestDriverOptions_SetCompression(t *testing.T) {
+	var err error
 	c := &client.Conn{}
-	CompressOption(c, "true")
+	err = CompressOption(c, "true")
+	require.NoError(t, err)
 	require.True(t, c.HasCapability(mysql.CLIENT_COMPRESS))
 
-	CompressOption(c, "false")
+	err = CompressOption(c, "false")
+	require.NoError(t, err)
 	require.False(t, c.HasCapability(mysql.CLIENT_COMPRESS))
 
 	require.Error(t, CompressOption(c, "foo"))
@@ -200,7 +204,6 @@ func (h *mockHandler) HandleStmtPrepare(query string) (params int, columns int, 
 }
 
 func (h *mockHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error) {
-
 	if strings.HasPrefix(strings.ToLower(query), "select") {
 		return h.HandleQuery(query)
 	}

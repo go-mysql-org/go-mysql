@@ -121,8 +121,8 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 	c.charset = DEFAULT_CHARSET
 
 	// Apply configuration functions.
-	for i := range options {
-		if err := options[i](c); err != nil {
+	for _, option := range options {
+		if err := option(c); err != nil {
 			return nil, err
 		}
 	}
