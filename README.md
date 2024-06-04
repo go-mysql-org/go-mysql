@@ -378,7 +378,7 @@ Enable zlib compression between the client and the server.
 
 #### `readTimeout`
 
-I/O read timeout.
+I/O read timeout. 0 means no timeout.
 
 | Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |
