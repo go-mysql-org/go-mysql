@@ -384,13 +384,13 @@ I/O read timeout. 0 means no timeout.
 | --------- | --------- | ------------------------------------------- |
 | duration  | 0         | user:pass@localhost/mydb?readTimeout=10s    |
 
-#### `tls`
+#### `ssl`
 
 Enable TLS between client and server. Valid values are `true` or `custom`.
 
 | Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |
-| string    |           | user:pass@localhost/mydb?tls=true           |
+| string    |           | user:pass@localhost/mydb?ssl=true           |
 
 #### `timeout`
 
