@@ -370,11 +370,11 @@ Configuration options can be provided by the standard DSN (Data Source Name).
 
 #### `compress`
 
-Enable zlib compression between the client and the server.
+Enable compression between the client and the server. Valid values are 'zstd','zlib','uncompressed'.
 
-| Type      | Default   | Example                                     |
-| --------- | --------- | ------------------------------------------- |
-| boolean   | false     | user:pass@localhost/mydb?compress=true      |
+| Type      | Default       | Example                                 |
+| --------- | ------------- | --------------------------------------- |
+| string    | uncompressed  | user:pass@localhost/mydb?compress=zlib  |
 
 #### `readTimeout`
 
@@ -384,18 +384,17 @@ I/O read timeout. 0 means no timeout.
 | --------- | --------- | ------------------------------------------- |
 | duration  | 0         | user:pass@localhost/mydb?readTimeout=10s    |
 
-#### `ssl`
+#### `tls`
 
-Enable TLS between client and server.
+Enable TLS between client and server. Valid values are `true` or `custom`.
 
-| Type      | Default   | Allowed Values                              |
+| Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |
-| string    |           | `true` or `custom`                          |
-
+| string    |           | user:pass@localhost/mydb?tls=true           |
 
 #### `timeout`
 
-Timeout is the maximum amount of time a dial will wait for a connect to complete.
+Timeout is the maximum amount of time a dial will wait for a connect to complete.  0 means no timeout.
 
 | Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |
@@ -403,12 +402,11 @@ Timeout is the maximum amount of time a dial will wait for a connect to complete
 
 #### `writeTimeout`
 
-I/O write timeout.
+I/O write timeout. 0 means no timeout.
 
 | Type      | Default   | Example                                         |
 | --------- | --------- | ----------------------------------------------- |
 | duration  | 0         | user:pass@localhost/mydb?writeTimeout=1m30s     |
-
 
 
 

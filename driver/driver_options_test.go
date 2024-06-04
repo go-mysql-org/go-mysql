@@ -39,13 +39,18 @@ func TestDriverOptions_SetCollation(t *testing.T) {
 func TestDriverOptions_SetCompression(t *testing.T) {
 	var err error
 	c := &client.Conn{}
-	err = CompressOption(c, "true")
+	err = CompressOption(c, "zlib")
 	require.NoError(t, err)
 	require.True(t, c.HasCapability(mysql.CLIENT_COMPRESS))
 
-	err = CompressOption(c, "false")
+	err = CompressOption(c, "zstd")
+	require.NoError(t, err)
+	require.True(t, c.HasCapability(mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM))
+
+	err = CompressOption(c, "uncompressed")
 	require.NoError(t, err)
 	require.False(t, c.HasCapability(mysql.CLIENT_COMPRESS))
+	require.False(t, c.HasCapability(mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM))
 
 	require.Error(t, CompressOption(c, "foo"))
 }

@@ -86,12 +86,14 @@ func TestParseDSN(t *testing.T) {
 		"user@1.domain.com?db":                          {standardDSN: false, addr: "1.domain.com", user: "user", password: "", db: "db", params: url.Values{}},
 		"user:password@2.domain.com/db":                 {standardDSN: true, addr: "2.domain.com", user: "user", password: "password", db: "db", params: url.Values{}},
 		"user:password@3.domain.com/db?ssl=true":        {standardDSN: true, addr: "3.domain.com", user: "user", password: "password", db: "db", params: url.Values{"ssl": []string{"true"}}},
+		"user:password@3.domain.com/db?tls=true":        {standardDSN: true, addr: "3.domain.com", user: "user", password: "password", db: "db", params: url.Values{"tls": []string{"true"}}},
 		"user:password@4.domain.com/db?ssl=custom":      {standardDSN: true, addr: "4.domain.com", user: "user", password: "password", db: "db", params: url.Values{"ssl": []string{"custom"}}},
+		"user:password@4.domain.com/db?tls=custom":      {standardDSN: true, addr: "4.domain.com", user: "user", password: "password", db: "db", params: url.Values{"tls": []string{"custom"}}},
 		"user:password@5.domain.com/db?unused=param":    {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"unused": []string{"param"}}},
 		"user:password@5.domain.com/db?timeout=1s":      {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"timeout": []string{"1s"}}},
 		"user:password@5.domain.com/db?readTimeout=1m":  {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"readTimeout": []string{"1m"}}},
 		"user:password@5.domain.com/db?writeTimeout=1m": {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"writeTimeout": []string{"1m"}}},
-		"user:password@5.domain.com/db?compress=true":   {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"compress": []string{"true"}}},
+		"user:password@5.domain.com/db?compress=zlib":   {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"compress": []string{"zlib"}}},
 	}
 
 	for supplied, expected := range testDSNs {

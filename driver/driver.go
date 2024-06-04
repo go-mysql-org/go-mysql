@@ -99,7 +99,8 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 		var timeout time.Duration
 		configuredOptions := make([]client.Option, 0, len(ci.params))
 		for key, value := range ci.params {
-			if key == "ssl" && len(value) > 0 {
+			// the key ssl has been deprecated in favor of tls
+			if (key == "ssl" || key == "tls") && len(value) > 0 {
 				tlsConfigName := value[0]
 				switch tlsConfigName {
 				case "true":
@@ -118,7 +119,7 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 						return nil
 					})
 				default:
-					return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
+					return nil, errors.Errorf("Supported options are tls=true or tls=custom")
 				}
 			} else if key == "timeout" && len(value) > 0 {
 				if timeout, err = time.ParseDuration(value[0]); err != nil {

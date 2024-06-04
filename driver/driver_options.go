@@ -1,7 +1,6 @@
 package driver
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -35,17 +34,16 @@ func WriteTimeoutOption(c *client.Conn, value string) error {
 }
 
 func CompressOption(c *client.Conn, value string) error {
-	var (
-		b   bool
-		err error
-	)
-	if b, err = strconv.ParseBool(value); err != nil {
-		return errors.Errorf("invalid boolean value '%s' for compress option", value)
-	}
-	if b {
+	switch value {
+	case "zlib":
 		c.SetCapability(mysql.CLIENT_COMPRESS)
-	} else {
+	case "zstd":
+		c.SetCapability(mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM)
+	case "uncompressed":
 		c.UnsetCapability(mysql.CLIENT_COMPRESS)
+		c.UnsetCapability(mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM)
+	default:
+		return errors.Errorf("invalid compression algorithm '%s', valid values are 'zstd','zlib','uncompressed'", value)
 	}
 
 	return nil
