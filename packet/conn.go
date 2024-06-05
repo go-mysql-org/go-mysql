@@ -412,7 +412,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err = c.Write(compressedPacket.Bytes()); err != nil {
+	if _, err = c.writeWithTimeout(compressedPacket.Bytes()); err != nil {
 		return 0, err
 	}
 
