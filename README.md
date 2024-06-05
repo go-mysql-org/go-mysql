@@ -378,7 +378,10 @@ Enable compression between the client and the server. Valid values are 'zstd','z
 
 #### `readTimeout`
 
-I/O read timeout. 0 means no timeout.
+I/O read timeout. The time unit is specified in the argument value using
+golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
 
 | Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |
@@ -386,7 +389,8 @@ I/O read timeout. 0 means no timeout.
 
 #### `ssl`
 
-Enable TLS between client and server. Valid values are `true` or `custom`.
+Enable TLS between client and server. Valid values are `true` or `custom`. When using `custom`,
+the connection will use the TLS configuration set by SetCustomTLSConfig matching the host.
 
 | Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |
@@ -394,7 +398,10 @@ Enable TLS between client and server. Valid values are `true` or `custom`.
 
 #### `timeout`
 
-Timeout is the maximum amount of time a dial will wait for a connect to complete.  0 means no timeout.
+Timeout is the maximum amount of time a dial will wait for a connect to complete.
+The time unit is specified in the argument value using golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
 
 | Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |
@@ -402,7 +409,10 @@ Timeout is the maximum amount of time a dial will wait for a connect to complete
 
 #### `writeTimeout`
 
-I/O write timeout. 0 means no timeout.
+I/O write timeout. The time unit is specified in the argument value using
+golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
 
 | Type      | Default   | Example                                         |
 | --------- | --------- | ----------------------------------------------- |

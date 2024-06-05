@@ -123,6 +123,8 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 	// Apply configuration functions.
 	for _, option := range options {
 		if err := option(c); err != nil {
+			// must close the connection in the event the provided configuration is not valid
+			_ = conn.Close()
 			return nil, err
 		}
 	}
@@ -135,6 +137,7 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 	}
 
 	if err = c.handshake(); err != nil {
+		// in the event of an error c.handshake() will close the connection
 		return nil, errors.Trace(err)
 	}
 
@@ -149,11 +152,13 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 	if len(c.collation) != 0 {
 		collation, err := charset.GetCollationByName(c.collation)
 		if err != nil {
+			c.Close()
 			return nil, errors.Trace(fmt.Errorf("invalid collation name %s", c.collation))
 		}
 
 		if collation.ID > 255 {
 			if _, err := c.exec(fmt.Sprintf("SET NAMES %s COLLATE %s", c.charset, c.collation)); err != nil {
+				c.Close()
 				return nil, errors.Trace(err)
 			}
 		}
