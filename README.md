@@ -360,6 +360,95 @@ func main() {
 }
 ```
 
+### Driver Options
+
+Configuration options can be provided by the standard DSN (Data Source Name).
+
+```
+[user[:password]@]addr[/db[?param=X]]
+```
+
+#### `compress`
+
+Enable compression between the client and the server. Valid values are 'zstd','zlib','uncompressed'.
+
+| Type      | Default       | Example                                 |
+| --------- | ------------- | --------------------------------------- |
+| string    | uncompressed  | user:pass@localhost/mydb?compress=zlib  |
+
+#### `readTimeout`
+
+I/O read timeout. The time unit is specified in the argument value using
+golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?readTimeout=10s    |
+
+#### `ssl`
+
+Enable TLS between client and server. Valid values are `true` or `custom`. When using `custom`,
+the connection will use the TLS configuration set by SetCustomTLSConfig matching the host.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| string    |           | user:pass@localhost/mydb?ssl=true           |
+
+#### `timeout`
+
+Timeout is the maximum amount of time a dial will wait for a connect to complete.
+The time unit is specified in the argument value using golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?timeout=1m         |
+
+#### `writeTimeout`
+
+I/O write timeout. The time unit is specified in the argument value using
+golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
+
+| Type      | Default   | Example                                         |
+| --------- | --------- | ----------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?writeTimeout=1m30s     |
+
+### Custom Driver Options
+
+The driver package exposes the function `SetDSNOptions`, allowing for modification of the
+connection by adding custom driver options.
+It requires a full import of the driver (not by side-effects only).
+
+Example of defining a custom option:
+
+```golang
+import (
+ "database/sql"
+
+ "github.com/go-mysql-org/go-mysql/driver"
+)
+
+func main() {
+ driver.SetDSNOptions(map[string]DriverOption{
+  "no_metadata": func(c *client.Conn, value string) error {
+   c.SetCapability(mysql.CLIENT_OPTIONAL_RESULTSET_METADATA)
+   return nil
+  },
+ })
+
+ // dsn format: "user:password@addr/dbname?"
+ dsn := "root@127.0.0.1:3306/test?no_metadata=true"
+ db, _ := sql.Open(dsn)
+ db.Close()
+}
+```
+
+
 We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)
 
 ## Donate

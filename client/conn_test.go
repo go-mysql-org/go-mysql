@@ -28,10 +28,11 @@ func TestConnSuite(t *testing.T) {
 func (s *connTestSuite) SetupSuite() {
 	var err error
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
-	s.c, err = Connect(addr, *testUser, *testPassword, "", func(c *Conn) {
+	s.c, err = Connect(addr, *testUser, *testPassword, "", func(c *Conn) error {
 		// required for the ExecuteMultiple test
 		c.SetCapability(mysql.CLIENT_MULTI_STATEMENTS)
 		c.SetAttributes(map[string]string{"attrtest": "attrvalue"})
+		return nil
 	})
 	require.NoError(s.T(), err)
 

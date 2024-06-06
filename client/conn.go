@@ -18,6 +18,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
+type Option func(*Conn) error
+
 type Conn struct {
 	*packet.Conn
 
@@ -26,6 +28,10 @@ type Conn struct {
 	db        string
 	tlsConfig *tls.Config
 	proto     string
+
+	// Connection read and write timeouts to set on the connection
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
 
 	serverVersion string
 	// server capabilities
@@ -66,16 +72,18 @@ func getNetProto(addr string) string {
 
 // Connect to a MySQL server, addr can be ip:port, or a unix socket domain like /var/sock.
 // Accepts a series of configuration functions as a variadic argument.
-func Connect(addr string, user string, password string, dbName string, options ...func(*Conn)) (*Conn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
+func Connect(addr, user, password, dbName string, options ...Option) (*Conn, error) {
+	return ConnectWithTimeout(addr, user, password, dbName, time.Second*10, options...)
+}
 
-	return ConnectWithContext(ctx, addr, user, password, dbName, options...)
+// ConnectWithTimeout to a MySQL address using a timeout.
+func ConnectWithTimeout(addr, user, password, dbName string, timeout time.Duration, options ...Option) (*Conn, error) {
+	return ConnectWithContext(context.Background(), addr, user, password, dbName, time.Second*10, options...)
 }
 
 // ConnectWithContext to a MySQL addr using the provided context.
-func ConnectWithContext(ctx context.Context, addr string, user string, password string, dbName string, options ...func(*Conn)) (*Conn, error) {
-	dialer := &net.Dialer{}
+func ConnectWithContext(ctx context.Context, addr, user, password, dbName string, timeout time.Duration, options ...Option) (*Conn, error) {
+	dialer := &net.Dialer{Timeout: timeout}
 	return ConnectWithDialer(ctx, "", addr, user, password, dbName, dialer.DialContext, options...)
 }
 
@@ -83,7 +91,7 @@ func ConnectWithContext(ctx context.Context, addr string, user string, password 
 type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 
 // ConnectWithDialer to a MySQL server using the given Dialer.
-func ConnectWithDialer(ctx context.Context, network string, addr string, user string, password string, dbName string, dialer Dialer, options ...func(*Conn)) (*Conn, error) {
+func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbName string, dialer Dialer, options ...Option) (*Conn, error) {
 	c := new(Conn)
 
 	c.attributes = map[string]string{
@@ -108,23 +116,28 @@ func ConnectWithDialer(ctx context.Context, network string, addr string, user st
 	c.password = password
 	c.db = dbName
 	c.proto = network
-	c.Conn = packet.NewConn(conn)
 
 	// use default charset here, utf-8
 	c.charset = DEFAULT_CHARSET
 
 	// Apply configuration functions.
-	for i := range options {
-		options[i](c)
+	for _, option := range options {
+		if err := option(c); err != nil {
+			// must close the connection in the event the provided configuration is not valid
+			_ = conn.Close()
+			return nil, err
+		}
 	}
 
+	c.Conn = packet.NewConnWithTimeout(conn, c.ReadTimeout, c.WriteTimeout)
 	if c.tlsConfig != nil {
 		seq := c.Conn.Sequence
-		c.Conn = packet.NewTLSConn(conn)
+		c.Conn = packet.NewTLSConnWithTimeout(conn, c.ReadTimeout, c.WriteTimeout)
 		c.Conn.Sequence = seq
 	}
 
 	if err = c.handshake(); err != nil {
+		// in the event of an error c.handshake() will close the connection
 		return nil, errors.Trace(err)
 	}
 
@@ -139,11 +152,13 @@ func ConnectWithDialer(ctx context.Context, network string, addr string, user st
 	if len(c.collation) != 0 {
 		collation, err := charset.GetCollationByName(c.collation)
 		if err != nil {
+			c.Close()
 			return nil, errors.Trace(fmt.Errorf("invalid collation name %s", c.collation))
 		}
 
 		if collation.ID > 255 {
 			if _, err := c.exec(fmt.Sprintf("SET NAMES %s COLLATE %s", c.charset, c.collation)); err != nil {
+				c.Close()
 				return nil, errors.Trace(err)
 			}
 		}
@@ -204,6 +219,11 @@ func (c *Conn) SetCapability(cap uint32) {
 // UnsetCapability disables the use of a specific capability
 func (c *Conn) UnsetCapability(cap uint32) {
 	c.ccaps &= ^cap
+}
+
+// HasCapability returns true if the connection has the specific capability
+func (c *Conn) HasCapability(cap uint32) bool {
+	return c.ccaps&cap > 0
 }
 
 // UseSSL: use default SSL

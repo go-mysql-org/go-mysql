@@ -17,7 +17,7 @@ type (
 		password string
 		dbName   string
 
-		connOptions []func(conn *Conn)
+		connOptions []Option
 
 		newPoolPingTimeout time.Duration
 	}
@@ -46,7 +46,7 @@ func WithLogFunc(f LogFunc) PoolOption {
 	}
 }
 
-func WithConnOptions(options ...func(conn *Conn)) PoolOption {
+func WithConnOptions(options ...Option) PoolOption {
 	return func(o *poolOptions) {
 		o.connOptions = append(o.connOptions, options...)
 	}

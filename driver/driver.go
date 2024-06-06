@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"sync"
+	"time"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -21,7 +22,10 @@ import (
 var customTLSMutex sync.Mutex
 
 // Map of dsn address (makes more sense than full dsn?) to tls Config
-var customTLSConfigMap = make(map[string]*tls.Config)
+var (
+	customTLSConfigMap = make(map[string]*tls.Config)
+	options            = make(map[string]DriverOption)
+)
 
 type driver struct {
 }
@@ -92,26 +96,52 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	}
 
 	if ci.standardDSN {
-		if ci.params["ssl"] != nil {
-			tlsConfigName := ci.params.Get("ssl")
-			switch tlsConfigName {
-			case "true":
-				// This actually does insecureSkipVerify
-				// But not even sure if it makes sense to handle false? According to
-				// client_test.go it doesn't - it'd result in an error
-				c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, func(c *client.Conn) { c.UseSSL(true) })
-			case "custom":
-				// I was too concerned about mimicking what go-sql-driver/mysql does which will
-				// allow any name for a custom tls profile and maps the query parameter value to
-				// that TLSConfig variable... there is no need to be that clever.
-				// Instead of doing that, let's store required custom TLSConfigs in a map that
-				// uses the DSN address as the key
-				c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, func(c *client.Conn) { c.SetTLSConfig(customTLSConfigMap[ci.addr]) })
-			default:
-				return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
+		var timeout time.Duration
+		configuredOptions := make([]client.Option, 0, len(ci.params))
+		for key, value := range ci.params {
+			if key == "ssl" && len(value) > 0 {
+				tlsConfigName := value[0]
+				switch tlsConfigName {
+				case "true":
+					// This actually does insecureSkipVerify
+					// But not even sure if it makes sense to handle false? According to
+					// client_test.go it doesn't - it'd result in an error
+					configuredOptions = append(configuredOptions, UseSslOption)
+				case "custom":
+					// I was too concerned about mimicking what go-sql-driver/mysql does which will
+					// allow any name for a custom tls profile and maps the query parameter value to
+					// that TLSConfig variable... there is no need to be that clever.
+					// Instead of doing that, let's store required custom TLSConfigs in a map that
+					// uses the DSN address as the key
+					configuredOptions = append(configuredOptions, func(c *client.Conn) error {
+						c.SetTLSConfig(customTLSConfigMap[ci.addr])
+						return nil
+					})
+				default:
+					return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
+				}
+			} else if key == "timeout" && len(value) > 0 {
+				if timeout, err = time.ParseDuration(value[0]); err != nil {
+					return nil, errors.Wrap(err, "invalid duration value for timeout option")
+				}
+			} else {
+				if option, ok := options[key]; ok {
+					opt := func(o DriverOption, v string) client.Option {
+						return func(c *client.Conn) error {
+							return o(c, v)
+						}
+					}(option, value[0])
+					configuredOptions = append(configuredOptions, opt)
+				} else {
+					return nil, errors.Errorf("unsupported connection option: %s", key)
+				}
 			}
+		}
+
+		if timeout > 0 {
+			c, err = client.ConnectWithTimeout(ci.addr, ci.user, ci.password, ci.db, timeout, configuredOptions...)
 		} else {
-			c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db)
+			c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, configuredOptions...)
 		}
 	} else {
 		// No more processing here. Let's only support url parameters with the newer style DSN
@@ -296,6 +326,11 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 }
 
 func init() {
+	options["compress"] = CompressOption
+	options["collation"] = CollationOption
+	options["readTimeout"] = ReadTimeoutOption
+	options["writeTimeout"] = WriteTimeoutOption
+
 	sql.Register("mysql", driver{})
 }
 
@@ -323,4 +358,20 @@ func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte,
 	customTLSMutex.Unlock()
 
 	return nil
+}
+
+// SetDSNOptions sets custom options to the driver that allows modifications to the connection.
+// It requires a full import of the driver (not by side-effects only).
+// Example of supplying a custom option:
+//
+//	driver.SetDSNOptions(map[string]DriverOption{
+//			"my_option": func(c *client.Conn, value string) error {
+//				c.SetCapability(mysql.CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS)
+//				return nil
+//			},
+//		})
+func SetDSNOptions(customOptions map[string]DriverOption) {
+	for o, f := range customOptions {
+		options[o] = f
+	}
 }

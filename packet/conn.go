@@ -11,6 +11,7 @@ import (
 	goErrors "errors"
 	"io"
 	"net"
+	"time"
 
 	"github.com/go-mysql-org/go-mysql/compress"
 	. "github.com/go-mysql-org/go-mysql/mysql"
@@ -25,6 +26,9 @@ const DefaultBufferSize = 16 * 1024
 // Conn is the base class to handle MySQL protocol.
 type Conn struct {
 	net.Conn
+
+	readTimeout  time.Duration
+	writeTimeout time.Duration
 
 	// Buffered reader for net.Conn in Non-TLS connection only to address replication performance issue.
 	// See https://github.com/go-mysql-org/go-mysql/pull/422 for more details.
@@ -60,6 +64,13 @@ func NewConn(conn net.Conn) *Conn {
 	return c
 }
 
+func NewConnWithTimeout(conn net.Conn, readTimeout, writeTimeout time.Duration) *Conn {
+	c := NewConn(conn)
+	c.readTimeout = readTimeout
+	c.writeTimeout = writeTimeout
+	return c
+}
+
 func NewTLSConn(conn net.Conn) *Conn {
 	c := new(Conn)
 	c.Conn = conn
@@ -68,6 +79,13 @@ func NewTLSConn(conn net.Conn) *Conn {
 
 	c.copyNBuf = make([]byte, DefaultBufferSize)
 
+	return c
+}
+
+func NewTLSConnWithTimeout(conn net.Conn, readTimeout, writeTimeout time.Duration) *Conn {
+	c := NewTLSConn(conn)
+	c.readTimeout = readTimeout
+	c.writeTimeout = writeTimeout
 	return c
 }
 
@@ -127,6 +145,11 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 
 // newCompressedPacketReader creates a new compressed packet reader.
 func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
+	if c.readTimeout != 0 {
+		if err := c.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := io.ReadFull(c.reader, c.compressedHeader[:7]); err != nil {
 		return nil, errors.Wrapf(ErrBadConn, "io.ReadFull(compressedHeader) failed. err %v", err)
 	}
@@ -172,6 +195,11 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 
 		// Call ReadAtLeast with the currentPacketReader as it may change on every iteration
 		// of this loop.
+		if c.readTimeout != 0 {
+			if err := c.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+				return written, err
+			}
+		}
 		rd, err := io.ReadAtLeast(c.currentPacketReader(), buf, bcap)
 
 		n -= int64(rd)
@@ -265,7 +293,7 @@ func (c *Conn) WritePacket(data []byte) error {
 
 		data[3] = c.Sequence
 
-		if n, err := c.Write(data[:4+MaxPayloadLen]); err != nil {
+		if n, err := c.writeWithTimeout(data[:4+MaxPayloadLen]); err != nil {
 			return errors.Wrapf(ErrBadConn, "Write(payload portion) failed. err %v", err)
 		} else if n != (4 + MaxPayloadLen) {
 			return errors.Wrapf(ErrBadConn, "Write(payload portion) failed. only %v bytes written, while %v expected", n, 4+MaxPayloadLen)
@@ -283,7 +311,7 @@ func (c *Conn) WritePacket(data []byte) error {
 
 	switch c.Compression {
 	case MYSQL_COMPRESS_NONE:
-		if n, err := c.Write(data); err != nil {
+		if n, err := c.writeWithTimeout(data); err != nil {
 			return errors.Wrapf(ErrBadConn, "Write failed. err %v", err)
 		} else if n != len(data) {
 			return errors.Wrapf(ErrBadConn, "Write failed. only %v bytes written, while %v expected", n, len(data))
@@ -308,6 +336,16 @@ func (c *Conn) WritePacket(data []byte) error {
 
 	c.Sequence++
 	return nil
+}
+
+func (c *Conn) writeWithTimeout(b []byte) (n int, err error) {
+	if c.writeTimeout != 0 {
+		if err := c.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+			return n, err
+		}
+	}
+
+	return c.Write(b)
 }
 
 func (c *Conn) writeCompressed(data []byte) (n int, err error) {
@@ -374,7 +412,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err = c.Write(compressedPacket.Bytes()); err != nil {
+	if _, err = c.writeWithTimeout(compressedPacket.Bytes()); err != nil {
 		return 0, err
 	}
 
