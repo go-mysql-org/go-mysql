@@ -418,6 +418,35 @@ golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
 | --------- | --------- | ----------------------------------------------- |
 | duration  | 0         | user:pass@localhost/mydb?writeTimeout=1m30s     |
 
+### Custom Driver Options
+
+The driver package exposes the function `SetDSNOptions`, allowing for modification of the
+connection by adding custom driver options.
+It requires a full import of the driver (not by side-effects only).
+
+Example of defining a custom option:
+
+```golang
+import (
+ "database/sql"
+
+ "github.com/go-mysql-org/go-mysql/driver"
+)
+
+func main() {
+ driver.SetDSNOptions(map[string]DriverOption{
+  "no_metadata": func(c *client.Conn, value string) error {
+   c.SetCapability(mysql.CLIENT_OPTIONAL_RESULTSET_METADATA)
+   return nil
+  },
+ })
+
+ // dsn format: "user:password@addr/dbname?"
+ dsn := "root@127.0.0.1:3306/test?no_metadata=true"
+ db, _ := sql.Open(dsn)
+ db.Close()
+}
+```
 
 
 We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)

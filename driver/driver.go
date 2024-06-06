@@ -360,17 +360,17 @@ func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte,
 	return nil
 }
 
-// SetDsnOptions sets custom options to the driver that allows modifications to the connection.
+// SetDSNOptions sets custom options to the driver that allows modifications to the connection.
 // It requires a full import of the driver (not by side-effects only).
 // Example of supplying a custom option:
 //
-//	driver.SetDsnOptions(map[string]DriverOption{
+//	driver.SetDSNOptions(map[string]DriverOption{
 //			"my_option": func(c *client.Conn, value string) error {
 //				c.SetCapability(mysql.CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS)
 //				return nil
 //			},
 //		})
-func SetDsnOptions(customOptions map[string]DriverOption) {
+func SetDSNOptions(customOptions map[string]DriverOption) {
 	for o, f := range customOptions {
 		options[o] = f
 	}
