@@ -3,8 +3,11 @@ package driver
 import (
 	"context"
 	"database/sql"
+	sqlDriver "database/sql/driver"
 	"fmt"
+	"math"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -94,14 +97,48 @@ func TestDriverOptions_writeTimeout(t *testing.T) {
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 
-	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?writeTimeout=10")
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?writeTimeout=1ns")
 	require.NoError(t, err)
 
 	result, err := conn.ExecContext(context.TODO(), "insert into slow(a,b) values(1,2);")
-	require.Nil(t, result)
 	require.Error(t, err)
+	require.Nil(t, result)
 
 	conn.Close()
+}
+
+func TestDriverOptions_namedValueChecker(t *testing.T) {
+	AddNamedValueChecker(func(nv *sqlDriver.NamedValue) error {
+		rv := reflect.ValueOf(nv.Value)
+		if rv.Kind() != reflect.Uint64 {
+			// fallback to the default value converter when the value is not a uint64
+			return sqlDriver.ErrSkip
+		}
+
+		return nil
+	})
+
+	log.SetLevel(log.LevelDebug)
+	srv := CreateMockServer(t)
+	defer srv.Stop()
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?writeTimeout=1s")
+	require.NoError(t, err)
+	defer conn.Close()
+
+	stmt, err := conn.Prepare("select a, b from fast where uint64 = ?")
+	require.NoError(t, err)
+	defer stmt.Close()
+
+	var val uint64 = math.MaxUint64
+	result, err := stmt.Query(val)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	var a uint64
+	var b string
+	require.True(t, result.Next())
+	require.NoError(t, result.Scan(&a, &b))
+	require.True(t, math.MaxUint64 == a)
 }
 
 func CreateMockServer(t *testing.T) *testServer {
@@ -167,8 +204,13 @@ func (h *mockHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 				time.Sleep(time.Second * 5)
 			}
 
+			var aValue uint64 = 1
+			if strings.Contains(query, "uint64") {
+				aValue = math.MaxUint64
+			}
+
 			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]interface{}{
-				{1, "hello world"},
+				{aValue, "hello world"},
 			}, binary)
 		}
 
@@ -206,13 +248,13 @@ func (h *mockHandler) HandleFieldList(table string, fieldWildcard string) ([]*my
 
 func (h *mockHandler) HandleStmtPrepare(query string) (params int, columns int, context interface{}, err error) {
 	params = 1
-	columns = 0
+	columns = 2
 	return params, columns, nil, nil
 }
 
 func (h *mockHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error) {
 	if strings.HasPrefix(strings.ToLower(query), "select") {
-		return h.HandleQuery(query)
+		return h.handleQuery(query, true)
 	}
 
 	return &mysql.Result{

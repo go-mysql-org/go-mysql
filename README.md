@@ -448,6 +448,41 @@ func main() {
 }
 ```
 
+### Custom NamedValueChecker
+
+Golang allows for custom handling of query arguments before they are passed to the driver
+with the implementation of a [NamedValueChecker](https://pkg.go.dev/database/sql/driver#NamedValueChecker). By doing a full import of the driver (not by side-effects only),
+a custom NamedValueChecker can be implemented.
+
+```golang
+import (
+ "database/sql"
+
+ "github.com/go-mysql-org/go-mysql/driver"
+)
+
+func main() {
+ driver.AddNamedValueChecker(func(nv *sqlDriver.NamedValue) error {
+  rv := reflect.ValueOf(nv.Value)
+  if rv.Kind() != reflect.Uint64 {
+   // fallback to the default value converter when the value is not a uint64
+   return sqlDriver.ErrSkip
+  }
+
+  return nil
+ })
+
+ conn, err := sql.Open("mysql", "root@127.0.0.1:3306/test")
+ defer conn.Close()
+
+ stmt, err := conn.Prepare("select * from table where id = ?")
+ defer stmt.Close()
+ var val uint64 = math.MaxUint64
+ // without the NamedValueChecker this query would fail
+ result, err := stmt.Query(val)
+}
+```
+
 
 We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)
 

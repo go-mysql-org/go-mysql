@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	sqldriver "database/sql/driver"
+	goErrors "errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -25,6 +26,10 @@ var customTLSMutex sync.Mutex
 var (
 	customTLSConfigMap = make(map[string]*tls.Config)
 	options            = make(map[string]DriverOption)
+
+	// can be provided by clients to allow more control in handling Go and database
+	// types beyond the default Value types allowed
+	namedValueCheckers []CheckNamedValueFunc
 )
 
 type driver struct {
@@ -154,8 +159,30 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	return &conn{c}, nil
 }
 
+type CheckNamedValueFunc func(*sqldriver.NamedValue) error
+
+var _ sqldriver.NamedValueChecker = &conn{}
+
 type conn struct {
 	*client.Conn
+}
+
+func (c *conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
+	for _, nvChecker := range namedValueCheckers {
+		err := nvChecker(nv)
+		if err == nil {
+			// we've found a CheckNamedValueFunc that handled this named value
+			// no need to keep looking
+			return nil
+		} else {
+			// we've found an error, if the error is driver.ErrSkip then
+			// keep looking otherwise return the unknown error
+			if !goErrors.Is(sqldriver.ErrSkip, err) {
+				return err
+			}
+		}
+	}
+	return sqldriver.ErrSkip
 }
 
 func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
@@ -374,4 +401,12 @@ func SetDSNOptions(customOptions map[string]DriverOption) {
 	for o, f := range customOptions {
 		options[o] = f
 	}
+}
+
+// AddNamedValueChecker sets a custom NamedValueChecker for the driver connection which
+// allows for more control in handling Go and database types beyond the default Value types.
+// See https://pkg.go.dev/database/sql/driver#NamedValueChecker
+// Usage requires a full import of the driver (not by side-effects only).
+func AddNamedValueChecker(nvCheckFunc ...CheckNamedValueFunc) {
+	namedValueCheckers = append(namedValueCheckers, nvCheckFunc...)
 }
