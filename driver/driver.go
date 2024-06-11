@@ -406,7 +406,9 @@ func SetDSNOptions(customOptions map[string]DriverOption) {
 // AddNamedValueChecker sets a custom NamedValueChecker for the driver connection which
 // allows for more control in handling Go and database types beyond the default Value types.
 // See https://pkg.go.dev/database/sql/driver#NamedValueChecker
-// Usage requires a full import of the driver (not by side-effects only).
+// Usage requires a full import of the driver (not by side-effects only). Also note that
+// this function is not concurrent-safe, and should only be executed while setting up the driver
+// before establishing any connections via `sql.Open()`.
 func AddNamedValueChecker(nvCheckFunc ...CheckNamedValueFunc) {
 	namedValueCheckers = append(namedValueCheckers, nvCheckFunc...)
 }
