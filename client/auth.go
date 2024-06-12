@@ -285,10 +285,8 @@ func (c *Conn) writeAuthHandshake() error {
 		return fmt.Errorf("invalid collation name %s", collationName)
 	}
 
-	// the MySQL protocol calls for the collation id to be sent as 1, where only the
-	// lower 8 bits are used in this field. But wireshark shows that the first byte of
-	// the 23 bytes of filler is used to send the right middle 8 bits of the collation id.
-	// see https://github.com/mysql/mysql-server/pull/541
+	// the MySQL protocol calls for the collation id to be sent as 1 byte, where only the
+	// lower 8 bits are used in this field.
 	data[12] = byte(collation.ID & 0xff)
 
 	// SSL Connection Request Packet
