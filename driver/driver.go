@@ -57,7 +57,6 @@ type connInfo struct {
 //
 // Optional parameters are supported in the standard DSN form
 func parseDSN(dsn string) (connInfo, error) {
-
 	ci := connInfo{}
 
 	// If a "/" occurs after "@" and then no more "@" or "/" occur after that
