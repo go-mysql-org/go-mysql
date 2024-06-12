@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ var customTLSMutex sync.Mutex
 
 // Map of dsn address (makes more sense than full dsn?) to tls Config
 var (
+	dsnRegex           = regexp.MustCompile("@[^@]+/[^@/]+")
 	customTLSConfigMap = make(map[string]*tls.Config)
 	options            = make(map[string]DriverOption)
 
@@ -55,13 +57,17 @@ type connInfo struct {
 //
 // Optional parameters are supported in the standard DSN form
 func parseDSN(dsn string) (connInfo, error) {
-	var matchErr error
+
 	ci := connInfo{}
 
 	// If a "/" occurs after "@" and then no more "@" or "/" occur after that
-	ci.standardDSN, matchErr = regexp.MatchString("@[^@]+/[^@/]+", dsn)
-	if matchErr != nil {
-		return ci, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
+	if strings.Contains(dsn, "@") {
+		ci.standardDSN = dsnRegex.MatchString(dsn)
+	} else {
+		// when the `@` char is not present in the dsn, then look for `/` as the db separator
+		// to indicate a standard DSN. The legacy form uses the `?` char as the db separator.
+		// If neither `/` or `?` are in the dsn, simply treat the dsn as the legacy form.
+		ci.standardDSN = strings.Contains(dsn, "/")
 	}
 
 	// Add a prefix so we can parse with url.Parse
