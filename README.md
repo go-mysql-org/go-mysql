@@ -368,6 +368,14 @@ Configuration options can be provided by the standard DSN (Data Source Name).
 [user[:password]@]addr[/db[?param=X]]
 ```
 
+#### `collation`
+
+Set a collation during the Auth handshake.
+
+| Type      | Default         | Example                                               |
+| --------- | --------------- | ----------------------------------------------------- |
+| string    | utf8_general_ci | user:pass@localhost/mydb?collation=latin1_general_ci  |
+
 #### `compress`
 
 Enable compression between the client and the server. Valid values are 'zstd','zlib','uncompressed'.
