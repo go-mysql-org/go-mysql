@@ -92,6 +92,12 @@ func TestParseDSN(t *testing.T) {
 		"user:password@5.domain.com/db?readTimeout=1m":  {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"readTimeout": []string{"1m"}}},
 		"user:password@5.domain.com/db?writeTimeout=1m": {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"writeTimeout": []string{"1m"}}},
 		"user:password@5.domain.com/db?compress=zlib":   {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"compress": []string{"zlib"}}},
+
+		// per the documentation in the README, the 'user:password@' is optional as are the '/db?param=X' portions of the DSN
+		"6.domain.com":                  {standardDSN: false, addr: "6.domain.com", user: "", password: "", db: "", params: url.Values{}},
+		"7.domain.com?db":               {standardDSN: false, addr: "7.domain.com", user: "", password: "", db: "db", params: url.Values{}},
+		"8.domain.com/db":               {standardDSN: true, addr: "8.domain.com", user: "", password: "", db: "db", params: url.Values{}},
+		"9.domain.com/db?compress=zlib": {standardDSN: true, addr: "9.domain.com", user: "", password: "", db: "db", params: url.Values{"compress": []string{"zlib"}}},
 	}
 
 	for supplied, expected := range testDSNs {
