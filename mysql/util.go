@@ -324,7 +324,7 @@ func FormatBinaryDateTime(n int, data []byte) ([]byte, error) {
 
 func FormatBinaryTime(n int, data []byte) ([]byte, error) {
 	if n == 0 {
-		return []byte("0000-00-00"), nil
+		return []byte("00:00:00"), nil
 	}
 
 	var sign byte
@@ -332,27 +332,32 @@ func FormatBinaryTime(n int, data []byte) ([]byte, error) {
 		sign = byte('-')
 	}
 
+	var bytes []byte
 	switch n {
 	case 8:
-		return []byte(fmt.Sprintf(
+		bytes = []byte(fmt.Sprintf(
 			"%c%02d:%02d:%02d",
 			sign,
 			uint16(data[1])*24+uint16(data[5]),
 			data[6],
 			data[7],
-		)), nil
+		))
 	case 12:
-		return []byte(fmt.Sprintf(
+		bytes = []byte(fmt.Sprintf(
 			"%c%02d:%02d:%02d.%06d",
 			sign,
 			uint16(data[1])*24+uint16(data[5]),
 			data[6],
 			data[7],
 			binary.LittleEndian.Uint32(data[8:12]),
-		)), nil
+		))
 	default:
 		return nil, errors.Errorf("invalid time packet length %d", n)
 	}
+	if bytes[0] == 0 {
+		return bytes[1:], nil
+	}
+	return bytes, nil
 }
 
 var (
