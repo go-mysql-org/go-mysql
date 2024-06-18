@@ -42,12 +42,11 @@ func TestFormatBinaryTime(t *testing.T) {
 	for _, test := range tests {
 		n := len(test.Data)
 
-		// binary.LittleEndian.PutUint32(data[1:], uint64(test.Seconds))
 		got, err := FormatBinaryTime(n, test.Data)
 		if test.Error {
 			require.Error(t, err)
-		} else if err != nil {
-			t.Fatalf("unexpected error: %s", err)
+		} else {
+			require.NoError(t, err)
 		}
 		require.Equal(t, test.Expect, string(got), "test case %v", test.Data)
 	}
