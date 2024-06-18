@@ -40,7 +40,6 @@ func TestFormatBinaryTime(t *testing.T) {
 	}
 
 	for _, test := range tests {
-
 		n := len(test.Data)
 
 		// binary.LittleEndian.PutUint32(data[1:], uint64(test.Seconds))
