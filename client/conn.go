@@ -18,6 +18,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
+const defaultBufferSize = 65536 // 64kb
+
 type Option func(*Conn) error
 
 type Conn struct {
@@ -32,6 +34,9 @@ type Conn struct {
 	// Connection read and write timeouts to set on the connection
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
+
+	// The buffer size to use in the packet connection
+	BufferSize int
 
 	serverVersion string
 	// server capabilities
@@ -94,6 +99,7 @@ type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbName string, dialer Dialer, options ...Option) (*Conn, error) {
 	c := new(Conn)
 
+	c.BufferSize = defaultBufferSize
 	c.attributes = map[string]string{
 		"_client_name": "go-mysql",
 		// "_client_version": "0.1",
@@ -129,7 +135,7 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 		}
 	}
 
-	c.Conn = packet.NewConnWithTimeout(conn, c.ReadTimeout, c.WriteTimeout)
+	c.Conn = packet.NewConnWithTimeout(conn, c.ReadTimeout, c.WriteTimeout, c.BufferSize)
 	if c.tlsConfig != nil {
 		seq := c.Conn.Sequence
 		c.Conn = packet.NewTLSConnWithTimeout(conn, c.ReadTimeout, c.WriteTimeout)

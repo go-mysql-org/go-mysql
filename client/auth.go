@@ -304,7 +304,7 @@ func (c *Conn) writeAuthHandshake() error {
 		}
 
 		currentSequence := c.Sequence
-		c.Conn = packet.NewConn(tlsConn)
+		c.Conn = packet.NewBufferedConn(tlsConn, c.BufferSize)
 		c.Sequence = currentSequence
 	}
 

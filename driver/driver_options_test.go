@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +65,29 @@ func TestDriverOptions_ConnectTimeout(t *testing.T) {
 	defer srv.Stop()
 
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?timeout=1s")
+	require.NoError(t, err)
+
+	rows, err := conn.QueryContext(context.TODO(), "select * from table;")
+	require.NotNil(t, rows)
+	require.NoError(t, err)
+
+	conn.Close()
+}
+
+func TestDriverOptions_BufferSize(t *testing.T) {
+	log.SetLevel(log.LevelDebug)
+	srv := CreateMockServer(t)
+	defer srv.Stop()
+
+	SetDSNOptions(map[string]DriverOption{
+		"bufferSize": func(c *client.Conn, value string) error {
+			var err error
+			c.BufferSize, err = strconv.Atoi(value)
+			return err
+		},
+	})
+
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?bufferSize=4096")
 	require.NoError(t, err)
 
 	rows, err := conn.QueryContext(context.TODO(), "select * from table;")
