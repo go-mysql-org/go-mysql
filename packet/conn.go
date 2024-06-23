@@ -53,10 +53,14 @@ type Conn struct {
 }
 
 func NewConn(conn net.Conn) *Conn {
+	return NewBufferedConn(conn, 65536) // 64kb
+}
+
+func NewBufferedConn(conn net.Conn, bufferSize int) *Conn {
 	c := new(Conn)
 	c.Conn = conn
 
-	c.br = bufio.NewReaderSize(c, 65536) // 64kb
+	c.br = bufio.NewReaderSize(c, bufferSize)
 	c.reader = c.br
 
 	c.copyNBuf = make([]byte, DefaultBufferSize)
@@ -64,8 +68,8 @@ func NewConn(conn net.Conn) *Conn {
 	return c
 }
 
-func NewConnWithTimeout(conn net.Conn, readTimeout, writeTimeout time.Duration) *Conn {
-	c := NewConn(conn)
+func NewConnWithTimeout(conn net.Conn, readTimeout, writeTimeout time.Duration, bufferSize int) *Conn {
+	c := NewBufferedConn(conn, bufferSize)
 	c.readTimeout = readTimeout
 	c.writeTimeout = writeTimeout
 	return c
