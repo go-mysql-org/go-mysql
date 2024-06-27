@@ -47,22 +47,22 @@ func (c *Canal) runSyncBinlog() error {
 		// Update the delay between the Canal and the Master before the handler hooks are called
 		c.updateReplicationDelay(ev)
 
-		// If log pos equals zero then the received event is a fake rotate event and
-		// contains only a name of the next binlog file
-		// See https://github.com/mysql/mysql-server/blob/8e797a5d6eb3a87f16498edcb7261a75897babae/sql/rpl_binlog_sender.h#L235
-		// and https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
-		if ev.Header.LogPos == 0 {
-			switch e := ev.Event.(type) {
-			case *replication.RotateEvent:
+		switch e := ev.Event.(type) {
+		case *replication.RotateEvent:
+			// If the timestamp equals zero, the received rotate event is a fake rotate event
+			// and contains only the name of the next binlog file. Its log position should be
+			// ignored.
+			// See https://github.com/mysql/mysql-server/blob/8e797a5d6eb3a87f16498edcb7261a75897babae/sql/rpl_binlog_sender.h#L235
+			// and https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
+			if ev.Header.Timestamp == 0 {
 				fakeRotateLogName := string(e.NextLogName)
 				c.cfg.Logger.Infof("received fake rotate event, next log name is %s", e.NextLogName)
+
 				if fakeRotateLogName != c.master.Position().Name {
 					c.cfg.Logger.Info("log name changed, the fake rotate event will be handled as a real rotate event")
 				} else {
 					continue
 				}
-			default:
-				continue
 			}
 		}
 
