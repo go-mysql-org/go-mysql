@@ -235,6 +235,14 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 			table: t.Table.Name.String(),
 		}
 		ns = []*node{n}
+	case *ast.AnalyzeTableStmt:
+		ns = make([]*node, len(t.TableNames))
+		for i, table := range t.TableNames {
+			ns[i] = &node{
+				db:    table.Schema.String(),
+				table: table.Name.String(),
+			}
+		}
 	}
 	return ns
 }
