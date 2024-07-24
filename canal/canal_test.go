@@ -133,8 +133,24 @@ func (s *canalTestSuite) TestCanal() {
 	)
 	s.execute("ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
 	s.execute("INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
-	s.execute("ANALYZE TABLE test.canal_test")
 
+	err := s.c.CatchMasterPos(10 * time.Second)
+	require.NoError(s.T(), err)
+}
+
+func (s *canalTestSuite) TestAnalyzeAdvancesSyncedPos() {
+	<-s.c.WaitDumpDone()
+
+	// We should not need to use FLUSH BINARY LOGS
+	// An ANALYZE TABLE statement should advance the saved position.
+	// There are still cases that don't advance, such as
+	// statements that won't parse like [CREATE|DROP] TRIGGER.
+	s.c.cfg.DisableFlushBinlogWhileWaiting = true
+	defer func() {
+		s.c.cfg.DisableFlushBinlogWhileWaiting = false
+	}()
+
+	s.execute("ANALYZE TABLE test.canal_test")
 	err := s.c.CatchMasterPos(10 * time.Second)
 	require.NoError(s.T(), err)
 }

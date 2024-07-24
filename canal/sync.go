@@ -141,6 +141,8 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 	case *replication.QueryEvent:
 		stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 		if err != nil {
+			// The parser does not understand all syntax.
+			// For example, it won't parse [CREATE|DROP] TRIGGER statements.
 			c.cfg.Logger.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
 			return nil
 		}
@@ -302,6 +304,12 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 		case <-timer.C:
 			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
+			if !c.cfg.DisableFlushBinlogWhileWaiting {
+				err := c.FlushBinlog()
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
 			curPos := c.master.Position()
 			if curPos.Compare(pos) >= 0 {
 				return nil

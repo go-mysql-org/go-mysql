@@ -91,6 +91,11 @@ type Config struct {
 	// whether disable re-sync for broken connection
 	DisableRetrySync bool `toml:"disable_retry_sync"`
 
+	// whether the function WaitUntilPos() can use FLUSH BINARY LOGS
+	// to ensure we advance past a position. This should not strictly be required,
+	// and requires additional privileges.
+	DisableFlushBinlogWhileWaiting bool `toml:"disable_flush_binlog_while_waiting"`
+
 	// Set TLS config
 	TLSConfig *tls.Config
 
