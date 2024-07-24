@@ -174,7 +174,7 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	// the native go-mysql-org/go-mysql 'mysql.ErrBadConn' erorr which will prevent a retry.
 	// In this case the sqldriver.Validator interface is implemented and will return
 	// false for IsValid() signaling the connection is bad and should be discarded.
-	return &conn{Conn: c, state: &state{valid: true, useDriverErrors: !retries}}, nil
+	return &conn{Conn: c, state: &state{valid: true, useStdLibErrors: retries}}, nil
 }
 
 type CheckNamedValueFunc func(*sqldriver.NamedValue) error
@@ -183,8 +183,9 @@ var _ sqldriver.NamedValueChecker = &conn{}
 var _ sqldriver.Validator = &conn{}
 
 type state struct {
-	valid           bool
-	useDriverErrors bool
+	valid bool
+	// when true, the driver connection will return ErrBadConn from the golang Standard Library
+	useStdLibErrors bool
 }
 
 type conn struct {
@@ -249,7 +250,7 @@ func buildArgs(args []sqldriver.Value) []interface{} {
 func (st *state) replyError(err error) error {
 	isBadConnection := mysql.ErrorEqual(err, mysql.ErrBadConn)
 
-	if !st.useDriverErrors && isBadConnection {
+	if st.useStdLibErrors && isBadConnection {
 		return sqldriver.ErrBadConn
 	} else {
 		// if we have a bad connection, this mark the state of this connection as not valid
