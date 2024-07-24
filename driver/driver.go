@@ -140,7 +140,7 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 				}
 			} else if key == "retries" && len(value) > 0 {
 				// by default keep the golang database/sql retry behavior enabled unless
-				// the retries driver option is explicitly set to 'false'
+				// the retries driver option is explicitly set to 'off'
 				retries = !strings.EqualFold(value[0], "off")
 			} else {
 				if option, ok := options[key]; ok {
