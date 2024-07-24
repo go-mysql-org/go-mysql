@@ -169,11 +169,11 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 		return nil, err
 	}
 
-	// if retries is true then return sqldriver.ErrBadConn which will trigger up to 3
-	// retries by the database/sql package. If retries are disabled then we'll return
+	// if retries are 'on' then return sqldriver.ErrBadConn which will trigger up to 3
+	// retries by the database/sql package. If retries are 'off' then we'll return
 	// the native go-mysql-org/go-mysql 'mysql.ErrBadConn' erorr which will prevent a retry.
 	// In this case the sqldriver.Validator interface is implemented and will return
-	// false for IsValid() signaling that the connection is bad and should be discarded.
+	// false for IsValid() signaling the connection is bad and should be discarded.
 	return &conn{Conn: c, state: &state{valid: true, useDriverErrors: !retries}}, nil
 }
 
