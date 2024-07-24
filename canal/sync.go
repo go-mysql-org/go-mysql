@@ -144,6 +144,9 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 			c.cfg.Logger.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
 			return nil
 		}
+		if len(stmts) > 0 {
+			savePos = true
+		}
 		for _, stmt := range stmts {
 			nodes := parseStmt(stmt)
 			for _, node := range nodes {
@@ -155,7 +158,6 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 				}
 			}
 			if len(nodes) > 0 {
-				savePos = true
 				force = true
 				// Now we only handle Table Changed DDL, maybe we will support more later.
 				if err = c.eventHandler.OnDDL(ev.Header, pos, e); err != nil {
@@ -235,14 +237,6 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 			table: t.Table.Name.String(),
 		}
 		ns = []*node{n}
-	case *ast.AnalyzeTableStmt:
-		ns = make([]*node, len(t.TableNames))
-		for i, table := range t.TableNames {
-			ns[i] = &node{
-				db:    table.Schema.String(),
-				table: table.Name.String(),
-			}
-		}
 	}
 	return ns
 }
@@ -308,10 +302,6 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 		case <-timer.C:
 			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
-			err := c.FlushBinlog()
-			if err != nil {
-				return errors.Trace(err)
-			}
 			curPos := c.master.Position()
 			if curPos.Compare(pos) >= 0 {
 				return nil
