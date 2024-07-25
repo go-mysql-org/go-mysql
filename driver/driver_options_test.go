@@ -31,6 +31,51 @@ type testServer struct {
 }
 
 type mockHandler struct {
+	// the number of times a query executed
+	queryCount int
+}
+
+func TestDriverOptions_SetRetriesOn(t *testing.T) {
+	log.SetLevel(log.LevelDebug)
+	srv := CreateMockServer(t)
+	defer srv.Stop()
+
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s")
+	defer func() {
+		_ = conn.Close()
+	}()
+	require.NoError(t, err)
+
+	rows, err := conn.QueryContext(context.TODO(), "select * from slow;")
+	require.Nil(t, rows)
+
+	// we want to get a golang database/sql/driver ErrBadConn
+	require.ErrorIs(t, err, sqlDriver.ErrBadConn)
+
+	// here we issue assert that even though we only issued 1 query, that the retries
+	// remained on and there were 3 calls to the DB.
+	require.Equal(t, 3, srv.handler.queryCount)
+}
+
+func TestDriverOptions_SetRetriesOff(t *testing.T) {
+	log.SetLevel(log.LevelDebug)
+	srv := CreateMockServer(t)
+	defer srv.Stop()
+
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s&retries=off")
+	defer func() {
+		_ = conn.Close()
+	}()
+	require.NoError(t, err)
+
+	rows, err := conn.QueryContext(context.TODO(), "select * from slow;")
+	require.Nil(t, rows)
+	// we want the native error from this driver implementation
+	require.ErrorIs(t, err, mysql.ErrBadConn)
+
+	// here we issue assert that even though we only issued 1 query, that the retries
+	// remained on and there were 3 calls to the DB.
+	require.Equal(t, 1, srv.handler.queryCount)
 }
 
 func TestDriverOptions_SetCollation(t *testing.T) {
@@ -65,6 +110,9 @@ func TestDriverOptions_ConnectTimeout(t *testing.T) {
 	defer srv.Stop()
 
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?timeout=1s")
+	defer func() {
+		_ = conn.Close()
+	}()
 	require.NoError(t, err)
 
 	rows, err := conn.QueryContext(context.TODO(), "select * from table;")
@@ -88,6 +136,9 @@ func TestDriverOptions_BufferSize(t *testing.T) {
 	})
 
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?bufferSize=4096")
+	defer func() {
+		_ = conn.Close()
+	}()
 	require.NoError(t, err)
 
 	rows, err := conn.QueryContext(context.TODO(), "select * from table;")
@@ -103,6 +154,9 @@ func TestDriverOptions_ReadTimeout(t *testing.T) {
 	defer srv.Stop()
 
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s")
+	defer func() {
+		_ = conn.Close()
+	}()
 	require.NoError(t, err)
 
 	rows, err := conn.QueryContext(context.TODO(), "select * from slow;")
@@ -134,11 +188,15 @@ func TestDriverOptions_writeTimeout(t *testing.T) {
 	require.Contains(t, err.Error(), "missing unit in duration")
 	require.Error(t, err)
 	require.Nil(t, result)
+	require.NoError(t, conn.Close())
 
 	// use an almost zero (1ns) writeTimeout to ensure the insert statement
 	// can't write before the timeout. Just want to make sure ExecContext()
 	// will throw an error.
 	conn, err = sql.Open("mysql", "root@127.0.0.1:3307/test?writeTimeout=1ns")
+	defer func() {
+		_ = conn.Close()
+	}()
 	require.NoError(t, err)
 
 	// ExecContext() should fail due to the write timeout of 1ns
@@ -165,6 +223,9 @@ func TestDriverOptions_namedValueChecker(t *testing.T) {
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?writeTimeout=1s")
+	defer func() {
+		_ = conn.Close()
+	}()
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -248,6 +309,7 @@ func (h *mockHandler) UseDB(dbName string) error {
 }
 
 func (h *mockHandler) handleQuery(query string, binary bool, args []interface{}) (*mysql.Result, error) {
+	h.queryCount++
 	ss := strings.Split(query, " ")
 	switch strings.ToLower(ss[0]) {
 	case "select":
