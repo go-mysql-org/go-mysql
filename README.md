@@ -426,6 +426,18 @@ golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
 | --------- | --------- | ----------------------------------------------- |
 | duration  | 0         | user:pass@localhost/mydb?writeTimeout=1m30s     |
 
+#### `retries`
+
+Allows disabling the golang `database/sql` default behavior to retry errors
+when `ErrBadConn` is returned by the driver. When retries are disabled
+this driver will not return `ErrBadConn` from the `database/sql` package.
+
+Valid values are `on` (default) and `off`.
+
+| Type      | Default   | Example                                         |
+| --------- | --------- | ----------------------------------------------- |
+| string    | on        | user:pass@localhost/mydb?retries=off            |
+
 ### Custom Driver Options
 
 The driver package exposes the function `SetDSNOptions`, allowing for modification of the
