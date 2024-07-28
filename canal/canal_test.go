@@ -163,6 +163,7 @@ func (s *canalTestSuite) TestAnalyzeAdvancesSyncedPos() {
 	endingPos, err := s.c.GetMasterPos()
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), startingPos.Name, endingPos.Name)
+	require.Greater(s.T(), endingPos.Pos, startingPos.Pos)
 }
 
 func (s *canalTestSuite) TestCanalFilter() {
