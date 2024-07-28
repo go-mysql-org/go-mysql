@@ -150,9 +150,19 @@ func (s *canalTestSuite) TestAnalyzeAdvancesSyncedPos() {
 		s.c.cfg.DisableFlushBinlogWhileWaiting = false
 	}()
 
-	s.execute("ANALYZE TABLE test.canal_test")
-	err := s.c.CatchMasterPos(10 * time.Second)
+	startingPos, err := s.c.GetMasterPos()
 	require.NoError(s.T(), err)
+
+	s.execute("ANALYZE TABLE test.canal_test")
+	err = s.c.CatchMasterPos(10 * time.Second)
+	require.NoError(s.T(), err)
+
+	// Ensure the ending pos is greater than the starting pos
+	// but the filename is the same. This ensures that
+	// FLUSH BINARY LOGS was not used.
+	endingPos, err := s.c.GetMasterPos()
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), startingPos.Name, endingPos.Name)
 }
 
 func (s *canalTestSuite) TestCanalFilter() {
