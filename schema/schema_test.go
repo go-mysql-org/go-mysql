@@ -134,3 +134,41 @@ func (s *schemaTestSuite) TestQuoteSchema() {
 
 	require.Equal(s.T(), "a.b", ta.Columns[0].Name)
 }
+
+func (s *schemaTestSuite) TestSchemaWithMultiValueIndex() {
+	_, err := s.conn.Execute(`DROP TABLE IF EXISTS multi_value_idx_test`)
+	require.NoError(s.T(), err)
+
+	str := `
+        CREATE TABLE IF NOT EXISTS multi_value_idx_test (
+            id INT,
+            entries json,
+            PRIMARY KEY(id)
+        ) ENGINE = INNODB;
+    `
+
+	_, err = s.conn.Execute(str)
+	require.NoError(s.T(), err)
+
+	str = `CREATE INDEX idx_entries ON multi_value_idx_test((CAST((entries->'$') AS CHAR(64))));`
+	_, err = s.conn.Execute(str)
+	require.NoError(s.T(), err)
+
+	ta, err := NewTable(s.conn, *schema, "multi_value_idx_test")
+	require.NoError(s.T(), err)
+
+	require.Len(s.T(), ta.Indexes, 2)
+
+	require.Equal(s.T(), "PRIMARY", ta.Indexes[0].Name)
+	require.Len(s.T(), ta.Indexes[0].Columns, 1)
+	require.Equal(s.T(), "id", ta.Indexes[0].Columns[0])
+
+	require.Equal(s.T(), "idx_entries", ta.Indexes[1].Name)
+	require.Len(s.T(), ta.Indexes[1].Columns, 1)
+	require.Equal(s.T(), "", ta.Indexes[1].Columns[0])
+
+	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "multi_value_idx_test")
+	require.NoError(s.T(), err)
+
+	require.Equal(s.T(), ta, taSqlDb)
+}
