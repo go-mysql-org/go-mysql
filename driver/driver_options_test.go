@@ -10,15 +10,17 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go/log"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/server"
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go/log"
-	"github.com/stretchr/testify/require"
 )
 
 var _ server.Handler = &mockHandler{}
@@ -32,7 +34,7 @@ type testServer struct {
 
 type mockHandler struct {
 	// the number of times a query executed
-	queryCount int
+	queryCount atomic.Int32
 }
 
 func TestDriverOptions_SetRetriesOn(t *testing.T) {
@@ -54,7 +56,7 @@ func TestDriverOptions_SetRetriesOn(t *testing.T) {
 
 	// here we issue assert that even though we only issued 1 query, that the retries
 	// remained on and there were 3 calls to the DB.
-	require.Equal(t, 3, srv.handler.queryCount)
+	require.EqualValues(t, 3, srv.handler.queryCount.Load())
 }
 
 func TestDriverOptions_SetRetriesOff(t *testing.T) {
@@ -75,7 +77,7 @@ func TestDriverOptions_SetRetriesOff(t *testing.T) {
 
 	// here we issue assert that even though we only issued 1 query, that the retries
 	// remained on and there were 3 calls to the DB.
-	require.Equal(t, 1, srv.handler.queryCount)
+	require.EqualValues(t, 1, srv.handler.queryCount.Load())
 }
 
 func TestDriverOptions_SetCollation(t *testing.T) {
@@ -309,7 +311,7 @@ func (h *mockHandler) UseDB(dbName string) error {
 }
 
 func (h *mockHandler) handleQuery(query string, binary bool, args []interface{}) (*mysql.Result, error) {
-	h.queryCount++
+	h.queryCount.Add(1)
 	ss := strings.Split(query, " ")
 	switch strings.ToLower(ss[0]) {
 	case "select":
