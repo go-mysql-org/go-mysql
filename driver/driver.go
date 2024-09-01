@@ -203,7 +203,7 @@ func (c *conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
 		} else {
 			// we've found an error, if the error is driver.ErrSkip then
 			// keep looking otherwise return the unknown error
-			if !goErrors.Is(sqldriver.ErrSkip, err) {
+			if !goErrors.Is(err, sqldriver.ErrSkip) {
 				return err
 			}
 		}
