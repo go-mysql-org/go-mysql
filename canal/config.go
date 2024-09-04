@@ -107,6 +107,11 @@ type Config struct {
 
 	// Set Localhost
 	Localhost string
+
+	// EventCacheCount is the capacity of the BinlogStreamer internal event channel.
+	// the default value is 10240.
+	// if you table contain large columns, you can decrease this value to avoid OOM.
+	EventCacheCount int
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
