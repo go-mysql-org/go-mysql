@@ -526,3 +526,16 @@ INSERT INTO field_value_test VALUES (
 		require.Equal(s.T(), expected[i], v.String())
 	}
 }
+
+func (s *clientTestSuite) TestLongPassword() {
+	_, err := s.c.Execute("DROP USER IF EXISTS 'test_long_password'@'localhost'")
+	require.NoError(s.T(), err)
+	_, err = s.c.Execute("CREATE USER 'test_long_password'@'localhost' IDENTIFIED BY '12345678901234567890'")
+	require.NoError(s.T(), err)
+
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	c, err := Connect(addr, "test_long_password", "12345678901234567890", "")
+	require.NoError(s.T(), err)
+	err = c.Close()
+	require.NoError(s.T(), err)
+}
