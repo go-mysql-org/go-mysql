@@ -119,7 +119,7 @@ func (c *Conn) readInitialHandshake() error {
 				rest = 13
 			}
 
-			authPluginDataPart2 := data[pos : pos+rest]
+			authPluginDataPart2 := data[pos : pos+rest-1]
 			pos += rest
 
 			c.salt = append(c.salt, authPluginDataPart2...)
