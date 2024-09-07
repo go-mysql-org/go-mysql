@@ -528,9 +528,9 @@ INSERT INTO field_value_test VALUES (
 }
 
 func (s *clientTestSuite) TestLongPassword() {
-	_, err := s.c.Execute("DROP USER IF EXISTS 'test_long_password'@'localhost'")
+	_, err := s.c.Execute("DROP USER IF EXISTS 'test_long_password'@'%'")
 	require.NoError(s.T(), err)
-	_, err = s.c.Execute("CREATE USER 'test_long_password'@'localhost' IDENTIFIED BY '12345678901234567890'")
+	_, err = s.c.Execute("CREATE USER 'test_long_password'@'%' IDENTIFIED BY '12345678901234567890'")
 	require.NoError(s.T(), err)
 
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
