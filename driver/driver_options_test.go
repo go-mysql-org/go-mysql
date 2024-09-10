@@ -10,15 +10,18 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go/log"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/server"
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go/log"
-	"github.com/stretchr/testify/require"
 )
 
 var _ server.Handler = &mockHandler{}
@@ -32,15 +35,19 @@ type testServer struct {
 
 type mockHandler struct {
 	// the number of times a query executed
-	queryCount int
+	queryCount atomic.Int32
+	modifier   *sync.WaitGroup
 }
 
 func TestDriverOptions_SetRetriesOn(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
+	var wg sync.WaitGroup
+	srv.handler.modifier = &wg
+	wg.Add(3)
 
-	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s")
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=100ms")
 	defer func() {
 		_ = conn.Close()
 	}()
@@ -52,17 +59,21 @@ func TestDriverOptions_SetRetriesOn(t *testing.T) {
 	// we want to get a golang database/sql/driver ErrBadConn
 	require.ErrorIs(t, err, sqlDriver.ErrBadConn)
 
+	wg.Wait()
 	// here we issue assert that even though we only issued 1 query, that the retries
 	// remained on and there were 3 calls to the DB.
-	require.Equal(t, 3, srv.handler.queryCount)
+	require.EqualValues(t, 3, srv.handler.queryCount.Load())
 }
 
 func TestDriverOptions_SetRetriesOff(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
+	var wg sync.WaitGroup
+	srv.handler.modifier = &wg
+	wg.Add(1)
 
-	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s&retries=off")
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=100ms&retries=off")
 	defer func() {
 		_ = conn.Close()
 	}()
@@ -73,9 +84,10 @@ func TestDriverOptions_SetRetriesOff(t *testing.T) {
 	// we want the native error from this driver implementation
 	require.ErrorIs(t, err, mysql.ErrBadConn)
 
+	wg.Wait()
 	// here we issue assert that even though we only issued 1 query, that the retries
 	// remained on and there were 3 calls to the DB.
-	require.Equal(t, 1, srv.handler.queryCount)
+	require.EqualValues(t, 1, srv.handler.queryCount.Load())
 }
 
 func TestDriverOptions_SetCollation(t *testing.T) {
@@ -153,7 +165,7 @@ func TestDriverOptions_ReadTimeout(t *testing.T) {
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 
-	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s")
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=100ms")
 	defer func() {
 		_ = conn.Close()
 	}()
@@ -309,7 +321,13 @@ func (h *mockHandler) UseDB(dbName string) error {
 }
 
 func (h *mockHandler) handleQuery(query string, binary bool, args []interface{}) (*mysql.Result, error) {
-	h.queryCount++
+	defer func() {
+		if h.modifier != nil {
+			h.modifier.Done()
+		}
+	}()
+
+	h.queryCount.Add(1)
 	ss := strings.Split(query, " ")
 	switch strings.ToLower(ss[0]) {
 	case "select":
@@ -327,7 +345,7 @@ func (h *mockHandler) handleQuery(query string, binary bool, args []interface{})
 				}, binary)
 			} else {
 				if strings.Contains(query, "slow") {
-					time.Sleep(time.Second * 5)
+					time.Sleep(time.Second)
 				}
 
 				var aValue uint64 = 1
