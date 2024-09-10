@@ -165,7 +165,7 @@ func TestDriverOptions_ReadTimeout(t *testing.T) {
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 
-	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s")
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=100ms")
 	defer func() {
 		_ = conn.Close()
 	}()
