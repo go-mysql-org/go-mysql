@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,14 +36,18 @@ type testServer struct {
 type mockHandler struct {
 	// the number of times a query executed
 	queryCount atomic.Int32
+	modifier   *sync.WaitGroup
 }
 
 func TestDriverOptions_SetRetriesOn(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
+	var wg sync.WaitGroup
+	srv.handler.modifier = &wg
+	wg.Add(3)
 
-	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s")
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=100ms")
 	defer func() {
 		_ = conn.Close()
 	}()
@@ -54,6 +59,7 @@ func TestDriverOptions_SetRetriesOn(t *testing.T) {
 	// we want to get a golang database/sql/driver ErrBadConn
 	require.ErrorIs(t, err, sqlDriver.ErrBadConn)
 
+	wg.Wait()
 	// here we issue assert that even though we only issued 1 query, that the retries
 	// remained on and there were 3 calls to the DB.
 	require.EqualValues(t, 3, srv.handler.queryCount.Load())
@@ -63,8 +69,11 @@ func TestDriverOptions_SetRetriesOff(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
+	var wg sync.WaitGroup
+	srv.handler.modifier = &wg
+	wg.Add(1)
 
-	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=1s&retries=off")
+	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=100ms&retries=off")
 	defer func() {
 		_ = conn.Close()
 	}()
@@ -75,6 +84,7 @@ func TestDriverOptions_SetRetriesOff(t *testing.T) {
 	// we want the native error from this driver implementation
 	require.ErrorIs(t, err, mysql.ErrBadConn)
 
+	wg.Wait()
 	// here we issue assert that even though we only issued 1 query, that the retries
 	// remained on and there were 3 calls to the DB.
 	require.EqualValues(t, 1, srv.handler.queryCount.Load())
@@ -311,6 +321,12 @@ func (h *mockHandler) UseDB(dbName string) error {
 }
 
 func (h *mockHandler) handleQuery(query string, binary bool, args []interface{}) (*mysql.Result, error) {
+	defer func() {
+		if h.modifier != nil {
+			h.modifier.Done()
+		}
+	}()
+
 	h.queryCount.Add(1)
 	ss := strings.Split(query, " ")
 	switch strings.ToLower(ss[0]) {
@@ -329,7 +345,7 @@ func (h *mockHandler) handleQuery(query string, binary bool, args []interface{})
 				}, binary)
 			} else {
 				if strings.Contains(query, "slow") {
-					time.Sleep(time.Second * 5)
+					time.Sleep(time.Second)
 				}
 
 				var aValue uint64 = 1
