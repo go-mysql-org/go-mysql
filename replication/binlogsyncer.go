@@ -918,3 +918,24 @@ func (b *BinlogSyncer) killConnection(conn *client.Conn, id uint32) {
 	}
 	b.cfg.Logger.Infof("kill last connection id %d", id)
 }
+
+// GetSyncedGTIDSet returns the current GTID set.
+func (b *BinlogSyncer) GetSyncedGTIDSet() GTIDSet {
+	b.m.RLock()
+	defer b.m.RUnlock()
+	return b.currGset
+}
+
+// IsRunning returns whether the BinlogSyncer is running.
+func (b *BinlogSyncer) IsRunning() bool {
+	b.m.RLock()
+	defer b.m.RUnlock()
+	return b.running
+}
+
+// IsSemiSyncEnabled returns true if semi-synchronous replication is enabled.
+func (b *BinlogSyncer) IsSemiSyncEnabled() bool {
+	b.m.RLock()
+	defer b.m.RUnlock()
+	return b.cfg.SemiSyncEnabled
+}
