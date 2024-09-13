@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/pkg/db_table_filter"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 	"github.com/siddontang/go/hack"
@@ -944,6 +945,11 @@ type RowsEvent struct {
 	timestampStringLocation *time.Location
 	useDecimal              bool
 	ignoreJSONDecodeErr     bool
+
+	flashback     bool
+	rawBytesNew   []byte // rawBytesNew 如果是 flashback，则里面存储 flashback后的数据，如果是行过滤，则里面存储行过滤后的数据
+	dbTableFilter *db_table_filter.DbTableFilter
+	rowsFilter    *RowsFilter
 }
 
 // EnumRowImageType is allowed types for every row in mysql binlog.
@@ -1081,9 +1087,11 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 
 	var rowImageType EnumRowImageType
 	switch e.eventType {
-	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2, MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
+	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2,
+		MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2:
 		rowImageType = EnumRowImageTypeWriteAI
-	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2, MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
+	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2,
+		MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2:
 		rowImageType = EnumRowImageTypeDeleteBI
 	default:
 		rowImageType = EnumRowImageTypeUpdateBI
@@ -1113,7 +1121,21 @@ func (e *RowsEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
+	if e.dbTableFilter != nil {
+		dbTableName := fmt.Sprintf(`%s.%s`, e.Table.Schema, e.Table.Table)
+		tbMatch, _ := e.dbTableFilter.Compiled.TbFilter.MatchString(dbTableName)
+		if tbMatch {
+			err = e.DecodeData(pos, data)
+		}
+	}
 	return e.DecodeData(pos, data)
+}
+
+func (e *RowsEvent) SetDbTableFilter(filter *db_table_filter.DbTableFilter) {
+	e.dbTableFilter = filter
+}
+func (e *RowsEvent) SetRowsFilter(filter *RowsFilter) {
+	e.rowsFilter = filter
 }
 
 func isBitSet(bitmap []byte, i int) bool {

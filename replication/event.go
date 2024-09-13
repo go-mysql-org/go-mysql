@@ -1,6 +1,7 @@
 package replication
 
 import (
+	b64 "encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -25,6 +26,9 @@ const (
 	UndefinedServerVer         = 999999 // UNDEFINED_SERVER_VERSION
 )
 
+const EventTypePos = 4 // EventTypePos from header
+const EventSizPos = 9
+
 type BinlogEvent struct {
 	// raw binlog data which contains all data, including binlog header and event body, and including crc32 checksum if exists
 	RawData []byte
@@ -36,6 +40,13 @@ type BinlogEvent struct {
 func (e *BinlogEvent) Dump(w io.Writer) {
 	e.Header.Dump(w)
 	e.Event.Dump(w)
+}
+
+func (e *BinlogEvent) Print(w io.Writer) {
+	enc := b64.NewEncoder(b64.StdEncoding, w)
+	_, _ = enc.Write(e.RawData)
+	//enc.Write(e.)
+	//b64.StdEncoding.EncodeToString()
 }
 
 type Event interface {

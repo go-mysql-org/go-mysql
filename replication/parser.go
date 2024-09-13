@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/pkg/db_table_filter"
 	"github.com/pingcap/errors"
 
 	"github.com/go-mysql-org/go-mysql/utils"
@@ -44,6 +45,10 @@ type BinlogParser struct {
 	rowsEventDecodeFunc func(*RowsEvent, []byte) error
 
 	tableMapOptionalMetaDecodeFunc func([]byte) error
+
+	Flashback   bool
+	TableFilter *db_table_filter.DbTableFilter
+	RowsFilter  *RowsFilter
 }
 
 func NewBinlogParser() *BinlogParser {
@@ -151,16 +156,33 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 	}
 
 	var e Event
-	e, err = p.parseEvent(h, body, rawData)
-	if err != nil {
-		if err == errMissingTableMapEvent {
-			return false, nil
+	if p.Flashback || p.TableFilter != nil || p.RowsFilter != nil {
+		p.SetRowsEventDecodeFunc(flashbackRowsEventFunc)
+		rawFlashbacked := make([]byte, len(rawData)) // flashback, RowsFilter 才需要新的 bytes buff，TableFilter不需要
+		copy(rawFlashbacked, rawData)
+		e, rawFlashbacked, err = p.ParseEventFlashback(h, body, &rawFlashbacked)
+		if err != nil {
+			if err == errMissingTableMapEvent {
+				return false, nil
+			}
+			return false, errors.Trace(err)
 		}
-		return false, errors.Trace(err)
-	}
 
-	if err = onEvent(&BinlogEvent{RawData: rawData, Header: h, Event: e}); err != nil {
-		return false, errors.Trace(err)
+		if err = onEvent(&BinlogEvent{RawData: rawFlashbacked, Header: h, Event: e}); err != nil {
+			return false, errors.Trace(err)
+		}
+	} else {
+		e, err = p.parseEvent(h, body, rawData)
+		if err != nil {
+			if err == errMissingTableMapEvent {
+				return false, nil
+			}
+			return false, errors.Trace(err)
+		}
+
+		if err = onEvent(&BinlogEvent{RawData: rawData, Header: h, Event: e}); err != nil {
+			return false, errors.Trace(err)
+		}
 	}
 
 	return false, nil
@@ -230,7 +252,6 @@ func (p *BinlogParser) parseHeader(data []byte) (*EventHeader, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return h, nil
 }
 
@@ -284,6 +305,12 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1,
 				MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1,
 				MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1,
+				TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1,
+				TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V1,
+				TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1,
+				TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2,
+				TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V2,
+				TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2,
 				PARTIAL_UPDATE_ROWS_EVENT: // Extension of UPDATE_ROWS_EVENT, allowing partial values according to binlog_row_value_options
 
 				e = p.newRowsEvent(h)
@@ -322,8 +349,14 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 	}
 
 	var err error
-	if re, ok := e.(*RowsEvent); ok && p.rowsEventDecodeFunc != nil {
-		err = p.rowsEventDecodeFunc(re, data)
+	if re, ok := e.(*RowsEvent); ok {
+		re.SetDbTableFilter(p.TableFilter)
+		re.SetRowsFilter(p.RowsFilter)
+		if p.rowsEventDecodeFunc != nil {
+			err = p.rowsEventDecodeFunc(re, data)
+		} else {
+			err = e.Decode(data)
+		}
 	} else {
 		err = e.Decode(data)
 	}
@@ -427,14 +460,24 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 	case UPDATE_ROWS_EVENTv1:
 		e.Version = 1
 		e.needBitmap2 = true
-	case MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
+	case MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1:
 		e.Version = 1
 		e.compressed = true
-	case MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
+	case MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1:
 		e.Version = 1
 		e.compressed = true
-	case MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
+	case MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1, TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
 		e.Version = 1
+		e.compressed = true
+		e.needBitmap2 = true
+	case TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2:
+		e.Version = 2
+		e.compressed = true
+	case TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2:
+		e.Version = 2
+		e.compressed = true
+	case TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V2:
+		e.Version = 2
 		e.compressed = true
 		e.needBitmap2 = true
 	case WRITE_ROWS_EVENTv2:

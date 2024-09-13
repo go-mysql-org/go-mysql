@@ -1,43 +1,31 @@
-package canal
+package main
 
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/canal"
 	"github.com/go-mysql-org/go-mysql/client"
-	"github.com/go-mysql-org/go-mysql/dump"
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/siddontang/go-log/log"
 )
 
-// Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
-// MySQL must open row format for binlog
-type Canal struct {
+type RowEventPrinter struct {
 	m sync.Mutex
 
-	cfg *Config
+	cfg *canal.Config
 
-	parser     *parser.Parser
-	master     *masterInfo
-	dumper     *dump.Dumper
-	dumped     bool
-	dumpDoneCh chan struct{}
-	syncer     *replication.BinlogSyncer
-
-	eventHandler EventHandler
+	parser       *parser.Parser
+	eventHandler canal.EventHandler
 
 	connLock sync.Mutex
 	conn     *client.Conn
@@ -56,12 +44,18 @@ type Canal struct {
 	cancel context.CancelFunc
 }
 
-// canal will retry fetching unknown table's meta after UnknownTableRetryPeriod
-var UnknownTableRetryPeriod = time.Second * time.Duration(10)
-var ErrExcludedTable = errors.New("excluded table meta")
+type FlashbackEventHandler struct {
+	canal.DummyEventHandler
+}
 
-func NewCanal(cfg *Config) (*Canal, error) {
-	c := new(Canal)
+func (h *FlashbackEventHandler) OnRow(e *canal.RowsEvent) error {
+	fmt.Printf("%v\n", e)
+
+	return nil
+}
+
+func NewRowEventPrinter(cfg *canal.Config) (*RowEventPrinter, error) {
+	c := new(RowEventPrinter)
 	if cfg.Logger == nil {
 		streamHandler, _ := log.NewStreamHandler(os.Stdout)
 		cfg.Logger = log.NewDefault(streamHandler)
@@ -74,26 +68,16 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	c.dumpDoneCh = make(chan struct{})
-	c.eventHandler = &DummyEventHandler{}
+	c.eventHandler = &FlashbackEventHandler{}
 	c.parser = parser.New()
 	c.tables = make(map[string]*schema.Table)
 	if c.cfg.DiscardNoMetaRowEvent {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
-	c.master = &masterInfo{logger: c.cfg.Logger}
 
 	c.delay = new(uint32)
 
-	var err error
-
-	if err = c.prepareDumper(); err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	if err = c.prepareSyncer(); err != nil {
-		return nil, errors.Trace(err)
-	}
+	//var err error
 
 	if err := c.checkBinlogRowFormat(); err != nil {
 		return nil, errors.Trace(err)
@@ -102,11 +86,10 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	if err := c.initTableFilter(); err != nil {
 		return nil, errors.Trace(err)
 	}
-
 	return c, nil
 }
 
-func (c *Canal) initTableFilter() error {
+func (c *RowEventPrinter) initTableFilter() error {
 	if n := len(c.cfg.IncludeTableRegex); n > 0 {
 		c.includeTableRegex = make([]*regexp.Regexp, n)
 		for i, val := range c.cfg.IncludeTableRegex {
@@ -135,149 +118,7 @@ func (c *Canal) initTableFilter() error {
 	return nil
 }
 
-func (c *Canal) prepareDumper() error {
-	var err error
-	dumpPath := c.cfg.Dump.ExecutionPath
-	if len(dumpPath) == 0 {
-		// ignore mysqldump, use binlog only
-		return nil
-	}
-
-	if c.dumper, err = dump.NewDumper(dumpPath,
-		c.cfg.Addr, c.cfg.User, c.cfg.Password); err != nil {
-		return errors.Trace(err)
-	}
-
-	if c.dumper == nil {
-		// no mysqldump, use binlog only
-		return nil
-	}
-
-	dbs := c.cfg.Dump.Databases
-	tables := c.cfg.Dump.Tables
-	tableDB := c.cfg.Dump.TableDB
-
-	if len(tables) == 0 {
-		c.dumper.AddDatabases(dbs...)
-	} else {
-		c.dumper.AddTables(tableDB, tables...)
-	}
-
-	charset := c.cfg.Charset
-	c.dumper.SetCharset(charset)
-
-	c.dumper.SetWhere(c.cfg.Dump.Where)
-	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
-	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
-	c.dumper.SetProtocol(c.cfg.Dump.Protocol)
-	c.dumper.SetExtraOptions(c.cfg.Dump.ExtraOptions)
-	// Use hex blob for mysqldump
-	c.dumper.SetHexBlob(true)
-
-	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
-		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
-			c.dumper.AddIgnoreTables(seps[0], seps[1])
-		}
-	}
-
-	if c.cfg.Dump.DiscardErr {
-		c.dumper.SetErrOut(io.Discard)
-	} else {
-		c.dumper.SetErrOut(os.Stderr)
-	}
-
-	return nil
-}
-
-func (c *Canal) GetDelay() uint32 {
-	return atomic.LoadUint32(c.delay)
-}
-
-// Run will first try to dump all data from MySQL master `mysqldump`,
-// then sync from the binlog position in the dump data.
-// It will run forever until meeting an error or Canal closed.
-func (c *Canal) Run() error {
-	return c.run()
-}
-
-// RunFrom will sync from the binlog position directly, ignore mysqldump.
-func (c *Canal) RunFrom(pos mysql.Position) error {
-	c.master.Update(pos)
-
-	return c.Run()
-}
-
-func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
-	c.master.UpdateGTIDSet(set)
-
-	return c.Run()
-}
-
-// Dump all data from MySQL master `mysqldump`, ignore sync binlog.
-func (c *Canal) Dump() error {
-	if c.dumped {
-		return errors.New("the method Dump can't be called twice")
-	}
-	c.dumped = true
-	defer close(c.dumpDoneCh)
-	return c.dump()
-}
-
-func (c *Canal) run() error {
-	defer func() {
-		c.cancel()
-	}()
-
-	c.master.UpdateTimestamp(uint32(time.Now().Unix()))
-
-	if !c.dumped {
-		c.dumped = true
-
-		err := c.tryDump()
-		close(c.dumpDoneCh)
-
-		if err != nil {
-			c.cfg.Logger.Errorf("canal dump mysql err: %v", err)
-			return errors.Trace(err)
-		}
-	}
-
-	if err := c.runSyncBinlog(); err != nil {
-		if errors.Cause(err) != context.Canceled {
-			c.cfg.Logger.Errorf("canal start sync binlog err: %v", err)
-			return errors.Trace(err)
-		}
-	}
-
-	return nil
-}
-
-func (c *Canal) Close() {
-	c.cfg.Logger.Infof("closing canal")
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.cancel()
-	c.syncer.Close()
-	c.connLock.Lock()
-	if c.conn != nil {
-		c.conn.Close()
-		c.conn = nil
-	}
-	c.connLock.Unlock()
-
-	_ = c.eventHandler.OnPosSynced(nil, c.master.Position(), c.master.GTIDSet(), true)
-}
-
-func (c *Canal) WaitDumpDone() <-chan struct{} {
-	return c.dumpDoneCh
-}
-
-func (c *Canal) Ctx() context.Context {
-	return c.ctx
-}
-
-func (c *Canal) checkTableMatch(key string) bool {
+func (c *RowEventPrinter) checkTableMatch(key string) bool {
 	// no filter, return true
 	if c.tableMatchCache == nil {
 		return true
@@ -318,11 +159,11 @@ func (c *Canal) checkTableMatch(key string) bool {
 	return matchFlag
 }
 
-func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
+func (c *RowEventPrinter) GetTable(db string, table string) (*schema.Table, error) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	// if table is excluded, return error and skip parsing event or dump
 	if !c.checkTableMatch(key) {
-		return nil, ErrExcludedTable
+		return nil, canal.ErrExcludedTable
 	}
 	c.tableLock.RLock()
 	t, ok := c.tables[key]
@@ -336,7 +177,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 		c.tableLock.RLock()
 		lastTime, ok := c.errorTablesGetTime[key]
 		c.tableLock.RUnlock()
-		if ok && time.Since(lastTime) < UnknownTableRetryPeriod {
+		if ok && time.Since(lastTime) < canal.UnknownTableRetryPeriod {
 			return nil, schema.ErrMissingTableMeta
 		}
 	}
@@ -391,7 +232,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 }
 
 // ClearTableCache clear table cache
-func (c *Canal) ClearTableCache(db []byte, table []byte) {
+func (c *RowEventPrinter) ClearTableCache(db []byte, table []byte) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
 	delete(c.tables, key)
@@ -402,7 +243,7 @@ func (c *Canal) ClearTableCache(db []byte, table []byte) {
 }
 
 // SetTableCache sets table cache value for the given table
-func (c *Canal) SetTableCache(db []byte, table []byte, schema *schema.Table) {
+func (c *RowEventPrinter) SetTableCache(db []byte, table []byte, schema *schema.Table) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
 	c.tables[key] = schema
@@ -414,7 +255,7 @@ func (c *Canal) SetTableCache(db []byte, table []byte, schema *schema.Table) {
 }
 
 // CheckBinlogRowImage checks MySQL binlog row image, must be in FULL, MINIMAL, NOBLOB
-func (c *Canal) CheckBinlogRowImage(image string) error {
+func (c *RowEventPrinter) CheckBinlogRowImage(image string) error {
 	// need to check MySQL binlog row image? full, minimal or noblob?
 	// now only log
 	if c.cfg.Flavor == mysql.MySQLFlavor {
@@ -432,7 +273,7 @@ func (c *Canal) CheckBinlogRowImage(image string) error {
 	return nil
 }
 
-func (c *Canal) checkBinlogRowFormat() error {
+func (c *RowEventPrinter) checkBinlogRowFormat() error {
 	res, err := c.Execute(`SHOW GLOBAL VARIABLES LIKE 'binlog_format';`)
 	if err != nil {
 		return errors.Trace(err)
@@ -443,72 +284,8 @@ func (c *Canal) checkBinlogRowFormat() error {
 	return nil
 }
 
-func (c *Canal) prepareSyncer() error {
-	cfg := replication.BinlogSyncerConfig{
-		ServerID:                c.cfg.ServerID,
-		Flavor:                  c.cfg.Flavor,
-		User:                    c.cfg.User,
-		Password:                c.cfg.Password,
-		Charset:                 c.cfg.Charset,
-		HeartbeatPeriod:         c.cfg.HeartbeatPeriod,
-		ReadTimeout:             c.cfg.ReadTimeout,
-		UseDecimal:              c.cfg.UseDecimal,
-		ParseTime:               c.cfg.ParseTime,
-		SemiSyncEnabled:         c.cfg.SemiSyncEnabled,
-		MaxReconnectAttempts:    c.cfg.MaxReconnectAttempts,
-		DisableRetrySync:        c.cfg.DisableRetrySync,
-		TimestampStringLocation: c.cfg.TimestampStringLocation,
-		TLSConfig:               c.cfg.TLSConfig,
-		Logger:                  c.cfg.Logger,
-		Dialer:                  c.cfg.Dialer,
-		Localhost:               c.cfg.Localhost,
-		RowsEventDecodeFunc: func(event *replication.RowsEvent, data []byte) error {
-			pos, err := event.DecodeHeader(data)
-			if err != nil {
-				return err
-			}
-
-			key := fmt.Sprintf("%s.%s", string(event.Table.Schema), string(event.Table.Table))
-			if !c.checkTableMatch(key) { // xiaogz
-				return nil
-			}
-
-			return event.DecodeData(pos, data)
-		},
-	}
-
-	if strings.Contains(c.cfg.Addr, "/") {
-		cfg.Host = c.cfg.Addr
-	} else {
-		seps := strings.Split(c.cfg.Addr, ":")
-		if len(seps) != 2 {
-			return errors.Errorf("invalid mysql addr format %s, must host:port", c.cfg.Addr)
-		}
-
-		port, err := strconv.ParseUint(seps[1], 10, 16)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		cfg.Host = seps[0]
-		cfg.Port = uint16(port)
-	}
-
-	c.syncer = replication.NewBinlogSyncer(cfg)
-
-	return nil
-}
-
-func (c *Canal) connect(options ...client.Option) (*client.Conn, error) {
-	ctx, cancel := context.WithTimeout(c.ctx, time.Second*10)
-	defer cancel()
-
-	return client.ConnectWithDialer(ctx, "", c.cfg.Addr,
-		c.cfg.User, c.cfg.Password, "", c.cfg.Dialer, options...)
-}
-
 // Execute a SQL
-func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
+func (c *RowEventPrinter) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
 	argF := make([]client.Option, 0)
@@ -542,14 +319,10 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 	return rr, err
 }
 
-func (c *Canal) SyncedPosition() mysql.Position {
-	return c.master.Position()
-}
+func (c *RowEventPrinter) connect(options ...client.Option) (*client.Conn, error) {
+	ctx, cancel := context.WithTimeout(c.ctx, time.Second*10)
+	defer cancel()
 
-func (c *Canal) SyncedTimestamp() uint32 {
-	return c.master.Timestamp()
-}
-
-func (c *Canal) SyncedGTIDSet() mysql.GTIDSet {
-	return c.master.GTIDSet()
+	return client.ConnectWithDialer(ctx, "", c.cfg.Addr,
+		c.cfg.User, c.cfg.Password, "", c.cfg.Dialer, options...)
 }

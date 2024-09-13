@@ -212,7 +212,20 @@ func (e EventType) String() string {
 		return "MariadbUpdateRowsCompressedEventV1"
 	case MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
 		return "MariadbDeleteRowsCompressedEventV1"
-
+	case TENDB_QUERY_COMPRESSED_EVENT:
+		return "TendbQueryCompressedEvent"
+	case TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2:
+		return "TendbWriteRowsCompressedEventV2"
+	case TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V2:
+		return "TendbUpdateRowsCompressedEventV2"
+	case TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2:
+		return "TendbDeleteRowsCompressedEventV2"
+	case TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1:
+		return "TendbWriteRowsCompressedEventV1"
+	case TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
+		return "TendbUpdateRowsCompressedEventV1"
+	case TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1:
+		return "TendbDeleteRowsCompressedEventV1"
 	default:
 		return "UnknownEvent"
 	}
