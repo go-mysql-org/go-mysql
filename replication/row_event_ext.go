@@ -190,6 +190,53 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 			sql_clause1 = "### WHERE\n"
 			sql_clause2 = "### SET\n"
 			for k, v := range e.Rows[i] {
+				sql_clause1 += fmt.Sprintf("###   col[%d]=%v\n", k, v)
+			}
+			for k, v := range e.Rows[i+1] {
+				sql_clause2 += fmt.Sprintf("###   col[%d]=%v\n", k, v)
+			}
+			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
+		}
+	case WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2:
+		sql_command = fmt.Sprintf("### INSERT INTO `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
+		for i := 0; i < len(e.Rows); i++ {
+			sql_clause1 = "### SET\n"
+			sql_clause2 = ""
+			for k, v := range e.Rows[i] {
+				sql_clause1 += fmt.Sprintf("###   col[%d]=%v\n", k, v)
+			}
+			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
+		}
+	case DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2:
+		sql_command = fmt.Sprintf("### DELETE FROM `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
+		for i := 0; i < len(e.Rows); i++ {
+			sql_clause1 = "### WHERE\n"
+			sql_clause2 = ""
+			for k, v := range e.Rows[i] {
+				if e.Table.ColumnType[k] < MYSQL_TYPE_DOUBLE { // todo
+					sql_clause1 += fmt.Sprintf("###   col[%d]=%d\n", k, v)
+				} else {
+					sql_clause1 += fmt.Sprintf("###   col[%d]=%s\n", k, v)
+				}
+			}
+			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
+		}
+	default:
+		sql_command = ""
+		sql_clause1 = ""
+		sql_clause2 = ""
+	}
+}
+
+func (e *RowsEvent) PrintVerbose2(w io.Writer) {
+	var sql_command, sql_clause1, sql_clause2 string
+	switch e.eventType {
+	case UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2:
+		sql_command = fmt.Sprintf("### UDPATE `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
+		for i := 0; i < len(e.Rows); i += 2 {
+			sql_clause1 = "### WHERE\n"
+			sql_clause2 = "### SET\n"
+			for k, v := range e.Rows[i] {
 				sql_clause1 += fmt.Sprintf("###   @%d=%v\n", k+1, v)
 			}
 			for k, v := range e.Rows[i+1] {

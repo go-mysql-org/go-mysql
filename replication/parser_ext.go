@@ -192,23 +192,35 @@ func (p *BinlogParser) ParseEventFlashback(h *EventHeader, data []byte, rawData 
 	} else if qe, ok := e.(*QueryEvent); ok {
 		err = e.Decode(data)
 
-		if bytes.Equal(qe.Query, []byte("BEGIN")) || bytes.Equal(qe.Query, []byte("COMMIT")) {
-			//fmt.Fprintf(iowriter, "%s%s\n", r.Query, Delimiter)
-		}
-		//fmt.Printf("\nquery event: %s\n", r.Query)
-		sqlParser := parser.New()
-		stmts, _, err := sqlParser.Parse(string(qe.Query), "", "")
-		if err != nil {
-			fmt.Printf("parse query(%s) err %v, will skip this event\n", qe.Query, err)
-			//return nil
-		}
-		for _, stmt := range stmts {
-			nodes := ParseStmt(stmt)
-			for _, node := range nodes {
-				if node.Schema == "" {
-					node.Schema = string(qe.Schema)
+		if p.Flashback || p.TableFilter != nil || p.RowsFilter != nil {
+			if bytes.Equal(qe.Query, []byte("BEGIN")) || bytes.Equal(qe.Query, []byte("COMMIT")) {
+				//fmt.Fprintf(iowriter, "%s%s\n", r.Query, Delimiter)
+			}
+			// fmt.Printf("\nquery event: %s\n", qe.Query)
+			sqlParser := parser.New()
+			stmts, _, err := sqlParser.Parse(string(qe.Query), "", "")
+			if err != nil {
+				fmt.Printf("parse query(%s) err %v, will skip this event\n", qe.Query, err)
+				//return nil
+			}
+			for _, stmt := range stmts {
+				nodes := ParseStmt(stmt)
+				for _, node := range nodes {
+					if node.Schema == "" {
+						node.Schema = string(qe.Schema)
+					}
+					qe.dbTable = nodes
+					//fmt.Printf("parsed table name <%s.%s>\n", node.Schema, node.Table)
+					dbTableName := fmt.Sprintf(`%s.%s`, node.Schema, node.Table)
+					tbMatch, _ := p.TableFilter.Compiled.TbFilter.MatchString(dbTableName)
+					if tbMatch {
+						qe.DbTableMatched = true
+						if p.Flashback {
+							return nil, nil, errors.Errorf("flashback rows found statement [%s] table matched: [%s]",
+								qe.Query, dbTableName)
+						}
+					}
 				}
-				//fmt.Printf("parsed table name <%s.%s>\n", node.Schema, node.Table)
 			}
 		}
 	} else {

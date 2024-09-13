@@ -313,6 +313,9 @@ type QueryEvent struct {
 
 	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
 	GSet GTIDSet
+
+	dbTable        []*SchemaNode
+	DbTableMatched bool
 }
 
 func (e *QueryEvent) Decode(data []byte) error {

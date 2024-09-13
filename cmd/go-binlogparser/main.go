@@ -12,7 +12,6 @@ import (
 	"github.com/go-mysql-org/go-mysql/pkg/db_table_filter"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb/pkg/parser"
 	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
 	"github.com/spf13/viper"
 )
@@ -196,6 +195,21 @@ func parseBinlogFile() error {
 	p := replication.NewBinlogParser()
 	fileName := viper.GetString("file")
 	startPos := viper.GetInt64("start-position")
+	var startTs, stopTs uint32
+	if start := viper.GetString("start-datetime"); start != "" {
+		startDatetime, err := time.ParseInLocation(time.DateTime, viper.GetString("start-datetime"), time.Local)
+		if err != nil {
+			return errors.WithMessage(err, "parse start-datetime")
+		}
+		startTs = uint32(startDatetime.Local().Unix())
+	}
+	if stop := viper.GetString("stop-datetime"); stop != "" {
+		stopDatetime, err := time.ParseInLocation(time.DateTime, viper.GetString("stop-datetime"), time.Local)
+		if err != nil {
+			return errors.WithMessage(err, "parse stop-datetime")
+		}
+		stopTs = uint32(stopDatetime.Local().Unix())
+	}
 
 	//printParser := replication.NewBinlogParser()
 	//fileCache, _ := os.OpenFile("./test.txt", os.O_APPEND|os.O_WRONLY, os.ModePerm)
@@ -206,6 +220,10 @@ func parseBinlogFile() error {
 	defer ioWriter.Close()
 
 	f := func(e *replication.BinlogEvent) error {
+		if e.Header.Timestamp < startTs || (stopTs > 0 && e.Header.Timestamp > stopTs) {
+			return nil
+		}
+
 		//enc := b64.NewEncoder(b64.StdEncoding, ioWriter)
 
 		//b64.StdEncoding.EncodeToString()
@@ -223,8 +241,8 @@ func parseBinlogFile() error {
 			///fmt.Fprintf(ioWriter, rowsStart)
 			r := e.Event.(*replication.FormatDescriptionEvent)
 			b64RawString := ""
-			b64RawString += fmt.Sprintf("# EventType=%s Timestamp=%s LogPos=%d Version=%d",
-				e.Header.EventType.String(), unixTimeToStr(e.Header.Timestamp), e.Header.LogPos, r.Version) + "\n"
+			b64RawString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Version=%d",
+				unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, e.Header.EventType.String(), e.Header.LogPos, r.Version) + "\n"
 			b64RawString += rowsStart
 			b64RawString += b64.StdEncoding.EncodeToString(e.RawData) + "\n"
 			b64RawString += rowsEnd
@@ -254,8 +272,8 @@ func parseBinlogFile() error {
 			} else {
 				r := e.Event.(*replication.RowsEvent)
 				b64RawString := ""
-				b64RawString += fmt.Sprintf("# EventType=%s Timestamp=%s LogPos=%d Db=%s Table=%s TableID=%d",
-					r.GetEventType().String(), unixTimeToStr(e.Header.Timestamp), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
+				b64RawString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
+					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
 				b64RawString += rowsStart
 				b64RawString += tableMapRawBase64[r.TableID] + "\n"
 				b64RawString += b64.StdEncoding.EncodeToString(e.RawData) + "\n"
@@ -284,8 +302,8 @@ func parseBinlogFile() error {
 			} else {
 				r := e.Event.(*replication.RowsEvent)
 				b64RawString := ""
-				b64RawString += fmt.Sprintf("# EventType=%s Timestamp=%s LogPos=%d Db=%s Table=%s TableID=%d",
-					r.GetEventType().String(), unixTimeToStr(e.Header.Timestamp), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
+				b64RawString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
+					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
 				b64RawString += rowsStart
 				b64RawString += tableMapRawBase64[r.TableID] + "\n"
 				b64RawString += b64.StdEncoding.EncodeToString(e.RawData) + "\n"
@@ -313,8 +331,8 @@ func parseBinlogFile() error {
 			} else {
 				r := e.Event.(*replication.RowsEvent)
 				b64RawString := ""
-				b64RawString += fmt.Sprintf("# EventType=%s Timestamp=%s LogPos=%d Db=%s Table=%s TableID=%d",
-					r.GetEventType().String(), unixTimeToStr(e.Header.Timestamp), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
+				b64RawString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
+					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
 				b64RawString += rowsStart
 				b64RawString += tableMapRawBase64[r.TableID] + "\n"
 				b64RawString += b64.StdEncoding.EncodeToString(e.RawData) + "\n"
@@ -337,25 +355,25 @@ func parseBinlogFile() error {
 			//fmt.Printf("# update rows, table_name=%s.%s: %+v\n", r.Table.Schema, r.Table.Table, r.Rows)
 			//r.Dump(os.Stdout)
 		case replication.QUERY_EVENT:
-			r := e.Event.(*replication.QueryEvent)
-			if bytes.Equal(r.Query, BEGIN) || bytes.Equal(r.Query, COMMIT) {
+			qe := e.Event.(*replication.QueryEvent)
+			if bytes.Equal(qe.Query, BEGIN) || bytes.Equal(qe.Query, COMMIT) {
 				//fmt.Fprintf(iowriter, "%s%s\n", r.Query, Delimiter)
 			}
-			//fmt.Printf("\nquery event: %s\n", r.Query)
-			sqlParser := parser.New()
-			stmts, _, err := sqlParser.Parse(string(r.Query), "", "")
-			if err != nil {
-				fmt.Printf("parse query(%s) err %v, will skip this event\n", r.Query, err)
-				return nil
-			}
-			for _, stmt := range stmts {
-				nodes := replication.ParseStmt(stmt)
-				for _, node := range nodes {
-					if node.Schema == "" {
-						node.Schema = string(r.Schema)
-					}
-					fmt.Printf("parsed table name <%s.%s>\n", node.Schema, node.Table)
+			if p.Flashback && qe.DbTableMatched {
+				return errors.Errorf("statement error")
+			} else if p.TableFilter == nil || (p.TableFilter != nil && qe.DbTableMatched) {
+				queryString := ""
+				queryString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s",
+					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, e.Header.EventType.String(), e.Header.LogPos, qe.Schema) + "\n"
+				if string(qe.Schema) != "" {
+					queryString += fmt.Sprintf("USE `%s`%s\n", qe.Schema, Delimiter)
 				}
+				queryString += fmt.Sprintf("SET TIMESTAMP=%d%s\n", e.Header.Timestamp, Delimiter)
+				queryString += string(qe.Query) + "\n" + Delimiter + "\n"
+				fmt.Fprintf(ioWriter, queryString)
+				fmt.Printf("\nquery event: %s\n", qe.Query)
+			} else {
+				// 不打印 statement
 			}
 		default:
 			//fmt.Printf("# event type: %s\n", e.Header.EventType.String())
@@ -369,10 +387,10 @@ func parseBinlogFile() error {
 	var err error
 	databases := viper.GetStringSlice("databases")
 	tables := viper.GetStringSlice("tables")
-	edatabases := viper.GetStringSlice("exclude-databases")
-	etables := viper.GetStringSlice("exclude-tables")
-	if len(databases)+len(tables)+len(edatabases)+len(etables) > 0 {
-		tableFilter, err = db_table_filter.NewDbTableFilter(databases, tables, edatabases, etables)
+	excludeDatabases := viper.GetStringSlice("exclude-databases")
+	excludeTables := viper.GetStringSlice("exclude-tables")
+	if len(databases)+len(tables)+len(excludeDatabases)+len(excludeTables) > 0 {
+		tableFilter, err = db_table_filter.NewDbTableFilter(databases, tables, excludeDatabases, excludeTables)
 		if err != nil {
 			return err
 		}
