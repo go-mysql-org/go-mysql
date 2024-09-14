@@ -64,7 +64,8 @@ func init() {
 	rootCmd.PersistentFlags().Int("result-file-max-size-mb", 128, "result-file-max-size-mb")
 	_ = viper.BindPFlag("result-file-max-size-mb", rootCmd.PersistentFlags().Lookup("result-file-max-size-mb"))
 
-	rootCmd.PersistentFlags().IntP("verbose", "v", 1, "1 2 3")
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose")
+	_ = viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 
 	// overwrite -h option
 	rootCmd.PersistentFlags().BoolP("help", "", false, "help for this command")

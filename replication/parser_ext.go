@@ -130,10 +130,10 @@ func (p *BinlogParser) ParseEventFlashback(h *EventHeader, data []byte, rawData 
 				TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V2,
 				TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2,
 				PARTIAL_UPDATE_ROWS_EVENT: // Extension of UPDATE_ROWS_EVENT, allowing partial values according to binlog_row_value_options
-				e = p.newRowsEvent(h) // 也可以考虑在 newRowsEvent 里面 swap type
 				if p.Flashback {
 					p.swapFlashbackEventType(h) // for header print
 				}
+				e = p.newRowsEvent(h) // 也可以考虑在 newRowsEvent 里面 swap type
 			case ROWS_QUERY_EVENT:
 				e = &RowsQueryEvent{}
 			case GTID_EVENT:

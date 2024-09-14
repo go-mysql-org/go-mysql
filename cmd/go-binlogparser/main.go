@@ -124,7 +124,7 @@ func parseBinlogFile() error {
 		}
 		stopTs = uint32(stopDatetime.Local().Unix())
 	}
-
+	verbose := viper.GetBool("verbose")
 	//printParser := replication.NewBinlogParser()
 	//defer fileCache.Close()
 	//cacheWriter := bufio.NewWriterSize(fileCache, 128*1024*1024*1024)
@@ -191,14 +191,16 @@ func parseBinlogFile() error {
 				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
 					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(),
 					e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n")
+				evType := fmt.Sprintf("header:%s rows:%s", e.Header.EventType.String(), r.GetEventType().String())
+				buf.WriteString(evType + "\n")
 				buf.WriteString(rowsStart + "\n")
 				buf.WriteString(tableMapRawBase64[r.TableID] + "\n")
 				buf.WriteString(b64.StdEncoding.EncodeToString(e.RawData) + "\n")
 				buf.WriteString(rowsEnd + "\n")
-				buf.Write(r.GetRowsEventPrinted())
-				//fmt.Fprintf(ioWriter, b64RawString)
+				if verbose {
+					buf.Write(r.GetRowsEventPrinted())
+				}
 				ioWriter.Write(buf.Bytes())
-				//r.PrintVerbose(os.Stdout)
 
 				/*
 					fmt.Fprint(ioWriter, "BEGIN"+Delimiter+"\n")
@@ -225,15 +227,16 @@ func parseBinlogFile() error {
 				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
 					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(),
 					e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n")
+				evType := fmt.Sprintf("header:%s rows:%s", e.Header.EventType.String(), r.GetEventType().String())
+				buf.WriteString(evType + "\n")
 				buf.WriteString(rowsStart + "\n")
 				buf.WriteString(tableMapRawBase64[r.TableID] + "\n")
 				buf.WriteString(b64.StdEncoding.EncodeToString(e.RawData) + "\n")
 				buf.WriteString(rowsEnd + "\n")
-				buf.Write(r.GetRowsEventPrinted())
-
-				//fmt.Fprintf(ioWriter, b64RawString)
+				if verbose {
+					buf.Write(r.GetRowsEventPrinted())
+				}
 				ioWriter.Write(buf.Bytes())
-				//r.PrintVerbose(os.Stdout)
 			}
 
 			///fmt.Fprintf(ioWriter, rowsStart)
@@ -263,9 +266,9 @@ func parseBinlogFile() error {
 				buf.WriteString(tableMapRawBase64[r.TableID] + "\n")
 				buf.WriteString(b64.StdEncoding.EncodeToString(e.RawData) + "\n")
 				buf.WriteString(rowsEnd + "\n")
-				buf.Write(r.GetRowsEventPrinted())
-
-				//fmt.Fprintf(ioWriter, b64RawString)
+				if verbose {
+					buf.Write(r.GetRowsEventPrinted())
+				}
 				ioWriter.Write(buf.Bytes())
 
 				//r.PrintVerbose(os.Stdout)
