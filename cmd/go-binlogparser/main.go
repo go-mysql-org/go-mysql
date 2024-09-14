@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/pkg/db_table_filter"
@@ -92,98 +91,11 @@ const (
 	TypeLogicalClock = "logical_clock"
 )
 
-type BytesCache struct {
-	filePrefix      string
-	maxCacheSize    int
-	cacheHeader     []string
-	cacheFooter     []string
-	cache           [][]byte
-	currentIndex    int
-	currentWritten  int
-	currentFileName string
-
-	currentIOWriter io.WriteCloser
-	filePartId      int
-}
-
-func (c *BytesCache) Write(p []byte) (n int, err error) {
-	if c.currentIOWriter == nil {
-		return 0, errors.New("unknown writer")
-	}
-	pc := make([]byte, len(p))
-	copy(pc, p)
-	c.cache = append(c.cache, pc)
-	//c.cache[c.currentIndex] = p
-	c.currentIndex += 1
-	c.currentWritten += len(p)
-	if c.currentWritten >= c.maxCacheSize {
-		c.currentWritten = 0
-		c.currentIndex = 0
-		for i := len(c.cache); i > 0; i-- {
-			if i == len(c.cache) {
-				c.currentIOWriter.Write([]byte(strings.Join(c.cacheHeader, "\n")))
-			}
-			_, err = c.currentIOWriter.Write(c.cache[i-1])
-			if err != nil {
-				return 0, err
-			}
-		}
-		c.next()
-		//return len(p), errors.New("cache full")
-	}
-	return len(p), nil
-}
-
-// NewBytesCache filePrefix may contain db_table name
-func (c *BytesCache) next() {
-	c.currentIOWriter.Close()
-	c.cache = nil
-	c.filePartId += 1
-	c.currentFileName = fmt.Sprintf("%s.%03d.sql", c.filePrefix, c.filePartId)
-	//c.currentIOWriter, _ = os.OpenFile(c.currentFileName, os.O_APPEND|os.O_WRONLY, os.ModePerm)
-	c.currentIOWriter, _ = os.Create(c.currentFileName)
-}
-
-func (c *BytesCache) SetHeader(s []string) {
-	c.cacheHeader = s
-}
-func (c *BytesCache) SetFooter(s []string) {
-	c.cacheFooter = s
-}
-
-func (c *BytesCache) Close() (err error) {
-	for i := len(c.cache); i > 0; i-- {
-		if i == len(c.cache) {
-			c.currentIOWriter.Write([]byte(strings.Join(c.cacheHeader, "\n")))
-		}
-		_, err = c.currentIOWriter.Write(c.cache[i-1])
-		if err != nil {
-			return err
-		}
-	}
-	c.currentIOWriter.Write([]byte(strings.Join(c.cacheFooter, "\n")))
-	c.cache = nil
-	return c.currentIOWriter.Close()
-}
-
-func NewBytesCache(filePrefix string, cacheSize int) *BytesCache {
-	fmt.Println("xxx", filePrefix)
-	bc := &BytesCache{
-		filePrefix:   filePrefix,
-		maxCacheSize: cacheSize,
-	}
-	bc.currentFileName = fmt.Sprintf("%s.%03d.sql", filePrefix, bc.filePartId)
-	//bc.currentIOWriter, _ = os.OpenFile(bc.currentFileName, os.O_APPEND|os.O_WRONLY, os.ModePerm)
-	bc.currentIOWriter, _ = os.Create(bc.currentFileName)
-	return bc
-}
-
 func unixTimeToStr(ts uint32) string {
 	return time.Unix(int64(ts), 0).Local().Format(time.DateTime)
 }
 
 func parseBinlogFile() error {
-
 	BEGIN := []byte("BEGIN")
 	COMMIT := []byte("COMMIT")
 	Delimiter := "/*!*/;"
@@ -193,6 +105,8 @@ func parseBinlogFile() error {
 	tableMapRawBase64 := make(map[uint64]string)
 
 	p := replication.NewBinlogParser()
+	p.Flashback = viper.GetBool("flashback")
+
 	fileName := viper.GetString("file")
 	startPos := viper.GetInt64("start-position")
 	var startTs, stopTs uint32
@@ -212,43 +126,44 @@ func parseBinlogFile() error {
 	}
 
 	//printParser := replication.NewBinlogParser()
-	//fileCache, _ := os.OpenFile("./test.txt", os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	//defer fileCache.Close()
 	//cacheWriter := bufio.NewWriterSize(fileCache, 128*1024*1024*1024)
 
-	ioWriter := NewBytesCache(fileName, 128*1024*1024*1024)
+	/*
+		ioWriter, err2 := os.OpenFile("/data/workspace/go/src/sync/go-mysql/ft_local/parsed_binlog_test.txt", os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+		if err2 != nil {
+			return err2
+		}
+		defer ioWriter.Close()
+	*/
+	var ioWriter BinlogWriter
+	if p.Flashback {
+		ioWriter = NewFlashbackWriter(fileName, viper.GetInt("result-file-max-size-mb")/2*1024*1024)
+	} else {
+		ioWriter = NewNormalWriter(os.Stdout)
+	}
 	defer ioWriter.Close()
+	rowsStart := "BINLOG '"
+	rowsEnd := "'" + Delimiter
 
 	f := func(e *replication.BinlogEvent) error {
 		if e.Header.Timestamp < startTs || (stopTs > 0 && e.Header.Timestamp > stopTs) {
 			return nil
 		}
-
 		//enc := b64.NewEncoder(b64.StdEncoding, ioWriter)
-
-		//b64.StdEncoding.EncodeToString()
-		rowsStart := "BINLOG '\n"
-		rowsEnd := "'" + Delimiter + "\n"
-		//_, _ = enc.Write(e.RawData)
-		//ii := bytes.NewReader(e.RawData)
-		//printParser.ParseSingleEvent(ii,)
-
 		switch e.Header.EventType {
 		case replication.FORMAT_DESCRIPTION_EVENT:
-			cacheHeader := []string{}
-			cacheHeader = append(cacheHeader, fmt.Sprintf("DELIMITER %s\n", Delimiter))
-			///fmt.Fprintf(ioWriter, "DELIMITER %s\n", Delimiter)
-			///fmt.Fprintf(ioWriter, rowsStart)
 			r := e.Event.(*replication.FormatDescriptionEvent)
-			b64RawString := ""
-			b64RawString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Version=%d",
-				unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, e.Header.EventType.String(), e.Header.LogPos, r.Version) + "\n"
-			b64RawString += rowsStart
-			b64RawString += b64.StdEncoding.EncodeToString(e.RawData) + "\n"
-			b64RawString += rowsEnd
-			cacheHeader = append(cacheHeader, b64RawString)
+			buf := bytes.NewBuffer(nil)
+			buf.WriteString("DELIMITER " + Delimiter + "\n")
+			buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Version=%d",
+				unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, e.Header.EventType.String(), e.Header.LogPos, r.Version) + "\n")
+			buf.WriteString(rowsStart + "\n")
+			buf.WriteString(b64.StdEncoding.EncodeToString(e.RawData) + "\n")
+			buf.WriteString(rowsEnd + "\n")
+
 			//fmt.Fprintf(ioWriter, b64RawString)
-			ioWriter.SetHeader(cacheHeader)
+			ioWriter.SetHeader(buf.Bytes())
 
 			//_, _ = enc.Write(e.RawData)
 			//enc.Close()
@@ -258,7 +173,7 @@ func parseBinlogFile() error {
 			//fmt.Printf("# glob_description_event: %+v\n", r.Version)
 		case replication.ROTATE_EVENT:
 			//fmt.Fprintf(ioWriter, "DELIMITER ;\n")
-			ioWriter.SetFooter([]string{"", "DELIMITER ;\n"})
+			ioWriter.SetFooter([]byte("\nDELIMITER ;\n"))
 			//r := e.Event.(*replication.RotateEvent)
 			//fmt.Printf("# End of log file, next: %s\n", r.NextLogName)
 		case replication.TABLE_MAP_EVENT:
@@ -268,48 +183,57 @@ func parseBinlogFile() error {
 			// set table map cache
 		case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2, replication.TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1, replication.TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2:
 			if len(e.RawData) <= replication.EventHeaderSize {
-				fmt.Println("xxxxx insert", "not matched")
+				//fmt.Println("xxxxx insert", "not matched")
 			} else {
 				r := e.Event.(*replication.RowsEvent)
-				b64RawString := ""
-				b64RawString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
-					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
-				b64RawString += rowsStart
-				b64RawString += tableMapRawBase64[r.TableID] + "\n"
-				b64RawString += b64.StdEncoding.EncodeToString(e.RawData) + "\n"
-				b64RawString += rowsEnd
-				fmt.Fprintf(ioWriter, b64RawString)
+				buf := bytes.NewBuffer(nil)
 
-				r.PrintVerbose(os.Stdout)
+				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
+					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(),
+					e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n")
+				buf.WriteString(rowsStart + "\n")
+				buf.WriteString(tableMapRawBase64[r.TableID] + "\n")
+				buf.WriteString(b64.StdEncoding.EncodeToString(e.RawData) + "\n")
+				buf.WriteString(rowsEnd + "\n")
+				buf.Write(r.GetRowsEventPrinted())
+				//fmt.Fprintf(ioWriter, b64RawString)
+				ioWriter.Write(buf.Bytes())
+				//r.PrintVerbose(os.Stdout)
+
+				/*
+					fmt.Fprint(ioWriter, "BEGIN"+Delimiter+"\n")
+					comment := fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
+						unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
+					fmt.Fprint(ioWriter, comment)
+					fmt.Fprint(ioWriter, rowsStart)
+					fmt.Fprint(ioWriter, tableMapRawBase64[r.TableID]+"\n")
+					_, _ = enc.Write(e.RawData)
+					_ = enc.Close()
+					fmt.Fprint(ioWriter, rowsEnd)
+					r.PrintVerbose(ioWriter)
+					fmt.Fprint(ioWriter, "COMMIT"+Delimiter+"\n")
+				*/
 			}
 
-			///fmt.Fprintf(ioWriter, rowsStart)
-			///fmt.Fprintf(ioWriter, tableMapRawBase64[r.TableID]+"\n")
-			///fmt.Fprintf(ioWriter, b64.StdEncoding.EncodeToString(e.RawData))
-			///fmt.Fprintf(ioWriter, rowsEnd)
-			//_, _ = enc.Write(tableMapRawbytes[r.TableID])
-			//enc.Close()
-			//fmt.Fprintf(ioWriter, "\n")
-			//_, _ = enc.Write(e.RawData)
-			//enc.Close()
-			//fmt.Printf("# event type: %s\n", e.Header.EventType.String())
-			//fmt.Printf("# insert rows: %+v\n", r.Rows)
-			////e.SetRawDataIndex(replication.EventTypePos, byte(replication.DELETE_ROWS_EVENTv1))
-			//e.Dump(os.Stdout)
 		case replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2, replication.TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1, replication.TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2:
 			if len(e.RawData) <= replication.EventHeaderSize {
-				fmt.Println("xxxxx delete", "not matched")
+				//fmt.Println("xxxxx delete", "not matched")
 			} else {
+				buf := bytes.NewBuffer(nil)
+
 				r := e.Event.(*replication.RowsEvent)
-				b64RawString := ""
-				b64RawString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
-					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
-				b64RawString += rowsStart
-				b64RawString += tableMapRawBase64[r.TableID] + "\n"
-				b64RawString += b64.StdEncoding.EncodeToString(e.RawData) + "\n"
-				b64RawString += rowsEnd
-				fmt.Fprintf(ioWriter, b64RawString)
-				r.PrintVerbose(os.Stdout)
+				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
+					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(),
+					e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n")
+				buf.WriteString(rowsStart + "\n")
+				buf.WriteString(tableMapRawBase64[r.TableID] + "\n")
+				buf.WriteString(b64.StdEncoding.EncodeToString(e.RawData) + "\n")
+				buf.WriteString(rowsEnd + "\n")
+				buf.Write(r.GetRowsEventPrinted())
+
+				//fmt.Fprintf(ioWriter, b64RawString)
+				ioWriter.Write(buf.Bytes())
+				//r.PrintVerbose(os.Stdout)
 			}
 
 			///fmt.Fprintf(ioWriter, rowsStart)
@@ -327,18 +251,24 @@ func parseBinlogFile() error {
 			//r.Dump(os.Stdout)
 		case replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 			if len(e.RawData) <= replication.EventHeaderSize {
-				fmt.Println("xxxxx update", "not matched")
+				//fmt.Println("xxxxx update", "not matched")
 			} else {
+				buf := bytes.NewBuffer(nil)
+
 				r := e.Event.(*replication.RowsEvent)
-				b64RawString := ""
-				b64RawString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
-					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(), e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n"
-				b64RawString += rowsStart
-				b64RawString += tableMapRawBase64[r.TableID] + "\n"
-				b64RawString += b64.StdEncoding.EncodeToString(e.RawData) + "\n"
-				b64RawString += rowsEnd
-				fmt.Fprintf(ioWriter, b64RawString)
-				r.PrintVerbose(os.Stdout)
+				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s Table=%s TableID=%d",
+					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(),
+					e.Header.LogPos, r.Table.Schema, r.Table.Table, r.TableID) + "\n")
+				buf.WriteString(rowsStart + "\n")
+				buf.WriteString(tableMapRawBase64[r.TableID] + "\n")
+				buf.WriteString(b64.StdEncoding.EncodeToString(e.RawData) + "\n")
+				buf.WriteString(rowsEnd + "\n")
+				buf.Write(r.GetRowsEventPrinted())
+
+				//fmt.Fprintf(ioWriter, b64RawString)
+				ioWriter.Write(buf.Bytes())
+
+				//r.PrintVerbose(os.Stdout)
 			}
 
 			///fmt.Fprintf(ioWriter, rowsStart)
@@ -362,16 +292,19 @@ func parseBinlogFile() error {
 			if p.Flashback && qe.DbTableMatched {
 				return errors.Errorf("statement error")
 			} else if p.TableFilter == nil || (p.TableFilter != nil && qe.DbTableMatched) {
-				queryString := ""
-				queryString += fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s",
-					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, e.Header.EventType.String(), e.Header.LogPos, qe.Schema) + "\n"
+				buf := bytes.NewBuffer(nil)
+
+				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s LogPos=%d Db=%s",
+					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, e.Header.EventType.String(), e.Header.LogPos, qe.Schema) + "\n")
 				if string(qe.Schema) != "" {
-					queryString += fmt.Sprintf("USE `%s`%s\n", qe.Schema, Delimiter)
+					buf.WriteString(fmt.Sprintf("USE `%s`%s\n", qe.Schema, Delimiter))
 				}
-				queryString += fmt.Sprintf("SET TIMESTAMP=%d%s\n", e.Header.Timestamp, Delimiter)
-				queryString += string(qe.Query) + "\n" + Delimiter + "\n"
-				fmt.Fprintf(ioWriter, queryString)
-				fmt.Printf("\nquery event: %s\n", qe.Query)
+				buf.WriteString(fmt.Sprintf("SET TIMESTAMP=%d%s\n", e.Header.Timestamp, Delimiter))
+				buf.Write(qe.Query)
+				buf.WriteString("\n + Delimiter + \n")
+				//fmt.Fprintf(ioWriter, queryString)
+				ioWriter.Write(buf.Bytes())
+				//fmt.Printf("\nquery event: %s\n", qe.Query)
 			} else {
 				// 不打印 statement
 			}
@@ -398,6 +331,12 @@ func parseBinlogFile() error {
 		if err = p.TableFilter.DbTableFilterCompile(); err != nil {
 			return err
 		}
+	} else if p.Flashback {
+		tableFilter, err = db_table_filter.NewDbTableFilter([]string{"*"}, []string{"*"}, []string{"infodba_schema"}, []string{"*"})
+		p.TableFilter = tableFilter
+		if err = p.TableFilter.DbTableFilterCompile(); err != nil {
+			return err
+		}
 	}
 
 	if rowsFilterExpr := viper.GetString("rows-filter"); rowsFilterExpr != "" {
@@ -407,11 +346,10 @@ func parseBinlogFile() error {
 		}
 		p.RowsFilter = rowsFilter
 	}
-	p.Flashback = viper.GetBool("flashback")
 
 	err = p.ParseFile(fileName, startPos, f)
 	if err != nil {
-		println(err.Error())
+		fmt.Println(err.Error())
 	}
-	return nil
+	return err
 }

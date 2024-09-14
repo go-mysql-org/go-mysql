@@ -61,7 +61,8 @@ func init() {
 	rootCmd.PersistentFlags().StringP("result-file", "r", "", "Direct output to a given file")
 	rootCmd.PersistentFlags().String("parallel-type", "mysqlbinlog", "database | table | database_hash | table_hash | key_hash")
 	rootCmd.PersistentFlags().Int("binlog-row-event-max-size", 0, "binlog-row-event-max-size")
-	rootCmd.PersistentFlags().Int("result-file-max-size", 0, "result-file-max-size")
+	rootCmd.PersistentFlags().Int("result-file-max-size-mb", 128, "result-file-max-size-mb")
+	_ = viper.BindPFlag("result-file-max-size-mb", rootCmd.PersistentFlags().Lookup("result-file-max-size-mb"))
 
 	rootCmd.PersistentFlags().IntP("verbose", "v", 1, "1 2 3")
 

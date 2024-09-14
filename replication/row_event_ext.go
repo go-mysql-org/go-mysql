@@ -1,6 +1,9 @@
 package replication
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 
@@ -181,7 +184,187 @@ func (e *RowsEvent) GetEventType() EventType {
 	return e.eventType
 }
 
+func (e *RowsEvent) GetRowsEventPrinted() []byte {
+	//var buf []byte
+	w := bytes.NewBuffer(nil)
+	e.PrintVerbose(w)
+	return w.Bytes()
+}
+
+type TableMapColumnInfo struct {
+	DataType string
+	Nullable bool
+	//IsNull     bool
+	IsBinary   bool
+	isUnsigned bool
+	Position   int
+}
+
+func (i *TableMapColumnInfo) GetValuePrinted(v interface{}) interface{} {
+	if v == nil {
+		return "NULL"
+	} else if i.IsBinary {
+		return hex.EncodeToString(v.([]byte))
+		// return base64.RawStdEncoding.EncodeToString(v.([]byte))
+	}
+
+	return v
+}
+
+func (i *TableMapColumnInfo) GetTypeString(e *TableMapEvent, pos int) string {
+	meta := e.ColumnMeta[pos]
+	switch e.realType(pos) {
+	case MYSQL_TYPE_STRING:
+		return fmt.Sprintf("STRING(%d)", meta)
+	case MYSQL_TYPE_VARCHAR,
+		MYSQL_TYPE_VAR_STRING:
+		return fmt.Sprintf("VARSTRING(%d)", meta)
+	case MYSQL_TYPE_NULL:
+		return "NULL"
+	case MYSQL_TYPE_LONG:
+		return "INT"
+	case MYSQL_TYPE_TINY:
+		return "TINYINT"
+	case MYSQL_TYPE_SHORT:
+		return "SHORTINT"
+	case MYSQL_TYPE_INT24:
+		return "MEDIUMINT"
+	case MYSQL_TYPE_LONGLONG:
+		return "LONGINT"
+	case MYSQL_TYPE_NEWDECIMAL:
+		precision := meta >> 8
+		decimals := meta & 0xFF
+		return fmt.Sprintf("DECIMAL(%d,%d)", precision, decimals)
+	case MYSQL_TYPE_FLOAT:
+		return "FLOAT"
+	case MYSQL_TYPE_DOUBLE:
+		return "DOUBLE"
+	case MYSQL_TYPE_BIT:
+		nbits := ((meta >> 8) * 8) + (meta & 0xFF)
+		return fmt.Sprintf("BIT(%d)", nbits)
+	case MYSQL_TYPE_TIMESTAMP:
+		return "TIMESTAMP"
+	case MYSQL_TYPE_TIMESTAMP2:
+		return fmt.Sprintf("TIMESTAMP(%d)", meta)
+	case MYSQL_TYPE_DATETIME:
+		return "DATETIME"
+	case MYSQL_TYPE_DATETIME2:
+		return fmt.Sprintf("DATETIME(%d)", meta)
+	case MYSQL_TYPE_TIME:
+		return "TIME"
+	case MYSQL_TYPE_TIME2:
+		return fmt.Sprintf("TIME(%d)", meta)
+	case MYSQL_TYPE_DATE:
+		return "DATE"
+	case MYSQL_TYPE_YEAR:
+		return "YEAR"
+	case MYSQL_TYPE_ENUM:
+		bbytes := meta & 0xFF
+		switch bbytes {
+		case 1:
+			return "ENUM(1 byte)"
+		case 2:
+			return "ENUM(2 bytes)"
+		default:
+			return "ENUM"
+		}
+	case MYSQL_TYPE_SET:
+		return fmt.Sprintf("SET(%d bytes)", meta&0xFF)
+	case MYSQL_TYPE_BLOB, MYSQL_TYPE_TINY_BLOB, MYSQL_TYPE_MEDIUM_BLOB, MYSQL_TYPE_LONG_BLOB:
+		i.IsBinary = true
+		switch meta {
+		case 1:
+			return "TINYBLOB / TINYTEXT"
+		case 2:
+			return "BLOB/TEXT"
+		case 3:
+			return "MEDIUMBLOB/MEDIUMTEXT"
+		case 4:
+			return "LONGBLOB/LONGTEXT"
+		default:
+			return "BLOB"
+		}
+	case MYSQL_TYPE_JSON:
+		return "JSON"
+	case MYSQL_TYPE_GEOMETRY:
+		return "geometry"
+	default:
+		_ = fmt.Errorf("unsupport type %d in binlog and don't know how to handle", e.realType(pos))
+		return "unknown"
+	}
+}
+
+func (e *TableMapEvent) ReadColumnInfo() {
+	unsignedMap := e.UnsignedMap()
+	/*
+		collationMap := e.CollationMap()
+		enumSetCollationMap := e.EnumSetCollationMap()
+		enumStrValueMap := e.EnumStrValueMap()
+		setStrValueMap := e.SetStrValueMap()
+		geometryTypeMap := e.GeometryTypeMap()
+		primaryKey := map[int]struct{}{}
+	*/
+	for i := 0; i < int(e.ColumnCount); i++ {
+		info := &TableMapColumnInfo{Position: i}
+		info.DataType = info.GetTypeString(e, i)
+		if e.IsNumericColumn(i) {
+			if len(unsignedMap) > 0 && unsignedMap[i] {
+				info.isUnsigned = true
+			}
+		}
+		_, nullable := e.Nullable(i)
+		if nullable {
+			info.Nullable = true
+		}
+		/*
+			if e.IsCharacterColumn(i) {
+				if len(collationMap) == 0 {
+					fmt.Fprintf(w, "  collation=<n/a>")
+				} else {
+					fmt.Fprintf(w, "  collation=%d ", collationMap[i])
+				}
+			}
+			if e.IsEnumColumn(i) {
+				if len(enumSetCollationMap) == 0 {
+					fmt.Fprintf(w, "  enum_collation=<n/a>")
+				} else {
+					fmt.Fprintf(w, "  enum_collation=%d", enumSetCollationMap[i])
+				}
+
+				if len(enumStrValueMap) == 0 {
+					fmt.Fprintf(w, "  enum=<n/a>")
+				} else {
+					fmt.Fprintf(w, "  enum=%v", enumStrValueMap[i])
+				}
+			}
+			if e.IsSetColumn(i) {
+				if len(enumSetCollationMap) == 0 {
+					fmt.Fprintf(w, "  set_collation=<n/a>")
+				} else {
+					fmt.Fprintf(w, "  set_collation=%d", enumSetCollationMap[i])
+				}
+
+				if len(setStrValueMap) == 0 {
+					fmt.Fprintf(w, "  set=<n/a>")
+				} else {
+					fmt.Fprintf(w, "  set=%v", setStrValueMap[i])
+				}
+			}
+			if e.IsGeometryColumn(i) {
+				if len(geometryTypeMap) == 0 {
+					fmt.Fprintf(w, "  geometry_type=<n/a>")
+				} else {
+					fmt.Fprintf(w, "  geometry_type=%v", geometryTypeMap[i])
+				}
+			}
+		*/
+		e.columnsInfo = append(e.columnsInfo, info)
+	}
+}
 func (e *RowsEvent) PrintVerbose(w io.Writer) {
+	if len(e.Table.columnsInfo) == 0 {
+		e.Table.ReadColumnInfo()
+	}
 	var sql_command, sql_clause1, sql_clause2 string
 	switch e.eventType {
 	case UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2:
@@ -189,11 +372,14 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 		for i := 0; i < len(e.Rows); i += 2 {
 			sql_clause1 = "### WHERE\n"
 			sql_clause2 = "### SET\n"
+			e.Table.UnsignedMap()
 			for k, v := range e.Rows[i] {
-				sql_clause1 += fmt.Sprintf("###   col[%d]=%v\n", k, v)
+				sql_clause1 += fmt.Sprintf("###   col[%d]=%v /* %v %v */\n",
+					k, e.Table.columnsInfo[k].GetValuePrinted(v), e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
 			}
 			for k, v := range e.Rows[i+1] {
-				sql_clause2 += fmt.Sprintf("###   col[%d]=%v\n", k, v)
+				sql_clause2 += fmt.Sprintf("###   col[%d]=%v /* %v %v */\n",
+					k, e.Table.columnsInfo[k].GetValuePrinted(v), e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
 			}
 			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
 		}
@@ -203,7 +389,8 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 			sql_clause1 = "### SET\n"
 			sql_clause2 = ""
 			for k, v := range e.Rows[i] {
-				sql_clause1 += fmt.Sprintf("###   col[%d]=%v\n", k, v)
+				sql_clause1 += fmt.Sprintf("###   col[%d]=%v /* %v %v */\n",
+					k, e.Table.columnsInfo[k].GetValuePrinted(v), e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
 			}
 			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
 		}
@@ -213,11 +400,8 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 			sql_clause1 = "### WHERE\n"
 			sql_clause2 = ""
 			for k, v := range e.Rows[i] {
-				if e.Table.ColumnType[k] < MYSQL_TYPE_DOUBLE { // todo
-					sql_clause1 += fmt.Sprintf("###   col[%d]=%d\n", k, v)
-				} else {
-					sql_clause1 += fmt.Sprintf("###   col[%d]=%s\n", k, v)
-				}
+				sql_clause1 += fmt.Sprintf("###   col[%d]=%v /* %v %v */\n",
+					k, e.Table.columnsInfo[k].GetValuePrinted(v), e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
 			}
 			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
 		}
@@ -228,49 +412,169 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 	}
 }
 
-func (e *RowsEvent) PrintVerbose2(w io.Writer) {
-	var sql_command, sql_clause1, sql_clause2 string
-	switch e.eventType {
-	case UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2:
-		sql_command = fmt.Sprintf("### UDPATE `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
-		for i := 0; i < len(e.Rows); i += 2 {
-			sql_clause1 = "### WHERE\n"
-			sql_clause2 = "### SET\n"
-			for k, v := range e.Rows[i] {
-				sql_clause1 += fmt.Sprintf("###   @%d=%v\n", k+1, v)
-			}
-			for k, v := range e.Rows[i+1] {
-				sql_clause2 += fmt.Sprintf("###   @%d=%v\n", k+1, v)
-			}
-			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
+func ReturnDataType(v interface{}, dt byte, meta uint16) string {
+	var val interface{} = v
+	var valInfo string
+	switch dt {
+	case MYSQL_TYPE_STRING:
+		valInfo = fmt.Sprintf("STRING(%d)", meta)
+	case MYSQL_TYPE_VARCHAR,
+		MYSQL_TYPE_VAR_STRING:
+		valInfo = fmt.Sprintf("VARSTRING(%d)", meta)
+	case MYSQL_TYPE_NULL:
+		val = "NULL"
+		valInfo = "NULL"
+	case MYSQL_TYPE_LONG:
+		valInfo = "INT"
+	case MYSQL_TYPE_TINY:
+		valInfo = "TINYINT"
+	case MYSQL_TYPE_SHORT:
+		valInfo = "SHORTINT"
+	case MYSQL_TYPE_INT24:
+		valInfo = "MEDIUMINT"
+	case MYSQL_TYPE_LONGLONG:
+		valInfo = "LONGINT"
+	case MYSQL_TYPE_NEWDECIMAL:
+		precision := meta >> 8
+		decimals := meta & 0xFF
+		valInfo = fmt.Sprintf("DECIMAL(%d,%d)", precision, decimals)
+	case MYSQL_TYPE_FLOAT:
+		valInfo = "FLOAT"
+	case MYSQL_TYPE_DOUBLE:
+		valInfo = "DOUBLE"
+	case MYSQL_TYPE_BIT:
+		nbits := ((meta >> 8) * 8) + (meta & 0xFF)
+		valInfo = fmt.Sprintf("BIT(%d)", nbits)
+	case MYSQL_TYPE_TIMESTAMP:
+		valInfo = "TIMESTAMP"
+	case MYSQL_TYPE_TIMESTAMP2:
+		valInfo = fmt.Sprintf("TIMESTAMP(%d)", meta)
+	case MYSQL_TYPE_DATETIME:
+		valInfo = "DATETIME"
+	case MYSQL_TYPE_DATETIME2:
+		valInfo = fmt.Sprintf("DATETIME(%d)", meta)
+	case MYSQL_TYPE_TIME:
+		valInfo = "TIME"
+	case MYSQL_TYPE_TIME2:
+		valInfo = fmt.Sprintf("TIME(%d)", meta)
+	case MYSQL_TYPE_DATE:
+		valInfo = "DATE"
+	case MYSQL_TYPE_YEAR:
+		valInfo = "YEAR"
+	case MYSQL_TYPE_ENUM:
+		bbytes := meta & 0xFF
+		switch bbytes {
+		case 1:
+			valInfo = "ENUM(1 byte)"
+		case 2:
+			valInfo = "ENUM(2 bytes)"
+		default:
+			valInfo = "ENUM"
 		}
-	case WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2:
-		sql_command = fmt.Sprintf("### INSERT INTO `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
-		for i := 0; i < len(e.Rows); i++ {
-			sql_clause1 = "### SET\n"
-			sql_clause2 = ""
-			for k, v := range e.Rows[i] {
-				sql_clause1 += fmt.Sprintf("###   @%d=%v\n", k+1, v)
-			}
-			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
+	case MYSQL_TYPE_SET:
+		valInfo = fmt.Sprintf("SET(%d bytes)", meta&0xFF)
+	case MYSQL_TYPE_BLOB, MYSQL_TYPE_TINY_BLOB, MYSQL_TYPE_MEDIUM_BLOB, MYSQL_TYPE_LONG_BLOB:
+		val = base64.RawStdEncoding.EncodeToString(v.([]byte))
+		switch meta {
+		case 1:
+			valInfo = "TINYBLOB / TINYTEXT"
+		case 2:
+			valInfo = "BLOB/TEXT"
+		case 3:
+			valInfo = "MEDIUMBLOB/MEDIUMTEXT"
+		case 4:
+			valInfo = "LONGBLOB/LONGTEXT"
+		default:
+			valInfo = "BLOB"
 		}
-	case DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2:
-		sql_command = fmt.Sprintf("### DELETE FROM `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
-		for i := 0; i < len(e.Rows); i++ {
-			sql_clause1 = "### WHERE\n"
-			sql_clause2 = ""
-			for k, v := range e.Rows[i] {
-				if e.Table.ColumnType[k] < MYSQL_TYPE_DOUBLE { // todo
-					sql_clause1 += fmt.Sprintf("###   @%d=%d\n", k+1, v)
-				} else {
-					sql_clause1 += fmt.Sprintf("###   @%d=%s\n", k+1, v)
-				}
-			}
-			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
-		}
+	case MYSQL_TYPE_JSON:
+		valInfo = "JSON"
+	case MYSQL_TYPE_GEOMETRY:
+		valInfo = "geometry"
 	default:
-		sql_command = ""
-		sql_clause1 = ""
-		sql_clause2 = ""
+		_ = fmt.Errorf("unsupport type %d in binlog and don't know how to handle", dt)
+		valInfo = "unknown"
+	}
+	return fmt.Sprintf("%v /* %s */", val, valInfo)
+}
+
+func DataTypeString(dt byte, meta uint16) string {
+	switch dt {
+	case MYSQL_TYPE_STRING:
+		return fmt.Sprintf("STRING(%d)", meta)
+	case MYSQL_TYPE_VARCHAR,
+		MYSQL_TYPE_VAR_STRING:
+		return fmt.Sprintf("VARSTRING(%d)", meta)
+	case MYSQL_TYPE_NULL:
+		return "NULL"
+	case MYSQL_TYPE_LONG:
+		return "INT"
+	case MYSQL_TYPE_TINY:
+		return "TINYINT"
+	case MYSQL_TYPE_SHORT:
+		return "SHORTINT"
+	case MYSQL_TYPE_INT24:
+		return "MEDIUMINT"
+	case MYSQL_TYPE_LONGLONG:
+		return "LONGINT"
+	case MYSQL_TYPE_NEWDECIMAL:
+		precision := meta >> 8
+		decimals := meta & 0xFF
+		return fmt.Sprintf("DECIMAL(%d,%d)", precision, decimals)
+	case MYSQL_TYPE_FLOAT:
+		return "FLOAT"
+	case MYSQL_TYPE_DOUBLE:
+		return "DOUBLE"
+	case MYSQL_TYPE_BIT:
+		nbits := ((meta >> 8) * 8) + (meta & 0xFF)
+		return fmt.Sprintf("BIT(%d)", nbits)
+	case MYSQL_TYPE_TIMESTAMP:
+		return "TIMESTAMP"
+	case MYSQL_TYPE_TIMESTAMP2:
+		return fmt.Sprintf("TIMESTAMP(%d)", meta)
+	case MYSQL_TYPE_DATETIME:
+		return "DATETIME"
+	case MYSQL_TYPE_DATETIME2:
+		return fmt.Sprintf("DATETIME(%d)", meta)
+	case MYSQL_TYPE_TIME:
+		return "TIME"
+	case MYSQL_TYPE_TIME2:
+		return fmt.Sprintf("TIME(%d)", meta)
+	case MYSQL_TYPE_DATE:
+		return "DATE"
+	case MYSQL_TYPE_YEAR:
+		return "YEAR"
+	case MYSQL_TYPE_ENUM:
+		bbytes := meta & 0xFF
+		switch bbytes {
+		case 1:
+			return "ENUM(1 byte)"
+		case 2:
+			return "ENUM(2 bytes)"
+		default:
+			return "ENUM"
+		}
+	case MYSQL_TYPE_SET:
+		return fmt.Sprintf("SET(%d bytes)", meta&0xFF)
+	case MYSQL_TYPE_BLOB, MYSQL_TYPE_TINY_BLOB, MYSQL_TYPE_MEDIUM_BLOB, MYSQL_TYPE_LONG_BLOB:
+		switch meta {
+		case 1:
+			return "TINYBLOB / TINYTEXT"
+		case 2:
+			return "BLOB/TEXT"
+		case 3:
+			return "MEDIUMBLOB/MEDIUMTEXT"
+		case 4:
+			return "LONGBLOB/LONGTEXT"
+		default:
+			return "BLOB"
+		}
+	case MYSQL_TYPE_JSON:
+		return "JSON"
+	case MYSQL_TYPE_GEOMETRY:
+		return "geometry"
+	default:
+		_ = fmt.Errorf("unsupport type %d in binlog and don't know how to handle", dt)
+		return "unknown"
 	}
 }

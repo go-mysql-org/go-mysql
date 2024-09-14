@@ -167,9 +167,6 @@ func (c *DbTableFilter) DbTableFilterCompile() error {
 	c.BuildFilter()
 	var err error
 
-	fmt.Println("dbfilter: ", c.DbFilterRegex())
-	fmt.Println("tbfilter: ", c.TableFilterRegex())
-
 	c.Compiled = &DbTableFilterCompiled{}
 	c.Compiled.DbFilter, err = regexp2.Compile(c.DbFilterRegex(), regexp2.None)
 	if err != nil {

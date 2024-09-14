@@ -87,6 +87,8 @@ type TableMapEvent struct {
 	VisibilityBitmap []byte
 
 	optionalMetaDecodeFunc func(data []byte) (err error)
+
+	columnsInfo []*TableMapColumnInfo
 }
 
 func (e *TableMapEvent) Decode(data []byte) error {
@@ -1057,11 +1059,13 @@ func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 
 func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 	if e.compressed {
-		data, err2 = DecompressMariadbData(data[pos:])
-		if err2 != nil {
+		// mariadb and tendb share the same compress algo(zlib)?
+		uncompressedBuf, err3 := DecompressMariadbData(data[pos:])
+		if err3 != nil {
 			//nolint:nakedret
-			return
+			return err3
 		}
+		data = append(data[:pos], uncompressedBuf...) // tendb
 	}
 
 	// Rows_log_event::print_verbose()
