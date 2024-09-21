@@ -91,6 +91,11 @@ type Config struct {
 	// whether disable re-sync for broken connection
 	DisableRetrySync bool `toml:"disable_retry_sync"`
 
+	// whether the function WaitUntilPos() can use FLUSH BINARY LOGS
+	// to ensure we advance past a position. This should not strictly be required,
+	// and requires additional privileges.
+	DisableFlushBinlogWhileWaiting bool `toml:"disable_flush_binlog_while_waiting"`
+
 	// Set TLS config
 	TLSConfig *tls.Config
 
@@ -102,6 +107,11 @@ type Config struct {
 
 	// Set Localhost
 	Localhost string
+
+	// EventCacheCount is the capacity of the BinlogStreamer internal event channel.
+	// the default value is 10240.
+	// if you table contain large columns, you can decrease this value to avoid OOM.
+	EventCacheCount int
 }
 
 func NewConfigWithFile(name string) (*Config, error) {

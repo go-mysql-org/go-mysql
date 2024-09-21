@@ -115,11 +115,11 @@ func (c *Conn) readInitialHandshake() error {
 			// the first packet *must* have at least 20 bytes of a scramble.
 			// if a plugin provided less, we pad it to 20 with zeros
 			rest := int(authPluginDataLen) - 8
-			if max := 12 + 1; rest < max {
-				rest = max
+			if rest < 13 {
+				rest = 13
 			}
 
-			authPluginDataPart2 := data[pos : pos+rest]
+			authPluginDataPart2 := data[pos : pos+rest-1]
 			pos += rest
 
 			c.salt = append(c.salt, authPluginDataPart2...)

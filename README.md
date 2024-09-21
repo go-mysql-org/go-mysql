@@ -9,10 +9,10 @@ A pure go library to handle MySQL network protocol and replication.
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
 ```
-replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.8.0
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.9.0
 ```
 
-v1.8.0 - is the last tag in repo, feel free to choose what you want.
+v1.9.0 - is the last tag in repo, feel free to choose what you want.
 
 ## Changelog
 This repo uses [Changelog](CHANGELOG.md).
@@ -425,6 +425,18 @@ golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
 | Type      | Default   | Example                                         |
 | --------- | --------- | ----------------------------------------------- |
 | duration  | 0         | user:pass@localhost/mydb?writeTimeout=1m30s     |
+
+#### `retries`
+
+Allows disabling the golang `database/sql` default behavior to retry errors
+when `ErrBadConn` is returned by the driver. When retries are disabled
+this driver will not return `ErrBadConn` from the `database/sql` package.
+
+Valid values are `on` (default) and `off`.
+
+| Type      | Default   | Example                                         |
+| --------- | --------- | ----------------------------------------------- |
+| string    | on        | user:pass@localhost/mydb?retries=off            |
 
 ### Custom Driver Options
 

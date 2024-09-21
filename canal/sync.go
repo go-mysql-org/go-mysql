@@ -141,8 +141,13 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 	case *replication.QueryEvent:
 		stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 		if err != nil {
+			// The parser does not understand all syntax.
+			// For example, it won't parse [CREATE|DROP] TRIGGER statements.
 			c.cfg.Logger.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
 			return nil
+		}
+		if len(stmts) > 0 {
+			savePos = true
 		}
 		for _, stmt := range stmts {
 			nodes := parseStmt(stmt)
@@ -155,7 +160,6 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 				}
 			}
 			if len(nodes) > 0 {
-				savePos = true
 				force = true
 				// Now we only handle Table Changed DDL, maybe we will support more later.
 				if err = c.eventHandler.OnDDL(ev.Header, pos, e); err != nil {
@@ -300,9 +304,11 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 		case <-timer.C:
 			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
-			err := c.FlushBinlog()
-			if err != nil {
-				return errors.Trace(err)
+			if !c.cfg.DisableFlushBinlogWhileWaiting {
+				err := c.FlushBinlog()
+				if err != nil {
+					return errors.Trace(err)
+				}
 			}
 			curPos := c.master.Position()
 			if curPos.Compare(pos) >= 0 {

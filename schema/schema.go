@@ -354,7 +354,8 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 	var unusedVal interface{}
 
 	for r.Next() {
-		var indexName, colName string
+		var indexName string
+		var colName sql.NullString
 		var noneUnique uint64
 		var cardinality interface{}
 		cols, err := r.Columns()
@@ -387,7 +388,12 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		}
 
 		c := toUint64(cardinality)
-		currentIndex.AddColumn(colName, c)
+		// If colName is a null string, switch to ""
+		if colName.Valid {
+			currentIndex.AddColumn(colName.String, c)
+		} else {
+			currentIndex.AddColumn("", c)
+		}
 		currentIndex.NoneUnique = noneUnique
 	}
 

@@ -97,7 +97,11 @@ func parseDSN(dsn string) (connInfo, error) {
 // Open takes a supplied DSN string and opens a connection
 // See ParseDSN for more information on the form of the DSN
 func (d driver) Open(dsn string) (sqldriver.Conn, error) {
-	var c *client.Conn
+	var (
+		c *client.Conn
+		// by default database/sql driver retries will be enabled
+		retries = true
+	)
 
 	ci, err := parseDSN(dsn)
 
@@ -134,6 +138,10 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 				if timeout, err = time.ParseDuration(value[0]); err != nil {
 					return nil, errors.Wrap(err, "invalid duration value for timeout option")
 				}
+			} else if key == "retries" && len(value) > 0 {
+				// by default keep the golang database/sql retry behavior enabled unless
+				// the retries driver option is explicitly set to 'off'
+				retries = !strings.EqualFold(value[0], "off")
 			} else {
 				if option, ok := options[key]; ok {
 					opt := func(o DriverOption, v string) client.Option {
@@ -161,15 +169,28 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 		return nil, err
 	}
 
-	return &conn{c}, nil
+	// if retries are 'on' then return sqldriver.ErrBadConn which will trigger up to 3
+	// retries by the database/sql package. If retries are 'off' then we'll return
+	// the native go-mysql-org/go-mysql 'mysql.ErrBadConn' erorr which will prevent a retry.
+	// In this case the sqldriver.Validator interface is implemented and will return
+	// false for IsValid() signaling the connection is bad and should be discarded.
+	return &conn{Conn: c, state: &state{valid: true, useStdLibErrors: retries}}, nil
 }
 
 type CheckNamedValueFunc func(*sqldriver.NamedValue) error
 
 var _ sqldriver.NamedValueChecker = &conn{}
+var _ sqldriver.Validator = &conn{}
+
+type state struct {
+	valid bool
+	// when true, the driver connection will return ErrBadConn from the golang Standard Library
+	useStdLibErrors bool
+}
 
 type conn struct {
 	*client.Conn
+	state *state
 }
 
 func (c *conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
@@ -182,12 +203,16 @@ func (c *conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
 		} else {
 			// we've found an error, if the error is driver.ErrSkip then
 			// keep looking otherwise return the unknown error
-			if !goErrors.Is(sqldriver.ErrSkip, err) {
+			if !goErrors.Is(err, sqldriver.ErrSkip) {
 				return err
 			}
 		}
 	}
 	return sqldriver.ErrSkip
+}
+
+func (c *conn) IsValid() bool {
+	return c.state.valid
 }
 
 func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
@@ -196,7 +221,7 @@ func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
 		return nil, errors.Trace(err)
 	}
 
-	return &stmt{st}, nil
+	return &stmt{Stmt: st, connectionState: c.state}, nil
 }
 
 func (c *conn) Close() error {
@@ -222,10 +247,16 @@ func buildArgs(args []sqldriver.Value) []interface{} {
 	return a
 }
 
-func replyError(err error) error {
-	if mysql.ErrorEqual(err, mysql.ErrBadConn) {
+func (st *state) replyError(err error) error {
+	isBadConnection := mysql.ErrorEqual(err, mysql.ErrBadConn)
+
+	if st.useStdLibErrors && isBadConnection {
 		return sqldriver.ErrBadConn
 	} else {
+		// if we have a bad connection, this mark the state of this connection as not valid
+		// do the database/sql package can discard it instead of placing it back in the
+		// sql.DB pool.
+		st.valid = !isBadConnection
 		return errors.Trace(err)
 	}
 }
@@ -234,7 +265,7 @@ func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, err
 	a := buildArgs(args)
 	r, err := c.Conn.Execute(query, a...)
 	if err != nil {
-		return nil, replyError(err)
+		return nil, c.state.replyError(err)
 	}
 	return &result{r}, nil
 }
@@ -243,13 +274,14 @@ func (c *conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, erro
 	a := buildArgs(args)
 	r, err := c.Conn.Execute(query, a...)
 	if err != nil {
-		return nil, replyError(err)
+		return nil, c.state.replyError(err)
 	}
 	return newRows(r.Resultset)
 }
 
 type stmt struct {
 	*client.Stmt
+	connectionState *state
 }
 
 func (s *stmt) Close() error {
@@ -264,7 +296,7 @@ func (s *stmt) Exec(args []sqldriver.Value) (sqldriver.Result, error) {
 	a := buildArgs(args)
 	r, err := s.Stmt.Execute(a...)
 	if err != nil {
-		return nil, replyError(err)
+		return nil, s.connectionState.replyError(err)
 	}
 	return &result{r}, nil
 }
@@ -273,7 +305,7 @@ func (s *stmt) Query(args []sqldriver.Value) (sqldriver.Rows, error) {
 	a := buildArgs(args)
 	r, err := s.Stmt.Execute(a...)
 	if err != nil {
-		return nil, replyError(err)
+		return nil, s.connectionState.replyError(err)
 	}
 	return newRows(r.Resultset)
 }
