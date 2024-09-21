@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
+	"slices"
 
 	"github.com/dlclark/regexp2"
 	"github.com/expr-lang/expr"
@@ -17,6 +18,15 @@ import (
 type RowsFilter struct {
 	columnFilterExpr         string
 	CompiledColumnFilterExpr *vm.Program
+	// rowsMatch rows filter matched records number in this rows event
+	rowsMatch int
+}
+
+type TimeFilter struct {
+	StartTime uint32
+	StopTime  uint32
+	StartPos  uint32
+	StopPos   uint32
 }
 
 // NewRowsFilter return compile expr
@@ -63,9 +73,23 @@ func (p *BinlogParser) swapFlashbackEventType(h *EventHeader) {
 		h.EventType = WRITE_ROWS_EVENTv1
 	case DELETE_ROWS_EVENTv0:
 		h.EventType = WRITE_ROWS_EVENTv0
+	case TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2:
+		h.EventType = TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2
+	case TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1:
+		h.EventType = TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1
+	case TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2:
+		h.EventType = TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2
+	case TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1:
+		h.EventType = TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1
 	default:
 	}
 }
+
+var (
+	UpdateEventType = []EventType{UPDATE_ROWS_EVENTv2, UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv0, TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V2, TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V1}
+	DeleteEventType = []EventType{DELETE_ROWS_EVENTv2, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv0, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1}
+	InsertEventType = []EventType{WRITE_ROWS_EVENTv2, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv0, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1}
+)
 
 // ParseEventFlashback change rawData
 // rawData is a new object
@@ -130,8 +154,16 @@ func (p *BinlogParser) ParseEventFlashback(h *EventHeader, data []byte, rawData 
 				TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V2,
 				TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2,
 				PARTIAL_UPDATE_ROWS_EVENT: // Extension of UPDATE_ROWS_EVENT, allowing partial values according to binlog_row_value_options
-				if p.Flashback {
-					p.swapFlashbackEventType(h) // for header print
+				if p.EventTypeFilter != nil {
+					if !slices.Contains(p.EventTypeFilter, h.EventType) {
+						//filterMatched := false
+						//e = &GenericEvent{FilterMatched: &filterMatched}
+						re := p.newRowsEvent(h)
+						re.RowsMatched = 0
+						rawBytesNew := (*rawData)[:EventHeaderSize]
+						e = re
+						return e, rawBytesNew, nil
+					}
 				}
 				e = p.newRowsEvent(h) // 也可以考虑在 newRowsEvent 里面 swap type
 			case ROWS_QUERY_EVENT:
@@ -174,16 +206,17 @@ func (p *BinlogParser) ParseEventFlashback(h *EventHeader, data []byte, rawData 
 		re.SetDbTableFilter(p.TableFilter)
 		re.SetRowsFilter(p.RowsFilter)
 		re.flashback = p.Flashback
+		re.convUpdateToWrite = p.ConvUpdateToWrite
 		if p.rowsEventDecodeFunc != nil {
 			re.rawBytesNew = *rawData
-			err = p.rowsEventDecodeFunc(re, data)
+			err = p.rowsEventDecodeFunc(re, data) // todo handle err?
 			if len(re.rawBytesNew) > EventHeaderSize {
 				if p.format != nil && p.format.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
 					re.rawBytesNew = append(re.rawBytesNew, p.computeCrc32Checksum(re.rawBytesNew)...)
 				}
 				eventSizeBuff := make([]byte, 4)
 				binary.LittleEndian.PutUint32(eventSizeBuff, uint32(len(re.rawBytesNew)))
-				BytesReplaceWithIndex(re.rawBytesNew, EventSizPos, EventTypePos+4, eventSizeBuff)
+				BytesReplaceWithIndex(re.rawBytesNew, EventSizPos, EventSizPos+4, eventSizeBuff)
 			}
 			rawData = &re.rawBytesNew
 		} else {
@@ -191,12 +224,10 @@ func (p *BinlogParser) ParseEventFlashback(h *EventHeader, data []byte, rawData 
 		}
 	} else if qe, ok := e.(*QueryEvent); ok {
 		err = e.Decode(data)
-
 		if p.Flashback || p.TableFilter != nil || p.RowsFilter != nil {
 			if bytes.Equal(qe.Query, []byte("BEGIN")) || bytes.Equal(qe.Query, []byte("COMMIT")) {
 				//fmt.Fprintf(iowriter, "%s%s\n", r.Query, Delimiter)
 			}
-			// fmt.Printf("\nquery event: %s\n", qe.Query)
 			sqlParser := parser.New()
 			stmts, _, err := sqlParser.Parse(string(qe.Query), "", "")
 			if err != nil {
@@ -223,9 +254,23 @@ func (p *BinlogParser) ParseEventFlashback(h *EventHeader, data []byte, rawData 
 				}
 			}
 		}
+	} else if te, ok := e.(*TableMapEvent); ok {
+		te.SetRenameRule(p.RenameRule)
+		if te.renameRule != nil {
+			te.rawBytesNew = *rawData
+			err = te.DecodeAndRename(data)
+			if p.format != nil && p.format.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
+				te.rawBytesNew = append(te.rawBytesNew, p.computeCrc32Checksum(te.rawBytesNew)...)
+			}
+			eventSizeBuff := make([]byte, 4)
+			binary.LittleEndian.PutUint32(eventSizeBuff, uint32(len(te.rawBytesNew)))
+			BytesReplaceWithIndex(te.rawBytesNew, EventSizPos, EventSizPos+4, eventSizeBuff)
+			rawData = &te.rawBytesNew
+		} else {
+			err = e.Decode(data)
+		}
 	} else {
 		err = e.Decode(data)
-
 	}
 
 	if err != nil {

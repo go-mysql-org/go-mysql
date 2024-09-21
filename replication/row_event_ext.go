@@ -2,12 +2,14 @@ package replication
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
 
 	"github.com/expr-lang/expr"
 	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/pkg"
 	"github.com/pingcap/errors"
 )
 
@@ -69,18 +71,7 @@ func (e *RowsEvent) FlashbackData(pos int, data []byte) (err2 error) {
 	}
 	e.SkippedColumns = make([][]int, 0, rowsLen)
 	e.Rows = make([][]interface{}, 0, rowsLen)
-
-	var rowImageType EnumRowImageType
-	switch e.eventType { // flashback 这里已经swap了
-	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2,
-		MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2:
-		rowImageType = EnumRowImageTypeWriteAI
-	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2,
-		MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2:
-		rowImageType = EnumRowImageTypeDeleteBI
-	default:
-		rowImageType = EnumRowImageTypeUpdateBI
-	}
+	//var originalEventType EventType = e.eventType
 
 	if e.flashback {
 		switch e.eventType {
@@ -105,6 +96,37 @@ func (e *RowsEvent) FlashbackData(pos int, data []byte) (err2 error) {
 		default:
 		}
 	}
+	convUpdateToWriteThis := false
+	//convUpdateToWriteThis = e.convUpdateToWrite && rowImageType == EnumRowImageTypeUpdateBI
+	if e.convUpdateToWrite {
+		switch e.eventType {
+		case UPDATE_ROWS_EVENTv2, TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V2:
+			e.rawBytesNew[EventTypePos] = byte(WRITE_ROWS_EVENTv2)
+			e.eventType = WRITE_ROWS_EVENTv2
+			convUpdateToWriteThis = true
+		case UPDATE_ROWS_EVENTv1, TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
+			e.rawBytesNew[EventTypePos] = byte(WRITE_ROWS_EVENTv1)
+			e.eventType = WRITE_ROWS_EVENTv1
+			convUpdateToWriteThis = true
+		case UPDATE_ROWS_EVENTv0:
+			e.rawBytesNew[EventTypePos] = byte(WRITE_ROWS_EVENTv0)
+			e.eventType = WRITE_ROWS_EVENTv0
+			convUpdateToWriteThis = true
+		default:
+		}
+	}
+
+	var rowImageType EnumRowImageType
+	switch e.eventType {
+	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2,
+		MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V1, TENDB_WRITE_ROWS_COMPRESSED_EVENT_V2:
+		rowImageType = EnumRowImageTypeWriteAI
+	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2,
+		MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1, TENDB_DELETE_ROWS_COMPRESSED_EVENT_V2:
+		rowImageType = EnumRowImageTypeDeleteBI
+	default:
+		rowImageType = EnumRowImageTypeUpdateBI
+	}
 
 	matched := false
 	if e.rowsFilter == nil {
@@ -119,7 +141,7 @@ func (e *RowsEvent) FlashbackData(pos int, data []byte) (err2 error) {
 		var bufImage1 []byte
 		var bufImage2 []byte
 
-		// Parse the first image
+		// Parse the first image, insert AI | delete BI | update BI
 		if n, err = e.decodeImage(data[pos:], e.ColumnBitmap1, rowImageType); err != nil {
 			return errors.Trace(err)
 		}
@@ -132,33 +154,53 @@ func (e *RowsEvent) FlashbackData(pos int, data []byte) (err2 error) {
 			if res, ok := rowMatched.(bool); ok && res {
 				matched = true
 				currentMatched = true
+				e.RowsMatched += 1
+			}
+		}
+		if convUpdateToWriteThis && e.flashback {
+			// convert 模式 + flashback, update event 取 BI
+			if e.rowsFilter == nil || currentMatched {
+				e.rawBytesNew = append(e.rawBytesNew, bufImage1...)
+			} else {
+				e.Rows = e.Rows[:len(e.Rows)-1]
+			}
+		} else if !e.flashback {
+			if e.rowsFilter == nil || currentMatched {
+				e.rawBytesNew = append(e.rawBytesNew, bufImage1...)
+				e.Rows = e.Rows[:len(e.Rows)-1] // 不是 flashback 且 convUpdate, 删除 BI
 			} else {
 				e.Rows = e.Rows[:len(e.Rows)-1]
 			}
 		}
-		if !e.flashback {
-			if e.rowsFilter == nil || currentMatched {
-				e.rawBytesNew = append(e.rawBytesNew, bufImage1...)
-			}
-		}
 		pos += n
+		e.rowsCount += 1
 
-		// Parse the second image (for UPDATE only)
+		// Parse the second image (for UPDATE only), update AI
 		if e.needBitmap2 {
 			if n, err = e.decodeImage(data[pos:], e.ColumnBitmap2, EnumRowImageTypeUpdateAI); err != nil {
 				return errors.Trace(err)
 			}
 			bufImage2 = data[pos : pos+n]
-			if e.rowsFilter == nil || currentMatched {
-				e.rawBytesNew = append(e.rawBytesNew, bufImage2...)
-			} else if e.rowsFilter != nil && !currentMatched {
-				e.Rows = e.Rows[:len(e.Rows)-1]
+			if convUpdateToWriteThis && !e.flashback {
+				if e.rowsFilter == nil || currentMatched {
+					e.rawBytesNew = append(e.rawBytesNew, bufImage2...)
+				} else {
+					e.Rows = e.Rows[:len(e.Rows)-1]
+				}
+			} else {
+				if e.rowsFilter == nil || currentMatched {
+					e.rawBytesNew = append(e.rawBytesNew, bufImage2...)
+				} else {
+					e.Rows = e.Rows[:len(e.Rows)-1]
+				}
 			}
 			pos += n
 		}
-		if e.flashback {
+		if e.flashback && !convUpdateToWriteThis {
 			if e.rowsFilter == nil || currentMatched {
 				e.rawBytesNew = append(e.rawBytesNew, bufImage1...)
+			} else {
+				e.Rows = e.Rows[:len(e.Rows)-1]
 			}
 		}
 	}
@@ -166,7 +208,7 @@ func (e *RowsEvent) FlashbackData(pos int, data []byte) (err2 error) {
 		e.rawBytesNew = e.rawBytesNew[:EventHeaderSize] // 无效 event raw data
 	}
 	// swap rows AI/BI for update event
-	if e.needBitmap2 {
+	if e.flashback && e.needBitmap2 && !convUpdateToWriteThis {
 		rowCount := len(e.Rows)
 		for i := 0; i < rowCount; i += 2 {
 			tmpRow := make([]interface{}, e.ColumnCount)
@@ -367,7 +409,7 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 	var sql_command, sql_clause1, sql_clause2 string
 	switch e.eventType {
 	case UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2:
-		sql_command = fmt.Sprintf("### UDPATE `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
+		sql_command = fmt.Sprintf("### UDPATE `%s`.`%s`\n", e.Table.GetSchema(), e.Table.Table)
 		for i := 0; i < len(e.Rows); i += 2 {
 			sql_clause1 = "### WHERE\n"
 			sql_clause2 = "### SET\n"
@@ -383,7 +425,7 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
 		}
 	case WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2:
-		sql_command = fmt.Sprintf("### INSERT INTO `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
+		sql_command = fmt.Sprintf("### INSERT INTO `%s`.`%s`\n", e.Table.GetSchema(), e.Table.Table)
 		for i := 0; i < len(e.Rows); i++ {
 			sql_clause1 = "### SET\n"
 			sql_clause2 = ""
@@ -394,7 +436,7 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
 		}
 	case DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2:
-		sql_command = fmt.Sprintf("### DELETE FROM `%s`.`%s`\n", e.Table.Schema, e.Table.Table)
+		sql_command = fmt.Sprintf("### DELETE FROM `%s`.`%s`\n", e.Table.GetSchema(), e.Table.Table)
 		for i := 0; i < len(e.Rows); i++ {
 			sql_clause1 = "### WHERE\n"
 			sql_clause2 = ""
@@ -409,4 +451,98 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 		sql_clause1 = ""
 		sql_clause2 = ""
 	}
+}
+
+func (e *TableMapEvent) SetRenameRule(rule *pkg.RenameRule) {
+	e.renameRule = rule
+}
+
+func (e *TableMapEvent) GetSchema() []byte {
+	if len(e.NewSchema) > 0 {
+		return e.NewSchema
+	}
+	return e.Schema
+}
+
+// DecodeAndRename do not change original schema.table name
+func (e *TableMapEvent) DecodeAndRename(data []byte) error {
+	//var dataNew = make([]byte, len(data))
+	//copy(dataNew, data)
+	e.rawBytesNew = e.rawBytesNew[:EventHeaderSize]
+	pos := 0
+	e.TableID = FixedLengthInt(data[0:e.tableIDSize])
+	pos += e.tableIDSize
+
+	e.Flags = binary.LittleEndian.Uint16(data[pos:])
+	pos += 2
+	e.rawBytesNew = append(e.rawBytesNew, data[:pos]...)
+
+	schemaLength := data[pos]
+	pos++
+
+	e.Schema = data[pos : pos+int(schemaLength)]
+	pos += int(schemaLength)
+
+	newSchema := e.renameRule.GetNewName(string(e.Schema))
+	e.rawBytesNew = append(e.rawBytesNew, byte(len(newSchema)))
+	e.rawBytesNew = append(e.rawBytesNew, []byte(newSchema)...)
+	e.NewSchema = []byte(newSchema)
+
+	// skip 0x00
+	e.rawBytesNew = append(e.rawBytesNew, data[pos])
+	pos++
+
+	tableLength := data[pos]
+	e.rawBytesNew = append(e.rawBytesNew, data[pos])
+	pos++
+
+	e.Table = data[pos : pos+int(tableLength)]
+	e.rawBytesNew = append(e.rawBytesNew, e.Table...)
+	pos += int(tableLength)
+
+	// skip 0x00
+	e.rawBytesNew = append(e.rawBytesNew, data[pos])
+	pos++
+
+	e.rawBytesNew = append(e.rawBytesNew, data[pos:]...)
+
+	var n int
+	e.ColumnCount, _, n = LengthEncodedInt(data[pos:])
+	pos += n
+
+	e.ColumnType = data[pos : pos+int(e.ColumnCount)]
+	pos += int(e.ColumnCount)
+
+	var err error
+	var metaData []byte
+	if metaData, _, n, err = LengthEncodedString(data[pos:]); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err = e.decodeMeta(metaData); err != nil {
+		return errors.Trace(err)
+	}
+
+	pos += n
+
+	nullBitmapSize := bitmapByteSize(int(e.ColumnCount))
+	if len(data[pos:]) < nullBitmapSize {
+		return io.EOF
+	}
+
+	e.NullBitmap = data[pos : pos+nullBitmapSize]
+
+	pos += nullBitmapSize
+
+	if e.optionalMetaDecodeFunc != nil {
+		if err = e.optionalMetaDecodeFunc(data[pos:]); err != nil {
+			return err
+		}
+	} else {
+		if err = e.decodeOptionalMeta(data[pos:]); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

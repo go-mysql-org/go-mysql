@@ -8,7 +8,8 @@ import (
 
 // we don't parse all event, so some we will use GenericEvent instead
 type GenericEvent struct {
-	Data []byte
+	Data          []byte
+	FilterMatched *bool
 }
 
 func (e *GenericEvent) Dump(w io.Writer) {

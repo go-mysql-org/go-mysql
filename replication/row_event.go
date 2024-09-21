@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/pkg"
 	"github.com/go-mysql-org/go-mysql/pkg/db_table_filter"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
@@ -89,6 +90,9 @@ type TableMapEvent struct {
 	optionalMetaDecodeFunc func(data []byte) (err error)
 
 	columnsInfo []*TableMapColumnInfo
+	renameRule  *pkg.RenameRule
+	NewSchema   []byte
+	rawBytesNew []byte
 }
 
 func (e *TableMapEvent) Decode(data []byte) error {
@@ -948,10 +952,14 @@ type RowsEvent struct {
 	useDecimal              bool
 	ignoreJSONDecodeErr     bool
 
-	flashback     bool
-	rawBytesNew   []byte // rawBytesNew 如果是 flashback，则里面存储 flashback后的数据，如果是行过滤，则里面存储行过滤后的数据
-	dbTableFilter *db_table_filter.DbTableFilter
-	rowsFilter    *RowsFilter
+	flashback         bool
+	convUpdateToWrite bool
+	rawBytesNew       []byte // rawBytesNew 如果是 flashback，则里面存储 flashback后的数据，如果是行过滤，则里面存储行过滤后的数据
+	dbTableFilter     *db_table_filter.DbTableFilter
+	rowsFilter        *RowsFilter
+	RowsMatched       int
+	// rowsCount total records number in this events
+	rowsCount int
 }
 
 // EnumRowImageType is allowed types for every row in mysql binlog.

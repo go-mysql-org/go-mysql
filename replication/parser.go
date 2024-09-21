@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/pkg"
 	"github.com/go-mysql-org/go-mysql/pkg/db_table_filter"
 	"github.com/pingcap/errors"
 
@@ -46,9 +47,13 @@ type BinlogParser struct {
 
 	tableMapOptionalMetaDecodeFunc func([]byte) error
 
-	Flashback   bool
-	TableFilter *db_table_filter.DbTableFilter
-	RowsFilter  *RowsFilter
+	Flashback         bool
+	ConvUpdateToWrite bool
+	TableFilter       *db_table_filter.DbTableFilter
+	RowsFilter        *RowsFilter
+	EventTypeFilter   []EventType
+	TimeFilter        *TimeFilter
+	RenameRule        *pkg.RenameRule
 }
 
 func NewBinlogParser() *BinlogParser {
@@ -147,6 +152,14 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 		return false, errors.Errorf("invalid raw data size in event %s, need %d but got %d", h.EventType, h.EventSize, buf.Len())
 	}
 
+	if (h.Timestamp < p.TimeFilter.StartTime) && h.EventType != FORMAT_DESCRIPTION_EVENT { // continue
+		return false, nil
+	} else if p.TimeFilter.StopTime > 0 && h.Timestamp > p.TimeFilter.StopTime {
+		return true, nil
+	} else if p.TimeFilter.StopPos > 0 && h.LogPos > p.TimeFilter.StopPos {
+		return true, nil
+	}
+
 	var rawData []byte
 	rawData = append(rawData, buf.Bytes()...)
 	bodyLen := int(h.EventSize) - EventHeaderSize
@@ -156,33 +169,19 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 	}
 
 	var e Event
-	if p.Flashback || p.TableFilter != nil || p.RowsFilter != nil {
-		p.SetRowsEventDecodeFunc(flashbackRowsEventFunc)
-		rawFlashbacked := make([]byte, len(rawData)) // flashback, RowsFilter 才需要新的 bytes buff，TableFilter不需要
-		copy(rawFlashbacked, rawData)
-		e, rawFlashbacked, err = p.ParseEventFlashback(h, body, &rawFlashbacked)
-		if err != nil {
-			if err == errMissingTableMapEvent {
-				return false, nil
-			}
-			return false, errors.Trace(err)
+	p.SetRowsEventDecodeFunc(flashbackRowsEventFunc)
+	rawFlashbacked := make([]byte, len(rawData)) // flashback, RowsFilter 才需要新的 bytes buff，TableFilter不需要
+	copy(rawFlashbacked, rawData)
+	e, rawFlashbacked, err = p.ParseEventFlashback(h, body, &rawFlashbacked)
+	if err != nil {
+		if err == errMissingTableMapEvent {
+			return false, nil
 		}
+		return false, errors.Trace(err)
+	}
 
-		if err = onEvent(&BinlogEvent{RawData: rawFlashbacked, Header: h, Event: e}); err != nil {
-			return false, errors.Trace(err)
-		}
-	} else {
-		e, err = p.parseEvent(h, body, rawData)
-		if err != nil {
-			if err == errMissingTableMapEvent {
-				return false, nil
-			}
-			return false, errors.Trace(err)
-		}
-
-		if err = onEvent(&BinlogEvent{RawData: rawData, Header: h, Event: e}); err != nil {
-			return false, errors.Trace(err)
-		}
+	if err = onEvent(&BinlogEvent{RawData: rawFlashbacked, Header: h, Event: e}); err != nil {
+		return false, errors.Trace(err)
 	}
 
 	return false, nil
@@ -428,6 +427,7 @@ func (p *BinlogParser) verifyCrc32Checksum(rawData []byte) error {
 	return nil
 }
 
+// newRowsEvent 注意，如果是 flashback，只改变 h.EventType。row.eventType 原始值透传到 rows event 里面后续处理
 func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 	e := &RowsEvent{}
 
@@ -491,7 +491,9 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 		e.Version = 2
 		e.needBitmap2 = true
 	}
-
+	if p.Flashback {
+		p.swapFlashbackEventType(h) // for header print
+	}
 	return e
 }
 

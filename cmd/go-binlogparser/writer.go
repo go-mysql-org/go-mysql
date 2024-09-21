@@ -111,7 +111,7 @@ func (c *FlashbackWriter) Close() (err error) {
 }
 
 func NewFlashbackWriter(filePrefix string, cacheSize int) *FlashbackWriter {
-	fmt.Println("xxx", filePrefix)
+	//fmt.Println("xxx", filePrefix)
 	bc := &FlashbackWriter{
 		filePrefix:   filePrefix,
 		maxCacheSize: cacheSize,
