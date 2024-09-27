@@ -66,7 +66,7 @@ func (c *Conn) writeEOF() error {
 
 // see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_auth_switch_request.html
 func (c *Conn) writeAuthSwitchRequest(newAuthPluginName string) error {
-	data := make([]byte, 4)
+	data := make([]byte, 0, 4)
 	data = append(data, EOF_HEADER)
 	data = append(data, []byte(newAuthPluginName)...)
 	data = append(data, 0x00)
@@ -93,21 +93,21 @@ func (c *Conn) readAuthSwitchRequestResponse() ([]byte, error) {
 }
 
 func (c *Conn) writeAuthMoreDataPubkey() error {
-	data := make([]byte, 4)
+	data := make([]byte, 0, 4)
 	data = append(data, MORE_DATE_HEADER)
 	data = append(data, c.serverConf.pubKey...)
 	return c.WritePacket(data)
 }
 
 func (c *Conn) writeAuthMoreDataFullAuth() error {
-	data := make([]byte, 4)
+	data := make([]byte, 0, 4)
 	data = append(data, MORE_DATE_HEADER)
 	data = append(data, CACHE_SHA2_FULL_AUTH)
 	return c.WritePacket(data)
 }
 
 func (c *Conn) writeAuthMoreDataFastAuth() error {
-	data := make([]byte, 4)
+	data := make([]byte, 0, 4)
 	data = append(data, MORE_DATE_HEADER)
 	data = append(data, CACHE_SHA2_FAST_AUTH)
 	return c.WritePacket(data)
