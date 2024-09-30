@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
@@ -41,77 +42,106 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 	// Force use raw mode
 	b.parser.SetRawMode(true)
 
+	// Set up the backup event handler
+	backupHandler := &BackupEventHandler{
+		handler: handler,
+	}
+
+	// Set the event handler in BinlogSyncer
+	b.SetEventHandler(backupHandler)
+
+	// Start syncing
 	s, err := b.StartSync(p)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	var filename string
-	var offset uint32
-
-	var w io.WriteCloser
 	defer func() {
-		var closeErr error
-		if w != nil {
-			closeErr = w.Close()
-		}
-		if retErr == nil {
-			retErr = closeErr
+		b.SetEventHandler(nil) // Reset the event handler
+		if backupHandler.w != nil {
+			closeErr := backupHandler.w.Close()
+			if retErr == nil {
+				retErr = closeErr
+			}
 		}
 	}()
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		e, err := s.GetEvent(ctx)
-		cancel()
+	// Wait until the context is done or an error occurs
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-		if err == context.DeadlineExceeded {
-			return nil
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-b.ctx.Done():
+		return nil
+	case err := <-s.ech:
+		return errors.Trace(err)
+	}
+}
+
+// BackupEventHandler handles writing events for backup
+type BackupEventHandler struct {
+	handler func(binlogFilename string) (io.WriteCloser, error)
+	w       io.WriteCloser
+	file    *os.File
+	mutex   sync.Mutex
+}
+
+func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	switch e.Header.EventType {
+	case ROTATE_EVENT:
+		rotateEvent := e.Event.(*RotateEvent)
+		filename := string(rotateEvent.NextLogName)
+
+		// Close existing file if open
+		if h.w != nil {
+			if err := h.w.Close(); err != nil {
+				h.w = nil
+				return errors.Trace(err)
+			}
 		}
 
+		// Open new file
+		var err error
+		h.w, err = h.handler(filename)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
-		offset = e.Header.LogPos
-
-		if e.Header.EventType == ROTATE_EVENT {
-			rotateEvent := e.Event.(*RotateEvent)
-			filename = string(rotateEvent.NextLogName)
-
-			if e.Header.Timestamp == 0 || offset == 0 {
-				// fake rotate event
-				continue
-			}
-		} else if e.Header.EventType == FORMAT_DESCRIPTION_EVENT {
-			// FormateDescriptionEvent is the first event in binlog, we will close old one and create a new
-
-			if w != nil {
-				if err = w.Close(); err != nil {
-					w = nil
-					return errors.Trace(err)
-				}
-			}
-
-			if len(filename) == 0 {
-				return errors.Errorf("empty binlog filename for FormateDescriptionEvent")
-			}
-
-			w, err = handler(filename)
-			if err != nil {
-				return errors.Trace(err)
-			}
-
-			// write binlog header fe'bin'
-			if _, err = w.Write(BinLogFileHeader); err != nil {
-				return errors.Trace(err)
-			}
+		// Ensure w is an *os.File to call Sync
+		if f, ok := h.w.(*os.File); ok {
+			h.file = f
+		} else {
+			return errors.New("handler did not return *os.File, cannot fsync")
 		}
 
-		if n, err := w.Write(e.RawData); err != nil {
+		// Write binlog header
+		if _, err := h.w.Write(BinLogFileHeader); err != nil {
+			return errors.Trace(err)
+		}
+
+		// fsync after writing header
+		if err := h.file.Sync(); err != nil {
+			return errors.Trace(err)
+		}
+
+	default:
+		// Write raw event data
+		if n, err := h.w.Write(e.RawData); err != nil {
 			return errors.Trace(err)
 		} else if n != len(e.RawData) {
 			return errors.Trace(io.ErrShortWrite)
 		}
+
+		// fsync after writing event
+		if err := h.file.Sync(); err != nil {
+			return errors.Trace(err)
+		}
 	}
+
+	return nil
 }
