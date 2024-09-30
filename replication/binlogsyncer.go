@@ -162,6 +162,9 @@ type BinlogSyncer struct {
 	retryCount int
 
 	eventHandler EventHandler
+
+	// used for testing event order is correct
+	ackedChan chan struct{}
 }
 
 // NewBinlogSyncer creates the BinlogSyncer with cfg.
@@ -618,23 +621,23 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	return b.c.WritePacket(data)
 }
 
-func (b *BinlogSyncer) replySemiSyncACK(p Position) error {
+func (b *BinlogSyncer) replySemiSyncACK(pos Position) error {
 	b.c.ResetSequence()
 
-	data := make([]byte, 4+1+8+len(p.Name))
-	pos := 4
-	// semi sync indicator
-	data[pos] = SemiSyncIndicator
-	pos++
+	filenameBytes := []byte(pos.Name)
+	dataLength := 1 + 8 + len(filenameBytes)
+	data := make([]byte, dataLength)
+	data[0] = SemiSyncIndicator
+	binary.LittleEndian.PutUint64(data[1:], uint64(pos.Pos))
+	copy(data[9:], filenameBytes)
 
-	binary.LittleEndian.PutUint64(data[pos:], uint64(p.Pos))
-	pos += 8
-
-	copy(data[pos:], p.Name)
-
-	err := b.c.WritePacket(data)
-	if err != nil {
+	if err := b.c.WritePacket(data); err != nil {
 		return errors.Trace(err)
+	}
+
+	// Signal that ACK is sent
+	if b.ackedChan != nil {
+		b.ackedChan <- struct{}{}
 	}
 
 	return nil
@@ -925,10 +928,10 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, rawD
 
 // getCurrentGtidSet returns a clone of the current GTID set.
 func (b *BinlogSyncer) getCurrentGtidSet() GTIDSet {
-    if b.currGset != nil {
-        return b.currGset.Clone()
-    }
-    return nil
+	if b.currGset != nil {
+		return b.currGset.Clone()
+	}
+	return nil
 }
 
 // LastConnectionID returns last connectionID.

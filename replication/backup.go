@@ -82,10 +82,11 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 
 // BackupEventHandler handles writing events for backup
 type BackupEventHandler struct {
-	handler func(binlogFilename string) (io.WriteCloser, error)
-	w       io.WriteCloser
-	file    *os.File
-	mutex   sync.Mutex
+	handler     func(binlogFilename string) (io.WriteCloser, error)
+	w           io.WriteCloser
+	file        *os.File
+	mutex       sync.Mutex
+	fsyncedChan chan struct{}
 }
 
 func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
@@ -127,6 +128,11 @@ func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
 		// fsync after writing header
 		if err := h.file.Sync(); err != nil {
 			return errors.Trace(err)
+		}
+
+		if h.fsyncedChan != nil {
+			// Signal that fsync is completed in testing
+			h.fsyncedChan <- struct{}{}
 		}
 
 	default:

@@ -37,6 +37,8 @@ func TestSyncerSuite(t *testing.T) {
 
 func (t *testSyncerSuite) TearDownTest() {
 	if t.b != nil {
+		t.b.SetEventHandler(nil)
+		t.b.ackedChan = nil
 		t.b.Close()
 		t.b = nil
 	}
@@ -78,6 +80,9 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 			}
 		}
 	}()
+
+	handler := &CountingEventHandler{}
+	t.b.SetEventHandler(handler)
 
 	// use mixed format
 	t.testExecute("SET SESSION binlog_format = 'MIXED'")
@@ -258,6 +263,11 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 		"2014-09-08 17:51:04.000456","2014-09-08 17:51:04.000456","2014-09-08 17:51:04.000456")`)
 
 	t.wg.Wait()
+
+	handler.mutex.Lock()
+	eventCount := handler.count
+	handler.mutex.Unlock()
+	require.Greater(t.T(), eventCount, 0, "No events were handled by the EventHandler")
 }
 
 func (t *testSyncerSuite) setupTest(flavor string) {
@@ -462,4 +472,51 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec() {
 		err = p.ParseFile(path.Join(binlogDir, file), 0, f)
 		require.NoError(t.T(), err)
 	}
+}
+
+func (t *testSyncerSuite) TestGTIDSetHandling() {
+	t.setupTest(mysql.MySQLFlavor)
+
+	// Ensure GTID mode is enabled
+	r, err := t.c.Execute("SELECT @@gtid_mode")
+	require.NoError(t.T(), err)
+	modeOn, _ := r.GetString(0, 0)
+	if modeOn != "ON" {
+		t.T().Skip("GTID mode is not ON")
+	}
+
+	// Start syncing with an empty GTID set
+	set, _ := mysql.ParseMysqlGTIDSet("")
+	s, err := t.b.StartSyncGTID(set)
+	require.NoError(t.T(), err)
+
+	// Perform some transactions
+	t.testExecute("CREATE TABLE test_gtid (id INT PRIMARY KEY)")
+	t.testExecute("INSERT INTO test_gtid VALUES (1)")
+	t.testExecute("COMMIT")
+
+	// Read events and verify GTID sets
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			e, err := s.GetEvent(ctx)
+			cancel()
+			if err == context.DeadlineExceeded {
+				return
+			}
+			require.NoError(t.T(), err)
+
+			// Check GTID set in XIDEvent or QueryEvent
+			switch e.Event.(type) {
+			case *XIDEvent, *QueryEvent:
+				if !t.b.cfg.DiscardGTIDSet {
+					gtidSet := t.b.getCurrentGtidSet()
+					require.NotNil(t.T(), gtidSet, "GTID set should not be nil")
+				}
+			}
+		}
+	}()
+	t.wg.Wait()
 }
