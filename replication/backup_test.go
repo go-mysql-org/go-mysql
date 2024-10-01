@@ -106,17 +106,29 @@ func (t *testSyncerSuite) TestACKSentAfterFsync() {
 	// Define binlogDir and timeout
 	binlogDir := "./var"
 	os.RemoveAll(binlogDir)
+	err := os.MkdirAll(binlogDir, 0755)
+	require.NoError(t.T(), err)
 	timeout := 5 * time.Second
 
 	// Create channels for signaling
 	fsyncedChan := make(chan struct{}, 1)
 	ackedChan := make(chan struct{}, 1)
 
+	// Custom handler returning TestWriteCloser
+	handler := func(binlogFilename string) (io.WriteCloser, error) {
+		file, err := os.OpenFile(path.Join(binlogDir, binlogFilename), os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, err
+		}
+		return &TestWriteCloser{
+			file:       file,
+			syncCalled: fsyncedChan,
+		}, nil
+	}
+
 	// Set up the BackupEventHandler with fsyncedChan
 	backupHandler := &BackupEventHandler{
-		handler: func(binlogFilename string) (io.WriteCloser, error) {
-			return os.OpenFile(path.Join(binlogDir, binlogFilename), os.O_CREATE|os.O_WRONLY, 0644)
-		},
+		handler:     handler,
 		fsyncedChan: fsyncedChan,
 	}
 
@@ -131,7 +143,7 @@ func (t *testSyncerSuite) TestACKSentAfterFsync() {
 	pos := mysql.Position{Name: "", Pos: uint32(0)}
 	go func() {
 		// Start backup (this will block until timeout)
-		err := t.b.StartBackupWithHandler(pos, timeout, backupHandler.handler)
+		err := t.b.StartBackupWithHandler(pos, timeout, handler)
 		require.NoError(t.T(), err)
 	}()
 
