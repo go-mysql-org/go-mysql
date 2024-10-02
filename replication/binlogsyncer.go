@@ -25,6 +25,13 @@ var (
 	errSyncRunning = errors.New("Sync is running, must Close first")
 )
 
+type SyncMode int
+
+const (
+	SyncModeAsync SyncMode = iota // Asynchronous mode (default)
+	SyncModeSync                  // Synchronous mode
+)
+
 // BinlogSyncerConfig is the configuration for BinlogSyncer.
 type BinlogSyncerConfig struct {
 	// ServerID is the unique ID in cluster.
@@ -126,6 +133,11 @@ type BinlogSyncerConfig struct {
 	DiscardGTIDSet bool
 
 	EventCacheCount int
+
+	// SyncMode specifies whether to operate in synchronous or asynchronous mode.
+	// - SyncModeAsync (default): Events are sent to the BinlogStreamer and can be consumed via GetEvent().
+	// - SyncModeSync: Events are processed synchronously using the EventHandler.
+	SyncMode SyncMode
 }
 
 // EventHandler defines the interface for processing binlog events.
@@ -895,11 +907,24 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, rawD
 		}
 	}
 
-	// If an EventHandler is set, handle the event synchronously
-	if b.eventHandler != nil {
-		err := b.eventHandler.HandleEvent(e)
-		if err != nil {
-			return errors.Trace(err)
+	// Process the event based on the configured SyncMode
+	switch b.cfg.SyncMode {
+	case SyncModeSync:
+		// Synchronous mode: use EventHandler
+		if b.eventHandler != nil {
+			err := b.eventHandler.HandleEvent(e)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		} else {
+			return errors.New("no EventHandler set for synchronous mode")
+		}
+	case SyncModeAsync:
+		// Asynchronous mode: send the event to the streamer channel
+		select {
+		case s.ch <- e:
+		case <-b.ctx.Done():
+			return errors.New("sync is being closed...")
 		}
 	}
 
@@ -909,18 +934,6 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, rawD
 		if err != nil {
 			return errors.Trace(err)
 		}
-	}
-
-	// Send event to the streamer channel
-	needStop := false
-	select {
-	case s.ch <- e:
-	case <-b.ctx.Done():
-		needStop = true
-	}
-
-	if needStop {
-		return errors.New("sync is being closed...")
 	}
 
 	return nil

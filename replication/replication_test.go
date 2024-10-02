@@ -270,7 +270,9 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 	require.Greater(t.T(), eventCount, 0, "No events were handled by the EventHandler")
 }
 
-func (t *testSyncerSuite) setupTest(flavor string) {
+// setupTest initializes the test environment with the specified flavor and SyncMode.
+// It configures the BinlogSyncer accordingly.
+func (t *testSyncerSuite) setupTest(flavor string, syncMode SyncMode) {
 	var port uint16 = 3306
 	switch flavor {
 	case mysql.MariaDBFlavor:
@@ -307,6 +309,7 @@ func (t *testSyncerSuite) setupTest(flavor string) {
 		User:       "root",
 		Password:   "",
 		UseDecimal: true,
+		SyncMode:   syncMode, // Set SyncMode directly
 	}
 
 	t.b = NewBinlogSyncer(cfg)
@@ -352,12 +355,12 @@ func (t *testSyncerSuite) testPositionSync() {
 }
 
 func (t *testSyncerSuite) TestMysqlPositionSync() {
-	t.setupTest(mysql.MySQLFlavor)
+	t.setupTest(mysql.MySQLFlavor, SyncModeSync)
 	t.testPositionSync()
 }
 
 func (t *testSyncerSuite) TestMysqlGTIDSync() {
-	t.setupTest(mysql.MySQLFlavor)
+	t.setupTest(mysql.MySQLFlavor, SyncModeSync)
 
 	r, err := t.c.Execute("SELECT @@gtid_mode")
 	require.NoError(t.T(), err)
@@ -384,13 +387,13 @@ func (t *testSyncerSuite) TestMysqlGTIDSync() {
 }
 
 func (t *testSyncerSuite) TestMariadbPositionSync() {
-	t.setupTest(mysql.MariaDBFlavor)
+	t.setupTest(mysql.MariaDBFlavor, SyncModeSync)
 
 	t.testPositionSync()
 }
 
 func (t *testSyncerSuite) TestMariadbGTIDSync() {
-	t.setupTest(mysql.MariaDBFlavor)
+	t.setupTest(mysql.MariaDBFlavor, SyncModeSync)
 
 	// get current master gtid binlog pos
 	r, err := t.c.Execute("SELECT @@gtid_binlog_pos")
@@ -406,13 +409,13 @@ func (t *testSyncerSuite) TestMariadbGTIDSync() {
 }
 
 func (t *testSyncerSuite) TestMariadbAnnotateRows() {
-	t.setupTest(mysql.MariaDBFlavor)
+	t.setupTest(mysql.MariaDBFlavor, SyncModeSync)
 	t.b.cfg.DumpCommandFlag = BINLOG_SEND_ANNOTATE_ROWS_EVENT
 	t.testPositionSync()
 }
 
 func (t *testSyncerSuite) TestMysqlSemiPositionSync() {
-	t.setupTest(mysql.MySQLFlavor)
+	t.setupTest(mysql.MySQLFlavor, SyncModeSync)
 
 	t.b.cfg.SemiSyncEnabled = true
 
@@ -420,7 +423,7 @@ func (t *testSyncerSuite) TestMysqlSemiPositionSync() {
 }
 
 func (t *testSyncerSuite) TestMysqlBinlogCodec() {
-	t.setupTest(mysql.MySQLFlavor)
+	t.setupTest(mysql.MySQLFlavor, SyncModeSync)
 
 	resetBinaryLogs := "RESET BINARY LOGS AND GTIDS"
 	if eq, err := t.c.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
@@ -475,7 +478,7 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec() {
 }
 
 func (t *testSyncerSuite) TestGTIDSetHandling() {
-	t.setupTest(mysql.MySQLFlavor)
+	t.setupTest(mysql.MySQLFlavor, SyncModeSync)
 
 	// Ensure GTID mode is enabled
 	r, err := t.c.Execute("SELECT @@gtid_mode")
