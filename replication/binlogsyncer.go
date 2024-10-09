@@ -11,11 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/siddontang/go-log/loggers"
-
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
+	"github.com/siddontang/go-log/loggers"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	. "github.com/go-mysql-org/go-mysql/mysql"
@@ -58,7 +57,7 @@ type BinlogSyncerConfig struct {
 	TLSConfig *tls.Config
 
 	// Use replication.Time structure for timestamp and datetime.
-	// We will use Local location for timestamp and UTC location for datatime.
+	// We will use Local location for timestamp and UTC location for datetime.
 	ParseTime bool
 
 	// If ParseTime is false, convert TIMESTAMP into this specified timezone. If
@@ -137,7 +136,7 @@ type EventHandler interface {
 	HandleEvent(e *BinlogEvent) error
 }
 
-// BinlogSyncer syncs binlog event from server.
+// BinlogSyncer syncs binlog events from the server.
 type BinlogSyncer struct {
 	m sync.RWMutex
 
@@ -164,11 +163,9 @@ type BinlogSyncer struct {
 	lastConnectionID uint32
 
 	retryCount int
-
-	eventHandler EventHandler
 }
 
-// NewBinlogSyncer creates the BinlogSyncer with cfg.
+// NewBinlogSyncer creates the BinlogSyncer with the given configuration.
 func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	if cfg.Logger == nil {
 		streamHandler, _ := log.NewStreamHandler(os.Stdout)
@@ -185,7 +182,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 		cfg.EventCacheCount = 10240
 	}
 
-	// Clear the Password to avoid outputing it in log.
+	// Clear the Password to avoid outputting it in logs.
 	pass := cfg.Password
 	cfg.Password = ""
 	cfg.Logger.Infof("create BinlogSyncer with config %+v", cfg)
@@ -391,12 +388,6 @@ func (b *BinlogSyncer) enableSemiSync() error {
 	}
 
 	return nil
-}
-
-func (b *BinlogSyncer) SetEventHandler(handler EventHandler) {
-	b.m.Lock()
-	defer b.m.Unlock()
-	b.eventHandler = handler
 }
 
 func (b *BinlogSyncer) prepare() error {
@@ -834,6 +825,7 @@ func (b *BinlogSyncer) parseEvent(data []byte) (*BinlogEvent, bool, error) {
 	return e, needACK, nil
 }
 
+// handleEventAndACK processes an event and sends an ACK if necessary.
 func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, needACK bool) error {
 	// Update the next position based on the event's LogPos
 	if e.Header.LogPos > 0 {
