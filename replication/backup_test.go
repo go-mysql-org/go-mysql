@@ -2,7 +2,9 @@ package replication
 
 import (
 	"context"
+	"io"
 	"os"
+	"path"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -50,23 +52,35 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime() {
 
 // TestAsyncBackup runs the backup process in asynchronous mode and verifies binlog file creation.
 func (t *testSyncerSuite) TestAsyncBackup() {
-	testSyncModeBackup(t, SyncModeAsync)
+	testBackup(t, false) // false indicates asynchronous mode
 }
 
 // TestSyncBackup runs the backup process in synchronous mode and verifies binlog file creation.
 func (t *testSyncerSuite) TestSyncBackup() {
-	testSyncModeBackup(t, SyncModeSync)
+	testBackup(t, true) // true indicates synchronous mode
 }
 
-// testSyncModeBackup is a helper function that runs the backup process for a given sync mode and checks if binlog files are written correctly.
-func testSyncModeBackup(t *testSyncerSuite, syncMode SyncMode) {
+// testBackup is a helper function that runs the backup process in the specified mode and checks if binlog files are written correctly.
+func testBackup(t *testSyncerSuite, isSynchronous bool) {
 	t.setupTest(mysql.MySQLFlavor)
 	t.b.cfg.SemiSyncEnabled = false // Ensure semi-sync is disabled
-	t.b.cfg.SyncMode = syncMode     // Set the sync mode
 
 	binlogDir := "./var"
 	os.RemoveAll(binlogDir)
 	timeout := 3 * time.Second
+
+	if isSynchronous {
+		// Set up a BackupEventHandler for synchronous mode
+		backupHandler := &BackupEventHandler{
+			handler: func(filename string) (io.WriteCloser, error) {
+				return os.OpenFile(path.Join(binlogDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
+			},
+		}
+		t.b.cfg.SynchronousEventHandler = backupHandler
+	} else {
+		// Ensure SynchronousEventHandler is nil for asynchronous mode
+		t.b.cfg.SynchronousEventHandler = nil
+	}
 
 	done := make(chan bool)
 
@@ -88,8 +102,17 @@ func testSyncModeBackup(t *testSyncerSuite, syncMode SyncMode) {
 		files, err := os.ReadDir(binlogDir)
 		require.NoError(t.T(), err, "Failed to read binlog directory")
 		require.Greater(t.T(), len(files), 0, "Binlog files were not written to the directory")
-		t.T().Logf("Backup completed successfully in %v mode with %d binlog file(s).", syncMode, len(files))
+		mode := modeLabel(isSynchronous)
+		t.T().Logf("Backup completed successfully in %s mode with %d binlog file(s).", mode, len(files))
 	case <-ctx.Done():
-		t.T().Fatalf("Timeout error during backup in %v mode.", syncMode)
+		mode := modeLabel(isSynchronous)
+		t.T().Fatalf("Timeout error during backup in %s mode.", mode)
 	}
+}
+
+func modeLabel(isSynchronous bool) string {
+	if isSynchronous {
+		return "synchronous"
+	}
+	return "asynchronous"
 }

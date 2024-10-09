@@ -12,20 +12,24 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// StartBackup: Like mysqlbinlog remote raw backup
-// Backup remote binlog from position (filename, offset) and write in backupDir
+// StartBackup starts the backup process for the binary log and writes to the backup directory.
 func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Duration) error {
 	err := os.MkdirAll(backupDir, 0755)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	return b.StartBackupWithHandler(p, timeout, func(filename string) (io.WriteCloser, error) {
-		return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
-	})
+	if b.cfg.SynchronousEventHandler == nil {
+		return b.StartBackupWithHandler(p, timeout, func(filename string) (io.WriteCloser, error) {
+			return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
+		})
+	} else {
+		return b.StartSynchronousBackup(p, timeout)
+	}
 }
 
 // StartBackupWithHandler starts the backup process for the binary log using the specified position and handler.
 // The process will continue until the timeout is reached or an error occurs.
+// This method should not be used together with SynchronousEventHandler.
 //
 // Parameters:
 //   - p: The starting position in the binlog from which to begin the backup.
@@ -38,6 +42,9 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 		// a very long timeout here
 		timeout = 30 * 3600 * 24 * time.Second
 	}
+	if b.cfg.SynchronousEventHandler != nil {
+		return errors.New("StartBackupWithHandler cannot be used when SynchronousEventHandler is set. Use StartSynchronousBackup instead.")
+	}
 
 	// Force use raw mode
 	b.parser.SetRawMode(true)
@@ -47,18 +54,12 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 		handler: handler,
 	}
 
-	if b.cfg.SyncMode == SyncModeSync {
-		// Set the event handler in BinlogSyncer for synchronous mode
-		b.SetEventHandler(backupHandler)
-	}
-
 	s, err := b.StartSync(p)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	defer func() {
-		b.SetEventHandler(nil) // Reset the event handler
 		if backupHandler.w != nil {
 			closeErr := backupHandler.w.Close()
 			if retErr == nil {
@@ -70,8 +71,7 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if b.cfg.SyncMode == SyncModeSync {
-		// Synchronous mode: wait for completion or error
+	for {
 		select {
 		case <-ctx.Done():
 			return nil
@@ -79,57 +79,68 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 			return nil
 		case err := <-s.ech:
 			return errors.Trace(err)
-		}
-	} else {
-		// Asynchronous mode: consume events from the streamer
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-b.ctx.Done():
-				return nil
-			case err := <-s.ech:
+		case e := <-s.ch:
+			err = backupHandler.HandleEvent(e)
+			if err != nil {
 				return errors.Trace(err)
-			case e := <-s.ch:
-				err = backupHandler.HandleEvent(e)
-				if err != nil {
-					return errors.Trace(err)
-				}
 			}
 		}
 	}
 }
 
+// StartSynchronousBackup starts the backup process using the SynchronousEventHandler in the BinlogSyncerConfig.
+func (b *BinlogSyncer) StartSynchronousBackup(p Position, timeout time.Duration) error {
+	if b.cfg.SynchronousEventHandler == nil {
+		return errors.New("SynchronousEventHandler must be set in BinlogSyncerConfig to use StartSynchronousBackup")
+	}
+
+	if timeout == 0 {
+		timeout = 30 * 3600 * 24 * time.Second // Long timeout by default
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	s, err := b.StartSync(p)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// Wait for the binlog syncer to finish or encounter an error
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-b.ctx.Done():
+		return nil
+	case err := <-s.ech:
+		return errors.Trace(err)
+	}
+}
+
 // BackupEventHandler handles writing events for backup
 type BackupEventHandler struct {
-	handler     func(binlogFilename string) (io.WriteCloser, error)
-	w           io.WriteCloser
-	mutex       sync.Mutex
-	fsyncedChan chan struct{}
-	eventCount  int // eventCount used for testing
+	handler func(binlogFilename string) (io.WriteCloser, error)
+	w       io.WriteCloser
+	mutex   sync.Mutex
 
 	filename string
 }
 
+// HandleEvent processes a single event for the backup.
 func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	var err error
-
-	// Update the offset
 	offset := e.Header.LogPos
 
 	if e.Header.EventType == ROTATE_EVENT {
 		rotateEvent := e.Event.(*RotateEvent)
 		h.filename = string(rotateEvent.NextLogName)
-
 		if e.Header.Timestamp == 0 || offset == 0 {
-			// Fake rotate event, skip processing
 			return nil
 		}
 	} else if e.Header.EventType == FORMAT_DESCRIPTION_EVENT {
-		// Close the current writer and open a new one
 		if h.w != nil {
 			if err = h.w.Close(); err != nil {
 				h.w = nil
@@ -146,14 +157,12 @@ func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
 			return errors.Trace(err)
 		}
 
-		// Write binlog header fe'bin'
 		_, err = h.w.Write(BinLogFileHeader)
 		if err != nil {
 			return errors.Trace(err)
 		}
 	}
 
-	// Write raw event data to the current writer
 	if h.w != nil {
 		n, err := h.w.Write(e.RawData)
 		if err != nil {
@@ -162,23 +171,9 @@ func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
 		if n != len(e.RawData) {
 			return errors.Trace(io.ErrShortWrite)
 		}
-
-		// Perform Sync if the writer supports it
-		if f, ok := h.w.(*os.File); ok {
-			if err := f.Sync(); err != nil {
-				return errors.Trace(err)
-			}
-			// Signal that fsync has completed
-			if h.fsyncedChan != nil {
-				h.fsyncedChan <- struct{}{}
-			}
-		}
 	} else {
-		// If writer is nil and event is not FORMAT_DESCRIPTION_EVENT, we can't write
-		// This should not happen if events are in expected order
 		return errors.New("writer is not initialized")
 	}
 
-	h.eventCount++
 	return nil
 }
