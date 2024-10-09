@@ -1,5 +1,7 @@
 package replication
 
+const FAKE_DONE_EVENT EventType = 199
+
 const (
 	// TenDB compressed event from 50
 	TENDB_QUERY_COMPRESSED_EVENT          EventType = 50 + iota

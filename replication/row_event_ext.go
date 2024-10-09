@@ -42,6 +42,13 @@ func flashbackRowsEventFunc(e *RowsEvent, data []byte) error {
 // pos is row event body header length
 // data is event body
 func (e *RowsEvent) FlashbackData(pos int, data []byte) (err2 error) {
+
+	if e.flashback {
+		return e.FlashbackData2(pos, data)
+	} else {
+		return e.DecodeData2(pos, data)
+	}
+
 	e.rawBytesNew = e.rawBytesNew[:EventHeaderSize+pos] // 后面的部分需要修改
 	if e.compressed {
 		// mariadb and tendb share the same compress algo(zlib)?
@@ -225,10 +232,10 @@ func (e *RowsEvent) GetEventType() EventType {
 	return e.eventType
 }
 
-func (e *RowsEvent) GetRowsEventPrinted() []byte {
+func (e *RowsEvent) GetRowsEventPrinted(verboseLevel int) []byte {
 	//var buf []byte
 	w := bytes.NewBuffer(nil)
-	e.PrintVerbose(w)
+	e.PrintVerbose(w, verboseLevel)
 	return w.Bytes()
 }
 
@@ -238,6 +245,7 @@ type TableMapColumnInfo struct {
 	//IsNull     bool
 	IsBinary   bool
 	isUnsigned bool
+	IsNumeric  bool
 	Position   int
 }
 
@@ -248,7 +256,9 @@ func (i *TableMapColumnInfo) GetValuePrinted(v interface{}) interface{} {
 		return hex.EncodeToString(v.([]byte))
 		// return base64.RawStdEncoding.EncodeToString(v.([]byte))
 	}
-
+	if !i.IsNumeric {
+		return fmt.Sprintf("'%s'", v)
+	}
 	return v
 }
 
@@ -337,18 +347,12 @@ func (i *TableMapColumnInfo) GetTypeString(e *TableMapEvent, pos int) string {
 
 func (e *TableMapEvent) ReadColumnInfo() {
 	unsignedMap := e.UnsignedMap()
-	/*
-		collationMap := e.CollationMap()
-		enumSetCollationMap := e.EnumSetCollationMap()
-		enumStrValueMap := e.EnumStrValueMap()
-		setStrValueMap := e.SetStrValueMap()
-		geometryTypeMap := e.GeometryTypeMap()
-		primaryKey := map[int]struct{}{}
-	*/
+
 	for i := 0; i < int(e.ColumnCount); i++ {
 		info := &TableMapColumnInfo{Position: i}
 		info.DataType = info.GetTypeString(e, i)
 		if e.IsNumericColumn(i) {
+			info.IsNumeric = true
 			if len(unsignedMap) > 0 && unsignedMap[i] {
 				info.isUnsigned = true
 			}
@@ -357,52 +361,10 @@ func (e *TableMapEvent) ReadColumnInfo() {
 		if nullable {
 			info.Nullable = true
 		}
-		/*
-			if e.IsCharacterColumn(i) {
-				if len(collationMap) == 0 {
-					fmt.Fprintf(w, "  collation=<n/a>")
-				} else {
-					fmt.Fprintf(w, "  collation=%d ", collationMap[i])
-				}
-			}
-			if e.IsEnumColumn(i) {
-				if len(enumSetCollationMap) == 0 {
-					fmt.Fprintf(w, "  enum_collation=<n/a>")
-				} else {
-					fmt.Fprintf(w, "  enum_collation=%d", enumSetCollationMap[i])
-				}
-
-				if len(enumStrValueMap) == 0 {
-					fmt.Fprintf(w, "  enum=<n/a>")
-				} else {
-					fmt.Fprintf(w, "  enum=%v", enumStrValueMap[i])
-				}
-			}
-			if e.IsSetColumn(i) {
-				if len(enumSetCollationMap) == 0 {
-					fmt.Fprintf(w, "  set_collation=<n/a>")
-				} else {
-					fmt.Fprintf(w, "  set_collation=%d", enumSetCollationMap[i])
-				}
-
-				if len(setStrValueMap) == 0 {
-					fmt.Fprintf(w, "  set=<n/a>")
-				} else {
-					fmt.Fprintf(w, "  set=%v", setStrValueMap[i])
-				}
-			}
-			if e.IsGeometryColumn(i) {
-				if len(geometryTypeMap) == 0 {
-					fmt.Fprintf(w, "  geometry_type=<n/a>")
-				} else {
-					fmt.Fprintf(w, "  geometry_type=%v", geometryTypeMap[i])
-				}
-			}
-		*/
 		e.columnsInfo = append(e.columnsInfo, info)
 	}
 }
-func (e *RowsEvent) PrintVerbose(w io.Writer) {
+func (e *RowsEvent) PrintVerbose(w io.Writer, verboseLevel int) {
 	if len(e.Table.columnsInfo) == 0 {
 		e.Table.ReadColumnInfo()
 	}
@@ -415,12 +377,20 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 			sql_clause2 = "### SET\n"
 			e.Table.UnsignedMap()
 			for k, v := range e.Rows[i] {
-				sql_clause1 += fmt.Sprintf("###   col[%d]=%v /* %v %v */\n",
-					k, e.Table.columnsInfo[k].GetValuePrinted(v), e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
+				sql_clause1 += fmt.Sprintf("###   col[%d]=%v", k, e.Table.columnsInfo[k].GetValuePrinted(v))
+				if verboseLevel >= 2 {
+					sql_clause1 += fmt.Sprintf(" /* %v %v */\n", e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
+				} else {
+					sql_clause1 += fmt.Sprintf("\n")
+				}
 			}
 			for k, v := range e.Rows[i+1] {
-				sql_clause2 += fmt.Sprintf("###   col[%d]=%v /* %v %v */\n",
-					k, e.Table.columnsInfo[k].GetValuePrinted(v), e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
+				sql_clause2 += fmt.Sprintf("###   col[%d]=%v", k, e.Table.columnsInfo[k].GetValuePrinted(v))
+				if verboseLevel >= 2 {
+					sql_clause2 += fmt.Sprintf(" /* %v %v */\n", e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
+				} else {
+					sql_clause2 += fmt.Sprintf("\n")
+				}
 			}
 			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
 		}
@@ -430,8 +400,12 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 			sql_clause1 = "### SET\n"
 			sql_clause2 = ""
 			for k, v := range e.Rows[i] {
-				sql_clause1 += fmt.Sprintf("###   col[%d]=%v /* %v %v */\n",
-					k, e.Table.columnsInfo[k].GetValuePrinted(v), e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
+				sql_clause1 += fmt.Sprintf("###   col[%d]=%v", k, e.Table.columnsInfo[k].GetValuePrinted(v))
+				if verboseLevel >= 2 {
+					sql_clause1 += fmt.Sprintf(" /* %v %v */\n", e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
+				} else {
+					sql_clause1 += fmt.Sprintf("\n")
+				}
 			}
 			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
 		}
@@ -441,8 +415,12 @@ func (e *RowsEvent) PrintVerbose(w io.Writer) {
 			sql_clause1 = "### WHERE\n"
 			sql_clause2 = ""
 			for k, v := range e.Rows[i] {
-				sql_clause1 += fmt.Sprintf("###   col[%d]=%v /* %v %v */\n",
-					k, e.Table.columnsInfo[k].GetValuePrinted(v), e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
+				sql_clause1 += fmt.Sprintf("###   col[%d]=%v", k, e.Table.columnsInfo[k].GetValuePrinted(v))
+				if verboseLevel >= 2 {
+					sql_clause1 += fmt.Sprintf(" /* %v %v */\n", e.Table.columnsInfo[k].DataType, e.Table.columnsInfo[k].isUnsigned)
+				} else {
+					sql_clause1 += fmt.Sprintf("\n")
+				}
 			}
 			fmt.Fprintf(w, "%s%s%s", sql_command, sql_clause1, sql_clause2)
 		}

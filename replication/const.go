@@ -226,6 +226,8 @@ func (e EventType) String() string {
 		return "TendbUpdateRowsCompressedEventV1"
 	case TENDB_DELETE_ROWS_COMPRESSED_EVENT_V1:
 		return "TendbDeleteRowsCompressedEventV1"
+	case FAKE_DONE_EVENT:
+		return "FakeDoneEvent"
 	default:
 		return "UnknownEvent"
 	}

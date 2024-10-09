@@ -54,6 +54,8 @@ type BinlogParser struct {
 	EventTypeFilter   []EventType
 	TimeFilter        *TimeFilter
 	RenameRule        *pkg.RenameRule
+
+	*PrintEventInfo
 }
 
 func NewBinlogParser() *BinlogParser {
@@ -131,6 +133,11 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 	defer utils.BytesBufferPut(buf)
 
 	if n, err = io.CopyN(buf, r, EventHeaderSize); err == io.EOF {
+		h := &EventHeader{
+			EventType: FAKE_DONE_EVENT,
+		}
+		fakeDoneEvent := &BinlogEvent{RawData: nil, Header: h, Event: &FakeDoneEvent{Done: true}}
+		_ = onEvent(fakeDoneEvent)
 		return true, nil
 	} else if err != nil {
 		return false, errors.Errorf("get event header err %v, need %d but got %d", err, EventHeaderSize, n)
@@ -172,7 +179,7 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 	p.SetRowsEventDecodeFunc(flashbackRowsEventFunc)
 	rawFlashbacked := make([]byte, len(rawData)) // flashback, RowsFilter 才需要新的 bytes buff，TableFilter不需要
 	copy(rawFlashbacked, rawData)
-	e, rawFlashbacked, err = p.ParseEventFlashback(h, body, &rawFlashbacked)
+	e, rawFlashbacked, err = p.ParseEvent2(h, body, &rawFlashbacked)
 	if err != nil {
 		if err == errMissingTableMapEvent {
 			return false, nil

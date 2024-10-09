@@ -960,6 +960,8 @@ type RowsEvent struct {
 	RowsMatched       int
 	// rowsCount total records number in this events
 	rowsCount int
+	// printValueMeta 是否需要 decode field value. 如果只是表过滤，或者不需要打印 字段信息，则无需 decodeValue，只需获取长度
+	printValueMeta bool
 }
 
 // EnumRowImageType is allowed types for every row in mysql binlog.
@@ -1220,7 +1222,11 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 
 		var n int
 		var err error
-		row[i], n, err = e.decodeValue(data[pos:], e.Table.ColumnType[i], e.Table.ColumnMeta[i], isPartial)
+		if !e.printValueMeta {
+			row[i], n, err = e.decodeValueLength(data[pos:], e.Table.ColumnType[i], e.Table.ColumnMeta[i], isPartial)
+		} else {
+			row[i], n, err = e.decodeValue(data[pos:], e.Table.ColumnType[i], e.Table.ColumnMeta[i], isPartial)
+		}
 
 		if err != nil {
 			return 0, err

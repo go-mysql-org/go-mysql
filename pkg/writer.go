@@ -1,4 +1,4 @@
-package main
+package pkg
 
 import (
 	"fmt"
@@ -35,6 +35,9 @@ func NewNormalWriter(writer io.WriteCloser) *NormalWriter {
 }
 
 type FlashbackWriter struct {
+	// mergedWriter 是否自动合并成一个文件
+	mergedWriter io.WriteCloser
+
 	filePrefix      string
 	maxCacheSize    int
 	cacheHeader     []byte
@@ -44,8 +47,9 @@ type FlashbackWriter struct {
 	currentWritten  int
 	currentFileName string
 
-	currentIOWriter io.WriteCloser
-	filePartId      int
+	currentIOWriter   io.WriteCloser
+	currentFilePartId int
+	filePartNames     []string
 }
 
 func (c *FlashbackWriter) Write(p []byte) (n int, err error) {
@@ -82,9 +86,9 @@ func (c *FlashbackWriter) Write(p []byte) (n int, err error) {
 func (c *FlashbackWriter) next() {
 	c.currentIOWriter.Close()
 	c.cache = nil
-	c.filePartId += 1
-	c.currentFileName = fmt.Sprintf("%s.%03d.sql", c.filePrefix, c.filePartId)
-	//c.currentIOWriter, _ = os.OpenFile(c.currentFileName, os.O_APPEND|os.O_WRONLY, os.ModePerm)
+	c.currentFilePartId += 1
+	c.currentFileName = fmt.Sprintf("%s.%03d.sql", c.filePrefix, c.currentFilePartId)
+	c.filePartNames = append(c.filePartNames, c.currentFileName)
 	c.currentIOWriter, _ = os.Create(c.currentFileName)
 }
 
@@ -95,6 +99,7 @@ func (c *FlashbackWriter) SetFooter(s []byte) {
 	c.cacheFooter = s
 }
 
+// Close 如果 mergedWriter != nil，则会合并文件
 func (c *FlashbackWriter) Close() (err error) {
 	for i := len(c.cache); i > 0; i-- {
 		if i == len(c.cache) {
@@ -107,17 +112,31 @@ func (c *FlashbackWriter) Close() (err error) {
 	}
 	c.currentIOWriter.Write(c.cacheFooter)
 	c.cache = nil
-	return c.currentIOWriter.Close()
+	if err = c.currentIOWriter.Close(); err != nil {
+		return err
+	}
+	if c.mergedWriter != nil {
+		defer c.mergedWriter.Close()
+		for _, srcFileName := range c.filePartNames {
+			srcFile, err := os.OpenFile(srcFileName, os.O_RDONLY, 0644)
+			if _, err = io.Copy(c.mergedWriter, srcFile); err != nil {
+				return errors.WithMessagef(err, "merge file from %s to output", srcFileName)
+			} else if err = os.Remove(srcFileName); err != nil {
+				return errors.WithMessagef(err, "remove file part %s", srcFileName)
+			}
+		}
+	}
+	return
 }
 
-func NewFlashbackWriter(filePrefix string, cacheSize int) *FlashbackWriter {
-	//fmt.Println("xxx", filePrefix)
+func NewFlashbackWriter(filePrefix string, cacheSize int, writer io.WriteCloser) *FlashbackWriter {
 	bc := &FlashbackWriter{
 		filePrefix:   filePrefix,
 		maxCacheSize: cacheSize,
+		mergedWriter: writer,
 	}
-	bc.currentFileName = fmt.Sprintf("%s.%03d.sql", filePrefix, bc.filePartId)
-	//bc.currentIOWriter, _ = os.OpenFile(bc.currentFileName, os.O_APPEND|os.O_WRONLY, os.ModePerm)
+	bc.currentFileName = fmt.Sprintf("%s.%03d.sql", filePrefix, bc.currentFilePartId)
+	bc.filePartNames = append(bc.filePartNames, bc.currentFileName)
 	bc.currentIOWriter, _ = os.Create(bc.currentFileName)
 	return bc
 }
