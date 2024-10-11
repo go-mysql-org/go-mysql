@@ -23,7 +23,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
 		})
 	} else {
-		return b.StartSynchronousBackup(p)
+		return b.StartSynchronousBackup(p, timeout)
 	}
 }
 
@@ -89,7 +89,7 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 }
 
 // StartSynchronousBackup starts the backup process using the SynchronousEventHandler in the BinlogSyncerConfig.
-func (b *BinlogSyncer) StartSynchronousBackup(p Position) error {
+func (b *BinlogSyncer) StartSynchronousBackup(p Position, timeout time.Duration) error {
 	if b.cfg.SynchronousEventHandler == nil {
 		return errors.New("SynchronousEventHandler must be set in BinlogSyncerConfig to use StartSynchronousBackup")
 	}
@@ -99,10 +99,25 @@ func (b *BinlogSyncer) StartSynchronousBackup(p Position) error {
 		return errors.Trace(err)
 	}
 
+	var ctx context.Context
+	var cancel context.CancelFunc
+
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
+
 	select {
+	case <-ctx.Done():
+		// The timeout has been reached
+		return nil
 	case <-b.ctx.Done():
+		// The BinlogSyncer has been closed
 		return nil
 	case err := <-s.ech:
+		// An error occurred during streaming
 		return errors.Trace(err)
 	}
 }

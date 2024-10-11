@@ -12,6 +12,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
+// TestStartBackupEndInGivenTime tests the backup process completes within a given time.
 func (t *testSyncerSuite) TestStartBackupEndInGivenTime() {
 	t.setupTest(mysql.MySQLFlavor)
 
