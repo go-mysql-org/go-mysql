@@ -23,7 +23,7 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p Position, timeout time.Du
 			return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
 		})
 	} else {
-		return b.StartSynchronousBackup(p, timeout)
+		return b.StartSynchronousBackup(p)
 	}
 }
 
@@ -68,10 +68,10 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
 	for {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
 		select {
 		case <-ctx.Done():
 			return nil
@@ -89,27 +89,17 @@ func (b *BinlogSyncer) StartBackupWithHandler(p Position, timeout time.Duration,
 }
 
 // StartSynchronousBackup starts the backup process using the SynchronousEventHandler in the BinlogSyncerConfig.
-func (b *BinlogSyncer) StartSynchronousBackup(p Position, timeout time.Duration) error {
+func (b *BinlogSyncer) StartSynchronousBackup(p Position) error {
 	if b.cfg.SynchronousEventHandler == nil {
 		return errors.New("SynchronousEventHandler must be set in BinlogSyncerConfig to use StartSynchronousBackup")
 	}
-
-	if timeout == 0 {
-		timeout = 30 * 3600 * 24 * time.Second // Long timeout by default
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 
 	s, err := b.StartSync(p)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	// Wait for the binlog syncer to finish or encounter an error
 	select {
-	case <-ctx.Done():
-		return nil
 	case <-b.ctx.Done():
 		return nil
 	case err := <-s.ech:
@@ -138,6 +128,7 @@ func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
 		rotateEvent := e.Event.(*RotateEvent)
 		h.filename = string(rotateEvent.NextLogName)
 		if e.Header.Timestamp == 0 || offset == 0 {
+			// fake rotate event
 			return nil
 		}
 	} else if e.Header.EventType == FORMAT_DESCRIPTION_EVENT {
@@ -157,6 +148,7 @@ func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
 			return errors.Trace(err)
 		}
 
+		// Write binlog header 0xfebin
 		_, err = h.w.Write(BinLogFileHeader)
 		if err != nil {
 			return errors.Trace(err)

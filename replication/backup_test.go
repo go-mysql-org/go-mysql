@@ -32,12 +32,12 @@ func (t *testSyncerSuite) TestStartBackupEndInGivenTime() {
 	os.RemoveAll(binlogDir)
 	timeout := 2 * time.Second
 
-	done := make(chan bool)
+	done := make(chan struct{})
 
 	go func() {
 		err := t.b.StartBackup(binlogDir, mysql.Position{Name: "", Pos: uint32(0)}, timeout)
 		require.NoError(t.T(), err)
-		done <- true
+		close(done)
 	}()
 	failTimeout := 5 * timeout
 	ctx, cancel := context.WithTimeout(context.Background(), failTimeout)

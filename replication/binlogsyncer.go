@@ -128,6 +128,7 @@ type BinlogSyncerConfig struct {
 
 	// SynchronousEventHandler is used for synchronous event handling.
 	// This should not be used together with StartBackupWithHandler.
+	// If this is not nil, GetEvent does not need to be called.
 	SynchronousEventHandler EventHandler
 }
 
@@ -805,11 +806,13 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 // parseEvent parses the raw data into a BinlogEvent.
 // It only handles parsing and does not perform any side effects.
-func (b *BinlogSyncer) parseEvent(data []byte) (*BinlogEvent, bool, error) {
+// Returns the parsed BinlogEvent, a boolean indicating if an ACK is needed, and an error if the
+// parsing fails
+func (b *BinlogSyncer) parseEvent(data []byte) (event *BinlogEvent, needACK bool, err error) {
 	// Skip OK byte (0x00)
 	data = data[1:]
 
-	needACK := false
+	needACK = false
 	if b.cfg.SemiSyncEnabled && data[0] == SemiSyncIndicator {
 		needACK = data[1] == 0x01
 		// Skip semi-sync header
@@ -817,12 +820,12 @@ func (b *BinlogSyncer) parseEvent(data []byte) (*BinlogEvent, bool, error) {
 	}
 
 	// Parse the event using the BinlogParser
-	e, err := b.parser.Parse(data)
+	event, err = b.parser.Parse(data)
 	if err != nil {
 		return nil, false, errors.Trace(err)
 	}
 
-	return e, needACK, nil
+	return event, needACK, nil
 }
 
 // handleEventAndACK processes an event and sends an ACK if necessary.
