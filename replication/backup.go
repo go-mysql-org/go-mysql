@@ -131,6 +131,12 @@ type BackupEventHandler struct {
 	filename string
 }
 
+func NewBackupEventHandler(handlerFunction func(filename string) (io.WriteCloser, error)) *BackupEventHandler {
+	return &BackupEventHandler{
+		handler: handlerFunction,
+	}
+}
+
 // HandleEvent processes a single event for the backup.
 func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
 	h.mutex.Lock()
