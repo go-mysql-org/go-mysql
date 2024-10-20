@@ -11,11 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/siddontang/go-log/loggers"
-
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
+	"github.com/siddontang/go-log/loggers"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	. "github.com/go-mysql-org/go-mysql/mysql"
@@ -58,7 +57,7 @@ type BinlogSyncerConfig struct {
 	TLSConfig *tls.Config
 
 	// Use replication.Time structure for timestamp and datetime.
-	// We will use Local location for timestamp and UTC location for datatime.
+	// We will use Local location for timestamp and UTC location for datetime.
 	ParseTime bool
 
 	// If ParseTime is false, convert TIMESTAMP into this specified timezone. If
@@ -126,9 +125,19 @@ type BinlogSyncerConfig struct {
 	DiscardGTIDSet bool
 
 	EventCacheCount int
+
+	// SynchronousEventHandler is used for synchronous event handling.
+	// This should not be used together with StartBackupWithHandler.
+	// If this is not nil, GetEvent does not need to be called.
+	SynchronousEventHandler EventHandler
 }
 
-// BinlogSyncer syncs binlog event from server.
+// EventHandler defines the interface for processing binlog events.
+type EventHandler interface {
+	HandleEvent(e *BinlogEvent) error
+}
+
+// BinlogSyncer syncs binlog events from the server.
 type BinlogSyncer struct {
 	m sync.RWMutex
 
@@ -157,7 +166,7 @@ type BinlogSyncer struct {
 	retryCount int
 }
 
-// NewBinlogSyncer creates the BinlogSyncer with cfg.
+// NewBinlogSyncer creates the BinlogSyncer with the given configuration.
 func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	if cfg.Logger == nil {
 		streamHandler, _ := log.NewStreamHandler(os.Stdout)
@@ -174,7 +183,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 		cfg.EventCacheCount = 10240
 	}
 
-	// Clear the Password to avoid outputing it in log.
+	// Clear the Password to avoid outputting it in logs.
 	pass := cfg.Password
 	cfg.Password = ""
 	cfg.Logger.Infof("create BinlogSyncer with config %+v", cfg)
@@ -765,7 +774,16 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 		switch data[0] {
 		case OK_HEADER:
-			if err = b.parseEvent(s, data); err != nil {
+			// Parse the event
+			e, needACK, err := b.parseEvent(data)
+			if err != nil {
+				s.closeWithError(err)
+				return
+			}
+
+			// Handle the event and send ACK if necessary
+			err = b.handleEventAndACK(s, e, needACK)
+			if err != nil {
 				s.closeWithError(err)
 				return
 			}
@@ -786,39 +804,45 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	}
 }
 
-func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
-	//skip OK byte, 0x00
+// parseEvent parses the raw data into a BinlogEvent.
+// It only handles parsing and does not perform any side effects.
+// Returns the parsed BinlogEvent, a boolean indicating if an ACK is needed, and an error if the
+// parsing fails
+func (b *BinlogSyncer) parseEvent(data []byte) (event *BinlogEvent, needACK bool, err error) {
+	// Skip OK byte (0x00)
 	data = data[1:]
 
-	needACK := false
-	if b.cfg.SemiSyncEnabled && (data[0] == SemiSyncIndicator) {
+	needACK = false
+	if b.cfg.SemiSyncEnabled && data[0] == SemiSyncIndicator {
 		needACK = data[1] == 0x01
-		//skip semi sync header
+		// Skip semi-sync header
 		data = data[2:]
 	}
 
-	e, err := b.parser.Parse(data)
+	// Parse the event using the BinlogParser
+	event, err = b.parser.Parse(data)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, false, errors.Trace(err)
 	}
 
+	return event, needACK, nil
+}
+
+// handleEventAndACK processes an event and sends an ACK if necessary.
+func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, needACK bool) error {
+	// Update the next position based on the event's LogPos
 	if e.Header.LogPos > 0 {
 		// Some events like FormatDescriptionEvent return 0, ignore.
 		b.nextPos.Pos = e.Header.LogPos
 	}
 
-	getCurrentGtidSet := func() GTIDSet {
-		if b.currGset == nil {
-			return nil
-		}
-		return b.currGset.Clone()
-	}
-
+	// Handle event types to update positions and GTID sets
 	switch event := e.Event.(type) {
 	case *RotateEvent:
 		b.nextPos.Name = string(event.NextLogName)
 		b.nextPos.Pos = uint32(event.Position)
 		b.cfg.Logger.Infof("rotate to %s", b.nextPos)
+
 	case *GTIDEvent:
 		if b.prevGset == nil {
 			break
@@ -826,13 +850,20 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		if b.currGset == nil {
 			b.currGset = b.prevGset.Clone()
 		}
-		u, _ := uuid.FromBytes(event.SID)
+		u, err := uuid.FromBytes(event.SID)
+		if err != nil {
+			return errors.Trace(err)
+		}
 		b.currGset.(*MysqlGTIDSet).AddGTID(u, event.GNO)
 		if b.prevMySQLGTIDEvent != nil {
-			u, _ = uuid.FromBytes(b.prevMySQLGTIDEvent.SID)
+			u, err = uuid.FromBytes(b.prevMySQLGTIDEvent.SID)
+			if err != nil {
+				return errors.Trace(err)
+			}
 			b.prevGset.(*MysqlGTIDSet).AddGTID(u, b.prevMySQLGTIDEvent.GNO)
 		}
 		b.prevMySQLGTIDEvent = event
+
 	case *MariadbGTIDEvent:
 		if b.prevGset == nil {
 			break
@@ -841,29 +872,39 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 			b.currGset = b.prevGset.Clone()
 		}
 		prev := b.currGset.Clone()
-		err = b.currGset.(*MariadbGTIDSet).AddSet(&event.GTID)
+		err := b.currGset.(*MariadbGTIDSet).AddSet(&event.GTID)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		// right after reconnect we will see same gtid as we saw before, thus currGset will not get changed
+		// Right after reconnect we may see the same GTID as before; update prevGset if currGset changed
 		if !b.currGset.Equal(prev) {
 			b.prevGset = prev
 		}
+
 	case *XIDEvent:
 		if !b.cfg.DiscardGTIDSet {
-			event.GSet = getCurrentGtidSet()
+			event.GSet = b.getCurrentGtidSet()
 		}
+
 	case *QueryEvent:
 		if !b.cfg.DiscardGTIDSet {
-			event.GSet = getCurrentGtidSet()
+			event.GSet = b.getCurrentGtidSet()
 		}
 	}
 
-	needStop := false
-	select {
-	case s.ch <- e:
-	case <-b.ctx.Done():
-		needStop = true
+	// Use SynchronousEventHandler if it's set
+	if b.cfg.SynchronousEventHandler != nil {
+		err := b.cfg.SynchronousEventHandler.HandleEvent(e)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		// Asynchronous mode: send the event to the streamer channel
+		select {
+		case s.ch <- e:
+		case <-b.ctx.Done():
+			return errors.New("sync is being closed...")
+		}
 	}
 
 	if needACK {
@@ -873,10 +914,14 @@ func (b *BinlogSyncer) parseEvent(s *BinlogStreamer, data []byte) error {
 		}
 	}
 
-	if needStop {
-		return errors.New("sync is been closing...")
-	}
+	return nil
+}
 
+// getCurrentGtidSet returns a clone of the current GTID set.
+func (b *BinlogSyncer) getCurrentGtidSet() GTIDSet {
+	if b.currGset != nil {
+		return b.currGset.Clone()
+	}
 	return nil
 }
 
