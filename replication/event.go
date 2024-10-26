@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -145,9 +146,8 @@ func calcVersionProduct(server string) int {
 }
 
 type FormatDescriptionEvent struct {
-	Version uint16
-	//len = 50
-	ServerVersion          []byte
+	Version                uint16
+	ServerVersion          string
 	CreateTimestamp        uint32
 	EventHeaderLength      uint8
 	EventTypeHeaderLengths []byte
@@ -161,8 +161,8 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 	e.Version = binary.LittleEndian.Uint16(data[pos:])
 	pos += 2
 
-	e.ServerVersion = make([]byte, 50)
-	copy(e.ServerVersion, data[pos:])
+	serverVersionRaw := make([]byte, 50)
+	copy(serverVersionRaw, data[pos:])
 	pos += 50
 
 	e.CreateTimestamp = binary.LittleEndian.Uint32(data[pos:])
@@ -175,13 +175,18 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 		return errors.Errorf("invalid event header length %d, must 19", e.EventHeaderLength)
 	}
 
-	server := string(e.ServerVersion)
+	serverVersionLength := bytes.Index(serverVersionRaw, []byte{0x0})
+	if serverVersionLength < 0 {
+		e.ServerVersion = string(serverVersionRaw)
+	} else {
+		e.ServerVersion = string(serverVersionRaw[:serverVersionLength])
+	}
 	checksumProduct := checksumVersionProductMysql
-	if strings.Contains(strings.ToLower(server), "mariadb") {
+	if strings.Contains(strings.ToLower(e.ServerVersion), "mariadb") {
 		checksumProduct = checksumVersionProductMariaDB
 	}
 
-	if calcVersionProduct(string(e.ServerVersion)) >= checksumProduct {
+	if calcVersionProduct(e.ServerVersion) >= checksumProduct {
 		// here, the last 5 bytes is 1 byte check sum alg type and 4 byte checksum if exists
 		e.ChecksumAlgorithm = data[len(data)-5]
 		e.EventTypeHeaderLengths = data[pos : len(data)-5]
