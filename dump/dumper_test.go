@@ -59,5 +59,4 @@ func TestDetectSourceDataSupported(t *testing.T) {
 	for _, v := range versions {
 		require.Equal(t, v.supported, d.detectSourceDataSupported(v.version), v.version)
 	}
-
 }
