@@ -3,7 +3,9 @@ package server
 import (
 	"bytes"
 	"fmt"
+	"log"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/siddontang/go/hack"
@@ -186,39 +188,71 @@ type EmptyReplicationHandler struct {
 }
 
 func (h EmptyHandler) UseDB(dbName string) error {
+	log.Printf("Received: UseDB %s", dbName)
 	return nil
 }
 func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
+	log.Printf("Received: Query: %s", query)
+
+	// These two queries are implemented for minimal support for MySQL Shell
+	if query == `SET NAMES 'utf8mb4';` {
+		return nil, nil
+	}
+	if query == `select concat(@@version, ' ', @@version_comment)` {
+		r, err := mysql.BuildSimpleResultset([]string{"concat(@@version, ' ', @@version_comment)"}, [][]interface{}{
+			{"8.0.11"},
+		}, false)
+		if err != nil {
+			return nil, err
+		} else {
+			return &mysql.Result{
+				Status:       0,
+				Warnings:     0,
+				InsertId:     0,
+				AffectedRows: 0,
+				Resultset:    r,
+			}, nil
+		}
+	}
+
 	return nil, fmt.Errorf("not supported now")
 }
 
 func (h EmptyHandler) HandleFieldList(table string, fieldWildcard string) ([]*Field, error) {
+	log.Println("Received: FieldList")
 	return nil, fmt.Errorf("not supported now")
 }
 func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, error) {
+	log.Printf("Received: StmtPrepare: %s", query)
 	return 0, 0, nil, fmt.Errorf("not supported now")
 }
 func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error) {
+	log.Println("Received: StmtExecute")
 	return nil, fmt.Errorf("not supported now")
 }
 
 func (h EmptyHandler) HandleStmtClose(context interface{}) error {
+	log.Println("Received: StmtClose")
 	return nil
 }
 
 func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
+	log.Println("Received: RegisterSlave")
 	return fmt.Errorf("not supported now")
 }
 
 func (h EmptyReplicationHandler) HandleBinlogDump(pos Position) (*replication.BinlogStreamer, error) {
+	log.Println("Received: BinlogDump")
 	return nil, fmt.Errorf("not supported now")
 }
 
 func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error) {
+	log.Println("Received: BinlogDumpGTID")
 	return nil, fmt.Errorf("not supported now")
 }
 
 func (h EmptyHandler) HandleOtherCommand(cmd byte, data []byte) error {
+	log.Println("Received: OtherCommand")
 	return NewError(
 		ER_UNKNOWN_ERROR,
 		fmt.Sprintf("command %d is not supported now", cmd),
