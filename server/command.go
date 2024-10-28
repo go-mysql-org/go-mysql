@@ -11,6 +11,7 @@ import (
 	"github.com/siddontang/go/hack"
 )
 
+// Handler is what a server needs to implement the client-server protocol
 type Handler interface {
 	//handle COM_INIT_DB command, you can check whether the dbName is valid, or other.
 	UseDB(dbName string) error
@@ -33,6 +34,7 @@ type Handler interface {
 	HandleOtherCommand(cmd byte, data []byte) error
 }
 
+// ReplicationHandler is for handlers that want to implement the replication protocol
 type ReplicationHandler interface {
 	// handle Replication command
 	HandleRegisterSlave(data []byte) error
@@ -40,6 +42,8 @@ type ReplicationHandler interface {
 	HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error)
 }
 
+// HandleCommand is handling commands received by the server
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_command_phase.html
 func (c *Conn) HandleCommand() error {
 	if c.Conn == nil {
 		return fmt.Errorf("connection closed")
@@ -180,17 +184,22 @@ func (c *Conn) dispatch(data []byte) interface{} {
 	}
 }
 
+// EmptyHandler is a mostly empty implementation for demonstration purposes
 type EmptyHandler struct {
 }
 
+// EmptyReplicationHandler is a empty handler that implements the replication protocol
 type EmptyReplicationHandler struct {
 	EmptyHandler
 }
 
+// UseDB is called for COM_INIT_DB
 func (h EmptyHandler) UseDB(dbName string) error {
 	log.Printf("Received: UseDB %s", dbName)
 	return nil
 }
+
+// HandleQuery is called for COM_QUERY
 func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
 	log.Printf("Received: Query: %s", query)
 
@@ -217,41 +226,59 @@ func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
 	return nil, fmt.Errorf("not supported now")
 }
 
+// HandleFieldList is called for COM_FIELD_LIST packets
+// Note that COM_FIELD_LIST has been deprecated since MySQL 5.7.11
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_field_list.html
 func (h EmptyHandler) HandleFieldList(table string, fieldWildcard string) ([]*Field, error) {
-	log.Println("Received: FieldList")
+	log.Printf("Received: FieldList: table=%s, fieldWildcard:%s", table, fieldWildcard)
 	return nil, fmt.Errorf("not supported now")
 }
+
+// HandleStmtPrepare is called for COM_STMT_PREPARE
 func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, error) {
 	log.Printf("Received: StmtPrepare: %s", query)
 	return 0, 0, nil, fmt.Errorf("not supported now")
 }
+
+// 'context' isn't used but replacing it with `_` would remove important information for who
+// wants to extend this later.
+//revive:disable:unused-parameter
+
+// HandleStmtExecute is called for COM_STMT_EXECUTE
 func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error) {
-	log.Println("Received: StmtExecute")
+	log.Printf("Received: StmtExecute: %s (args: %v)", query, args)
 	return nil, fmt.Errorf("not supported now")
 }
 
+// HandleStmtClose is called for COM_STMT_CLOSE
 func (h EmptyHandler) HandleStmtClose(context interface{}) error {
 	log.Println("Received: StmtClose")
 	return nil
 }
 
+//revive:enable:unused-parameter
+
+// HandleRegisterSlave is called for COM_REGISTER_SLAVE
 func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
-	log.Println("Received: RegisterSlave")
+	log.Printf("Received: RegisterSlave: %x", data)
 	return fmt.Errorf("not supported now")
 }
 
+// HandleBinlogDump is called for COM_BINLOG_DUMP (non-GTID)
 func (h EmptyReplicationHandler) HandleBinlogDump(pos Position) (*replication.BinlogStreamer, error) {
-	log.Println("Received: BinlogDump")
+	log.Printf("Received: BinlogDump: pos=%s", pos.String())
 	return nil, fmt.Errorf("not supported now")
 }
 
+// HandleBinlogDumpGTID is called for COM_BINLOG_DUMP_GTID
 func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error) {
-	log.Println("Received: BinlogDumpGTID")
+	log.Printf("Received: BinlogDumpGTID: gtidSet=%s", gtidSet.String())
 	return nil, fmt.Errorf("not supported now")
 }
 
+// HandleOtherCommand is called for commands not handled elsewhere
 func (h EmptyHandler) HandleOtherCommand(cmd byte, data []byte) error {
-	log.Println("Received: OtherCommand")
+	log.Printf("Received: OtherCommand: cmd=%x, data=%x", cmd, data)
 	return NewError(
 		ER_UNKNOWN_ERROR,
 		fmt.Sprintf("command %d is not supported now", cmd),
