@@ -404,6 +404,8 @@ func (b *BinlogSyncer) prepare() error {
 		return errors.Trace(err)
 	}
 
+	b.cfg.Logger.Infof("Connected to %s %s server", b.cfg.Flavor, b.c.GetServerVersion())
+
 	return nil
 }
 
