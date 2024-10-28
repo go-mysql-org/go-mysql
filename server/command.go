@@ -204,15 +204,14 @@ func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
 		}, false)
 		if err != nil {
 			return nil, err
-		} else {
-			return &mysql.Result{
-				Status:       0,
-				Warnings:     0,
-				InsertId:     0,
-				AffectedRows: 0,
-				Resultset:    r,
-			}, nil
 		}
+		return &mysql.Result{
+			Status:       0,
+			Warnings:     0,
+			InsertId:     0,
+			AffectedRows: 0,
+			Resultset:    r,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("not supported now")
