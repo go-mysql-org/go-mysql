@@ -9,6 +9,7 @@ build:
 	${GO} build -o bin/go-mysqldump cmd/go-mysqldump/main.go
 	${GO} build -o bin/go-canal cmd/go-canal/main.go
 	${GO} build -o bin/go-binlogparser cmd/go-binlogparser/main.go
+	${GO} build -o bin/go-mysqlserver cmd/go-mysqlserver/main.go
 
 test:
 	${GO} test --race -timeout 2m ./...

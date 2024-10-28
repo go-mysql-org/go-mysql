@@ -48,7 +48,7 @@ func NewDefaultServer() *Server {
 	certPem, keyPem := generateAndSignRSACerts(caPem, caKey)
 	tlsConf := NewServerTLSConfig(caPem, certPem, keyPem, tls.VerifyClientCertIfGiven)
 	return &Server{
-		serverVersion:   "5.7.0",
+		serverVersion:   "8.0.11",
 		protocolVersion: 10,
 		capability: CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
 			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_SSL | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
