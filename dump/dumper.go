@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
@@ -44,6 +45,9 @@ type Dumper struct {
 
 	// see detectColumnStatisticsParamSupported
 	isColumnStatisticsParamSupported bool
+
+	mysqldumpVersion    string
+	sourceDataSupported bool
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
@@ -67,7 +71,14 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 	d.IgnoreTables = make(map[string][]string)
 	d.ExtraOptions = make([]string, 0, 5)
 	d.masterDataSkipped = false
-	d.isColumnStatisticsParamSupported = d.detectColumnStatisticsParamSupported()
+
+	out, err := exec.Command(d.ExecutionPath, `--help`).CombinedOutput()
+	if err != nil {
+		return d, err
+	}
+	d.isColumnStatisticsParamSupported = d.detectColumnStatisticsParamSupported(out)
+	d.mysqldumpVersion = d.getMysqldumpVersion(out)
+	d.sourceDataSupported = d.detectSourceDataSupported(d.mysqldumpVersion)
 
 	d.ErrOut = os.Stderr
 
@@ -81,12 +92,47 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 // But this parameter exists only for versions >=8.0.2 (https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-2.html).
 //
 // For environments where the version of mysql-server and mysqldump differs, we try to check this parameter and use it if available.
-func (d *Dumper) detectColumnStatisticsParamSupported() bool {
-	out, err := exec.Command(d.ExecutionPath, `--help`).CombinedOutput()
-	if err != nil {
+func (d *Dumper) detectColumnStatisticsParamSupported(helpOutput []byte) bool {
+	return bytes.Contains(helpOutput, []byte(`--column-statistics`))
+}
+
+// mysqldump  Ver 10.19 Distrib 10.3.37-MariaDB, for linux-systemd (x86_64)`, `10.3.37-MariaDB
+// opt/mysql/11.0.0/bin/mysqldump from 11.0.0-preview-MariaDB, client 10.19 for linux-systemd (x86_64)
+func (d *Dumper) getMysqldumpVersion(helpOutput []byte) string {
+	mysqldumpVersionRegexpNew := regexp.MustCompile(`mysqldump  Ver ([0-9][^ ]*) for`)
+	if m := mysqldumpVersionRegexpNew.FindSubmatch(helpOutput); m != nil {
+		return string(m[1])
+	}
+
+	mysqldumpVersionRegexpOld := regexp.MustCompile(`mysqldump  Ver .* Distrib ([0-9][^ ]*),`)
+	if m := mysqldumpVersionRegexpOld.FindSubmatch(helpOutput); m != nil {
+		return string(m[1])
+	}
+
+	mysqldumpVersionRegexpMaria := regexp.MustCompile(`mysqldump from ([0-9][^ ]*), `)
+	if m := mysqldumpVersionRegexpMaria.FindSubmatch(helpOutput); m != nil {
+		return string(m[1])
+	}
+
+	return ""
+}
+
+func (d *Dumper) detectSourceDataSupported(version string) bool {
+	// Failed to detect mysqldump version
+	if version == "" {
 		return false
 	}
-	return bytes.Contains(out, []byte(`--column-statistics`))
+
+	// MySQL 5.x
+	if version[0] == byte('5') {
+		return false
+	}
+
+	if strings.Contains(version, "MariaDB") {
+		return false
+	}
+
+	return true
 }
 
 func (d *Dumper) SetCharset(charset string) {
@@ -169,7 +215,11 @@ func (d *Dumper) Dump(w io.Writer) error {
 	passwordArgIndex := len(args) - 1
 
 	if !d.masterDataSkipped {
-		args = append(args, "--master-data")
+		if d.sourceDataSupported {
+			args = append(args, "--source-data")
+		} else {
+			args = append(args, "--master-data")
+		}
 	}
 
 	if d.maxAllowedPacket > 0 {

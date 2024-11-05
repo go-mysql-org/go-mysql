@@ -29,7 +29,7 @@ var valuesExp *regexp.Regexp
 var gtidExp *regexp.Regexp
 
 func init() {
-	binlogExp = regexp.MustCompile(`^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\d+);`)
+	binlogExp = regexp.MustCompile(`^CHANGE (MASTER|REPLICATION SOURCE) TO (MASTER_LOG_FILE|SOURCE_LOG_FILE)='(.+)', (MASTER_LOG_POS|SOURCE_LOG_POS)=(\d+);`)
 	useExp = regexp.MustCompile("^USE `(.+)`;")
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
 	// The pattern will only match MySQL GTID, as you know SET GLOBAL gtid_slave_pos='0-1-4' is used for MariaDB.
@@ -71,8 +71,8 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 				}
 			}
 			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-				name := m[0][1]
-				pos, err := strconv.ParseUint(m[0][2], 10, 64)
+				name := m[0][3]
+				pos, err := strconv.ParseUint(m[0][5], 10, 64)
 				if err != nil {
 					return errors.Errorf("parse binlog %v err, invalid number", line)
 				}
