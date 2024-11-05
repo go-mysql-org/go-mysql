@@ -463,7 +463,12 @@ func (c *Canal) prepareSyncer() error {
 		Dialer:                  c.cfg.Dialer,
 		Localhost:               c.cfg.Localhost,
 		EventCacheCount:         c.cfg.EventCacheCount,
-		RowsEventDecodeFunc: func(event *replication.RowsEvent, data []byte) error {
+	}
+
+	if c.cfg.RowsEventDecodeFunc != nil {
+		cfg.RowsEventDecodeFunc = c.cfg.RowsEventDecodeFunc
+	} else {
+		cfg.RowsEventDecodeFunc = func(event *replication.RowsEvent, data []byte) error {
 			pos, err := event.DecodeHeader(data)
 			if err != nil {
 				return err
@@ -475,7 +480,7 @@ func (c *Canal) prepareSyncer() error {
 			}
 
 			return event.DecodeData(pos, data)
-		},
+		}
 	}
 
 	if strings.Contains(c.cfg.Addr, "/") {

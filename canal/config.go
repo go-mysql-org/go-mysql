@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 )
 
 type DumpConfig struct {
@@ -70,6 +71,9 @@ type Config struct {
 	// Default IncludeTableRegex and ExcludeTableRegex are empty, this will include all tables
 	IncludeTableRegex []string `toml:"include_table_regex"`
 	ExcludeTableRegex []string `toml:"exclude_table_regex"`
+
+	// Allows to specify a custom function to decode RowsEvent. This can be used to skip decoding of some events.
+	RowsEventDecodeFunc func(*replication.RowsEvent, []byte) error
 
 	// discard row event without table meta
 	DiscardNoMetaRowEvent bool `toml:"discard_no_meta_row_event"`
