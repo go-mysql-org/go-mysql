@@ -483,7 +483,7 @@ func (c *Canal) prepareSyncer() error {
 	} else {
 		host, port, err := net.SplitHostPort(c.cfg.Addr)
 		if err != nil {
-			return errors.Errorf("invalid mysql addr format %s, must host:port", c.cfg.Addr)
+			return errors.Errorf("invalid MySQL address format %s, must host:port", c.cfg.Addr)
 		}
 		portNumber, err := strconv.ParseUint(port, 10, 16)
 		if err != nil {
