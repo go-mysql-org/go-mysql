@@ -481,26 +481,17 @@ func (c *Canal) prepareSyncer() error {
 	if strings.Contains(c.cfg.Addr, "/") {
 		cfg.Host = c.cfg.Addr
 	} else {
-		ipv6 := strings.Count(c.cfg.Addr, ":") > 1
-		if ipv6 && !strings.ContainsAny(c.cfg.Addr, "[]") {
-			return errors.Errorf("invalid mysql ipv6 addr format %s, must [host]:port", c.cfg.Addr)
+		host, port, err := net.SplitHostPort(c.cfg.Addr)
+		if err != nil {
+			return errors.Errorf("invalid mysql addr format %s, must host:port", c.cfg.Addr)
 		}
-		lastSep := strings.LastIndex(c.cfg.Addr, ":")
-		if !ipv6 && lastSep == -1 {
-			return errors.Errorf("invalid mysql ipv4 addr format %s, must host:port", c.cfg.Addr)
-		}
-		addr := strings.Trim(c.cfg.Addr[:lastSep], "[]")
-		ip := net.ParseIP(addr)
-		if ip == nil {
-			return errors.Errorf("invalid mysql ip format %s", addr)
-		}
-		port, err := strconv.ParseUint(c.cfg.Addr[lastSep+1:], 10, 16)
+		portNumber, err := strconv.ParseUint(port, 10, 16)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
-		cfg.Host = addr
-		cfg.Port = uint16(port)
+		cfg.Host = host
+		cfg.Port = uint16(portNumber)
 	}
 
 	c.syncer = replication.NewBinlogSyncer(cfg)
