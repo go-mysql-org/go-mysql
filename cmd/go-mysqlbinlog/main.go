@@ -50,6 +50,12 @@ func main() {
 		MaxReconnectAttempts: 10,
 	}
 
+	err := mysql.ValidateFlavor(*flavor)
+	if err != nil {
+		fmt.Printf("Flavor error: %v\n", errors.ErrorStack(err))
+		return
+	}
+
 	b := replication.NewBinlogSyncer(cfg)
 
 	pos := mysql.Position{Name: *file, Pos: uint32(*pos)}
