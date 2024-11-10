@@ -1,0 +1,113 @@
+name: runTestsAndLinters
+on: [push, pull_request]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go: [ "1.22", "1.21" ]
+        os: [ ubuntu-22.04, ubuntu-20.04 ]
+    name: Tests Go ${{ matrix.go }} on ${{ matrix.os }} # This name is used in main branch protection rules
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Setup MySQL
+        run: |
+          echo -n "mysql -V: " ; mysql -V
+          echo -n "mysqldump -V: " ; mysqldump -V
+
+          echo -e '[mysqld]\nserver-id=1\nlog-bin=mysql\nbinlog-format=row\ngtid-mode=ON\nenforce_gtid_consistency=ON\n' | sudo tee /etc/mysql/conf.d/replication.cnf
+          sudo service mysql start
+
+          # apply this for mysql5 & mysql8 compatibility
+          sudo mysql -h 127.0.0.1 -uroot -proot -e "DROP USER IF EXISTS 'mysql.infoschema'@'localhost'; CREATE USER IF NOT EXISTS 'mysql.infoschema'@'localhost' IDENTIFIED BY ''; GRANT SELECT ON *.* TO 'mysql.infoschema'@'localhost';"
+
+          sudo mysql -h 127.0.0.1 -uroot -proot -e "use mysql; update user set authentication_string=null where User='root'; update user set plugin='mysql_native_password'; FLUSH PRIVILEGES;"
+          # create ssl/rsa files for mysql ssl support
+          sudo mysql_ssl_rsa_setup --uid=mysql
+          mysql -e "CREATE DATABASE IF NOT EXISTS test;" -uroot
+          mysql -e "SHOW VARIABLES LIKE 'log_bin'" -uroot
+      - name: Prepare for Go
+        run: |
+          sudo apt-get install -y make gcc
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Run tests
+        run: |
+          # separate test to avoid RESET MASTER conflict
+          go test -race $(go list ./... | grep -v canal)
+          go test -race $(go list ./... | grep canal)
+
+  mysqltest:
+    strategy:
+      matrix:
+        mysql_version:
+          - 8.0.37
+          - 8.4.0
+    name: Tests with MySQL ${{ matrix.mysql_version }}
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql_version }}
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: MySQL versions
+        run: |
+          echo -n "mysql -v: " ; mysql -V
+          echo -n "mysqldump -V: " ; mysqldump -V
+          echo -n "MySQL Server (SELECT VERSION()): " ; mysql -h 127.0.0.1 -u root -BNe 'SELECT VERSION()'
+      - name: Prepare for Go
+        run: |
+          sudo apt-get install -y make gcc
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Run tests
+        run: |
+          # separate test to avoid RESET MASTER conflict
+          # TODO: Fix "dump/" and "canal/": mysqldump tries to run SHOW MASTER STATUS on v8.4.0
+          go test $(go list ./... | grep -v canal | grep -v dump)
+          # go test $(go list ./... | grep canal | grep -v dump)
+
+  golangci:
+    name: golangci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=3m
+
+  platforms:
+    strategy:
+      matrix:
+        arch: [ "amd64", "arm64" ]
+        os: [ "linux", "freebsd", "darwin" ]
+    name: platforms
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare for Go
+        run: |
+          sudo apt-get install -y make gcc
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Build on ${{ matrix.os }}/${{ matrix.arch }}
+        run: GOARCH=${{ matrix.arch }} GOOS=${{ matrix.os }} go build ./...

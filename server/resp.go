@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"fmt"
 
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 )
 
 func (c *Conn) writeOK(r *Result) error {
@@ -22,7 +24,7 @@ func (c *Conn) writeOK(r *Result) error {
 
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, byte(r.Status), byte(r.Status>>8))
-		data = append(data, 0, 0)
+		data = append(data, byte(r.Warnings), byte(r.Warnings>>8))
 	}
 
 	return c.WritePacket(data)
@@ -55,7 +57,7 @@ func (c *Conn) writeEOF() error {
 
 	data = append(data, EOF_HEADER)
 	if c.capability&CLIENT_PROTOCOL_41 > 0 {
-		data = append(data, 0, 0)
+		data = append(data, byte(c.warnings), byte(c.warnings>>8))
 		data = append(data, byte(c.status), byte(c.status>>8))
 	}
 
@@ -68,12 +70,8 @@ func (c *Conn) writeAuthSwitchRequest(newAuthPluginName string) error {
 	data = append(data, EOF_HEADER)
 	data = append(data, []byte(newAuthPluginName)...)
 	data = append(data, 0x00)
-	rnd, err := RandomBuf(20)
-	if err != nil {
-		return err
-	}
 	// new auth data
-	c.salt = rnd
+	c.salt = RandomBuf(20)
 	data = append(data, c.salt...)
 	// the online doc states it's a string.EOF, however, the actual MySQL server add a \NUL to the end, without it, the
 	// official MySQL client will fail.
@@ -116,6 +114,20 @@ func (c *Conn) writeAuthMoreDataFastAuth() error {
 }
 
 func (c *Conn) writeResultset(r *Resultset) error {
+	// for a streaming resultset, that handled rowdata separately in a callback
+	// of type SelectPerRowCallback, we can suffice by ending the stream with
+	// an EOF
+	// when streaming multiple queries, no EOF has to be sent, all results should've
+	// been taken care of already in the user-defined callback
+	if r.StreamingDone {
+		switch r.Streaming {
+		case StreamingMultiple:
+			return nil
+		case StreamingSelect:
+			return c.writeEOF()
+		}
+	}
+
 	columnLen := PutLengthEncodedInt(uint64(len(r.Fields)))
 
 	data := make([]byte, 4, 1024)
@@ -125,16 +137,14 @@ func (c *Conn) writeResultset(r *Resultset) error {
 		return err
 	}
 
-	for _, v := range r.Fields {
-		data = data[0:4]
-		data = append(data, v.Dump()...)
-		if err := c.WritePacket(data); err != nil {
-			return err
-		}
+	if err := c.writeFieldList(r.Fields, data); err != nil {
+		return err
 	}
 
-	if err := c.writeEOF(); err != nil {
-		return err
+	// streaming select resultsets handle rowdata in a separate callback of type
+	// SelectPerRowCallback so we're done here
+	if r.Streaming == StreamingSelect {
+		return nil
 	}
 
 	for _, v := range r.RowDatas {
@@ -152,8 +162,10 @@ func (c *Conn) writeResultset(r *Resultset) error {
 	return nil
 }
 
-func (c *Conn) writeFieldList(fs []*Field) error {
-	data := make([]byte, 4, 1024)
+func (c *Conn) writeFieldList(fs []*Field, data []byte) error {
+	if data == nil {
+		data = make([]byte, 4, 1024)
+	}
 
 	for _, v := range fs {
 		data = data[0:4]
@@ -169,12 +181,50 @@ func (c *Conn) writeFieldList(fs []*Field) error {
 	return nil
 }
 
-type noResponse struct{}
+func (c *Conn) writeFieldValues(fv []FieldValue) error {
+	data := make([]byte, 4, 1024)
+	for _, v := range fv {
+		if v.Value() == nil {
+			// NULL value is encoded as 0xfb here
+			data = append(data, []byte{0xfb}...)
+		} else {
+			tv, err := FormatTextValue(v.Value())
+			if err != nil {
+				return err
+			}
+			data = append(data, PutLengthEncodedString(tv)...)
+		}
+	}
 
-func (c *Conn) writeValue(value interface{}) error {
+	return c.WritePacket(data)
+}
+
+// see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication.html
+func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
+	for {
+		ev, err := s.GetEvent(context.Background())
+		if err != nil {
+			return err
+		}
+		data := make([]byte, 4, 4+len(ev.RawData))
+		data = append(data, OK_HEADER)
+
+		data = append(data, ev.RawData...)
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+}
+
+type noResponse struct{}
+type eofResponse struct{}
+
+func (c *Conn) WriteValue(value interface{}) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
+	case eofResponse:
+		return c.writeEOF()
 	case error:
 		return c.writeError(v)
 	case nil:
@@ -186,7 +236,11 @@ func (c *Conn) writeValue(value interface{}) error {
 			return c.writeOK(v)
 		}
 	case []*Field:
-		return c.writeFieldList(v)
+		return c.writeFieldList(v, nil)
+	case []FieldValue:
+		return c.writeFieldValues(v)
+	case *replication.BinlogStreamer:
+		return c.writeBinlogEvents(v)
 	case *Stmt:
 		return c.writePrepare(v)
 	default:

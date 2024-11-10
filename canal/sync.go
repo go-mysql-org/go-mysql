@@ -1,17 +1,14 @@
 package canal
 
 import (
-	"fmt"
 	"sync/atomic"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser/ast"
-	uuid "github.com/satori/go.uuid"
-	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
-	"github.com/siddontang/go-mysql/schema"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -22,7 +19,7 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
 		}
-		log.Infof("start sync binlog at binlog file %v", pos)
+		c.cfg.Logger.Infof("start sync binlog at binlog file %v", pos)
 		return s, nil
 	} else {
 		gsetClone := gset.Clone()
@@ -30,7 +27,7 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
 		}
-		log.Infof("start sync binlog at GTID set %v", gsetClone)
+		c.cfg.Logger.Infof("start sync binlog at GTID set %v", gsetClone)
 		return s, nil
 	}
 }
@@ -41,13 +38,6 @@ func (c *Canal) runSyncBinlog() error {
 		return err
 	}
 
-	savePos := false
-	force := false
-
-	// The name of the binlog file received in the fake rotate event.
-	// It must be preserved until the new position is saved.
-	fakeRotateLogName := ""
-
 	for {
 		ev, err := s.GetEvent(c.ctx)
 		if err != nil {
@@ -57,128 +47,139 @@ func (c *Canal) runSyncBinlog() error {
 		// Update the delay between the Canal and the Master before the handler hooks are called
 		c.updateReplicationDelay(ev)
 
-		// If log pos equals zero then the received event is a fake rotate event and
-		// contains only a name of the next binlog file
-		// See https://github.com/mysql/mysql-server/blob/8e797a5d6eb3a87f16498edcb7261a75897babae/sql/rpl_binlog_sender.h#L235
-		// and https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
-		if ev.Header.LogPos == 0 {
-			switch e := ev.Event.(type) {
-			case *replication.RotateEvent:
-				fakeRotateLogName = string(e.NextLogName)
-				log.Infof("received fake rotate event, next log name is %s", e.NextLogName)
-			}
-
-			continue
-		}
-
-		savePos = false
-		force = false
-		pos := c.master.Position()
-
-		curPos := pos.Pos
-		// next binlog pos
-		pos.Pos = ev.Header.LogPos
-
-		// new file name received in the fake rotate event
-		if fakeRotateLogName != "" {
-			pos.Name = fakeRotateLogName
-		}
-
-		// We only save position with RotateEvent and XIDEvent.
-		// For RowsEvent, we can't save the position until meeting XIDEvent
-		// which tells the whole transaction is over.
-		// TODO: If we meet any DDL query, we must save too.
 		switch e := ev.Event.(type) {
 		case *replication.RotateEvent:
-			pos.Name = string(e.NextLogName)
-			pos.Pos = uint32(e.Position)
-			log.Infof("rotate binlog to %s", pos)
-			savePos = true
-			force = true
-			if err = c.eventHandler.OnRotate(e); err != nil {
+			// If the timestamp equals zero, the received rotate event is a fake rotate event
+			// and contains only the name of the next binlog file. Its log position should be
+			// ignored.
+			// See https://github.com/mysql/mysql-server/blob/8e797a5d6eb3a87f16498edcb7261a75897babae/sql/rpl_binlog_sender.h#L235
+			// and https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
+			if ev.Header.Timestamp == 0 {
+				fakeRotateLogName := string(e.NextLogName)
+				c.cfg.Logger.Infof("received fake rotate event, next log name is %s", e.NextLogName)
+
+				if fakeRotateLogName != c.master.Position().Name {
+					c.cfg.Logger.Info("log name changed, the fake rotate event will be handled as a real rotate event")
+				} else {
+					continue
+				}
+			}
+		}
+
+		err = c.handleEvent(ev)
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
+	savePos := false
+	force := false
+	pos := c.master.Position()
+	var err error
+
+	curPos := pos.Pos
+
+	// next binlog pos
+	pos.Pos = ev.Header.LogPos
+
+	// We only save position with RotateEvent and XIDEvent.
+	// For RowsEvent, we can't save the position until meeting XIDEvent
+	// which tells the whole transaction is over.
+	// TODO: If we meet any DDL query, we must save too.
+	switch e := ev.Event.(type) {
+	case *replication.RotateEvent:
+		pos.Name = string(e.NextLogName)
+		pos.Pos = uint32(e.Position)
+		c.cfg.Logger.Infof("rotate binlog to %s", pos)
+		savePos = true
+		force = true
+		if err = c.eventHandler.OnRotate(ev.Header, e); err != nil {
+			return errors.Trace(err)
+		}
+	case *replication.RowsEvent:
+		// we only focus row based event
+		err = c.handleRowsEvent(ev)
+		if err != nil {
+			c.cfg.Logger.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+			return errors.Trace(err)
+		}
+		return nil
+	case *replication.TransactionPayloadEvent:
+		// handle subevent row by row
+		ev := ev.Event.(*replication.TransactionPayloadEvent)
+		for _, subEvent := range ev.Events {
+			err = c.handleEvent(subEvent)
+			if err != nil {
+				c.cfg.Logger.Errorf("handle transaction payload subevent at (%s, %d) error %v", pos.Name, curPos, err)
 				return errors.Trace(err)
 			}
-		case *replication.RowsEvent:
-			// we only focus row based event
-			err = c.handleRowsEvent(ev)
-			if err != nil {
-				e := errors.Cause(err)
-				// if error is not ErrExcludedTable or ErrTableNotExist or ErrMissingTableMeta, stop canal
-				if e != ErrExcludedTable &&
-					e != schema.ErrTableNotExist &&
-					e != schema.ErrMissingTableMeta {
-					log.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+		}
+		return nil
+	case *replication.XIDEvent:
+		savePos = true
+		// try to save the position later
+		if err := c.eventHandler.OnXID(ev.Header, pos); err != nil {
+			return errors.Trace(err)
+		}
+		if e.GSet != nil {
+			c.master.UpdateGTIDSet(e.GSet)
+		}
+	case *replication.MariadbGTIDEvent:
+		if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
+			return errors.Trace(err)
+		}
+	case *replication.GTIDEvent:
+		if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
+			return errors.Trace(err)
+		}
+	case *replication.RowsQueryEvent:
+		if err := c.eventHandler.OnRowsQueryEvent(e); err != nil {
+			return errors.Trace(err)
+		}
+	case *replication.QueryEvent:
+		stmts, _, err := c.parser.Parse(string(e.Query), "", "")
+		if err != nil {
+			// The parser does not understand all syntax.
+			// For example, it won't parse [CREATE|DROP] TRIGGER statements.
+			c.cfg.Logger.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
+			return nil
+		}
+		if len(stmts) > 0 {
+			savePos = true
+		}
+		for _, stmt := range stmts {
+			nodes := parseStmt(stmt)
+			for _, node := range nodes {
+				if node.db == "" {
+					node.db = string(e.Schema)
+				}
+				if err = c.updateTable(ev.Header, node.db, node.table); err != nil {
 					return errors.Trace(err)
 				}
 			}
-			continue
-		case *replication.XIDEvent:
-			savePos = true
-			// try to save the position later
-			if err := c.eventHandler.OnXID(pos); err != nil {
-				return errors.Trace(err)
-			}
-			if e.GSet != nil {
-				c.master.UpdateGTIDSet(e.GSet)
-			}
-		case *replication.MariadbGTIDEvent:
-			// try to save the GTID later
-			gtid, err := mysql.ParseMariadbGTIDSet(e.GTID.String())
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err := c.eventHandler.OnGTID(gtid); err != nil {
-				return errors.Trace(err)
-			}
-		case *replication.GTIDEvent:
-			u, _ := uuid.FromBytes(e.SID)
-			gtid, err := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d", u.String(), e.GNO))
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err := c.eventHandler.OnGTID(gtid); err != nil {
-				return errors.Trace(err)
-			}
-		case *replication.QueryEvent:
-			stmts, _, err := c.parser.Parse(string(e.Query), "", "")
-			if err != nil {
-				log.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
-				continue
-			}
-			for _, stmt := range stmts {
-				nodes := parseStmt(stmt)
-				for _, node := range nodes {
-					if node.db == "" {
-						node.db = string(e.Schema)
-					}
-					if err = c.updateTable(node.db, node.table); err != nil {
-						return errors.Trace(err)
-					}
-				}
-				if len(nodes) > 0 {
-					savePos = true
-					force = true
-					// Now we only handle Table Changed DDL, maybe we will support more later.
-					if err = c.eventHandler.OnDDL(pos, e); err != nil {
-						return errors.Trace(err)
-					}
+			if len(nodes) > 0 {
+				force = true
+				// Now we only handle Table Changed DDL, maybe we will support more later.
+				if err = c.eventHandler.OnDDL(ev.Header, pos, e); err != nil {
+					return errors.Trace(err)
 				}
 			}
-			if savePos && e.GSet != nil {
-				c.master.UpdateGTIDSet(e.GSet)
-			}
-		default:
-			continue
 		}
+		if savePos && e.GSet != nil {
+			c.master.UpdateGTIDSet(e.GSet)
+		}
+	default:
+		return nil
+	}
 
-		if savePos {
-			c.master.Update(pos)
-			c.master.UpdateTimestamp(ev.Header.Timestamp)
-			fakeRotateLogName = ""
+	if savePos {
+		c.master.Update(pos)
+		c.master.UpdateTimestamp(ev.Header.Timestamp)
 
-			if err := c.eventHandler.OnPosSynced(pos, c.master.GTIDSet(), force); err != nil {
-				return errors.Trace(err)
-			}
+		if err := c.eventHandler.OnPosSynced(ev.Header, pos, c.master.GTIDSet(), force); err != nil {
+			return errors.Trace(err)
 		}
 	}
 
@@ -193,12 +194,12 @@ type node struct {
 func parseStmt(stmt ast.StmtNode) (ns []*node) {
 	switch t := stmt.(type) {
 	case *ast.RenameTableStmt:
-		for _, tableInfo := range t.TableToTables {
-			n := &node{
+		ns = make([]*node, len(t.TableToTables))
+		for i, tableInfo := range t.TableToTables {
+			ns[i] = &node{
 				db:    tableInfo.OldTable.Schema.String(),
 				table: tableInfo.OldTable.Name.String(),
 			}
-			ns = append(ns, n)
 		}
 	case *ast.AlterTableStmt:
 		n := &node{
@@ -207,12 +208,12 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 		}
 		ns = []*node{n}
 	case *ast.DropTableStmt:
-		for _, table := range t.Tables {
-			n := &node{
+		ns = make([]*node, len(t.Tables))
+		for i, table := range t.Tables {
+			ns[i] = &node{
 				db:    table.Schema.String(),
 				table: table.Name.String(),
 			}
-			ns = append(ns, n)
 		}
 	case *ast.CreateTableStmt:
 		n := &node{
@@ -223,17 +224,29 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 	case *ast.TruncateTableStmt:
 		n := &node{
 			db:    t.Table.Schema.String(),
-			table: t.Table.Schema.String(),
+			table: t.Table.Name.String(),
+		}
+		ns = []*node{n}
+	case *ast.CreateIndexStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Name.String(),
+		}
+		ns = []*node{n}
+	case *ast.DropIndexStmt:
+		n := &node{
+			db:    t.Table.Schema.String(),
+			table: t.Table.Name.String(),
 		}
 		ns = []*node{n}
 	}
-	return
+	return ns
 }
 
-func (c *Canal) updateTable(db, table string) (err error) {
+func (c *Canal) updateTable(header *replication.EventHeader, db, table string) (err error) {
 	c.ClearTableCache([]byte(db), []byte(table))
-	log.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
-	if err = c.eventHandler.OnTableChanged(db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
+	c.cfg.Logger.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
+	if err = c.eventHandler.OnTableChanged(header, db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
 		return errors.Trace(err)
 	}
 	return
@@ -251,20 +264,26 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	ev := e.Event.(*replication.RowsEvent)
 
 	// Caveat: table may be altered at runtime.
-	schema := string(ev.Table.Schema)
-	table := string(ev.Table.Table)
+	schemaName := string(ev.Table.Schema)
+	tableName := string(ev.Table.Table)
 
-	t, err := c.GetTable(schema, table)
+	t, err := c.GetTable(schemaName, tableName)
 	if err != nil {
+		e := errors.Cause(err)
+		// ignore errors below
+		if e == ErrExcludedTable || e == schema.ErrTableNotExist || e == schema.ErrMissingTableMeta {
+			err = nil
+		}
+
 		return err
 	}
 	var action string
 	switch e.Header.EventType {
-	case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
+	case replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2, replication.MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
 		action = InsertAction
-	case replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
+	case replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2, replication.MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
 		action = DeleteAction
-	case replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
+	case replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2, replication.MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
 		action = UpdateAction
 	default:
 		return errors.Errorf("%s not supported now", e.Header.EventType)
@@ -285,25 +304,30 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 		case <-timer.C:
 			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
-			err := c.FlushBinlog()
-			if err != nil {
-				return errors.Trace(err)
+			if !c.cfg.DisableFlushBinlogWhileWaiting {
+				err := c.FlushBinlog()
+				if err != nil {
+					return errors.Trace(err)
+				}
 			}
 			curPos := c.master.Position()
 			if curPos.Compare(pos) >= 0 {
 				return nil
 			} else {
-				log.Debugf("master pos is %v, wait catching %v", curPos, pos)
+				c.cfg.Logger.Debugf("master pos is %v, wait catching %v", curPos, pos)
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}
-
-	return nil
 }
 
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
-	rr, err := c.Execute("SHOW MASTER STATUS")
+	showBinlogStatus := "SHOW BINARY LOG STATUS"
+	if eq, err := c.conn.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+		showBinlogStatus = "SHOW MASTER STATUS"
+	}
+
+	rr, err := c.Execute(showBinlogStatus)
 	if err != nil {
 		return mysql.Position{}, errors.Trace(err)
 	}

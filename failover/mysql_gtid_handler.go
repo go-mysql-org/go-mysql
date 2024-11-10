@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 )
 
 type MysqlGTIDHandler struct {
@@ -27,7 +27,7 @@ func (h *MysqlGTIDHandler) Promote(s *Server) error {
 func (h *MysqlGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
 	// MHA use Relay_Master_Log_File and Exec_Master_Log_Pos to determind which is the best slave
 
-	bestSlaves := []*Server{}
+	var bestSlaves []*Server
 
 	ps := make([]Position, len(slaves))
 

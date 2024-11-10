@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -10,9 +11,10 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
-	. "github.com/siddontang/go-mysql/mysql"
+
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 const (
@@ -90,7 +92,7 @@ func (h *EventHeader) Decode(data []byte) error {
 	pos += 4
 
 	h.Flags = binary.LittleEndian.Uint16(data[pos:])
-	pos += 2
+	// pos += 2
 
 	if h.EventSize < uint32(EventHeaderSize) {
 		return errors.Errorf("invalid event size %d, must >= 19", h.EventSize)
@@ -100,18 +102,18 @@ func (h *EventHeader) Decode(data []byte) error {
 }
 
 func (h *EventHeader) Dump(w io.Writer) {
-	fmt.Fprintf(w, "=== %s ===\n", EventType(h.EventType))
+	fmt.Fprintf(w, "=== %s ===\n", h.EventType)
 	fmt.Fprintf(w, "Date: %s\n", time.Unix(int64(h.Timestamp), 0).Format(TimeFormat))
 	fmt.Fprintf(w, "Log position: %d\n", h.LogPos)
 	fmt.Fprintf(w, "Event size: %d\n", h.EventSize)
 }
 
 var (
-	checksumVersionSplitMysql   []int = []int{5, 6, 1}
-	checksumVersionProductMysql int   = (checksumVersionSplitMysql[0]*256+checksumVersionSplitMysql[1])*256 + checksumVersionSplitMysql[2]
+	checksumVersionSplitMysql   = []int{5, 6, 1}
+	checksumVersionProductMysql = (checksumVersionSplitMysql[0]*256+checksumVersionSplitMysql[1])*256 + checksumVersionSplitMysql[2]
 
-	checksumVersionSplitMariaDB   []int = []int{5, 3, 0}
-	checksumVersionProductMariaDB int   = (checksumVersionSplitMariaDB[0]*256+checksumVersionSplitMariaDB[1])*256 + checksumVersionSplitMariaDB[2]
+	checksumVersionSplitMariaDB   = []int{5, 3, 0}
+	checksumVersionProductMariaDB = (checksumVersionSplitMariaDB[0]*256+checksumVersionSplitMariaDB[1])*256 + checksumVersionSplitMariaDB[2]
 )
 
 // server version format X.Y.Zabc, a is not . or number
@@ -140,13 +142,12 @@ func splitServerVersion(server string) []int {
 func calcVersionProduct(server string) int {
 	versionSplit := splitServerVersion(server)
 
-	return ((versionSplit[0]*256+versionSplit[1])*256 + versionSplit[2])
+	return (versionSplit[0]*256+versionSplit[1])*256 + versionSplit[2]
 }
 
 type FormatDescriptionEvent struct {
-	Version uint16
-	//len = 50
-	ServerVersion          []byte
+	Version                uint16
+	ServerVersion          string
 	CreateTimestamp        uint32
 	EventHeaderLength      uint8
 	EventTypeHeaderLengths []byte
@@ -160,8 +161,8 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 	e.Version = binary.LittleEndian.Uint16(data[pos:])
 	pos += 2
 
-	e.ServerVersion = make([]byte, 50)
-	copy(e.ServerVersion, data[pos:])
+	serverVersionRaw := make([]byte, 50)
+	copy(serverVersionRaw, data[pos:])
 	pos += 50
 
 	e.CreateTimestamp = binary.LittleEndian.Uint32(data[pos:])
@@ -174,13 +175,18 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 		return errors.Errorf("invalid event header length %d, must 19", e.EventHeaderLength)
 	}
 
-	server := string(e.ServerVersion)
+	serverVersionLength := bytes.Index(serverVersionRaw, []byte{0x0})
+	if serverVersionLength < 0 {
+		e.ServerVersion = string(serverVersionRaw)
+	} else {
+		e.ServerVersion = string(serverVersionRaw[:serverVersionLength])
+	}
 	checksumProduct := checksumVersionProductMysql
-	if strings.Contains(strings.ToLower(server), "mariadb") {
+	if strings.Contains(strings.ToLower(e.ServerVersion), "mariadb") {
 		checksumProduct = checksumVersionProductMariaDB
 	}
 
-	if calcVersionProduct(string(e.ServerVersion)) >= checksumProduct {
+	if calcVersionProduct(e.ServerVersion) >= checksumProduct {
 		// here, the last 5 bytes is 1 byte check sum alg type and 4 byte checksum if exists
 		e.ChecksumAlgorithm = data[len(data)-5]
 		e.EventTypeHeaderLengths = data[pos : len(data)-5]
@@ -224,18 +230,18 @@ type PreviousGTIDsEvent struct {
 }
 
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
-	var previousGTIDSets []string
 	pos := 0
 	uuidCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 	pos += 8
 
-	for i := uint16(0); i < uuidCount; i++ {
+	previousGTIDSets := make([]string, uuidCount)
+	for i := range previousGTIDSets {
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
 		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 		pos += 8
-		var intervals []string
-		for i := uint16(0); i < sliceCount; i++ {
+		intervals := make([]string, sliceCount)
+		for i := range intervals {
 			start := e.decodeInterval(data[pos : pos+8])
 			pos += 8
 			stop := e.decodeInterval(data[pos : pos+8])
@@ -246,11 +252,11 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 			} else {
 				interval = fmt.Sprintf("%d-%d", start, stop-1)
 			}
-			intervals = append(intervals, interval)
+			intervals[i] = interval
 		}
-		previousGTIDSets = append(previousGTIDSets, fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":")))
+		previousGTIDSets[i] = fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":"))
 	}
-	e.GTIDSets = fmt.Sprintf("%s", strings.Join(previousGTIDSets, ","))
+	e.GTIDSets = strings.Join(previousGTIDSets, ",")
 	return nil
 }
 
@@ -296,6 +302,9 @@ type QueryEvent struct {
 	Schema        []byte
 	Query         []byte
 
+	// for mariadb QUERY_COMPRESSED_EVENT
+	compressed bool
+
 	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
 	GSet GTIDSet
 }
@@ -309,7 +318,7 @@ func (e *QueryEvent) Decode(data []byte) error {
 	e.ExecutionTime = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
-	schemaLength := uint8(data[pos])
+	schemaLength := data[pos]
 	pos++
 
 	e.ErrorCode = binary.LittleEndian.Uint16(data[pos:])
@@ -327,7 +336,15 @@ func (e *QueryEvent) Decode(data []byte) error {
 	//skip 0x00
 	pos++
 
-	e.Query = data[pos:]
+	if e.compressed {
+		decompressedQuery, err := DecompressMariadbData(data[pos:])
+		if err != nil {
+			return err
+		}
+		e.Query = decompressedQuery
+	} else {
+		e.Query = data[pos:]
+	}
 	return nil
 }
 
@@ -368,7 +385,7 @@ type GTIDEvent struct {
 
 func (e *GTIDEvent) Decode(data []byte) error {
 	pos := 0
-	e.CommitFlag = uint8(data[pos])
+	e.CommitFlag = data[pos]
 	pos++
 	e.SID = data[pos : pos+SidLength]
 	pos += SidLength
@@ -376,7 +393,7 @@ func (e *GTIDEvent) Decode(data []byte) error {
 	pos += 8
 
 	if len(data) >= 42 {
-		if uint8(data[pos]) == LogicalTimestampTypeCode {
+		if data[pos] == LogicalTimestampTypeCode {
 			pos++
 			e.LastCommitted = int64(binary.LittleEndian.Uint64(data[pos:]))
 			pos += PartLogicalTimestampLength
@@ -394,11 +411,9 @@ func (e *GTIDEvent) Decode(data []byte) error {
 				e.ImmediateCommitTimestamp &= ^(uint64(1) << 55)
 				e.OriginalCommitTimestamp = FixedLengthInt(data[pos : pos+7])
 				pos += 7
-
 			} else {
 				// Otherwise OriginalCommitTimestamp == ImmediateCommitTimestamp
 				e.OriginalCommitTimestamp = e.ImmediateCommitTimestamp
-
 			}
 
 			// TRANSACTION_LENGTH_MIN_LENGTH = 1
@@ -421,14 +436,11 @@ func (e *GTIDEvent) Decode(data []byte) error {
 				// If the most significant bit set, another 4 byte follows representing OriginalServerVersion
 				e.ImmediateServerVersion &= ^(uint32(1) << 31)
 				e.OriginalServerVersion = binary.LittleEndian.Uint32(data[pos:])
-				pos += 4
-
+				// pos += 4
 			} else {
 				// Otherwise OriginalServerVersion == ImmediateServerVersion
 				e.OriginalServerVersion = e.ImmediateServerVersion
-
 			}
-
 		}
 	}
 	return nil
@@ -453,6 +465,14 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Immediate server version: %d\n", e.ImmediateServerVersion)
 	fmt.Fprintf(w, "Orignal server version: %d\n", e.OriginalServerVersion)
 	fmt.Fprintln(w)
+}
+
+func (e *GTIDEvent) GTIDNext() (GTIDSet, error) {
+	u, err := uuid.FromBytes(e.SID)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMysqlGTIDSet(strings.Join([]string{u.String(), strconv.FormatInt(e.GNO, 10)}, ":"))
 }
 
 // ImmediateCommitTime returns the commit time of this trx on the immediate server
@@ -510,7 +530,7 @@ func (e *ExecuteLoadQueryEvent) Decode(data []byte) error {
 	e.ExecutionTime = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
-	e.SchemaLength = uint8(data[pos])
+	e.SchemaLength = data[pos]
 	pos++
 
 	e.ErrorCode = binary.LittleEndian.Uint16(data[pos:])
@@ -528,7 +548,7 @@ func (e *ExecuteLoadQueryEvent) Decode(data []byte) error {
 	e.EndPos = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
-	e.DupHandlingFlags = uint8(data[pos])
+	e.DupHandlingFlags = data[pos]
 
 	return nil
 }
@@ -601,7 +621,7 @@ func (e *MariadbGTIDEvent) Decode(data []byte) error {
 	pos += 8
 	e.GTID.DomainID = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
-	e.Flags = uint8(data[pos])
+	e.Flags = data[pos]
 	pos += 1
 
 	if (e.Flags & BINLOG_MARIADB_FL_GROUP_COMMIT_ID) > 0 {
@@ -616,6 +636,10 @@ func (e *MariadbGTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Flags: %v\n", e.Flags)
 	fmt.Fprintf(w, "CommitID: %v\n", e.CommitID)
 	fmt.Fprintln(w)
+}
+
+func (e *MariadbGTIDEvent) GTIDNext() (GTIDSet, error) {
+	return ParseMariadbGTIDSet(e.GTID.String())
 }
 
 type MariadbGTIDListEvent struct {
@@ -646,4 +670,20 @@ func (e *MariadbGTIDListEvent) Decode(data []byte) error {
 func (e *MariadbGTIDListEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Lists: %v\n", e.GTIDs)
 	fmt.Fprintln(w)
+}
+
+type IntVarEvent struct {
+	Type  IntVarEventType
+	Value uint64
+}
+
+func (i *IntVarEvent) Decode(data []byte) error {
+	i.Type = IntVarEventType(data[0])
+	i.Value = binary.LittleEndian.Uint64(data[1:])
+	return nil
+}
+
+func (i *IntVarEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "Type: %d\n", i.Type)
+	fmt.Fprintf(w, "Value: %d\n", i.Value)
 }

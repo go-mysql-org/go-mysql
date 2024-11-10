@@ -1,34 +1,42 @@
 package canal
 
 import (
-	"flag"
 	"fmt"
 	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/test_util"
 )
 
-var testHost = flag.String("host", "127.0.0.1", "MySQL host")
-
-func Test(t *testing.T) {
-	TestingT(t)
-}
-
 type canalTestSuite struct {
+	suite.Suite
 	c *Canal
 }
 
-var _ = Suite(&canalTestSuite{})
+func TestCanalSuite(t *testing.T) {
+	suite.Run(t, new(canalTestSuite))
+}
 
-func (s *canalTestSuite) SetUpSuite(c *C) {
+const (
+	miA = 0
+	miB = -1
+	miC = 1
+
+	umiA = 0
+	umiB = 1
+	umiC = 16777215
+)
+
+func (s *canalTestSuite) SetupSuite() {
 	cfg := NewDefaultConfig()
-	cfg.Addr = fmt.Sprintf("%s:3306", *testHost)
+	cfg.Addr = fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
 	cfg.User = "root"
 	cfg.HeartbeatPeriod = 200 * time.Millisecond
 	cfg.ReadTimeout = 300 * time.Millisecond
@@ -46,8 +54,8 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 
 	var err error
 	s.c, err = NewCanal(cfg)
-	c.Assert(err, IsNil)
-	s.execute(c, "DROP TABLE IF EXISTS test.canal_test")
+	require.NoError(s.T(), err)
+	s.execute("DROP TABLE IF EXISTS test.canal_test")
 	sql := `
         CREATE TABLE IF NOT EXISTS test.canal_test (
 			id int AUTO_INCREMENT,
@@ -59,24 +67,28 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
             )ENGINE=innodb;
     `
 
-	s.execute(c, sql)
+	s.execute(sql)
 
-	s.execute(c, "DELETE FROM test.canal_test")
-	s.execute(c, "INSERT INTO test.canal_test (content, name, mi, umi) VALUES (?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?)", "1", "a", 0, 0, `\0\ndsfasdf`, "b", 1, 16777215, "", "c", -1, 1)
+	s.execute("DELETE FROM test.canal_test")
+	s.execute("INSERT INTO test.canal_test (content, name, mi, umi) VALUES (?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?)",
+		"1", "a", miA, umiA,
+		`\0\ndsfasdf`, "b", miC, umiC,
+		"", "c", miB, umiB,
+	)
 
-	s.execute(c, "SET GLOBAL binlog_format = 'ROW'")
+	s.execute("SET GLOBAL binlog_format = 'ROW'")
 
-	s.c.SetEventHandler(&testEventHandler{c: c})
+	s.c.SetEventHandler(&testEventHandler{})
 	go func() {
 		set, _ := mysql.ParseGTIDSet("mysql", "")
 		err = s.c.StartFromGTID(set)
-		c.Assert(err, IsNil)
+		require.NoError(s.T(), err)
 	}()
 }
 
-func (s *canalTestSuite) TearDownSuite(c *C) {
+func (s *canalTestSuite) TearDownSuite() {
 	// To test the heartbeat and read timeout,so need to sleep 1 seconds without data transmission
-	c.Logf("Start testing the heartbeat and read timeout")
+	s.T().Logf("Start testing the heartbeat and read timeout")
 	time.Sleep(time.Second)
 
 	if s.c != nil {
@@ -85,21 +97,20 @@ func (s *canalTestSuite) TearDownSuite(c *C) {
 	}
 }
 
-func (s *canalTestSuite) execute(c *C, query string, args ...interface{}) *mysql.Result {
+func (s *canalTestSuite) execute(query string, args ...interface{}) *mysql.Result {
 	r, err := s.c.Execute(query, args...)
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 	return r
 }
 
 type testEventHandler struct {
 	DummyEventHandler
-	c *C
 }
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
 	log.Infof("OnRow %s %v\n", e.Action, e.Rows)
 	umi, ok := e.Rows[0][4].(uint32) // 4th col is umi. mysqldump gives uint64 instead of uint32
-	if ok && (umi != 0 && umi != 1 && umi != 16777215) {
+	if ok && (umi != umiA && umi != umiB && umi != umiC) {
 		return fmt.Errorf("invalid unsigned medium int %d", umi)
 	}
 	return nil
@@ -109,41 +120,69 @@ func (h *testEventHandler) String() string {
 	return "testEventHandler"
 }
 
-func (h *testEventHandler) OnPosSynced(p mysql.Position, set mysql.GTIDSet, f bool) error {
-	return nil
-}
-
-func (s *canalTestSuite) TestCanal(c *C) {
+func (s *canalTestSuite) TestCanal() {
 	<-s.c.WaitDumpDone()
 
 	for i := 1; i < 10; i++ {
-		s.execute(c, "INSERT INTO test.canal_test (name) VALUES (?)", fmt.Sprintf("%d", i))
+		s.execute("INSERT INTO test.canal_test (name) VALUES (?)", fmt.Sprintf("%d", i))
 	}
-	s.execute(c, "INSERT INTO test.canal_test (mi,umi) VALUES (?,?), (?,?), (?,?)", 0, 0, -1, 16777215, 1, 1)
-	s.execute(c, "ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
-	s.execute(c, "INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
+	s.execute("INSERT INTO test.canal_test (mi,umi) VALUES (?,?), (?,?), (?,?)",
+		miA, umiA,
+		miC, umiC,
+		miB, umiB,
+	)
+	s.execute("ALTER TABLE test.canal_test ADD `age` INT(5) NOT NULL AFTER `name`")
+	s.execute("INSERT INTO test.canal_test (name,age) VALUES (?,?)", "d", "18")
 
 	err := s.c.CatchMasterPos(10 * time.Second)
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 }
 
-func (s *canalTestSuite) TestCanalFilter(c *C) {
+func (s *canalTestSuite) TestAnalyzeAdvancesSyncedPos() {
+	<-s.c.WaitDumpDone()
+
+	// We should not need to use FLUSH BINARY LOGS
+	// An ANALYZE TABLE statement should advance the saved position.
+	// There are still cases that don't advance, such as
+	// statements that won't parse like [CREATE|DROP] TRIGGER.
+	s.c.cfg.DisableFlushBinlogWhileWaiting = true
+	defer func() {
+		s.c.cfg.DisableFlushBinlogWhileWaiting = false
+	}()
+
+	startingPos, err := s.c.GetMasterPos()
+	require.NoError(s.T(), err)
+
+	s.execute("ANALYZE TABLE test.canal_test")
+	err = s.c.CatchMasterPos(10 * time.Second)
+	require.NoError(s.T(), err)
+
+	// Ensure the ending pos is greater than the starting pos
+	// but the filename is the same. This ensures that
+	// FLUSH BINARY LOGS was not used.
+	endingPos, err := s.c.GetMasterPos()
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), startingPos.Name, endingPos.Name)
+	require.Greater(s.T(), endingPos.Pos, startingPos.Pos)
+}
+
+func (s *canalTestSuite) TestCanalFilter() {
 	// included
 	sch, err := s.c.GetTable("test", "canal_test")
-	c.Assert(err, IsNil)
-	c.Assert(sch, NotNil)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), sch)
 	_, err = s.c.GetTable("not_exist_db", "canal_test")
-	c.Assert(errors.Trace(err), Not(Equals), ErrExcludedTable)
+	require.NotErrorIs(s.T(), err, ErrExcludedTable)
 	// excluded
 	sch, err = s.c.GetTable("test", "canal_test_inner")
-	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
-	c.Assert(sch, IsNil)
+	require.ErrorIs(s.T(), err, ErrExcludedTable)
+	require.Nil(s.T(), sch)
 	sch, err = s.c.GetTable("mysql", "canal_test")
-	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
-	c.Assert(sch, IsNil)
+	require.ErrorIs(s.T(), err, ErrExcludedTable)
+	require.Nil(s.T(), sch)
 	sch, err = s.c.GetTable("not_exist_db", "not_canal_test")
-	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
-	c.Assert(sch, IsNil)
+	require.ErrorIs(s.T(), err, ErrExcludedTable)
+	require.Nil(s.T(), sch)
 }
 
 func TestCreateTableExp(t *testing.T) {
@@ -153,22 +192,20 @@ func TestCreateTableExp(t *testing.T) {
 		"CREATE TABLE IF NOT EXISTS mydb.`mytable` (`id` int(10)) ENGINE=InnoDB",
 		"CREATE TABLE IF NOT EXISTS `mydb`.mytable (`id` int(10)) ENGINE=InnoDB",
 	}
-	table := "mytable"
-	db := "mydb"
+	expected := &node{
+		db:    "mydb",
+		table: "mytable",
+	}
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(s, "", "")
-		if err != nil {
-			t.Fatalf("TestCreateTableExp:case %s failed\n", s)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
 				continue
 			}
-			if nodes[0].db != db || nodes[0].table != table {
-				t.Fatalf("TestCreateTableExp:case %s failed\n", s)
-			}
+			require.Equal(t, expected, nodes[0])
 		}
 	}
 }
@@ -186,9 +223,7 @@ func TestAlterTableExp(t *testing.T) {
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(s, "", "")
-		if err != nil {
-			t.Fatalf("TestAlterTableExp:case %s failed\n", s)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
@@ -220,9 +255,7 @@ func TestRenameTableExp(t *testing.T) {
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(s, "", "")
-		if err != nil {
-			t.Fatalf("TestRenameTableExp:case %s failed\n", s)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
@@ -264,9 +297,7 @@ func TestDropTableExp(t *testing.T) {
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(s, "", "")
-		if err != nil {
-			t.Fatalf("TestDropTableExp:case %s failed\n", s)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
@@ -283,22 +314,22 @@ func TestDropTableExp(t *testing.T) {
 		}
 	}
 }
-func TestWithoutSchemeExp(t *testing.T) {
 
+func TestWithoutSchemeExp(t *testing.T) {
 	cases := []replication.QueryEvent{
-		replication.QueryEvent{
+		{
 			Schema: []byte("test"),
 			Query:  []byte("drop table test0"),
 		},
-		replication.QueryEvent{
+		{
 			Schema: []byte("test"),
 			Query:  []byte("rename table `test0` to `testtmp`"),
 		},
-		replication.QueryEvent{
+		{
 			Schema: []byte("test"),
 			Query:  []byte("ALTER TABLE `test0` ADD `field2` DATE  NULL  AFTER `field1`;"),
 		},
-		replication.QueryEvent{
+		{
 			Schema: []byte("test"),
 			Query:  []byte("CREATE TABLE IF NOT EXISTS test0 (`id` int(10)) ENGINE=InnoDB"),
 		},
@@ -308,9 +339,7 @@ func TestWithoutSchemeExp(t *testing.T) {
 	pr := parser.New()
 	for _, s := range cases {
 		stmts, _, err := pr.Parse(string(s.Query), "", "")
-		if err != nil {
-			t.Fatalf("TestCreateTableExp:case %s failed\n", s.Query)
-		}
+		require.NoError(t, err)
 		for _, st := range stmts {
 			nodes := parseStmt(st)
 			if len(nodes) == 0 {
@@ -321,4 +350,112 @@ func TestWithoutSchemeExp(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestCreateIndexExp(t *testing.T) {
+	cases := []string{
+		"create index test0 on test.test (id)",
+		"create index test0 ON test.test (id)",
+		"CREATE INDEX test0 on `test`.test (id)",
+		"CREATE INDEX test0 ON test.test (id)",
+		"CREATE index test0 on `test`.test (id)",
+		"CREATE index test0 ON test.test (id)",
+		"create INDEX test0 on `test`.test (id)",
+		"create INDEX test0 ON test.test (id)",
+		"CREATE INDEX `test0` ON `test`.`test` (`id`) /* generated by server */",
+		"CREATE /*generated by server */ INDEX `test0` ON `test`.`test` (`id`)",
+		"CREATE INDEX `test0` ON `test`.test (id)",
+		"CREATE INDEX `test0` ON test.`test` (id)",
+		"CREATE INDEX `test0` ON test.test (`id`)",
+		"CREATE INDEX test0 ON `test`.`test` (`id`)",
+		"CREATE INDEX test0 ON `test`.`test` (id)",
+		"CREATE INDEX test0 ON test.test (`id`)",
+	}
+
+	baseTable := "test"
+	db := "test"
+	pr := parser.New()
+	for _, s := range cases {
+		stmts, _, err := pr.Parse(s, "", "")
+		require.NoError(t, err)
+		for _, st := range stmts {
+			nodes := parseStmt(st)
+			require.NotZero(t, nodes)
+			for _, node := range nodes {
+				rdb := node.db
+				rtable := node.table
+				require.Equal(t, db, rdb)
+				require.Equal(t, baseTable, rtable)
+			}
+		}
+	}
+}
+
+func TestDropIndexExp(t *testing.T) {
+	cases := []string{
+		"drop index test0 on test.test",
+		"DROP INDEX test0 ON test.test",
+		"drop INDEX test0 on test.test",
+		"DROP index test0 ON test.test",
+		"drop INDEX `test0` on `test`.`test`",
+		"drop INDEX test0 ON `test`.`test`",
+		"drop INDEX test0 on `test`.test",
+		"drop INDEX test0 on test.`test`",
+		"DROP index `test0` on `test`.`test`",
+		"DROP index test0 ON `test`.`test`",
+		"DROP index test0 on `test`.test",
+		"DROP index test0 on test.`test`",
+		"DROP INDEX `test0` ON `test`.`test` /* generated by server */",
+		"DROP /*generated by server */ INDEX `test0` ON `test`.`test`",
+		"DROP INDEX `test0` ON `test`.test",
+		"DROP INDEX `test0` ON test.`test`",
+		"DROP INDEX `test0` ON test.test",
+		"DROP INDEX test0 ON `test`.`test`",
+		"DROP INDEX test0 ON `test`.`test`",
+		"DROP INDEX test0 ON test.test",
+	}
+
+	baseTable := "test"
+	db := "test"
+	pr := parser.New()
+	for _, s := range cases {
+		stmts, _, err := pr.Parse(s, "", "")
+		require.NoError(t, err)
+		for _, st := range stmts {
+			nodes := parseStmt(st)
+			require.NotZero(t, nodes)
+			for _, node := range nodes {
+				rdb := node.db
+				rtable := node.table
+				require.Equal(t, db, rdb)
+				require.Equal(t, baseTable, rtable)
+			}
+		}
+	}
+}
+
+func TestIncludeExcludeTableRegex(t *testing.T) {
+	cfg := NewDefaultConfig()
+
+	// include & exclude config
+	cfg.IncludeTableRegex = make([]string, 1)
+	cfg.IncludeTableRegex[0] = ".*\\.canal_test"
+	cfg.ExcludeTableRegex = make([]string, 2)
+	cfg.ExcludeTableRegex[0] = "mysql\\..*"
+	cfg.ExcludeTableRegex[1] = ".*\\..*_inner"
+
+	c := new(Canal)
+	c.cfg = cfg
+	require.Nil(t, c.initTableFilter())
+	require.True(t, c.checkTableMatch("test.canal_test"))
+	require.False(t, c.checkTableMatch("test.canal_test_inner"))
+	require.False(t, c.checkTableMatch("mysql.canal_test_inner"))
+
+	cfg.IncludeTableRegex = nil
+	c = new(Canal)
+	c.cfg = cfg
+	require.Nil(t, c.initTableFilter())
+	require.True(t, c.checkTableMatch("test.canal_test"))
+	require.False(t, c.checkTableMatch("test.canal_test_inner"))
+	require.False(t, c.checkTableMatch("mysql.canal_test_inner"))
 }

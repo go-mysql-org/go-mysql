@@ -1,68 +1,15 @@
 package replication
 
 import (
-	"fmt"
-	"strconv"
+	"testing"
 
-	. "github.com/pingcap/check"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
-type testDecodeSuite struct{}
-
-var _ = Suite(&testDecodeSuite{})
-
-type decodeDecimalChecker struct {
-	*CheckerInfo
-}
-
-func (_ *decodeDecimalChecker) Check(params []interface{}, names []string) (bool, string) {
-	var test int
-	val := struct {
-		Value  decimal.Decimal
-		Pos    int
-		Err    error
-		EValue decimal.Decimal
-		EPos   int
-		EErr   error
-	}{}
-
-	for i, name := range names {
-		switch name {
-		case "obtainedValue":
-			val.Value, _ = params[i].(decimal.Decimal)
-		case "obtainedPos":
-			val.Pos, _ = params[i].(int)
-		case "obtainedErr":
-			val.Err, _ = params[i].(error)
-		case "expectedValue":
-			val.EValue, _ = params[i].(decimal.Decimal)
-		case "expectedPos":
-			val.EPos, _ = params[i].(int)
-		case "expectedErr":
-			val.EErr, _ = params[i].(error)
-		case "caseNumber":
-			test = params[i].(int)
-		}
-	}
-	errorMsgFmt := fmt.Sprintf("For Test %v: ", test) + "Did not get expected %v(%v), got %v instead."
-	if val.Err != val.EErr {
-		return false, fmt.Sprintf(errorMsgFmt, "error", val.EErr, val.Err)
-	}
-	if val.Pos != val.EPos {
-		return false, fmt.Sprintf(errorMsgFmt, "position", val.EPos, val.Pos)
-	}
-	if !val.Value.Equal(val.EValue) {
-		return false, fmt.Sprintf(errorMsgFmt, "value", val.EValue, val.Value)
-	}
-	return true, ""
-}
-
-var DecodeDecimalsEquals = &decodeDecimalChecker{
-	&CheckerInfo{Name: "Equals", Params: []string{"obtainedValue", "obtainedPos", "obtainedErr", "expectedValue", "expectedPos", "expectedErr", "caseNumber"}},
-}
-
-func (_ *testDecodeSuite) TestDecodeDecimal(c *C) {
+func TestDecodeDecimal(t *testing.T) {
 	// _PLACEHOLDER_ := 0
 	testcases := []struct {
 		Data        []byte
@@ -323,18 +270,21 @@ func (_ *testDecodeSuite) TestDecodeDecimal(c *C) {
 		{[]byte{127, 255, 255, 248, 99, 247, 167, 196, 255, 255, 255, 255, 255, 255, 127, 248}, 30, 20, "-1948.14000000000000000000", 14, nil},
 		{[]byte{127, 248, 99, 247, 167, 196, 255, 255, 255, 255, 255, 255, 255, 255, 255, 13, 0}, 30, 25, "-1948.1400000000000000000000000", 15, nil},
 	}
-	for i, tc := range testcases {
+	for _, tc := range testcases {
 		value, pos, err := decodeDecimal(tc.Data, tc.Precision, tc.Decimals, false)
-		expectedFloat, _ := strconv.ParseFloat(tc.Expected, 64)
-		c.Assert(value.(float64), DecodeDecimalsEquals, pos, err, expectedFloat, tc.ExpectedPos, tc.ExpectedErr, i)
+		require.Equal(t, tc.Expected, value.(string))
+		require.Equal(t, tc.ExpectedPos, pos)
+		require.Equal(t, tc.ExpectedErr, err)
 
 		value, pos, err = decodeDecimal(tc.Data, tc.Precision, tc.Decimals, true)
 		expectedDecimal, _ := decimal.NewFromString(tc.Expected)
-		c.Assert(value.(decimal.Decimal), DecodeDecimalsEquals, pos, err, expectedDecimal, tc.ExpectedPos, tc.ExpectedErr, i)
+		require.True(t, expectedDecimal.Equal(value.(decimal.Decimal)))
+		require.Equal(t, tc.ExpectedPos, pos)
+		require.Equal(t, tc.ExpectedErr, err)
 	}
 }
 
-func (_ *testDecodeSuite) TestLastNull(c *C) {
+func TestLastNull(t *testing.T) {
 	// Table format:
 	// desc funnytable;
 	// +-------+------------+------+-----+---------+-------+
@@ -352,7 +302,7 @@ func (_ *testDecodeSuite) TestLastNull(c *C) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	err := tableMapEvent.Decode(tableMapEventData)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	rows := new(RowsEvent)
 	rows.tableIDSize = 6
@@ -368,12 +318,12 @@ func (_ *testDecodeSuite) TestLastNull(c *C) {
 	for _, tbl := range tbls {
 		rows.Rows = nil
 		err = rows.Decode(tbl)
-		c.Assert(err, IsNil)
-		c.Assert(rows.Rows, HasLen, 3)
+		require.NoError(t, err)
+		require.Len(t, rows.Rows, 3)
 	}
 }
 
-func (_ *testDecodeSuite) TestParseRowPanic(c *C) {
+func TestParseRowPanic(t *testing.T) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	tableMapEvent.TableID = 1810
@@ -389,30 +339,11 @@ func (_ *testDecodeSuite) TestParseRowPanic(c *C) {
 	data := []byte{18, 7, 0, 0, 0, 0, 1, 0, 2, 0, 26, 1, 1, 16, 252, 248, 142, 63, 0, 0, 13, 0, 0, 0, 13, 0, 0, 0}
 
 	err := rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[0][0], Equals, int32(16270))
+	require.NoError(t, err)
+	require.Equal(t, int32(16270), rows.Rows[0][0])
 }
 
-type simpleDecimalEqualsChecker struct {
-	*CheckerInfo
-}
-
-var SimpleDecimalEqualsChecker Checker = &simpleDecimalEqualsChecker{
-	&CheckerInfo{Name: "Equals", Params: []string{"obtained", "expected"}},
-}
-
-func (checker *simpleDecimalEqualsChecker) Check(params []interface{}, names []string) (result bool, error string) {
-	defer func() {
-		if v := recover(); v != nil {
-			result = false
-			error = fmt.Sprint(v)
-		}
-	}()
-
-	return params[0].(decimal.Decimal).Equal(params[1].(decimal.Decimal)), ""
-}
-
-func (_ *testDecodeSuite) TestParseJson(c *C) {
+func TestParseJson(t *testing.T) {
 	// Table format:
 	// mysql> desc t10;
 	// +-------+---------------+------+-----+---------+-------+
@@ -427,6 +358,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 	//   `c2` decimal(10,0)
 	// ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+	//nolint:misspell
 	// INSERT INTO `t10` (`c2`) VALUES (1);
 	// INSERT INTO `t10` (`c1`, `c2`) VALUES ('{"key1": "value1", "key2": "value2"}', 1);
 	// test json deserialization
@@ -436,7 +368,7 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	err := tableMapEvent.Decode(tableMapEventData)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	rows := new(RowsEvent)
 	rows.tableIDSize = 6
@@ -452,10 +384,11 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 	for _, tbl := range tbls {
 		rows.Rows = nil
 		err = rows.Decode(tbl)
-		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], Equals, float64(1))
+		require.NoError(t, err)
+		require.Equal(t, "1", rows.Rows[0][1])
 	}
 
+	//nolint:misspell
 	longTbls := [][]byte{
 		[]byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc\xd0\n\x00\x00\x00\x01\x00\xcf\n\v\x00\x04\x00\f\x0f\x00text\xbe\x15Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac\x80\x00\x00\x00e"),
 	}
@@ -463,11 +396,11 @@ func (_ *testDecodeSuite) TestParseJson(c *C) {
 	for _, ltbl := range longTbls {
 		rows.Rows = nil
 		err = rows.Decode(ltbl)
-		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], Equals, float64(101))
+		require.NoError(t, err)
+		require.Equal(t, "101", rows.Rows[0][1])
 	}
 }
-func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
+func TestParseJsonDecimal(t *testing.T) {
 	// Table format:
 	// mysql> desc t10;
 	// +-------+---------------+------+-----+---------+-------+
@@ -482,6 +415,7 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 	//   `c2` decimal(10,0)
 	// ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+	//nolint:misspell
 	// INSERT INTO `t10` (`c2`) VALUES (1);
 	// INSERT INTO `t10` (`c1`, `c2`) VALUES ('{"key1": "value1", "key2": "value2"}', 1);
 	// test json deserialization
@@ -491,7 +425,7 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	err := tableMapEvent.Decode(tableMapEventData)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	rows := RowsEvent{useDecimal: true}
 	rows.tableIDSize = 6
@@ -507,10 +441,11 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 	for _, tbl := range tbls {
 		rows.Rows = nil
 		err = rows.Decode(tbl)
-		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], SimpleDecimalEqualsChecker, decimal.NewFromFloat(1))
+		require.NoError(t, err)
+		require.True(t, rows.Rows[0][1].(decimal.Decimal).Equal(decimal.NewFromFloat(1)))
 	}
 
+	//nolint:misspell
 	longTbls := [][]byte{
 		[]byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x02\xff\xfc\xd0\n\x00\x00\x00\x01\x00\xcf\n\v\x00\x04\x00\f\x0f\x00text\xbe\x15Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac\x80\x00\x00\x00e"),
 	}
@@ -518,12 +453,12 @@ func (_ *testDecodeSuite) TestParseJsonDecimal(c *C) {
 	for _, ltbl := range longTbls {
 		rows.Rows = nil
 		err = rows.Decode(ltbl)
-		c.Assert(err, IsNil)
-		c.Assert(rows.Rows[0][1], SimpleDecimalEqualsChecker, decimal.NewFromFloat(101))
+		require.NoError(t, err)
+		require.True(t, rows.Rows[0][1].(decimal.Decimal).Equal(decimal.NewFromFloat(101)))
 	}
 }
 
-func (_ *testDecodeSuite) TestEnum(c *C) {
+func TestEnum(t *testing.T) {
 	// mysql> desc aenum;
 	// +-------+-------------------------------------------+------+-----+---------+-------+
 	// | Field | Type                                      | Null | Key | Default | Extra |
@@ -539,7 +474,7 @@ func (_ *testDecodeSuite) TestEnum(c *C) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	err := tableMapEvent.Decode(tableMapEventData)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	rows := new(RowsEvent)
 	rows.tableIDSize = 6
@@ -551,11 +486,11 @@ func (_ *testDecodeSuite) TestEnum(c *C) {
 
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[0][1], Equals, int64(1))
+	require.NoError(t, err)
+	require.Equal(t, int64(1), rows.Rows[0][1])
 }
 
-func (_ *testDecodeSuite) TestMultiBytesEnum(c *C) {
+func TestMultiBytesEnum(t *testing.T) {
 	// CREATE TABLE numbers (
 	// 	id int auto_increment,
 	// 	num ENUM( '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70', '71', '72', '73', '74', '75', '76', '77', '78', '79', '80', '81', '82', '83', '84', '85', '86', '87', '88', '89', '90', '91', '92', '93', '94', '95', '96', '97', '98', '99', '100', '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '111', '112', '113', '114', '115', '116', '117', '118', '119', '120', '121', '122', '123', '124', '125', '126', '127', '128', '129', '130', '131', '132', '133', '134', '135', '136', '137', '138', '139', '140', '141', '142', '143', '144', '145', '146', '147', '148', '149', '150', '151', '152', '153', '154', '155', '156', '157', '158', '159', '160', '161', '162', '163', '164', '165', '166', '167', '168', '169', '170', '171', '172', '173', '174', '175', '176', '177', '178', '179', '180', '181', '182', '183', '184', '185', '186', '187', '188', '189', '190', '191', '192', '193', '194', '195', '196', '197', '198', '199', '200', '201', '202', '203', '204', '205', '206', '207', '208', '209', '210', '211', '212', '213', '214', '215', '216', '217', '218', '219', '220', '221', '222', '223', '224', '225', '226', '227', '228', '229', '230', '231', '232', '233', '234', '235', '236', '237', '238', '239', '240', '241', '242', '243', '244', '245', '246', '247', '248', '249', '250', '251', '252', '253', '254', '255','256','257'
@@ -571,7 +506,7 @@ func (_ *testDecodeSuite) TestMultiBytesEnum(c *C) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	err := tableMapEvent.Decode(tableMapEventData)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	rows := new(RowsEvent)
 	rows.tableIDSize = 6
@@ -583,12 +518,12 @@ func (_ *testDecodeSuite) TestMultiBytesEnum(c *C) {
 
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[0][1], Equals, int64(1))
-	c.Assert(rows.Rows[1][1], Equals, int64(257))
+	require.NoError(t, err)
+	require.Equal(t, int64(1), rows.Rows[0][1])
+	require.Equal(t, int64(257), rows.Rows[1][1])
 }
 
-func (_ *testDecodeSuite) TestSet(c *C) {
+func TestSet(t *testing.T) {
 	// mysql> desc aset;
 	// +--------+---------------------------------------------------------------------------------------+------+-----+---------+-------+
 	// | Field  | Type                                                                                  | Null | Key | Default | Extra |
@@ -605,7 +540,7 @@ func (_ *testDecodeSuite) TestSet(c *C) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	err := tableMapEvent.Decode(tableMapEventData)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	rows := new(RowsEvent)
 	rows.tableIDSize = 6
@@ -617,11 +552,11 @@ func (_ *testDecodeSuite) TestSet(c *C) {
 
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[0][1], Equals, int64(5))
+	require.NoError(t, err)
+	require.Equal(t, int64(5), rows.Rows[0][1])
 }
 
-func (_ *testDecodeSuite) TestJsonNull(c *C) {
+func TestJsonNull(t *testing.T) {
 	// Table:
 	// desc hj_order_preview
 	// +------------------+------------+------+-----+-------------------+----------------+
@@ -644,7 +579,7 @@ func (_ *testDecodeSuite) TestJsonNull(c *C) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	err := tableMapEvent.Decode(tableMapEventData)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	rows := new(RowsEvent)
 	rows.tableIDSize = 6
@@ -657,11 +592,11 @@ func (_ *testDecodeSuite) TestJsonNull(c *C) {
 
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[0][3], HasLen, 0)
+	require.NoError(t, err)
+	require.Len(t, rows.Rows[0][3], 0)
 }
 
-func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
+func TestJsonCompatibility(t *testing.T) {
 	// Table:
 	// mysql> desc t11;
 	// +----------+--------------+------+-----+---------+-------------------+
@@ -683,7 +618,7 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	tableMapEvent := new(TableMapEvent)
 	tableMapEvent.tableIDSize = 6
 	err := tableMapEvent.Decode(tableMapEventData)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	rows := new(RowsEvent)
 	rows.tableIDSize = 6
@@ -694,44 +629,44 @@ func (_ *testDecodeSuite) TestJsonCompatibility(c *C) {
 	data := []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[0][2], DeepEquals, []uint8("{}"))
+	require.NoError(t, err)
+	require.Equal(t, "{}", rows.Rows[0][2])
 
 	// after MySQL 5.7.22
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a")
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+	require.NoError(t, err)
+	require.Equal(t, "{}", rows.Rows[1][2])
+	require.Equal(t, "{\"a\":1234}", rows.Rows[2][2])
 
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{\"a\":1234}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+	require.NoError(t, err)
+	require.Equal(t, "{\"a\":1234}", rows.Rows[1][2])
+	require.Equal(t, "{}", rows.Rows[2][2])
 
 	// before MySQL 5.7.22
 	rows.ignoreJSONDecodeErr = true
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x01\x00\x0c\x00\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x01\x00\x0c\x00\x0b\x00\x01\x00\x05\xd2\x04a")
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("null"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{\"a\":1234}"))
+	require.NoError(t, err)
+	require.Equal(t, "null", rows.Rows[1][2])
+	require.Equal(t, "{\"a\":1234}", rows.Rows[2][2])
 
 	rows.ignoreJSONDecodeErr = false
 	data = []byte("l\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\xff\xff\xf8\x01\x00\x00\x00\n{\"a\":1234}\r\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x01\x00\x05\xd2\x04a\xf8\x01\x00\x00\x00\x02{}\x05\x00\x00\x00\x00\x00\x00\x04\x00")
 	rows.Rows = nil
 	err = rows.Decode(data)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	// this value is wrong in binlog, but can be parsed without error
-	c.Assert(rows.Rows[1][2], DeepEquals, []uint8("{}"))
-	c.Assert(rows.Rows[2][2], DeepEquals, []uint8("{}"))
+	require.Equal(t, "{}", rows.Rows[1][2])
+	require.Equal(t, "{}", rows.Rows[2][2])
 }
 
-func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
+func TestDecodeDatetime2(t *testing.T) {
 	testcases := []struct {
 		data        []byte
 		dec         uint16
@@ -750,21 +685,21 @@ func (_ *testDecodeSuite) TestDecodeDatetime2(c *C) {
 	}
 	for _, tc := range testcases {
 		value, _, err := decodeDatetime2(tc.data, tc.dec)
-		c.Assert(err, IsNil)
-		switch t := value.(type) {
+		require.NoError(t, err)
+		switch v := value.(type) {
 		case fracTime:
-			c.Assert(tc.getFracTime, IsTrue)
-			c.Assert(t.String(), Equals, tc.expected)
+			require.True(t, tc.getFracTime)
+			require.Equal(t, tc.expected, v.String())
 		case string:
-			c.Assert(tc.getFracTime, IsFalse)
-			c.Assert(t, Equals, tc.expected)
+			require.False(t, tc.getFracTime)
+			require.Equal(t, tc.expected, v)
 		default:
-			c.Errorf("invalid value type: %T", value)
+			require.FailNow(t, "invalid value type: %T", value)
 		}
 	}
 }
 
-func (_ *testDecodeSuite) TestTableMapNullable(c *C) {
+func TestTableMapNullable(t *testing.T) {
 	/*
 		create table _null (c1 int null, c2 int not null default '2', c3 timestamp default now(), c4 text);
 	*/
@@ -784,17 +719,17 @@ func (_ *testDecodeSuite) TestTableMapNullable(c *C) {
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.tableIDSize = 6
 		err := tableMapEvent.Decode(tc)
-		c.Assert(err, IsNil)
-		c.Assert(int(tableMapEvent.ColumnCount), Equals, len(nullables))
+		require.NoError(t, err)
+		require.Equal(t, int(tableMapEvent.ColumnCount), len(nullables))
 		for i := 0; i < int(tableMapEvent.ColumnCount); i++ {
 			available, nullable := tableMapEvent.Nullable(i)
-			c.Assert(available, Equals, true)
-			c.Assert(nullable, Equals, nullables[i])
+			require.True(t, available)
+			require.Equal(t, nullables[i], nullable)
 		}
 	}
 }
 
-func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
+func TestTableMapOptMetaNames(t *testing.T) {
 	/*
 		CREATE TABLE `_types` (
 			`b_bit` bit(64) NOT NULL DEFAULT b'0',
@@ -909,26 +844,24 @@ func (_ *testDecodeSuite) TestTableMapOptMetaNames(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.tableIDSize = 6
 		err := tableMapEvent.Decode(tc.data)
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		if tc.hasNames {
-			c.Assert(tableMapEvent.ColumnNameString(), DeepEquals, colNames)
-			c.Assert(tableMapEvent.SetStrValueString(), DeepEquals, setVals)
-			c.Assert(tableMapEvent.EnumStrValueString(), DeepEquals, enumVals)
+			require.Equal(t, colNames, tableMapEvent.ColumnNameString())
+			require.Equal(t, setVals, tableMapEvent.SetStrValueString())
+			require.Equal(t, enumVals, tableMapEvent.EnumStrValueString())
 		} else {
-			c.Assert(tableMapEvent.ColumnNameString(), DeepEquals, []string(nil))
-			c.Assert(tableMapEvent.SetStrValueString(), DeepEquals, [][]string(nil))
-			c.Assert(tableMapEvent.EnumStrValueString(), DeepEquals, [][]string(nil))
+			require.Equal(t, []string(nil), tableMapEvent.ColumnNameString())
+			require.Equal(t, [][]string(nil), tableMapEvent.SetStrValueString())
+			require.Equal(t, [][]string(nil), tableMapEvent.EnumStrValueString())
 		}
 	}
-
 }
 
-func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
+func TestTableMapOptMetaPrimaryKey(t *testing.T) {
 	/*
 		create table _prim (id2 int, col varchar(30), id1 bigint, primary key (id1, id2));
 	*/
@@ -1000,15 +933,250 @@ func (_ *testDecodeSuite) TestTableMapOptMetaPrimaryKey(c *C) {
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.tableIDSize = 6
 		err := tableMapEvent.Decode(tc.data)
-		c.Assert(err, IsNil)
-		c.Assert(tableMapEvent.PrimaryKey, DeepEquals, tc.expectedPrimaryKey)
-		c.Assert(tableMapEvent.PrimaryKeyPrefix, DeepEquals, tc.expectedPrimaryKeyPrefix)
+		require.NoError(t, err)
+		require.Equal(t, tc.expectedPrimaryKey, tableMapEvent.PrimaryKey)
+		require.Equal(t, tc.expectedPrimaryKeyPrefix, tableMapEvent.PrimaryKeyPrefix)
 	}
-
 }
 
-func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
+func TestTableMapOptMetaVisibility(t *testing.T) {
+	/*
+		SET GLOBAL binlog_row_image = FULL;
+		SET GLOBAL binlog_row_metadata = FULL;	-- if applicable
 
+		CREATE DATABASE test;
+		USE test;
+	*/
+
+	/*
+		CREATE TABLE _visibility(
+		    `col0` INT INVISIBLE,
+		    `col1` INT,
+		    `col2` INT INVISIBLE,
+		    `col3` INT,
+		    `col4` INT,
+		    `col5` INT INVISIBLE,
+		    `col6` INT INVISIBLE,
+		    `col7` INT INVISIBLE,
+		    `col8` INT,
+		    `col9` INT INVISIBLE,
+		    `col10` INT INVISIBLE
+		);
+	*/
+	case1VisibilityBitmap := []byte{0x58, 0x80}
+	case1VisibilityMap := map[int]bool{
+		0:  false,
+		1:  true,
+		2:  false,
+		3:  true,
+		4:  true,
+		5:  false,
+		6:  false,
+		7:  false,
+		8:  true,
+		9:  false,
+		10: false,
+	}
+
+	/*
+		CREATE TABLE _visibility(
+		    `col0` INT,
+		    `col1` INT,
+		    `col2` INT,
+		    `col3` INT,
+		    `col4` INT,
+		    `col5` INT,
+		    `col6` INT,
+		    `col7` INT,
+		    `col8` INT,
+		    `col9` INT,
+		    `col10` INT
+		);
+	*/
+	case2VisibilityBitmap := []byte{0xff, 0xe0}
+	case2VisibilityMap := map[int]bool{
+		0:  true,
+		1:  true,
+		2:  true,
+		3:  true,
+		4:  true,
+		5:  true,
+		6:  true,
+		7:  true,
+		8:  true,
+		9:  true,
+		10: true,
+	}
+
+	// Invisible column and INVISIBLE keyword is available only on MySQL 8.0.23+
+	testcases := []struct {
+		data                     []byte
+		expectedVisibilityBitmap []byte
+		expectedVisibilityMap    map[int]bool
+	}{
+		{
+			// mysql 8.0, case1
+			data:                     []byte("^\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07\x01\x02\x00\x00\x048\x04col0\x04col1\x04col2\x04col3\x04col4\x04col5\x04col6\x04col7\x04col8\x04col9\x05col10\x0c\x02X\x80"),
+			expectedVisibilityBitmap: case1VisibilityBitmap,
+			expectedVisibilityMap:    case1VisibilityMap,
+		},
+		{
+			// mysql 5.7, case2
+			data:                     []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07"),
+			expectedVisibilityBitmap: []byte(nil),
+			expectedVisibilityMap:    map[int]bool(nil),
+		},
+		{
+			// mysql 8.0, case2
+			data:                     []byte("^\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07\x01\x02\x00\x00\x048\x04col0\x04col1\x04col2\x04col3\x04col4\x04col5\x04col6\x04col7\x04col8\x04col9\x05col10\x0c\x02\xff\xe0"),
+			expectedVisibilityBitmap: case2VisibilityBitmap,
+			expectedVisibilityMap:    case2VisibilityMap,
+		},
+		{
+			// mariadb 10.4, case2
+			data:                     []byte("\x12\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07"),
+			expectedVisibilityBitmap: []byte(nil),
+			expectedVisibilityMap:    map[int]bool(nil),
+		},
+		{
+			// mariadb 10.5, case2
+			data:                     []byte("\x12\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x0b_visibility\x00\x0b\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x00\xff\x07\x01\x02\x00\x00\x048\x04col0\x04col1\x04col2\x04col3\x04col4\x04col5\x04col6\x04col7\x04col8\x04col9\x05col10"),
+			expectedVisibilityBitmap: []byte(nil),
+			expectedVisibilityMap:    map[int]bool(nil),
+		},
+	}
+
+	for _, tc := range testcases {
+		tableMapEvent := new(TableMapEvent)
+		tableMapEvent.tableIDSize = 6
+		err := tableMapEvent.Decode(tc.data)
+		require.NoError(t, err)
+		require.Equal(t, tc.expectedVisibilityBitmap, tableMapEvent.VisibilityBitmap)
+		require.Equal(t, tc.expectedVisibilityMap, tableMapEvent.VisibilityMap())
+	}
+}
+
+func TestRowsDataExtraData(t *testing.T) {
+	// Only after mysql 8.0.16 version can be parsed from extradata to 'partition info' and 'ndb info'
+	testcases := []struct {
+		data                    []byte
+		tableData               []byte
+		eventType               EventType
+		expectPartitionId       uint16
+		expectSourcePartitionId uint16
+		expectNdbFormat         byte
+		expectNdbData           []byte
+	}{
+		/*
+			mysql-cluster 8.0.32
+
+			+-------+------+------+-----+---------+-------+
+			| Field | Type | Null | Key | Default | Extra |
+			+-------+------+------+-----+---------+-------+
+			| p     | int  | NO   | PRI | NULL    |       |
+			| c     | int  | YES  | UNI | NULL    |       |
+			+-------+------+------+-----+---------+-------+
+
+			CREATE TABLE t (
+				p INT PRIMARY KEY,
+				c INT,
+				UNIQUE KEY u (c)
+			)   ENGINE NDB;
+
+			INSERT INTO t VALUES (1,1), (2,2), (3,3), (4,4), (5,5);
+		*/
+		{
+			data:                    []byte("s\x00\x00\x00\x00\x00\x01\x00\x0f\x00\x00\f\x00\x01\x00\x00\x04\x80\x00\x04\x00\x00\x00\x02\xff\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x02\x00\x00\x00\x02\x00\x00\x00\x00\x04\x00\x00\x00\x04\x00\x00\x00\x00\x03\x00\x00\x00\x03\x00\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00"),
+			tableData:               []byte("s\x00\x00\x00\x00\x00\x01\x00\abdteste\x00\x01t\x00\x02\x03\x03\x00\x02\x01\x01\x00"),
+			eventType:               WRITE_ROWS_EVENTv2,
+			expectPartitionId:       0x0,
+			expectSourcePartitionId: 0x0,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte("\x01\x00\x00\x04\x80\x00\x04\x00\x00\x00"),
+		},
+		/*
+				mysql 8.0.16
+
+				+-------+------+------+-----+---------+-------+
+				| Field | Type | Null | Key | Default | Extra |
+				+-------+------+------+-----+---------+-------+
+				| id    | int  | YES  |     | NULL    |       |
+				+-------+------+------+-----+---------+-------+
+
+				CREATE TABLE test (id INTEGER)
+			            PARTITION BY RANGE (id) (
+			                PARTITION p0 VALUES LESS THAN (1),
+			                PARTITION p1 VALUES LESS THAN (2),
+			                PARTITION p2 VALUES LESS THAN (3),
+			                PARTITION p3 VALUES LESS THAN (4),
+			                PARTITION p4 VALUES LESS THAN (5)
+			            );
+
+				INSERT INTO test (id) VALUES(3);
+				UPDATE test set id = 1 WHERE id = 3;
+		*/
+		{
+			data:                    []byte("p\x03\x00\x00\x00\x00\x01\x00\x05\x00\x01\x03\x00\x01\xff\x00\x03\x00\x00\x00"),
+			tableData:               []byte("p\x03\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01\x01\x01\x00"),
+			eventType:               WRITE_ROWS_EVENTv2,
+			expectPartitionId:       0x3,
+			expectSourcePartitionId: 0x0,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte(nil),
+		},
+		{
+			data:                    []byte("p\x03\x00\x00\x00\x00\x01\x00\a\x00\x01\x01\x00\x03\x00\x01\xff\xff\x00\x03\x00\x00\x00\x00\x01\x00\x00\x00"),
+			tableData:               []byte("p\x03\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01\x01\x01\x00"),
+			eventType:               UPDATE_ROWS_EVENTv2,
+			expectPartitionId:       0x1,
+			expectSourcePartitionId: 0x3,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte(nil),
+		},
+		// mysql 5.7 and mariadb 14(15) does not surpot extra data
+		{
+			data:                    []byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x01\xff\xfe\x03\x00\x00\x00"),
+			tableData:               []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01"),
+			eventType:               WRITE_ROWS_EVENTv2,
+			expectPartitionId:       0x0,
+			expectSourcePartitionId: 0x0,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte(nil),
+		},
+		{
+			data:                    []byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x01\xff\xff\xfe\x03\x00\x00\x00\xfe\x01\x00\x00\x00"),
+			tableData:               []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01"),
+			eventType:               UPDATE_ROWS_EVENTv2,
+			expectPartitionId:       0x0,
+			expectSourcePartitionId: 0x0,
+			expectNdbFormat:         0x0,
+			expectNdbData:           []byte(nil),
+		},
+	}
+
+	for _, tc := range testcases {
+		tableMapEvent := new(TableMapEvent)
+		tableMapEvent.tableIDSize = 6
+		err := tableMapEvent.Decode(tc.tableData)
+		require.NoError(t, err)
+
+		rowsEvent := new(RowsEvent)
+		rowsEvent.tableIDSize = 6
+		rowsEvent.tables = make(map[uint64]*TableMapEvent)
+		rowsEvent.tables[tableMapEvent.TableID] = tableMapEvent
+		rowsEvent.Version = 2
+		rowsEvent.eventType = tc.eventType
+
+		err = rowsEvent.Decode(tc.data)
+		require.NoError(t, err)
+		require.Equal(t, tc.expectPartitionId, rowsEvent.PartitionId)
+		require.Equal(t, tc.expectSourcePartitionId, rowsEvent.SourcePartitionId)
+		require.Equal(t, tc.expectNdbFormat, rowsEvent.NdbFormat)
+		require.Equal(t, tc.expectNdbData, rowsEvent.NdbData)
+	}
+}
+
+func TestTableMapHelperMaps(t *testing.T) {
 	/*
 		CREATE TABLE `_types` (
 			`b_bit` bit(64) NOT NULL DEFAULT b'0',
@@ -1104,13 +1272,13 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 	}
 
 	enumStrValueMap := map[int][]string{
-		38: []string{"a", "b"},
-		43: []string{"c", "d"},
+		38: {"a", "b"},
+		43: {"c", "d"},
 	}
 
 	setStrValueMap := map[int][]string{
-		39: []string{"1", "2"},
-		42: []string{"3", "4"},
+		39: {"1", "2"},
+		42: {"3", "4"},
 	}
 
 	geometryTypeMap := map[int]uint64{
@@ -1171,19 +1339,203 @@ func (_ *testDecodeSuite) TestTableMapHelperMaps(c *C) {
 	}
 
 	for _, tc := range testcases {
-
 		tableMapEvent := new(TableMapEvent)
 		tableMapEvent.flavor = tc.flavor
 		tableMapEvent.tableIDSize = 6
 		err := tableMapEvent.Decode(tc.data)
-		c.Assert(err, IsNil)
-		c.Assert(tableMapEvent.UnsignedMap(), DeepEquals, tc.unsignedMap)
-		c.Assert(tableMapEvent.CollationMap(), DeepEquals, tc.collationMap)
-		c.Assert(tableMapEvent.EnumSetCollationMap(), DeepEquals, tc.enumSetCollationMap)
-		c.Assert(tableMapEvent.EnumStrValueMap(), DeepEquals, tc.enumStrValueMap)
-		c.Assert(tableMapEvent.SetStrValueMap(), DeepEquals, tc.setStrValueMap)
-		c.Assert(tableMapEvent.GeometryTypeMap(), DeepEquals, tc.geometryTypeMap)
-
+		require.NoError(t, err)
+		require.Equal(t, tc.unsignedMap, tableMapEvent.UnsignedMap())
+		require.Equal(t, tc.collationMap, tableMapEvent.CollationMap())
+		require.Equal(t, tc.enumSetCollationMap, tableMapEvent.EnumSetCollationMap())
+		require.Equal(t, tc.enumStrValueMap, tableMapEvent.EnumStrValueMap())
+		require.Equal(t, tc.setStrValueMap, tableMapEvent.SetStrValueMap())
+		require.Equal(t, tc.geometryTypeMap, tableMapEvent.GeometryTypeMap())
 	}
+}
 
+func TestInvalidEvent(t *testing.T) {
+	data := "@\x01\x00\x00\x00\x00\x01\x00\x02\xff\xfc\x01\x00\x00\x00\x00B\x14U\x16\x8ew"
+	table := &TableMapEvent{
+		tableIDSize: 6,
+		TableID:     0x140,
+		Flags:       0x1,
+		Schema:      []uint8{0x74, 0x65, 0x73, 0x74},
+		Table:       []uint8{0x74},
+		ColumnCount: 0x2,
+		ColumnType:  []uint8{0x3, 0xc},
+		ColumnMeta:  []uint16{0x0, 0x0},
+		NullBitmap:  []uint8{0x2}}
+
+	e2 := &RowsEvent{
+		Version:     1,
+		tableIDSize: 6,
+	}
+	e2.tables = map[uint64]*TableMapEvent{}
+	e2.tables[0x140] = table
+	err := e2.Decode([]byte(data))
+	require.Error(t, err)
+}
+
+func TestDecodeTime2(t *testing.T) {
+	testcases := []struct {
+		data        []byte
+		dec         uint16
+		getFracTime bool
+		expected    string
+	}{
+		{[]byte("\xb4\x6e\xfb"), 0, false, "838:59:59"},
+		{[]byte("\x80\xf1\x05"), 0, false, "15:04:05"},
+		{[]byte("\x80\x00\x00"), 0, false, "00:00:00"},
+		{[]byte("\x7f\xff\xff"), 0, false, "-00:00:01"},
+		{[]byte("\x7f\x0e\xfb"), 0, false, "-15:04:05"},
+		{[]byte("\x4b\x91\x05"), 0, false, "-838:59:59"},
+		{[]byte("\x7f\xff\xff\xff"), 2, true, "-00:00:00.01"},
+		{[]byte("\x7f\x0e\xfa\xf4"), 2, true, "-15:04:05.12"},
+		{[]byte("\x4b\x91\x05\xf4"), 2, true, "-838:59:58.12"},
+		{[]byte("\x7f\xff\xff\xff\xff"), 4, true, "-00:00:00.0001"},
+		{[]byte("\x7f\x0e\xfa\xfb\x2d"), 4, true, "-15:04:05.1235"},
+		{[]byte("\x4b\x91\x05\xfb\x2d"), 4, true, "-838:59:58.1235"},
+		{[]byte("\x7f\xff\xff\xff\xff\xff"), 6, true, "-00:00:00.000001"},
+		{[]byte("\x7f\x0e\xfa\xfe\x1d\xc0"), 6, true, "-15:04:05.123456"},
+		{[]byte("\x4b\x91\x05\xfe\x1d\xc0"), 6, true, "-838:59:58.123456"},
+	}
+	for _, tc := range testcases {
+		value, _, err := decodeTime2(tc.data, tc.dec)
+		require.NoError(t, err)
+		require.Equal(t, tc.expected, value)
+	}
+}
+
+type decimalTest struct {
+	num      string
+	dumpData []byte
+	meta     uint16
+}
+
+var decimalData = []decimalTest{
+	// DECIMAL(40, 16)
+	{
+		"123.4560000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 27, 46, 2, 0, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"0.0000010000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"100000000.0000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 5, 245, 225, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"100000000.0000000200000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 5, 245, 225, 0, 0, 0, 0, 20, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"123456.1234567890000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 1, 226, 64, 7, 91, 205, 21, 0, 0, 0, 0},
+		10256,
+	},
+	{
+		"123456234234234757655.1234567890123456",
+		[]byte{128, 0, 123, 27, 49, 148, 250, 13, 254, 30, 23, 7, 91, 205, 21, 0, 1, 226, 64},
+		10256,
+	},
+	{
+		"-123456234234234757655.1234567890123456",
+		[]byte{127, 255, 132, 228, 206, 107, 5, 242, 1, 225, 232, 248, 164, 50, 234, 255, 254, 29, 191},
+		10256,
+	},
+	{
+		"0.0000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		10256,
+	},
+	// DECIMAL(60, 0)
+	{
+		"1000000000000000000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		15360,
+	},
+	{
+		"1",
+		[]byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		15360,
+	},
+	// DECIMAL(30, 30)
+	{
+		"0.100000000000000000000000000000",
+		[]byte{133, 245, 225, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		7710,
+	},
+	{
+		"0.000000000000001000000000000000",
+		[]byte{128, 0, 0, 0, 0, 0, 3, 232, 0, 0, 0, 0, 0, 0},
+		7710,
+	},
+}
+
+func BenchmarkUseDecimal(b *testing.B) {
+	e := &RowsEvent{useDecimal: true}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, d := range decimalData {
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
+		}
+	}
+}
+
+func BenchmarkNotUseDecimal(b *testing.B) {
+	e := &RowsEvent{useDecimal: false}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, d := range decimalData {
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
+		}
+	}
+}
+
+func TestDecimal(t *testing.T) {
+	e := &RowsEvent{useDecimal: true}
+	e2 := &RowsEvent{useDecimal: false}
+	for _, d := range decimalData {
+		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
+		require.NoError(t, err)
+		// no trailing zero
+		dec, err := decimal.NewFromString(d.num)
+		require.NoError(t, err)
+		require.True(t, dec.Equal(v.(decimal.Decimal)))
+
+		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
+		require.NoError(t, err)
+		require.Equal(t, d.num, v.(string))
+	}
+}
+
+var intData = [][]byte{
+	{1, 0, 0, 0},
+	{2, 0, 0, 0},
+	{3, 0, 0, 0},
+	{4, 0, 0, 0},
+	{5, 0, 0, 0},
+	{6, 0, 0, 0},
+	{7, 0, 0, 0},
+	{8, 0, 0, 0},
+	{9, 0, 0, 0},
+	{10, 0, 0, 0},
+	{11, 0, 0, 0},
+	{12, 0, 0, 0},
+}
+
+func BenchmarkInt(b *testing.B) {
+	e := &RowsEvent{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, d := range intData {
+			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0, false)
+		}
+	}
 }

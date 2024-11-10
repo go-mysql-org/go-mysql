@@ -2,8 +2,11 @@ package mysql
 
 import (
 	"encoding/binary"
+	"fmt"
+	"strconv"
+	"strings"
 
-	"github.com/siddontang/go-mysql/utils"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 type FieldData []byte
@@ -49,42 +52,42 @@ func (f *Field) Parse(p FieldData) (err error) {
 	//skip catelog, always def
 	n, err = SkipLengthEncodedString(p)
 	if err != nil {
-		return
+		return err
 	}
 	pos += n
 
 	//schema
 	f.Schema, _, n, err = LengthEncodedString(p[pos:])
 	if err != nil {
-		return
+		return err
 	}
 	pos += n
 
 	//table
 	f.Table, _, n, err = LengthEncodedString(p[pos:])
 	if err != nil {
-		return
+		return err
 	}
 	pos += n
 
 	//org_table
 	f.OrgTable, _, n, err = LengthEncodedString(p[pos:])
 	if err != nil {
-		return
+		return err
 	}
 	pos += n
 
 	//name
 	f.Name, _, n, err = LengthEncodedString(p[pos:])
 	if err != nil {
-		return
+		return err
 	}
 	pos += n
 
 	//org_name
 	f.OrgName, _, n, err = LengthEncodedString(p[pos:])
 	if err != nil {
-		return
+		return err
 	}
 	pos += n
 
@@ -123,14 +126,14 @@ func (f *Field) Parse(p FieldData) (err error) {
 
 		if pos+int(f.DefaultValueLength) > len(p) {
 			err = ErrMalformPacket
-			return
+			return err
 		}
 
 		//default value string[$len]
 		f.DefaultValue = p[pos:(pos + int(f.DefaultValueLength))]
 	}
 
-	return
+	return nil
 }
 
 func (p FieldData) Parse() (f *Field, err error) {
@@ -146,7 +149,7 @@ func (f *Field) Dump() []byte {
 		f = &Field{}
 	}
 	if f.Data != nil {
-		return []byte(f.Data)
+		return f.Data
 	}
 
 	l := len(f.Schema) + len(f.Table) + len(f.OrgTable) + len(f.Name) + len(f.OrgName) + len(f.DefaultValue) + 48
@@ -208,5 +211,33 @@ func (fv *FieldValue) Value() interface{} {
 		return fv.AsString()
 	default: // FieldValueTypeNull
 		return nil
+	}
+}
+
+// String returns a MySQL literal string that equals the value.
+func (fv *FieldValue) String() string {
+	switch fv.Type {
+	case FieldValueTypeNull:
+		return "NULL"
+	case FieldValueTypeUnsigned:
+		return strconv.FormatUint(fv.AsUint64(), 10)
+	case FieldValueTypeSigned:
+		return strconv.FormatInt(fv.AsInt64(), 10)
+	case FieldValueTypeFloat:
+		return strconv.FormatFloat(fv.AsFloat64(), 'f', -1, 64)
+	case FieldValueTypeString:
+		b := strings.Builder{}
+		b.Grow(len(fv.str) + 2)
+		b.WriteByte('\'')
+		for i := range fv.str {
+			if fv.str[i] == '\'' {
+				b.WriteByte('\\')
+			}
+			b.WriteByte(fv.str[i])
+		}
+		b.WriteByte('\'')
+		return b.String()
+	default:
+		return fmt.Sprintf("unknown type %d of FieldValue", fv.Type)
 	}
 }

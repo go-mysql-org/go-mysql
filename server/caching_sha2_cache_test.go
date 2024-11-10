@@ -10,18 +10,21 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/test_util/test_keys"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 )
 
 var delay = 50
 
 // test caching for 'caching_sha2_password'
 // NOTE the idea here is to plugin a throttled credential provider so that the first connection (cache miss) will take longer time
-//      than the second connection (cache hit). Remember to set the password for MySQL user otherwise it won't cache empty password.
+// than the second connection (cache hit). Remember to set the password for MySQL user otherwise it won't cache empty password.
 func TestCachingSha2Cache(t *testing.T) {
 	log.SetLevel(log.LevelDebug)
 
@@ -30,13 +33,11 @@ func TestCachingSha2Cache(t *testing.T) {
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// no TLS
-	Suite(&cacheTestSuite{
+	suite.Run(t, &cacheTestSuite{
 		server:       cacheServer,
 		credProvider: remoteProvider,
 		tlsPara:      "false",
 	})
-
-	TestingT(t)
 }
 
 func TestCachingSha2CacheTLS(t *testing.T) {
@@ -47,13 +48,11 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// TLS
-	Suite(&cacheTestSuite{
+	suite.Run(t, &cacheTestSuite{
 		server:       cacheServer,
 		credProvider: remoteProvider,
 		tlsPara:      "skip-verify",
 	})
-
-	TestingT(t)
 }
 
 type RemoteThrottleProvider struct {
@@ -67,7 +66,9 @@ func (m *RemoteThrottleProvider) GetCredential(username string) (password string
 }
 
 type cacheTestSuite struct {
+	suite.Suite
 	server       *Server
+	serverAddr   string
 	credProvider CredentialProvider
 	tlsPara      string
 
@@ -76,38 +77,40 @@ type cacheTestSuite struct {
 	l net.Listener
 }
 
-func (s *cacheTestSuite) SetUpSuite(c *C) {
+func (s *cacheTestSuite) SetupSuite() {
+	s.serverAddr = fmt.Sprintf("%s:%s", *test_util.MysqlFakeHost, *test_util.MysqlFakePort)
+
 	var err error
 
-	s.l, err = net.Listen("tcp", *testAddr)
-	c.Assert(err, IsNil)
+	s.l, err = net.Listen("tcp", s.serverAddr)
+	require.NoError(s.T(), err)
 
-	go s.onAccept(c)
+	go s.onAccept()
 
 	time.Sleep(30 * time.Millisecond)
 }
 
-func (s *cacheTestSuite) TearDownSuite(c *C) {
+func (s *cacheTestSuite) TearDownSuite() {
 	if s.l != nil {
 		s.l.Close()
 	}
 }
 
-func (s *cacheTestSuite) onAccept(c *C) {
+func (s *cacheTestSuite) onAccept() {
 	for {
 		conn, err := s.l.Accept()
 		if err != nil {
 			return
 		}
 
-		go s.onConn(conn, c)
+		go s.onConn(conn)
 	}
 }
 
-func (s *cacheTestSuite) onConn(conn net.Conn, c *C) {
+func (s *cacheTestSuite) onConn(conn net.Conn) {
 	//co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
 	co, err := NewCustomizedConn(conn, s.server, s.credProvider, &testCacheHandler{s})
-	c.Assert(err, IsNil)
+	require.NoError(s.T(), err)
 	for {
 		err = co.HandleCommand()
 		if err != nil {
@@ -116,30 +119,30 @@ func (s *cacheTestSuite) onConn(conn net.Conn, c *C) {
 	}
 }
 
-func (s *cacheTestSuite) runSelect(c *C) {
+func (s *cacheTestSuite) runSelect() {
 	var a int64
 	var b string
 
 	err := s.db.QueryRow("SELECT a, b FROM tbl WHERE id=1").Scan(&a, &b)
-	c.Assert(err, IsNil)
-	c.Assert(a, Equals, int64(1))
-	c.Assert(b, Equals, "hello world")
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), int64(1), a)
+	require.Equal(s.T(), "hello world", b)
 }
 
-func (s *cacheTestSuite) TestCache(c *C) {
+func (s *cacheTestSuite) TestCache() {
 	// first connection
 	t1 := time.Now()
 	var err error
-	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
-	c.Assert(err, IsNil)
+	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, s.serverAddr, *testDB, s.tlsPara))
+	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
-	s.runSelect(c)
+	s.runSelect()
 	t2 := time.Now()
 
 	d1 := int(t2.Sub(t1).Nanoseconds() / 1e6)
 	//log.Debugf("first connection took %d milliseconds", d1)
 
-	c.Assert(d1, GreaterEqual, delay)
+	require.GreaterOrEqual(s.T(), d1, delay)
 
 	if s.db != nil {
 		s.db.Close()
@@ -147,16 +150,16 @@ func (s *cacheTestSuite) TestCache(c *C) {
 
 	// second connection
 	t3 := time.Now()
-	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, *testAddr, *testDB, s.tlsPara))
-	c.Assert(err, IsNil)
+	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, s.serverAddr, *testDB, s.tlsPara))
+	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
-	s.runSelect(c)
+	s.runSelect()
 	t4 := time.Now()
 
 	d2 := int(t4.Sub(t3).Nanoseconds() / 1e6)
 	//log.Debugf("second connection took %d milliseconds", d2)
 
-	c.Assert(d2, Less, delay)
+	require.Less(s.T(), d2, delay)
 	if s.db != nil {
 		s.db.Close()
 	}
@@ -192,21 +195,33 @@ func (h *testCacheHandler) handleQuery(query string, binary bool) (*mysql.Result
 		if err != nil {
 			return nil, errors.Trace(err)
 		} else {
-			return &mysql.Result{0, 0, 0, r}, nil
+			return &mysql.Result{
+				Status:       0,
+				Warnings:     0,
+				InsertId:     0,
+				AffectedRows: 0,
+				Resultset:    r,
+			}, nil
 		}
 	case "insert":
-		return &mysql.Result{0, 1, 0, nil}, nil
-	case "delete":
-		return &mysql.Result{0, 0, 1, nil}, nil
-	case "update":
-		return &mysql.Result{0, 0, 1, nil}, nil
-	case "replace":
-		return &mysql.Result{0, 0, 1, nil}, nil
+		return &mysql.Result{
+			Status:       0,
+			Warnings:     0,
+			InsertId:     1,
+			AffectedRows: 0,
+			Resultset:    nil,
+		}, nil
+	case "delete", "update", "replace":
+		return &mysql.Result{
+			Status:       0,
+			Warnings:     0,
+			InsertId:     0,
+			AffectedRows: 1,
+			Resultset:    nil,
+		}, nil
 	default:
 		return nil, fmt.Errorf("invalid query %s", query)
 	}
-
-	return nil, nil
 }
 
 func (h *testCacheHandler) HandleQuery(query string) (*mysql.Result, error) {

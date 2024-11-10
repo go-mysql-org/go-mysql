@@ -2,20 +2,22 @@ package client
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 )
 
 type Stmt struct {
-	conn  *Conn
-	id    uint32
-	query string
+	conn *Conn
+	id   uint32
 
-	params  int
-	columns int
+	params   int
+	columns  int
+	warnings int
 }
 
 func (s *Stmt) ParamNum() int {
@@ -26,12 +28,24 @@ func (s *Stmt) ColumnNum() int {
 	return s.columns
 }
 
+func (s *Stmt) WarningsNum() int {
+	return s.warnings
+}
+
 func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 	if err := s.write(args...); err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	return s.conn.readResult(true)
+}
+
+func (s *Stmt) ExecuteSelectStreaming(result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback, args ...interface{}) error {
+	if err := s.write(args...); err != nil {
+		return errors.Trace(err)
+	}
+
+	return s.conn.readResultStreaming(true, result, perRowCb, perResCb)
 }
 
 func (s *Stmt) Close() error {
@@ -55,13 +69,13 @@ func (s *Stmt) write(args ...interface{}) error {
 	//NULL-bitmap, length: (num-params+7)
 	nullBitmap := make([]byte, (paramsNum+7)>>3)
 
-	var length int = int(1 + 4 + 1 + 4 + ((paramsNum + 7) >> 3) + 1 + (paramsNum << 1))
+	length := 1 + 4 + 1 + 4 + ((paramsNum + 7) >> 3) + 1 + (paramsNum << 1)
 
 	var newParamBoundFlag byte = 0
 
 	for i := range args {
 		if args[i] == nil {
-			nullBitmap[i/8] |= (1 << (uint(i) % 8))
+			nullBitmap[i/8] |= 1 << (uint(i) % 8)
 			paramTypes[i<<1] = MYSQL_TYPE_NULL
 			continue
 		}
@@ -91,11 +105,11 @@ func (s *Stmt) write(args ...interface{}) error {
 		case uint16:
 			paramTypes[i<<1] = MYSQL_TYPE_SHORT
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint16ToBytes(uint16(v))
+			paramValues[i] = Uint16ToBytes(v)
 		case uint32:
 			paramTypes[i<<1] = MYSQL_TYPE_LONG
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint32ToBytes(uint32(v))
+			paramValues[i] = Uint32ToBytes(v)
 		case uint:
 			paramTypes[i<<1] = MYSQL_TYPE_LONGLONG
 			paramTypes[(i<<1)+1] = 0x80
@@ -103,14 +117,13 @@ func (s *Stmt) write(args ...interface{}) error {
 		case uint64:
 			paramTypes[i<<1] = MYSQL_TYPE_LONGLONG
 			paramTypes[(i<<1)+1] = 0x80
-			paramValues[i] = Uint64ToBytes(uint64(v))
+			paramValues[i] = Uint64ToBytes(v)
 		case bool:
 			paramTypes[i<<1] = MYSQL_TYPE_TINY
 			if v {
 				paramValues[i] = []byte{1}
 			} else {
 				paramValues[i] = []byte{0}
-
 			}
 		case float32:
 			paramTypes[i<<1] = MYSQL_TYPE_FLOAT
@@ -124,6 +137,9 @@ func (s *Stmt) write(args ...interface{}) error {
 		case []byte:
 			paramTypes[i<<1] = MYSQL_TYPE_STRING
 			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
+		case json.RawMessage:
+			paramTypes[i<<1] = MYSQL_TYPE_STRING
+			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
 		default:
 			return fmt.Errorf("invalid argument type %T", args[i])
 		}
@@ -131,37 +147,44 @@ func (s *Stmt) write(args ...interface{}) error {
 		length += len(paramValues[i])
 	}
 
-	data := make([]byte, 4, 4+length)
+	data := utils.BytesBufferGet()
+	defer func() {
+		utils.BytesBufferPut(data)
+	}()
+	if data.Len() < length+4 {
+		data.Grow(4 + length)
+	}
 
-	data = append(data, COM_STMT_EXECUTE)
-	data = append(data, byte(s.id), byte(s.id>>8), byte(s.id>>16), byte(s.id>>24))
+	data.Write([]byte{0, 0, 0, 0})
+	data.WriteByte(COM_STMT_EXECUTE)
+	data.Write([]byte{byte(s.id), byte(s.id >> 8), byte(s.id >> 16), byte(s.id >> 24)})
 
 	//flag: CURSOR_TYPE_NO_CURSOR
-	data = append(data, 0x00)
+	data.WriteByte(0x00)
 
 	//iteration-count, always 1
-	data = append(data, 1, 0, 0, 0)
+	data.Write([]byte{1, 0, 0, 0})
 
 	if s.params > 0 {
-		data = append(data, nullBitmap...)
+		data.Write(nullBitmap)
 
 		//new-params-bound-flag
-		data = append(data, newParamBoundFlag)
+		data.WriteByte(newParamBoundFlag)
 
 		if newParamBoundFlag == 1 {
 			//type of each parameter, length: num-params * 2
-			data = append(data, paramTypes...)
+			data.Write(paramTypes)
 
 			//value of each parameter
 			for _, v := range paramValues {
-				data = append(data, v...)
+				data.Write(v)
 			}
 		}
 	}
 
 	s.conn.ResetSequence()
 
-	return s.conn.WritePacket(data)
+	return s.conn.WritePacket(data.Bytes())
 }
 
 func (c *Conn) Prepare(query string) (*Stmt, error) {
@@ -198,7 +221,8 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	pos += 2
 
 	//warnings
-	//warnings = binary.LittleEndian.Uint16(data[pos:])
+	s.warnings = int(binary.LittleEndian.Uint16(data[pos:]))
+	// pos += 2
 
 	if s.params > 0 {
 		if err := s.conn.readUntilEOF(); err != nil {

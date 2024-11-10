@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	. "github.com/siddontang/go-mysql/mysql"
 )
 
 // Limiatation
@@ -28,7 +28,7 @@ func (h *MariadbGTIDHandler) Promote(s *Server) error {
 }
 
 func (h *MariadbGTIDHandler) FindBestSlaves(slaves []*Server) ([]*Server, error) {
-	bestSlaves := []*Server{}
+	var bestSlaves []*Server
 
 	ps := make([]uint64, len(slaves))
 

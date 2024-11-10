@@ -1,20 +1,19 @@
 package failover
 
 import (
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 // Failover will do below things after the master down
-//  1. Elect a slave which has the most up-to-date data with old master
-//  2. Promote the slave to new master
-//  3. Change other slaves to the new master
+// 1. Elect a slave which has the most up-to-date data with old master
+// 2. Promote the slave to new master
+// 3. Change other slaves to the new master
 //
 // Limitation:
-//  1, All slaves must have the same master before, Failover will check using master server id or uuid
-//  2, If the failover error, the whole topology may be wrong, we must handle this error manually
-//  3, Slaves must have same replication mode, all use GTID or not
-//
+// 1, All slaves must have the same master before, Failover will check using master server id or uuid
+// 2, If the failover error, the whole topology may be wrong, we must handle this error manually
+// 3, Slaves must have same replication mode, all use GTID or not
 func Failover(flavor string, slaves []*Server) ([]*Server, error) {
 	var h Handler
 	var err error

@@ -1,0 +1,32 @@
+linters:
+  disable-all: true
+  enable:
+    # All code is ready for:
+    - errcheck
+    - staticcheck
+    - typecheck
+    - unused
+    - misspell
+    - nolintlint
+    - goimports
+    - nakedret
+    - unconvert
+    - whitespace
+    - govet
+    - gosimple
+    - ineffassign
+    # ToDo:
+    #- gocritic
+    #- golint
+linters-settings:
+  nolintlint:
+    allow-unused: false
+    allow-leading-space: false
+    require-specific: true
+
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+      - lostcancel
+      - shadow

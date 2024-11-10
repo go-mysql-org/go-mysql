@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	. "github.com/siddontang/go-mysql/mysql"
+	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var defaultServer = NewDefaultServer()
@@ -48,7 +48,7 @@ func NewDefaultServer() *Server {
 	certPem, keyPem := generateAndSignRSACerts(caPem, caKey)
 	tlsConf := NewServerTLSConfig(caPem, certPem, keyPem, tls.VerifyClientCertIfGiven)
 	return &Server{
-		serverVersion:   "5.7.0",
+		serverVersion:   "8.0.11",
 		protocolVersion: 10,
 		capability: CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
 			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_SSL | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
@@ -78,7 +78,8 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 	//	panic(fmt.Sprintf("default auth method is not one of the allowed auth methods"))
 	//}
 	var capFlag = CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
-		CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
+		CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_CONNECT_ATTRS |
+		CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
 	if tlsConfig != nil {
 		capFlag |= CLIENT_SSL
 	}

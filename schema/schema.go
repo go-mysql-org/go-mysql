@@ -11,7 +11,8 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var ErrTableNotExist = errors.New("table is not exist")
@@ -33,8 +34,8 @@ const (
 	TYPE_JSON                 // json
 	TYPE_DECIMAL              // decimal
 	TYPE_MEDIUM_INT
-	TYPE_BINARY               // binary, varbinary
-	TYPE_POINT                // coordinates
+	TYPE_BINARY // binary, varbinary
+	TYPE_POINT  // coordinates
 )
 
 type TableColumn struct {
@@ -45,6 +46,7 @@ type TableColumn struct {
 	IsAuto     bool
 	IsUnsigned bool
 	IsVirtual  bool
+	IsStored   bool
 	EnumValues []string
 	SetValues  []string
 	FixedSize  uint
@@ -55,6 +57,7 @@ type Index struct {
 	Name        string
 	Columns     []string
 	Cardinality []uint64
+	NoneUnique  uint64
 }
 
 type Table struct {
@@ -145,6 +148,8 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].IsAuto = true
 	} else if extra == "VIRTUAL GENERATED" {
 		ta.Columns[index].IsVirtual = true
+	} else if extra == "STORED GENERATED" {
+		ta.Columns[index].IsStored = true
 	}
 }
 
@@ -162,7 +167,7 @@ func getSizeFromColumnType(columnType string) uint {
 		return 0
 	}
 
-	i, err := strconv.Atoi(columnType[startIndex+1:endIndex])
+	i, err := strconv.Atoi(columnType[startIndex+1 : endIndex])
 	if err != nil || i < 0 {
 		return 0
 	}
@@ -178,8 +183,21 @@ func (ta *Table) FindColumn(name string) int {
 	return -1
 }
 
+// Get TableColumn by column index of primary key.
 func (ta *Table) GetPKColumn(index int) *TableColumn {
+	if index >= len(ta.PKColumns) {
+		return nil
+	}
 	return &ta.Columns[ta.PKColumns[index]]
+}
+
+func (ta *Table) IsPrimaryKey(colIndex int) bool {
+	for _, i := range ta.PKColumns {
+		if i == colIndex {
+			return true
+		}
+	}
+	return false
 }
 
 func (ta *Table) AddIndex(name string) (index *Index) {
@@ -189,7 +207,7 @@ func (ta *Table) AddIndex(name string) (index *Index) {
 }
 
 func NewIndex(name string) *Index {
-	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8)}
+	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8), 0}
 }
 
 func (idx *Index) AddColumn(name string, cardinality uint64) {
@@ -316,10 +334,10 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 		cardinality, _ := r.GetUint(i, 6)
 		colName, _ := r.GetString(i, 4)
 		currentIndex.AddColumn(colName, cardinality)
+		currentIndex.NoneUnique, _ = r.GetUint(i, 1)
 	}
 
 	return ta.fetchPrimaryKeyColumns()
-
 }
 
 func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
@@ -334,27 +352,32 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 	currentName := ""
 
 	var unusedVal interface{}
-	unused := &unusedVal
 
 	for r.Next() {
-		var indexName, colName string
+		var indexName string
+		var colName sql.NullString
+		var noneUnique uint64
 		var cardinality interface{}
-
-		err := r.Scan(
-			&unused,
-			&unused,
-			&indexName,
-			&unused,
-			&colName,
-			&unused,
-			&cardinality,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-			&unused,
-		)
+		cols, err := r.Columns()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		values := make([]interface{}, len(cols))
+		for i := 0; i < len(cols); i++ {
+			switch i {
+			case 1:
+				values[i] = &noneUnique
+			case 2:
+				values[i] = &indexName
+			case 4:
+				values[i] = &colName
+			case 6:
+				values[i] = &cardinality
+			default:
+				values[i] = &unusedVal
+			}
+		}
+		err = r.Scan(values...)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -365,7 +388,13 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		}
 
 		c := toUint64(cardinality)
-		currentIndex.AddColumn(colName, c)
+		// If colName is a null string, switch to ""
+		if colName.Valid {
+			currentIndex.AddColumn(colName.String, c)
+		} else {
+			currentIndex.AddColumn("", c)
+		}
+		currentIndex.NoneUnique = noneUnique
 	}
 
 	return ta.fetchPrimaryKeyColumns()
@@ -392,7 +421,7 @@ func toUint64(i interface{}) uint64 {
 	case uint32:
 		return uint64(i)
 	case uint64:
-		return uint64(i)
+		return i
 	}
 
 	return 0
@@ -403,6 +432,7 @@ func (ta *Table) fetchPrimaryKeyColumns() error {
 		return nil
 	}
 
+	// Primary key must be the first index?
 	pkIndex := ta.Indexes[0]
 	if pkIndex.Name != "PRIMARY" {
 		return nil

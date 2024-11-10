@@ -2,28 +2,41 @@
 
 A pure go library to handle MySQL network protocol and replication.
 
-## Call for Committer/Maintainer
+![semver](https://img.shields.io/github/v/tag/go-mysql-org/go-mysql)
+![example workflow](https://github.com/go-mysql-org/go-mysql/actions/workflows/ci.yml/badge.svg)
+![gomod version](https://img.shields.io/github/go-mod/go-version/go-mysql-org/go-mysql/master)
 
-Sorry that I have no enough time to maintain this project wholly, if you like this project and want to help me improve it continuously, please contact me through email (siddontang@gmail.com).
+## How to migrate to this repo
+To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
+```
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.9.0
+```
 
-Requirement: In the email, you should list somethings(including but not limited to below) to make me believe we can work together.
+v1.9.0 - is the last tag in repo, feel free to choose what you want.
 
-+ Your GitHub ID
-+ The contributions to go-mysql before, including PRs or Issues. 
-+ The reason why you can improve go-mysql.
- 
+## Changelog
+This repo uses [Changelog](CHANGELOG.md).
+
+---
+# Content
+* [Replication](#replication)
+* [Incremental dumping](#canal)
+* [Client](#client)
+* [Fake server](#server)
+* [Failover](#failover)
+* [database/sql like driver](#driver)
 
 ## Replication
 
 Replication package handles MySQL replication protocol like [python-mysql-replication](https://github.com/noplay/python-mysql-replication).
 
-You can use it as a MySQL slave to sync binlog from master then do something, like updating cache, etc...
+You can use it as a MySQL replica to sync binlog from master then do something, like updating cache, etc...
 
 ### Example
 
 ```go
 import (
-	"github.com/siddontang/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"os"
 )
 // Create a binlog syncer with a unique server id, the server id must be different from other MySQL's. 
@@ -55,7 +68,7 @@ for {
 // or we can use a timeout context
 for {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	ev, err := s.GetEvent(ctx)
+	ev, err := streamer.GetEvent(ctx)
 	cancel()
 
 	if err == context.DeadlineExceeded {
@@ -107,20 +120,18 @@ You must use ROW format for binlog, full binlog row image is preferred, because 
 A simple example:
 
 ```go
-cfg := NewDefaultConfig()
-cfg.Addr = "127.0.0.1:3306"
-cfg.User = "root"
-// We only care table canal_test in test db
-cfg.Dump.TableDB = "test"
-cfg.Dump.Tables = []string{"canal_test"}
+package main
 
-c, err := NewCanal(cfg)
+import (
+	"github.com/go-mysql-org/go-mysql/canal"
+	"github.com/siddontang/go-log/log"
+)
 
 type MyEventHandler struct {
-	DummyEventHandler
+	canal.DummyEventHandler
 }
 
-func (h *MyEventHandler) OnRow(e *RowsEvent) error {
+func (h *MyEventHandler) OnRow(e *canal.RowsEvent) error {
 	log.Infof("%s %v\n", e.Action, e.Rows)
 	return nil
 }
@@ -129,11 +140,25 @@ func (h *MyEventHandler) String() string {
 	return "MyEventHandler"
 }
 
-// Register a handler to handle RowsEvent
-c.SetEventHandler(&MyEventHandler{})
+func main() {
+	cfg := canal.NewDefaultConfig()
+	cfg.Addr = "127.0.0.1:3306"
+	cfg.User = "root"
+	// We only care table canal_test in test db
+	cfg.Dump.TableDB = "test"
+	cfg.Dump.Tables = []string{"canal_test"}
 
-// Start canal
-c.Run()
+	c, err := canal.NewCanal(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Register a handler to handle RowsEvent
+	c.SetEventHandler(&MyEventHandler{})
+
+	// Start canal
+	c.Run()
+}
 ```
 
 You can see [go-mysql-elasticsearch](https://github.com/siddontang/go-mysql-elasticsearch) for how to sync MySQL data into Elasticsearch. 
@@ -146,7 +171,7 @@ Client package supports a simple MySQL connection driver which you can use it to
 
 ```go
 import (
-	"github.com/siddontang/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/client"
 )
 
 // Connect MySQL at 127.0.0.1:3306, with user root, an empty password and database test
@@ -197,6 +222,42 @@ Tested MySQL versions for the client include:
 - 5.7.x
 - 8.0.x
 
+### Example for SELECT streaming (v1.1.1)
+You can use also streaming for large SELECT responses.
+The callback function will be called for every result row without storing the whole resultset in memory.
+`result.Fields` will be filled before the first callback call.
+
+```go
+// ...
+var result mysql.Result
+err := conn.ExecuteSelectStreaming(`select id, name from table LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
+    for idx, val := range row {
+    	field := result.Fields[idx]
+    	// You must not save FieldValue.AsString() value after this callback is done.
+    	// Copy it if you need.
+    	// ...
+    }
+    return nil
+}, nil)
+
+// ...
+```
+
+### Example for connection pool (v1.3.0)
+
+```go
+import (
+    "github.com/go-mysql-org/go-mysql/client"
+)
+
+pool := client.NewPool(log.Debugf, 100, 400, 5, "127.0.0.1:3306", `root`, ``, `test`)
+// ...
+conn, _ := pool.GetConn(ctx)
+defer pool.PutConn(conn)
+
+conn.Execute() / conn.Begin() / etc...
+```
+
 ## Server
 
 Server package supplies a framework to implement a simple MySQL server which can handle the packets from the MySQL client. 
@@ -205,30 +266,56 @@ so that most MySQL clients should be able to connect to the Server without modif
 
 ### Example
 
+Minimalistic MySQL server implementation:
+
 ```go
+package main
+
 import (
-	"github.com/siddontang/go-mysql/server"
+	"log"
 	"net"
+
+	"github.com/go-mysql-org/go-mysql/server"
 )
 
-l, _ := net.Listen("tcp", "127.0.0.1:4000")
+func main() {
+	// Listen for connections on localhost port 4000
+	l, err := net.Listen("tcp", "127.0.0.1:4000")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-c, _ := l.Accept()
+	// Accept a new connection once
+	c, err := l.Accept()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// Create a connection with user root and an empty password.
-// You can use your own handler to handle command here.
-conn, _ := server.NewConn(c, "root", "", server.EmptyHandler{})
+	// Create a connection with user root and an empty password.
+	// You can use your own handler to handle command here.
+	conn, err := server.NewConn(c, "root", "", server.EmptyHandler{})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-for {
-	conn.HandleCommand()
+	// as long as the client keeps sending commands, keep handling them
+	for {
+		if err := conn.HandleCommand(); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
-``` 
+```
 
 Another shell
 
 ```
-mysql -h127.0.0.1 -P4000 -uroot -p 
-//Becuase empty handler does nothing, so here the MySQL client can only connect the proxy server. :-) 
+$ mysql -h127.0.0.1 -P4000 -uroot
+Your MySQL connection id is 10001
+Server version: 5.7.0
+
+MySQL [(none)]>
+// Since EmptyHandler implements no commands, it will throw an error on any query that you will send
 ```
 
 > ```NewConn()``` will use default server configurations:
@@ -242,13 +329,13 @@ mysql -h127.0.0.1 -P4000 -uroot -p
 
 ## Failover
 
-Failover supports to promote a new master and let other slaves replicate from it automatically when the old master was down.
+Failover supports to promote a new master and let replicas replicate from it automatically when the old master was down.
 
 Failover supports MySQL >= 5.6.9 with GTID mode, if you use lower version, e.g, MySQL 5.0 - 5.5, please use [MHA](http://code.google.com/p/mysql-master-ha/) or [orchestrator](https://github.com/outbrain/orchestrator).
 
 At the same time, Failover supports MariaDB >= 10.0.9 with GTID mode too. 
 
-Why only GTID? Supporting failover with no GTID mode is very hard, because slave can not find the proper binlog filename and position with the new master. 
+Why only GTID? Supporting failover with no GTID mode is very hard, because replicas can not find the proper binlog filename and position with the new master.
 Although there are many companies use MySQL 5.0 - 5.5, I think upgrade MySQL to 5.6 or higher is easy. 
 
 ## Driver
@@ -261,7 +348,7 @@ package main
 import (
 	"database/sql"
 
-	_ "github.com/siddontang/go-mysql/driver"
+	_ "github.com/go-mysql-org/go-mysql/driver"
 )
 
 func main() {
@@ -271,6 +358,150 @@ func main() {
 	db.Close()
 }
 ```
+
+### Driver Options
+
+Configuration options can be provided by the standard DSN (Data Source Name).
+
+```
+[user[:password]@]addr[/db[?param=X]]
+```
+
+#### `collation`
+
+Set a collation during the Auth handshake.
+
+| Type      | Default         | Example                                               |
+| --------- | --------------- | ----------------------------------------------------- |
+| string    | utf8_general_ci | user:pass@localhost/mydb?collation=latin1_general_ci  |
+
+#### `compress`
+
+Enable compression between the client and the server. Valid values are 'zstd','zlib','uncompressed'.
+
+| Type      | Default       | Example                                 |
+| --------- | ------------- | --------------------------------------- |
+| string    | uncompressed  | user:pass@localhost/mydb?compress=zlib  |
+
+#### `readTimeout`
+
+I/O read timeout. The time unit is specified in the argument value using
+golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?readTimeout=10s    |
+
+#### `ssl`
+
+Enable TLS between client and server. Valid values are `true` or `custom`. When using `custom`,
+the connection will use the TLS configuration set by SetCustomTLSConfig matching the host.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| string    |           | user:pass@localhost/mydb?ssl=true           |
+
+#### `timeout`
+
+Timeout is the maximum amount of time a dial will wait for a connect to complete.
+The time unit is specified in the argument value using golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
+
+| Type      | Default   | Example                                     |
+| --------- | --------- | ------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?timeout=1m         |
+
+#### `writeTimeout`
+
+I/O write timeout. The time unit is specified in the argument value using
+golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
+
+0 means no timeout.
+
+| Type      | Default   | Example                                         |
+| --------- | --------- | ----------------------------------------------- |
+| duration  | 0         | user:pass@localhost/mydb?writeTimeout=1m30s     |
+
+#### `retries`
+
+Allows disabling the golang `database/sql` default behavior to retry errors
+when `ErrBadConn` is returned by the driver. When retries are disabled
+this driver will not return `ErrBadConn` from the `database/sql` package.
+
+Valid values are `on` (default) and `off`.
+
+| Type      | Default   | Example                                         |
+| --------- | --------- | ----------------------------------------------- |
+| string    | on        | user:pass@localhost/mydb?retries=off            |
+
+### Custom Driver Options
+
+The driver package exposes the function `SetDSNOptions`, allowing for modification of the
+connection by adding custom driver options.
+It requires a full import of the driver (not by side-effects only).
+
+Example of defining a custom option:
+
+```golang
+import (
+ "database/sql"
+
+ "github.com/go-mysql-org/go-mysql/driver"
+)
+
+func main() {
+ driver.SetDSNOptions(map[string]DriverOption{
+  "no_metadata": func(c *client.Conn, value string) error {
+   c.SetCapability(mysql.CLIENT_OPTIONAL_RESULTSET_METADATA)
+   return nil
+  },
+ })
+
+ // dsn format: "user:password@addr/dbname?"
+ dsn := "root@127.0.0.1:3306/test?no_metadata=true"
+ db, _ := sql.Open(dsn)
+ db.Close()
+}
+```
+
+### Custom NamedValueChecker
+
+Golang allows for custom handling of query arguments before they are passed to the driver
+with the implementation of a [NamedValueChecker](https://pkg.go.dev/database/sql/driver#NamedValueChecker). By doing a full import of the driver (not by side-effects only),
+a custom NamedValueChecker can be implemented.
+
+```golang
+import (
+ "database/sql"
+
+ "github.com/go-mysql-org/go-mysql/driver"
+)
+
+func main() {
+ driver.AddNamedValueChecker(func(nv *sqlDriver.NamedValue) error {
+  rv := reflect.ValueOf(nv.Value)
+  if rv.Kind() != reflect.Uint64 {
+   // fallback to the default value converter when the value is not a uint64
+   return sqlDriver.ErrSkip
+  }
+
+  return nil
+ })
+
+ conn, err := sql.Open("mysql", "root@127.0.0.1:3306/test")
+ defer conn.Close()
+
+ stmt, err := conn.Prepare("select * from table where id = ?")
+ defer stmt.Close()
+ var val uint64 = math.MaxUint64
+ // without the NamedValueChecker this query would fail
+ result, err := stmt.Query(val)
+}
+```
+
 
 We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)
 

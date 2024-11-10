@@ -1,15 +1,17 @@
 package dump
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
+	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
-	. "github.com/siddontang/go-mysql/mysql"
 )
 
 // Unlick mysqldump, Dumper is designed for parsing and syning data easily.
@@ -40,6 +42,12 @@ type Dumper struct {
 	masterDataSkipped bool
 	maxAllowedPacket  int
 	hexBlob           bool
+
+	// see detectColumnStatisticsParamSupported
+	isColumnStatisticsParamSupported bool
+
+	mysqldumpVersion    string
+	sourceDataSupported bool
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
@@ -64,9 +72,67 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 	d.ExtraOptions = make([]string, 0, 5)
 	d.masterDataSkipped = false
 
+	out, err := exec.Command(d.ExecutionPath, `--help`).CombinedOutput()
+	if err != nil {
+		return d, err
+	}
+	d.isColumnStatisticsParamSupported = d.detectColumnStatisticsParamSupported(out)
+	d.mysqldumpVersion = d.getMysqldumpVersion(out)
+	d.sourceDataSupported = d.detectSourceDataSupported(d.mysqldumpVersion)
+
 	d.ErrOut = os.Stderr
 
 	return d, nil
+}
+
+// New mysqldump versions try to send queries to information_schema.COLUMN_STATISTICS table which does not exist in old MySQL (<5.x).
+// And we got error: "Unknown table 'COLUMN_STATISTICS' in information_schema (1109)".
+//
+// mysqldump may not send this query if it is started with parameter --column-statistics.
+// But this parameter exists only for versions >=8.0.2 (https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-2.html).
+//
+// For environments where the version of mysql-server and mysqldump differs, we try to check this parameter and use it if available.
+func (d *Dumper) detectColumnStatisticsParamSupported(helpOutput []byte) bool {
+	return bytes.Contains(helpOutput, []byte(`--column-statistics`))
+}
+
+// mysqldump  Ver 10.19 Distrib 10.3.37-MariaDB, for linux-systemd (x86_64)`, `10.3.37-MariaDB
+// opt/mysql/11.0.0/bin/mysqldump from 11.0.0-preview-MariaDB, client 10.19 for linux-systemd (x86_64)
+func (d *Dumper) getMysqldumpVersion(helpOutput []byte) string {
+	mysqldumpVersionRegexpNew := regexp.MustCompile(`mysqldump  Ver ([0-9][^ ]*) for`)
+	if m := mysqldumpVersionRegexpNew.FindSubmatch(helpOutput); m != nil {
+		return string(m[1])
+	}
+
+	mysqldumpVersionRegexpOld := regexp.MustCompile(`mysqldump  Ver .* Distrib ([0-9][^ ]*),`)
+	if m := mysqldumpVersionRegexpOld.FindSubmatch(helpOutput); m != nil {
+		return string(m[1])
+	}
+
+	mysqldumpVersionRegexpMaria := regexp.MustCompile(`mysqldump from ([0-9][^ ]*), `)
+	if m := mysqldumpVersionRegexpMaria.FindSubmatch(helpOutput); m != nil {
+		return string(m[1])
+	}
+
+	return ""
+}
+
+func (d *Dumper) detectSourceDataSupported(version string) bool {
+	// Failed to detect mysqldump version
+	if version == "" {
+		return false
+	}
+
+	// MySQL 5.x
+	if version[0] == byte('5') {
+		return false
+	}
+
+	if strings.Contains(version, "MariaDB") {
+		return false
+	}
+
+	return true
 }
 
 func (d *Dumper) SetCharset(charset string) {
@@ -116,7 +182,7 @@ func (d *Dumper) AddTables(db string, tables ...string) {
 }
 
 func (d *Dumper) AddIgnoreTables(db string, tables ...string) {
-	t, _ := d.IgnoreTables[db]
+	t := d.IgnoreTables[db]
 	t = append(t, tables...)
 	d.IgnoreTables[db] = t
 }
@@ -144,10 +210,16 @@ func (d *Dumper) Dump(w io.Writer) error {
 	}
 
 	args = append(args, fmt.Sprintf("--user=%s", d.User))
-	args = append(args, fmt.Sprintf("--password=%s", d.Password))
+	passwordArg := fmt.Sprintf("--password=%s", d.Password)
+	args = append(args, passwordArg)
+	passwordArgIndex := len(args) - 1
 
 	if !d.masterDataSkipped {
-		args = append(args, "--master-data")
+		if d.sourceDataSupported {
+			args = append(args, "--source-data")
+		} else {
+			args = append(args, "--master-data")
+		}
 	}
 
 	if d.maxAllowedPacket > 0 {
@@ -196,6 +268,10 @@ func (d *Dumper) Dump(w io.Writer) error {
 		args = append(args, d.ExtraOptions...)
 	}
 
+	if d.isColumnStatisticsParamSupported {
+		args = append(args, `--column-statistics=0`)
+	}
+
 	if len(d.Tables) == 0 && len(d.Databases) == 0 {
 		args = append(args, "--all-databases")
 	} else if len(d.Tables) == 0 {
@@ -208,10 +284,15 @@ func (d *Dumper) Dump(w io.Writer) error {
 		// If we only dump some tables, the dump data will not have database name
 		// which makes us hard to parse, so here we add it manually.
 
-		w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
+		_, err := w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
+		if err != nil {
+			return fmt.Errorf(`could not write USE command: %w`, err)
+		}
 	}
 
+	args[passwordArgIndex] = "--password=******"
 	log.Infof("exec mysqldump with %v", args)
+	args[passwordArgIndex] = passwordArg
 	cmd := exec.Command(d.ExecutionPath, args...)
 
 	cmd.Stderr = d.ErrOut
@@ -227,12 +308,12 @@ func (d *Dumper) DumpAndParse(h ParseHandler) error {
 	done := make(chan error, 1)
 	go func() {
 		err := Parse(r, h, !d.masterDataSkipped)
-		r.CloseWithError(err)
+		_ = r.CloseWithError(err)
 		done <- err
 	}()
 
 	err := d.Dump(w)
-	w.CloseWithError(err)
+	_ = w.CloseWithError(err)
 
 	err = <-done
 

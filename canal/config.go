@@ -2,13 +2,18 @@ package canal
 
 import (
 	"crypto/tls"
-	"io/ioutil"
 	"math/rand"
+	"net"
+	"os"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-log/log"
+	"github.com/siddontang/go-log/loggers"
+
+	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 type DumpConfig struct {
@@ -56,10 +61,12 @@ type Config struct {
 	HeartbeatPeriod time.Duration `toml:"heartbeat_period"`
 	ReadTimeout     time.Duration `toml:"read_timeout"`
 
-	// IncludeTableRegex or ExcludeTableRegex should contain database name
+	// IncludeTableRegex or ExcludeTableRegex should contain database name.
+	// IncludeTableRegex defines the tables that will be included, if empty, all tables will be included.
+	// ExcludeTableRegex defines the tables that will be excluded from the ones defined by IncludeTableRegex.
 	// Only a table which matches IncludeTableRegex and dismatches ExcludeTableRegex will be processed
 	// eg, IncludeTableRegex : [".*\\.canal"], ExcludeTableRegex : ["mysql\\..*"]
-	//     this will include all database's 'canal' table, except database 'mysql'
+	//     this will include all database's 'canal' table, except database 'mysql'.
 	// Default IncludeTableRegex and ExcludeTableRegex are empty, this will include all tables
 	IncludeTableRegex []string `toml:"include_table_regex"`
 	ExcludeTableRegex []string `toml:"exclude_table_regex"`
@@ -84,12 +91,31 @@ type Config struct {
 	// whether disable re-sync for broken connection
 	DisableRetrySync bool `toml:"disable_retry_sync"`
 
+	// whether the function WaitUntilPos() can use FLUSH BINARY LOGS
+	// to ensure we advance past a position. This should not strictly be required,
+	// and requires additional privileges.
+	DisableFlushBinlogWhileWaiting bool `toml:"disable_flush_binlog_while_waiting"`
+
 	// Set TLS config
 	TLSConfig *tls.Config
+
+	// Set Logger
+	Logger loggers.Advanced
+
+	// Set Dialer
+	Dialer client.Dialer
+
+	// Set Localhost
+	Localhost string
+
+	// EventCacheCount is the capacity of the BinlogStreamer internal event channel.
+	// the default value is 10240.
+	// if you table contain large columns, you can decrease this value to avoid OOM.
+	EventCacheCount int
 }
 
 func NewConfigWithFile(name string) (*Config, error) {
-	data, err := ioutil.ReadFile(name)
+	data, err := os.ReadFile(name)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -108,21 +134,26 @@ func NewConfig(data string) (*Config, error) {
 	return &c, nil
 }
 
+// NewDefaultConfig initiates some default config for Canal
 func NewDefaultConfig() *Config {
 	c := new(Config)
 
-	c.Addr = "127.0.0.1:3306"
-	c.User = "root"
-	c.Password = ""
-
+	c.Addr = mysql.DEFAULT_ADDR
+	c.User = mysql.DEFAULT_USER
+	c.Password = mysql.DEFAULT_PASSWORD
 	c.Charset = mysql.DEFAULT_CHARSET
 	c.ServerID = uint32(rand.New(rand.NewSource(time.Now().Unix())).Intn(1000)) + 1001
+	c.Flavor = mysql.DEFAULT_FLAVOR
 
-	c.Flavor = "mysql"
-
-	c.Dump.ExecutionPath = "mysqldump"
+	c.Dump.ExecutionPath = mysql.DEFAULT_DUMP_EXECUTION_PATH
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
+
+	streamHandler, _ := log.NewStreamHandler(os.Stdout)
+	c.Logger = log.NewDefault(streamHandler)
+
+	dialer := &net.Dialer{}
+	c.Dialer = dialer.DialContext
 
 	return c
 }

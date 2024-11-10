@@ -3,8 +3,9 @@ package canal
 import (
 	"io"
 
-	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/format"
+	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/charset"
+	"github.com/pingcap/tidb/pkg/parser/format"
 )
 
 func init() {
@@ -34,7 +35,7 @@ type valueExpr struct {
 	ast.TexprNode
 }
 
-func newValueExpr(_ interface{}) ast.ValueExpr                      { return &valueExpr{} }
+func newValueExpr(_ interface{}, _ string, _ string) ast.ValueExpr  { return &valueExpr{} }
 func (ve *valueExpr) SetValue(val interface{})                      {}
 func (ve *valueExpr) GetValue() interface{}                         { return nil }
 func (ve *valueExpr) GetDatumString() string                        { return "" }
@@ -44,5 +45,5 @@ func (ve *valueExpr) SetProjectionOffset(offset int)                {}
 func (ve *valueExpr) Restore(ctx *format.RestoreCtx) error          { return nil }
 func (ve *valueExpr) Accept(v ast.Visitor) (node ast.Node, ok bool) { return }
 func (ve *valueExpr) Text() string                                  { return "" }
-func (ve *valueExpr) SetText(text string)                           {}
+func (ve *valueExpr) SetText(enc charset.Encoding, text string)     {}
 func (ve *valueExpr) Format(w io.Writer)                            {}
