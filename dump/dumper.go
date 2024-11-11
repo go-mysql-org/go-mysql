@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -212,20 +213,9 @@ func (d *Dumper) Dump(w io.Writer) error {
 	if strings.Contains(d.Addr, "/") {
 		args = append(args, fmt.Sprintf("--socket=%s", d.Addr))
 	} else {
-		ipv6 := strings.Count(d.Addr, ":") > 1
-		lastSep := strings.LastIndex(d.Addr, ":")
-		var host, port string
-		// without port
-		host = d.Addr
-		// ipv6 with port
-		if ipv6 && strings.ContainsAny(d.Addr, "[]") {
-			host = strings.Trim(d.Addr[:lastSep], "[]")
-			port = d.Addr[lastSep+1:]
-		}
-		// ipv4 with port
-		if !ipv6 && lastSep != -1 {
-			host = d.Addr[:lastSep]
-			port = d.Addr[lastSep+1:]
+		host, port, err := net.SplitHostPort(d.Addr)
+		if err != nil {
+			host = d.Addr
 		}
 
 		args = append(args, fmt.Sprintf("--host=%s", host))
