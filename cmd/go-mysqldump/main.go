@@ -15,7 +15,7 @@ var (
 	addr      = flag.String("addr", "127.0.0.1:3306", "MySQL addr")
 	user      = flag.String("user", "root", "MySQL user")
 	password  = flag.String("password", "", "MySQL password")
-	execution = flag.String("exec", "mysqldump", "mysqldump execution path")
+	execution = flag.String("exec", "", "mysqldump/mariadb-dump execution path")
 	output    = flag.String("o", "", "dump output, empty for stdout")
 
 	dbs           = flag.String("dbs", "", "dump databases, separated by comma")
@@ -30,7 +30,7 @@ func main() {
 
 	d, err := dump.NewDumper(*execution, *addr, *user, *password)
 	if err != nil {
-		fmt.Printf("Create Dumper error %v\n", errors.ErrorStack(err))
+		fmt.Printf("Create Dumper error: %v\n", errors.ErrorStack(err))
 		os.Exit(1)
 	}
 
