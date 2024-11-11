@@ -51,13 +51,23 @@ type Dumper struct {
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
-	if len(executionPath) == 0 {
-		return nil, nil
-	}
+	var path string
+	var err error
 
-	path, err := exec.LookPath(executionPath)
-	if err != nil {
-		return nil, errors.Trace(err)
+	if len(executionPath) == 0 { // No explicit path set
+		path, err = exec.LookPath("mysqldump")
+		if err != nil {
+			path, err = exec.LookPath("mariadb-dump")
+			if err != nil {
+				// Using a new error as `err` will only mention mariadb-dump and not mysqldump
+				return nil, errors.New("not able to find mysqldump or mariadb-dump in path")
+			}
+		}
+	} else {
+		path, err = exec.LookPath(executionPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	d := new(Dumper)

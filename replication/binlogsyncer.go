@@ -749,12 +749,18 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 					b.retryCount++
 					if err = b.retrySync(); err != nil {
 						if b.cfg.MaxReconnectAttempts > 0 && b.retryCount >= b.cfg.MaxReconnectAttempts {
-							b.cfg.Logger.Errorf("retry sync err: %v, exceeded max retries (%d)", err, b.cfg.MaxReconnectAttempts)
+							b.cfg.Logger.Errorf(
+								"retry sync err: %v, exceeded max retries (%d)",
+								err, b.cfg.MaxReconnectAttempts,
+							)
 							s.closeWithError(err)
 							return
 						}
 
-						b.cfg.Logger.Errorf("retry sync err: %v, wait 1s and retry again", err)
+						b.cfg.Logger.Errorf(
+							"retry sync err: %v, wait 1s and retry again (retries: %d/%d)",
+							err, b.retryCount, b.cfg.MaxReconnectAttempts,
+						)
 						continue
 					}
 				}

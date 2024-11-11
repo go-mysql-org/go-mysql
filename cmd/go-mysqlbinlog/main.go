@@ -40,13 +40,14 @@ func main() {
 		ServerID: 101,
 		Flavor:   *flavor,
 
-		Host:            *host,
-		Port:            uint16(*port),
-		User:            *user,
-		Password:        *password,
-		RawModeEnabled:  *rawMode,
-		SemiSyncEnabled: *semiSync,
-		UseDecimal:      true,
+		Host:                 *host,
+		Port:                 uint16(*port),
+		User:                 *user,
+		Password:             *password,
+		RawModeEnabled:       *rawMode,
+		SemiSyncEnabled:      *semiSync,
+		UseDecimal:           true,
+		MaxReconnectAttempts: 10,
 	}
 
 	b := replication.NewBinlogSyncer(cfg)
