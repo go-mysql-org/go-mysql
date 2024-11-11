@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -212,10 +213,14 @@ func (d *Dumper) Dump(w io.Writer) error {
 	if strings.Contains(d.Addr, "/") {
 		args = append(args, fmt.Sprintf("--socket=%s", d.Addr))
 	} else {
-		seps := strings.SplitN(d.Addr, ":", 2)
-		args = append(args, fmt.Sprintf("--host=%s", seps[0]))
-		if len(seps) > 1 {
-			args = append(args, fmt.Sprintf("--port=%s", seps[1]))
+		host, port, err := net.SplitHostPort(d.Addr)
+		if err != nil {
+			host = d.Addr
+		}
+
+		args = append(args, fmt.Sprintf("--host=%s", host))
+		if port != "" {
+			args = append(args, fmt.Sprintf("--port=%s", port))
 		}
 	}
 
