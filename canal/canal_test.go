@@ -16,12 +16,30 @@ import (
 )
 
 type canalTestSuite struct {
+	addr string
 	suite.Suite
 	c *Canal
 }
 
+type canalTestSuiteOption func(c *canalTestSuite)
+
+func withAddr(addr string) canalTestSuiteOption {
+	return func(c *canalTestSuite) {
+		c.addr = addr
+	}
+}
+
+func newCanalTestSuite(opts ...canalTestSuiteOption) *canalTestSuite {
+	c := new(canalTestSuite)
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
 func TestCanalSuite(t *testing.T) {
-	suite.Run(t, new(canalTestSuite))
+	suite.Run(t, newCanalTestSuite())
+	suite.Run(t, newCanalTestSuite(withAddr(mysql.DEFAULT_IPV6_ADDR)))
 }
 
 const (
@@ -37,6 +55,9 @@ const (
 func (s *canalTestSuite) SetupSuite() {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
+	if s.addr != "" {
+		cfg.Addr = s.addr
+	}
 	cfg.User = "root"
 	cfg.HeartbeatPeriod = 200 * time.Millisecond
 	cfg.ReadTimeout = 300 * time.Millisecond

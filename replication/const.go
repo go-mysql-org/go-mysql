@@ -48,6 +48,9 @@ const (
 	BINLOG_MARIADB_FL_DDL                         /*32 - FL_DDL is set for event group containing DDL*/
 )
 
+// See `Log_event_type` in binlog_event.h
+// https://github.com/mysql/mysql-server/blob/trunk/libs/mysql/binlog/event/binlog_event.h
+
 type EventType byte
 
 const (
@@ -93,6 +96,7 @@ const (
 	PARTIAL_UPDATE_ROWS_EVENT
 	TRANSACTION_PAYLOAD_EVENT
 	HEARTBEAT_LOG_EVENT_V2
+	GTID_TAGGED_LOG_EVENT
 )
 
 const (
@@ -202,6 +206,8 @@ func (e EventType) String() string {
 		return "TransactionPayloadEvent"
 	case HEARTBEAT_LOG_EVENT_V2:
 		return "HeartbeatLogEventV2"
+	case GTID_TAGGED_LOG_EVENT:
+		return "Gtid_tagged_log_event"
 	case MARIADB_START_ENCRYPTION_EVENT:
 		return "MariadbStartEncryptionEvent"
 	case MARIADB_QUERY_COMPRESSED_EVENT:

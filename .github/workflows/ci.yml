@@ -17,6 +17,11 @@ jobs:
           echo -n "mysqldump -V: " ; mysqldump -V
 
           echo -e '[mysqld]\nserver-id=1\nlog-bin=mysql\nbinlog-format=row\ngtid-mode=ON\nenforce_gtid_consistency=ON\n' | sudo tee /etc/mysql/conf.d/replication.cnf
+          
+          # bind to :: for dual-stack listening
+          sudo sed -i 's/bind-address.*= 127.0.0.1/bind-address = ::/' /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo sed -i 's/mysqlx-bind-address.*= 127.0.0.1/mysqlx-bind-address = ::/' /etc/mysql/mysql.conf.d/mysqld.cnf
+          
           sudo service mysql start
 
           # apply this for mysql5 & mysql8 compatibility
@@ -109,5 +114,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
+          
       - name: Build on ${{ matrix.os }}/${{ matrix.arch }}
         run: GOARCH=${{ matrix.arch }} GOOS=${{ matrix.os }} go build ./...

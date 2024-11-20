@@ -337,3 +337,26 @@ func mysqlGTIDfromString(t *testing.T, gtidStr string) MysqlGTIDSet {
 
 	return *gtid.(*MysqlGTIDSet)
 }
+
+func TestValidateFlavor(t *testing.T) {
+	tbls := []struct {
+		flavor string
+		valid  bool
+	}{
+		{"mysql", true},
+		{"mariadb", true},
+		{"maria", false},
+		{"MariaDB", true},
+		{"msql", false},
+		{"mArIAdb", true},
+	}
+
+	for _, f := range tbls {
+		err := ValidateFlavor(f.flavor)
+		if f.valid == true {
+			require.NoError(t, err)
+		} else {
+			require.Error(t, err)
+		}
+	}
+}

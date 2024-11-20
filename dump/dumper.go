@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -51,13 +52,23 @@ type Dumper struct {
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
-	if len(executionPath) == 0 {
-		return nil, nil
-	}
+	var path string
+	var err error
 
-	path, err := exec.LookPath(executionPath)
-	if err != nil {
-		return nil, errors.Trace(err)
+	if len(executionPath) == 0 { // No explicit path set
+		path, err = exec.LookPath("mysqldump")
+		if err != nil {
+			path, err = exec.LookPath("mariadb-dump")
+			if err != nil {
+				// Using a new error as `err` will only mention mariadb-dump and not mysqldump
+				return nil, errors.New("not able to find mysqldump or mariadb-dump in path")
+			}
+		}
+	} else {
+		path, err = exec.LookPath(executionPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	d := new(Dumper)
@@ -202,10 +213,14 @@ func (d *Dumper) Dump(w io.Writer) error {
 	if strings.Contains(d.Addr, "/") {
 		args = append(args, fmt.Sprintf("--socket=%s", d.Addr))
 	} else {
-		seps := strings.SplitN(d.Addr, ":", 2)
-		args = append(args, fmt.Sprintf("--host=%s", seps[0]))
-		if len(seps) > 1 {
-			args = append(args, fmt.Sprintf("--port=%s", seps[1]))
+		host, port, err := net.SplitHostPort(d.Addr)
+		if err != nil {
+			host = d.Addr
+		}
+
+		args = append(args, fmt.Sprintf("--host=%s", host))
+		if port != "" {
+			args = append(args, fmt.Sprintf("--port=%s", port))
 		}
 	}
 
