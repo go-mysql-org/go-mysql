@@ -503,6 +503,11 @@ To change the used package in your repo it's enough to add this `replace` direct
 replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.10.0
 ```
 
+This can be done by running this command:
+```
+go mod edit -replace=github.com/siddontang/go-mysql=github.com/go-mysql-org/go-mysql@v1.10.0
+```
+
 v1.10.0 - is the last tag in repo, feel free to choose what you want.
 
 ## Donate
