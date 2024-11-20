@@ -23,11 +23,11 @@ This repo uses [Changelog](CHANGELOG.md).
 
 The `cmd` directory contains example applications that can be build by running `make build` in the root of the project. The resulting binaries will be places in `bin/`.
 
-- `go-binlogparser`
-- `go-canal`
-- `go-mysqlbinlog`
-- `go-mysqldump`
-- `go-mysqlserver`
+- `go-binlogparser`: parses a binlog file at a given offset
+- `go-canal`: streams binlog events from a server to canal
+- `go-mysqlbinlog`: streams binlog events
+- `go-mysqldump`: like `mysqldump`, but in Go
+- `go-mysqlserver`: fake MySQL server
 
 ## Replication
 
