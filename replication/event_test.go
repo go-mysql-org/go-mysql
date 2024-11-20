@@ -140,3 +140,10 @@ func TestIntVarEvent(t *testing.T) {
 	require.Equal(t, INSERT_ID, ev.Type)
 	require.Equal(t, uint64(23), ev.Value)
 }
+
+func TestPreviousGTIDEvent(t *testing.T) {
+	data := []byte{1, 0, 0, 0, 0, 0, 0, 1}
+	ev := PreviousGTIDsEvent{}
+	err := ev.Decode(data)
+	require.NoError(t, err)
+}
