@@ -58,9 +58,10 @@ syncer := replication.NewBinlogSyncer(cfg)
 streamer, _ := syncer.StartSync(mysql.Position{binlogFile, binlogPos})
 
 // or you can start a gtid replication like
+// gtidSet, _ := mysql.ParseGTIDSet(mysql.MySQLFlavor, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
 // streamer, _ := syncer.StartSyncGTID(gtidSet)
-// the mysql GTID set likes this "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2"
-// the mariadb GTID set likes this "0-1-100"
+// the mysql GTID set is like this "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2" and uses mysql.MySQLFlavor
+// the mariadb GTID set is like this "0-1-100" and uses mysql.MariaDBFlavor
 
 for {
 	ev, _ := streamer.GetEvent(context.Background())
