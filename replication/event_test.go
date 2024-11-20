@@ -142,6 +142,7 @@ func TestIntVarEvent(t *testing.T) {
 }
 
 func TestPreviousGTIDEvent(t *testing.T) {
+	// uuidCount == 1
 	data := []byte{1, 0, 0, 0, 0, 0, 0, 1}
 	ev := PreviousGTIDsEvent{}
 	err := ev.Decode(data)
