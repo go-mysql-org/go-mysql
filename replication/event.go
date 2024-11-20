@@ -238,7 +238,6 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 		if len(data) == 8 {
 			return nil
 		}
-		return fmt.Errorf("uuidCount %d doesn't match data length %d", uuidCount, len(data))
 	}
 
 	previousGTIDSets := make([]string, uuidCount)
