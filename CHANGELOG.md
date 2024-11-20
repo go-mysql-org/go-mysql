@@ -1,3 +1,5 @@
+## Tag v1.10.0 WIP
+
 ### Tag v1.9.1 (2024-09-12)
 * Fix can't connect to MySQL 8.0 with long password. [#914](https://github.com/go-mysql-org/go-mysql/pull/914) ([lance6716](https://github.com/lance6716))
 * Fix actual master and add -race in CI. [#907](https://github.com/go-mysql-org/go-mysql/pull/907) ([atercattus](https://github.com/atercattus))
