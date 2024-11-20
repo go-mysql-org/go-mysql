@@ -1,29 +1,33 @@
 # go-mysql
 
-A pure go library to handle MySQL network protocol and replication.
+A pure go library to handle MySQL network protocol and replication as used by MySQL and MariaDB.
 
 ![semver](https://img.shields.io/github/v/tag/go-mysql-org/go-mysql)
 ![example workflow](https://github.com/go-mysql-org/go-mysql/actions/workflows/ci.yml/badge.svg)
 ![gomod version](https://img.shields.io/github/go-mod/go-version/go-mysql-org/go-mysql/master)
-
-## How to migrate to this repo
-To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
-```
-replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.10.0
-```
-
-v1.10.0 - is the last tag in repo, feel free to choose what you want.
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-mysql-org/go-mysql.svg)](https://pkg.go.dev/github.com/go-mysql-org/go-mysql)
 
 ## Changelog
 This repo uses [Changelog](CHANGELOG.md).
 
 ---
 # Content
-* [Replication](#replication)
-* [Incremental dumping](#canal)
-* [Client](#client)
-* [Fake server](#server)
-* [database/sql like driver](#driver)
+* [Replication](#replication) - Process events from a binlog stream.
+* [Incremental dumping](#canal) - Sync from MySQL to Redis, Elasticsearch, etc.
+* [Client](#client) - Simple MySQL client.
+* [Fake server](#server) - server side of the MySQL protocol, as library.
+* [database/sql like driver](#driver) - An alternative `database/sql` driver for MySQL.
+* [Migration](#how-to-migrate-to-this-repo) - Information for how to migrate if you used the old location of this project.
+
+## Examples
+
+The `cmd` directory contains example applications that can be build by running `make build` in the root of the project. The resulting binaries will be places in `bin/`.
+
+- `go-binlogparser`
+- `go-canal`
+- `go-mysqlbinlog`
+- `go-mysqldump`
+- `go-mysqlserver`
 
 ## Replication
 
@@ -491,6 +495,14 @@ func main() {
 
 
 We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)
+
+## How to migrate to this repo
+To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
+```
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.10.0
+```
+
+v1.10.0 - is the last tag in repo, feel free to choose what you want.
 
 ## Donate
 
