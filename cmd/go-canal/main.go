@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/canal"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/pingcap/errors"
 )
 
 var (
@@ -40,6 +41,12 @@ var (
 
 func main() {
 	flag.Parse()
+
+	err := mysql.ValidateFlavor(*flavor)
+	if err != nil {
+		fmt.Printf("Flavor error: %v\n", errors.ErrorStack(err))
+		return
+	}
 
 	cfg := canal.NewDefaultConfig()
 	cfg.Addr = net.JoinHostPort(*host, strconv.Itoa(*port))
