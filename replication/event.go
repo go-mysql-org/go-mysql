@@ -234,8 +234,18 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	uuidCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 	pos += 8
 
+	if uuidCount <= 1 {
+		if len(data) == 8 {
+			return nil
+		}
+		fmt.Errorf("uuidCount %d doesn't match data length %d", uuidCount, len(data))
+	}
+
 	previousGTIDSets := make([]string, uuidCount)
 	for i := range previousGTIDSets {
+		if len(data) < pos+16 {
+			return fmt.Errorf("Failed to decode UUID")
+		}
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
 		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
