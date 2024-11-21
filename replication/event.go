@@ -229,15 +229,59 @@ type PreviousGTIDsEvent struct {
 	GTIDSets string
 }
 
+type GtidFormat int
+
+const (
+	GtidFormatClassic = iota
+	GtidFormatTagged
+)
+
+func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
+	if data[7] == 1 {
+		format = GtidFormatTagged
+	}
+
+	if format == GtidFormatTagged {
+		sid_mask := []byte{0, 255, 255, 255, 255, 255, 255, 0}
+
+		// Apply the mask
+		for i, _ := range data[:8] {
+			data[i] &= sid_mask[i]
+		}
+		data = append(data, 0)
+
+		// sidnr
+		sidnr = binary.LittleEndian.Uint64(data[1:])
+		return
+	}
+	sidnr = binary.LittleEndian.Uint64(data)
+	return
+}
+
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos := 0
-	uuidCount := binary.LittleEndian.Uint16(data[pos : pos+8])
+
+	gtidinfo := make([]byte, 8)
+	copy(gtidinfo, data[:8])
+	format, uuidCount := decodeSid(gtidinfo)
 	pos += 8
 
 	previousGTIDSets := make([]string, uuidCount)
-	for i := range previousGTIDSets {
+	currentSetnr := 0
+	for _ = range previousGTIDSets {
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
+		isTag := false
+		var tag string
+		if format == GtidFormatTagged {
+			tagLength := int(data[pos]) / 2
+			pos += 1
+			if tagLength > 0 {
+				isTag = true
+				tag = string(data[pos : pos+tagLength])
+				pos += tagLength
+			}
+		}
 		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 		pos += 8
 		intervals := make([]string, sliceCount)
@@ -254,9 +298,14 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 			}
 			intervals[i] = interval
 		}
-		previousGTIDSets[i] = fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":"))
+		if isTag {
+			previousGTIDSets[currentSetnr-1] += fmt.Sprintf(":%s:%s", tag, strings.Join(intervals, ":"))
+		} else {
+			previousGTIDSets[currentSetnr] = fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":"))
+			currentSetnr += 1
+		}
 	}
-	e.GTIDSets = strings.Join(previousGTIDSets, ",")
+	e.GTIDSets = strings.Join(previousGTIDSets[:currentSetnr], ",")
 	return nil
 }
 
