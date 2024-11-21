@@ -140,3 +140,22 @@ func TestIntVarEvent(t *testing.T) {
 	require.Equal(t, INSERT_ID, ev.Type)
 	require.Equal(t, uint64(23), ev.Value)
 }
+
+func TestDecodeSid(t *testing.T) {
+	testcases := []struct {
+		input      []byte
+		gtidFormat GtidFormat
+		uuidCount  uint64
+	}{
+		{[]byte{1, 2, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 2},
+		{[]byte{1, 1, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 1},
+		{[]byte{1, 0, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 0},
+		{[]byte{1, 0, 0, 0, 0, 0, 0, 0}, GtidFormatClassic, 1},
+	}
+
+	for _, tc := range testcases {
+		format, uuidCount := decodeSid(tc.input)
+		assert.Equal(t, tc.gtidFormat, format)
+		assert.Equal(t, tc.uuidCount, uuidCount)
+	}
+}
