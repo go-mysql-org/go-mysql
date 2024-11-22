@@ -24,6 +24,7 @@ This repo uses [Changelog](CHANGELOG.md).
 * [Client](#client)
 * [Fake server](#server)
 * [database/sql like driver](#driver)
+* [Logging](#logging)
 
 ## Replication
 
@@ -491,6 +492,29 @@ func main() {
 
 
 We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)
+
+## Logging
+
+Logging by default is send to stdout.
+
+To disable logging completely:
+```go
+import "github.com/siddontang/go-log/log"
+...
+        nullHandler, _ := log.NewNullHandler()
+        cfg.Logger = log.NewDefault(nullHandler)
+```
+
+To write logging to any [`io.Writer`](https://pkg.go.dev/io#Writer):
+```go
+import "github.com/siddontang/go-log/log"
+...
+        w := ...
+        streamHandler, _ := log.NewStreamHandler(w)
+        cfg.Logger = log.NewDefault(streamHandler)
+```
+
+Or you can implement your own [`log.Handler`](https://pkg.go.dev/github.com/siddontang/go-log/log#Handler).
 
 ## Donate
 
