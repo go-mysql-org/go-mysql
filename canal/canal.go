@@ -153,6 +153,9 @@ func (c *Canal) prepareDumper() error {
 		return nil
 	}
 
+	// use the same logger for the dumper
+	c.dumper.Logger = c.cfg.Logger
+
 	dbs := c.cfg.Dump.Databases
 	tables := c.cfg.Dump.Tables
 	tableDB := c.cfg.Dump.TableDB
