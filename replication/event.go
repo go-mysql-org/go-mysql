@@ -268,7 +268,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 
 	previousGTIDSets := make([]string, uuidCount)
 	currentSetnr := 0
-	for _ = range previousGTIDSets {
+	for range previousGTIDSets {
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
 		isTag := false
