@@ -5,8 +5,8 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ "1.22", "1.21" ]
-        os: [ ubuntu-22.04, ubuntu-20.04 ]
+        go: [ "1.23", "1.22" ]
+        os: [ ubuntu-24.04, ubuntu-22.04, ubuntu-20.04 ]
     name: Tests Go ${{ matrix.go }} on ${{ matrix.os }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}
 
@@ -51,8 +51,8 @@ jobs:
     strategy:
       matrix:
         mysql_version:
-          - 8.0.37
-          - 8.4.0
+          - 8.0.40
+          - 8.4.3
     name: Tests with MySQL ${{ matrix.mysql_version }}
     runs-on: ubuntu-latest
     services:
@@ -78,7 +78,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.23"
       - name: Run tests
         run: |
           # separate test to avoid RESET MASTER conflict
@@ -113,7 +113,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.23"
           
       - name: Build on ${{ matrix.os }}/${{ matrix.arch }}
         run: GOARCH=${{ matrix.arch }} GOOS=${{ matrix.os }} go build ./...
