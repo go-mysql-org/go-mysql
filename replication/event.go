@@ -236,8 +236,20 @@ const (
 	GtidFormatTagged
 )
 
+// Decode the number of sids (source identifiers) and if it is using
+// tagged GTIDs or classic (non-tagged) GTIDs.
+//
+// Note that each gtid tag increases the sidno here, so a single UUID
+// might turn up multiple times if there are multipl tags.
+//
+// see also:
+// decode_nsids_format in mysql/mysql-server
+// https://github.com/mysql/mysql-server/blob/61a3a1d8ef15512396b4c2af46e922a19bf2b174/sql/rpl_gtid_set.cc#L1363-L1378
 func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
-	if data[7] == 1 {
+	gtidinfo := make([]byte, 8)
+	copy(gtidinfo, data[:8])
+
+	if gtidinfo[7] == 1 {
 		format = GtidFormatTagged
 	}
 
@@ -245,25 +257,23 @@ func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
 		sid_mask := []byte{0, 255, 255, 255, 255, 255, 255, 0}
 
 		// Apply the mask
-		for i, _ := range data[:8] {
-			data[i] &= sid_mask[i]
+		for i, _ := range gtidinfo[:8] {
+			gtidinfo[i] &= sid_mask[i]
 		}
-		data = append(data, 0)
+		gtidinfo = append(gtidinfo, 0)
 
 		// sidnr
-		sidnr = binary.LittleEndian.Uint64(data[1:])
+		sidnr = binary.LittleEndian.Uint64(gtidinfo[1:])
 		return
 	}
-	sidnr = binary.LittleEndian.Uint64(data)
+	sidnr = binary.LittleEndian.Uint64(gtidinfo)
 	return
 }
 
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos := 0
 
-	gtidinfo := make([]byte, 8)
-	copy(gtidinfo, data[:8])
-	format, uuidCount := decodeSid(gtidinfo)
+	format, uuidCount := decodeSid(data)
 	pos += 8
 
 	previousGTIDSets := make([]string, uuidCount)
@@ -276,7 +286,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 		if format == GtidFormatTagged {
 			tagLength := int(data[pos]) / 2
 			pos += 1
-			if tagLength > 0 {
+			if tagLength > 0 { // 0 == no tag, >0 == tag
 				isTag = true
 				tag = string(data[pos : pos+tagLength])
 				pos += tagLength
