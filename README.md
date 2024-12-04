@@ -342,7 +342,7 @@ import (
 func main() {
 	// dsn format: "user:password@addr?dbname"
 	dsn := "root@127.0.0.1:3306?test"
-	db, _ := sql.Open(dsn)
+	db, _ := sql.Open("mysql", dsn)
 	db.Close()
 }
 ```
