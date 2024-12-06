@@ -389,13 +389,15 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 	return nil
 }
 
+var driverName = "mysql"
+
 func init() {
 	options["compress"] = CompressOption
 	options["collation"] = CollationOption
 	options["readTimeout"] = ReadTimeoutOption
 	options["writeTimeout"] = WriteTimeoutOption
 
-	sql.Register("mysql", driver{})
+	sql.Register(driverName, driver{})
 }
 
 // SetCustomTLSConfig sets a custom TLSConfig for the address (host:port) of the supplied DSN.
