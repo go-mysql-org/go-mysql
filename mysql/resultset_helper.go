@@ -1,12 +1,53 @@
 package mysql
 
 import (
+	"bytes"
+	"encoding/binary"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 )
+
+func toBinaryDateTime(t time.Time) ([]byte, error) {
+	var buf bytes.Buffer
+
+	if t.IsZero() {
+		return nil, nil
+	}
+
+	year, month, day := t.Year(), t.Month(), t.Day()
+	hour, min, sec := t.Hour(), t.Minute(), t.Second()
+	nanosec := t.Nanosecond()
+
+	if nanosec > 0 {
+		buf.WriteByte(byte(11))
+		binary.Write(&buf, binary.LittleEndian, uint16(year))
+		buf.WriteByte(byte(month))
+		buf.WriteByte(byte(day))
+		buf.WriteByte(byte(hour))
+		buf.WriteByte(byte(min))
+		buf.WriteByte(byte(sec))
+		binary.Write(&buf, binary.LittleEndian, uint32(nanosec/1000))
+	} else if hour > 0 || min > 0 || sec > 0 {
+		buf.WriteByte(byte(7))
+		binary.Write(&buf, binary.LittleEndian, uint16(year))
+		buf.WriteByte(byte(month))
+		buf.WriteByte(byte(day))
+		buf.WriteByte(byte(hour))
+		buf.WriteByte(byte(min))
+		buf.WriteByte(byte(sec))
+	} else {
+		buf.WriteByte(byte(4))
+		binary.Write(&buf, binary.LittleEndian, uint16(year))
+		buf.WriteByte(byte(month))
+		buf.WriteByte(byte(day))
+	}
+
+	return buf.Bytes(), nil
+}
 
 func FormatTextValue(value interface{}) ([]byte, error) {
 	switch v := value.(type) {
@@ -38,6 +79,8 @@ func FormatTextValue(value interface{}) ([]byte, error) {
 		return v, nil
 	case string:
 		return hack.Slice(v), nil
+	case time.Time:
+		return hack.Slice(v.Format(time.DateTime)), nil
 	case nil:
 		return nil, nil
 	default:
@@ -75,6 +118,8 @@ func formatBinaryValue(value interface{}) ([]byte, error) {
 		return v, nil
 	case string:
 		return hack.Slice(v), nil
+	case time.Time:
+		return toBinaryDateTime(v)
 	default:
 		return nil, errors.Errorf("invalid type %T", value)
 	}
@@ -90,6 +135,8 @@ func fieldType(value interface{}) (typ uint8, err error) {
 		typ = MYSQL_TYPE_DOUBLE
 	case string, []byte:
 		typ = MYSQL_TYPE_VAR_STRING
+	case time.Time:
+		typ = MYSQL_TYPE_DATETIME
 	case nil:
 		typ = MYSQL_TYPE_NULL
 	default:
@@ -109,7 +156,7 @@ func formatField(field *Field, value interface{}) error {
 	case float32, float64:
 		field.Charset = 63
 		field.Flag = BINARY_FLAG | NOT_NULL_FLAG
-	case string, []byte:
+	case string, []byte, time.Time:
 		field.Charset = 33
 	case nil:
 		field.Charset = 33
