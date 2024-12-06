@@ -455,6 +455,19 @@ func main() {
 }
 ```
 
+### Custom Driver Name
+
+A custom driver name can be set via build options: `-ldflags '-X "github.com/go-mysql-org/go-mysql/driver.driverName=gomysql"'`.
+
+This can be useful when using [GORM](https://gorm.io/docs/connecting_to_the_database.html#Customize-Driver):
+```go
+mysql.Config{
+    DriverName: "gomysql",
+    ...
+}
+
+```
+
 ### Custom NamedValueChecker
 
 Golang allows for custom handling of query arguments before they are passed to the driver
