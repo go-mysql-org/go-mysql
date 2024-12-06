@@ -17,6 +17,7 @@ This repo uses [Changelog](CHANGELOG.md).
 * [Client](#client) - Simple MySQL client.
 * [Fake server](#server) - server side of the MySQL protocol, as library.
 * [database/sql like driver](#driver) - An alternative `database/sql` driver for MySQL.
+* [Logging](#logging) - Custom logging options.
 * [Migration](#how-to-migrate-to-this-repo) - Information for how to migrate if you used the old location of this project.
 
 ## Examples
@@ -346,7 +347,7 @@ import (
 func main() {
 	// dsn format: "user:password@addr?dbname"
 	dsn := "root@127.0.0.1:3306?test"
-	db, _ := sql.Open(dsn)
+	db, _ := sql.Open("mysql", dsn)
 	db.Close()
 }
 ```
@@ -496,6 +497,29 @@ func main() {
 
 
 We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driver. :-)
+
+## Logging
+
+Logging by default is send to stdout.
+
+To disable logging completely:
+```go
+import "github.com/siddontang/go-log/log"
+...
+        nullHandler, _ := log.NewNullHandler()
+        cfg.Logger = log.NewDefault(nullHandler)
+```
+
+To write logging to any [`io.Writer`](https://pkg.go.dev/io#Writer):
+```go
+import "github.com/siddontang/go-log/log"
+...
+        w := ...
+        streamHandler, _ := log.NewStreamHandler(w)
+        cfg.Logger = log.NewDefault(streamHandler)
+```
+
+Or you can implement your own [`log.Handler`](https://pkg.go.dev/github.com/siddontang/go-log/log#Handler).
 
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
