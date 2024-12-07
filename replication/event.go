@@ -229,15 +229,69 @@ type PreviousGTIDsEvent struct {
 	GTIDSets string
 }
 
+type GtidFormat int
+
+const (
+	GtidFormatClassic = iota
+	GtidFormatTagged
+)
+
+// Decode the number of sids (source identifiers) and if it is using
+// tagged GTIDs or classic (non-tagged) GTIDs.
+//
+// Note that each gtid tag increases the sidno here, so a single UUID
+// might turn up multiple times if there are multipl tags.
+//
+// see also:
+// decode_nsids_format in mysql/mysql-server
+// https://github.com/mysql/mysql-server/blob/61a3a1d8ef15512396b4c2af46e922a19bf2b174/sql/rpl_gtid_set.cc#L1363-L1378
+func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
+	gtidinfo := make([]byte, 8)
+	copy(gtidinfo, data[:8])
+
+	if gtidinfo[7] == 1 {
+		format = GtidFormatTagged
+	}
+
+	if format == GtidFormatTagged {
+		sid_mask := []byte{0, 255, 255, 255, 255, 255, 255, 0}
+
+		// Apply the mask
+		for i, _ := range gtidinfo[:8] {
+			gtidinfo[i] &= sid_mask[i]
+		}
+		gtidinfo = append(gtidinfo, 0)
+
+		// sidnr
+		sidnr = binary.LittleEndian.Uint64(gtidinfo[1:])
+		return
+	}
+	sidnr = binary.LittleEndian.Uint64(gtidinfo)
+	return
+}
+
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos := 0
-	uuidCount := binary.LittleEndian.Uint16(data[pos : pos+8])
+
+	format, uuidCount := decodeSid(data)
 	pos += 8
 
 	previousGTIDSets := make([]string, uuidCount)
-	for i := range previousGTIDSets {
+	currentSetnr := 0
+	for range previousGTIDSets {
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
+		isTag := false
+		var tag string
+		if format == GtidFormatTagged {
+			tagLength := int(data[pos]) / 2
+			pos += 1
+			if tagLength > 0 { // 0 == no tag, >0 == tag
+				isTag = true
+				tag = string(data[pos : pos+tagLength])
+				pos += tagLength
+			}
+		}
 		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 		pos += 8
 		intervals := make([]string, sliceCount)
@@ -254,9 +308,14 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 			}
 			intervals[i] = interval
 		}
-		previousGTIDSets[i] = fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":"))
+		if isTag {
+			previousGTIDSets[currentSetnr-1] += fmt.Sprintf(":%s:%s", tag, strings.Join(intervals, ":"))
+		} else {
+			previousGTIDSets[currentSetnr] = fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":"))
+			currentSetnr += 1
+		}
 	}
-	e.GTIDSets = strings.Join(previousGTIDSets, ",")
+	e.GTIDSets = strings.Join(previousGTIDSets[:currentSetnr], ",")
 	return nil
 }
 
