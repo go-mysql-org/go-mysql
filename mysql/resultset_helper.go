@@ -24,16 +24,16 @@ func toBinaryDateTime(t time.Time) ([]byte, error) {
 
 	if nanosec > 0 {
 		buf.WriteByte(byte(11))
-		binary.Write(&buf, binary.LittleEndian, uint16(year))
+		_ = binary.Write(&buf, binary.LittleEndian, uint16(year))
 		buf.WriteByte(byte(month))
 		buf.WriteByte(byte(day))
 		buf.WriteByte(byte(hour))
 		buf.WriteByte(byte(min))
 		buf.WriteByte(byte(sec))
-		binary.Write(&buf, binary.LittleEndian, uint32(nanosec/1000))
+		_ = binary.Write(&buf, binary.LittleEndian, uint32(nanosec/1000))
 	} else if hour > 0 || min > 0 || sec > 0 {
 		buf.WriteByte(byte(7))
-		binary.Write(&buf, binary.LittleEndian, uint16(year))
+		_ = binary.Write(&buf, binary.LittleEndian, uint16(year))
 		buf.WriteByte(byte(month))
 		buf.WriteByte(byte(day))
 		buf.WriteByte(byte(hour))
@@ -41,7 +41,7 @@ func toBinaryDateTime(t time.Time) ([]byte, error) {
 		buf.WriteByte(byte(sec))
 	} else {
 		buf.WriteByte(byte(4))
-		binary.Write(&buf, binary.LittleEndian, uint16(year))
+		_ = binary.Write(&buf, binary.LittleEndian, uint16(year))
 		buf.WriteByte(byte(month))
 		buf.WriteByte(byte(day))
 	}
