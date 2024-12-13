@@ -161,7 +161,7 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 				ioWriter.Write(buf.Bytes())
 			}
 		case FAKE_DONE_EVENT:
-			if p.footerBuf == nil {
+			if p.footerBuf == nil { // no rotate event found
 				buf := bytes.NewBuffer(nil)
 				buf.WriteString("\nDELIMITER ;\n")
 				buf.WriteString("# End of log file\n")
@@ -183,6 +183,7 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 					buf.WriteString("/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;\n")
 					buf.WriteString("/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;\n")
 				}
+				p.footerBuf = buf
 			}
 			if p.Flashback {
 				ioWriter.SetFooter(p.footerBuf.Bytes())
@@ -369,8 +370,11 @@ func unixTimeToStr(ts uint32) string {
 	return time.Unix(int64(ts), 0).Local().Format(time.DateTime)
 }
 
+// RowsFilter binlog rows filter
 type RowsFilter struct {
-	columnFilterExpr         string
+	// columnFilterExpr go expression evaluation
+	columnFilterExpr string
+	// CompiledColumnFilterExpr compiled go-expr
 	CompiledColumnFilterExpr *vm.Program
 	// rowsMatch rows filter matched records number in this rows event
 	rowsMatch int

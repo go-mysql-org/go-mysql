@@ -101,10 +101,8 @@ func (c *FlashbackWriter) SetFooter(s []byte) {
 
 // Close 如果 mergedWriter != nil，则会合并文件
 func (c *FlashbackWriter) Close() (err error) {
+	c.currentIOWriter.Write(c.cacheHeader)
 	for i := len(c.cache); i > 0; i-- {
-		if i == len(c.cache) {
-			c.currentIOWriter.Write(c.cacheHeader)
-		}
 		_, err = c.currentIOWriter.Write(c.cache[i-1])
 		if err != nil {
 			return err
@@ -129,11 +127,11 @@ func (c *FlashbackWriter) Close() (err error) {
 	return
 }
 
-func NewFlashbackWriter(filePrefix string, cacheSize int, writer io.WriteCloser) *FlashbackWriter {
+func NewFlashbackWriter(filePrefix string, cacheSize int, outputWriter io.WriteCloser) *FlashbackWriter {
 	bc := &FlashbackWriter{
 		filePrefix:   filePrefix,
 		maxCacheSize: cacheSize,
-		mergedWriter: writer,
+		mergedWriter: outputWriter,
 	}
 	bc.currentFileName = fmt.Sprintf("%s.%03d.sql", filePrefix, bc.currentFilePartId)
 	bc.filePartNames = append(bc.filePartNames, bc.currentFileName)

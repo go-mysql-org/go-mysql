@@ -113,7 +113,7 @@ func (e *RowsEvent) FlashbackData2(pos int, data []byte) (err2 error) {
 		}
 		bufImage1 = data[pos : pos+n] // 保存第一个镜像
 		currentMatched := false
-		if e.rowsFilter != nil {
+		if e.rowsFilter != nil { // go-expr
 			rowCount := len(e.Rows)
 			columnFields["col"] = e.Rows[rowCount-1]
 			rowMatched, _ := expr.Run(e.rowsFilter.CompiledColumnFilterExpr, columnFields)

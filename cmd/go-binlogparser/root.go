@@ -8,12 +8,12 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "gomysqlbinlog",
-	Short:   "gomysqlbinlog",
-	Long:    "gomysqlbinlog replace mysqlbinlog",
-	Version: "1.0.0",
+	Use:          "gomysqlbinlog",
+	Short:        "gomysqlbinlog",
+	Long:         "gomysqlbinlog replace mysqlbinlog",
+	Version:      "1.0.0",
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
-
 		return parseBinlogFile()
 	},
 }
@@ -29,7 +29,7 @@ func init() {
 	_ = viper.BindPFlag("stop-file", rootCmd.PersistentFlags().Lookup("stop-file"))
 	_ = viper.BindPFlag("binlog-dir", rootCmd.PersistentFlags().Lookup("binlog-dir"))
 
-	rootCmd.PersistentFlags().StringP("file", "f", "", "binlog file name")
+	rootCmd.PersistentFlags().StringSliceP("file", "f", nil, "binlog file name")
 	rootCmd.PersistentFlags().String("start-datetime", "", "start datetime")
 	rootCmd.PersistentFlags().String("stop-datetime", "", "stop datetime")
 	rootCmd.PersistentFlags().Int("start-position", 4, "start position for --file or --start-file")
@@ -59,6 +59,7 @@ func init() {
 
 	rootCmd.PersistentFlags().Int("server-id", 0, "Extract only binlog entries created by the server having the given id")
 	rootCmd.PersistentFlags().String("rows-filter", "", "col[0] == 'abc'")
+	rootCmd.PersistentFlags().String("rows-filter-from-csv", "", "file csv format like:col[0],col[1]\nxxx,100\nyyy,200")
 	rootCmd.PersistentFlags().StringSlice("rows-event-type", nil, "insert,update,delete")
 	//rootCmd.PersistentFlags().String("query-event-handler", "", "keep | ignore | error | safe")
 	//rootCmd.PersistentFlags().String("statement-match-error", "", "Decide how to handle the query events like statement or ddl.")
@@ -66,6 +67,7 @@ func init() {
 	//rootCmd.PersistentFlags().String("statement-match-ignore-force", "", "Decide how to handle the query events like statement or ddl.")
 	_ = viper.BindPFlag("server-id", rootCmd.PersistentFlags().Lookup("server-id"))
 	_ = viper.BindPFlag("rows-filter", rootCmd.PersistentFlags().Lookup("rows-filter"))
+	_ = viper.BindPFlag("rows-filter-from-csv", rootCmd.PersistentFlags().Lookup("rows-filter-from-csv"))
 	_ = viper.BindPFlag("rows-event-type", rootCmd.PersistentFlags().Lookup("rows-event-type"))
 	//_ = viper.BindPFlag("query-event-handler", rootCmd.PersistentFlags().Lookup("query-event-handler"))
 
@@ -99,7 +101,7 @@ func init() {
 	rootCmd.MarkFlagsOneRequired("file", "start-file")
 	rootCmd.MarkFlagsMutuallyExclusive("file", "start-file")
 	rootCmd.MarkFlagsRequiredTogether("start-file", "stop-file")
-	rootCmd.MarkFlagsMutuallyExclusive("stop-file", "result-file")
+	rootCmd.MarkFlagsMutuallyExclusive("stop-file", "result-file") // 多文件解析不允许指定 result-file
 }
 
 func main() {
