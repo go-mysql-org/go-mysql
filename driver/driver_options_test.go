@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/log"
+	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-mysql-org/go-mysql/client"
