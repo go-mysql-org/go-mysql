@@ -246,27 +246,17 @@ const (
 // decode_nsids_format in mysql/mysql-server
 // https://github.com/mysql/mysql-server/blob/61a3a1d8ef15512396b4c2af46e922a19bf2b174/sql/rpl_gtid_set.cc#L1363-L1378
 func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
-	gtidinfo := make([]byte, 8)
-	copy(gtidinfo, data[:8])
-
-	if gtidinfo[7] == 1 {
+	if data[7] == 1 {
 		format = GtidFormatTagged
 	}
 
 	if format == GtidFormatTagged {
-		sid_mask := []byte{0, 255, 255, 255, 255, 255, 255, 0}
-
-		// Apply the mask
-		for i, _ := range gtidinfo[:8] {
-			gtidinfo[i] &= sid_mask[i]
-		}
-		gtidinfo = append(gtidinfo, 0)
-
-		// sidnr
-		sidnr = binary.LittleEndian.Uint64(gtidinfo[1:])
+		masked := make([]byte, 8)
+		copy(masked, data[1:7])
+		sidnr = binary.LittleEndian.Uint64(masked)
 		return
 	}
-	sidnr = binary.LittleEndian.Uint64(gtidinfo)
+	sidnr = binary.LittleEndian.Uint64(data[:8])
 	return
 }
 
@@ -277,45 +267,53 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos += 8
 
 	previousGTIDSets := make([]string, uuidCount)
+
 	currentSetnr := 0
+	var buf strings.Builder
 	for range previousGTIDSets {
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
-		isTag := false
 		var tag string
 		if format == GtidFormatTagged {
 			tagLength := int(data[pos]) / 2
 			pos += 1
 			if tagLength > 0 { // 0 == no tag, >0 == tag
-				isTag = true
 				tag = string(data[pos : pos+tagLength])
 				pos += tagLength
 			}
 		}
+
+		if len(tag) > 0 {
+			buf.WriteString(":")
+			buf.WriteString(tag)
+		} else {
+			if currentSetnr != 0 {
+				buf.WriteString(",")
+			}
+			buf.WriteString(uuid)
+			currentSetnr += 1
+		}
+
 		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
 		pos += 8
-		intervals := make([]string, sliceCount)
-		for i := range intervals {
+		for range sliceCount {
+			buf.WriteString(":")
+
 			start := e.decodeInterval(data[pos : pos+8])
 			pos += 8
 			stop := e.decodeInterval(data[pos : pos+8])
 			pos += 8
-			interval := ""
 			if stop == start+1 {
-				interval = fmt.Sprintf("%d", start)
+				fmt.Fprintf(&buf, "%d", start)
 			} else {
-				interval = fmt.Sprintf("%d-%d", start, stop-1)
+				fmt.Fprintf(&buf, "%d-%d", start, stop-1)
 			}
-			intervals[i] = interval
 		}
-		if isTag {
-			previousGTIDSets[currentSetnr-1] += fmt.Sprintf(":%s:%s", tag, strings.Join(intervals, ":"))
-		} else {
-			previousGTIDSets[currentSetnr] = fmt.Sprintf("%s:%s", uuid, strings.Join(intervals, ":"))
+		if len(tag) == 0 {
 			currentSetnr += 1
 		}
 	}
-	e.GTIDSets = strings.Join(previousGTIDSets[:currentSetnr], ",")
+	e.GTIDSets = buf.String()
 	return nil
 }
 
