@@ -8,7 +8,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/siddontang/go/hack"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 // Handler is what a server needs to implement the client-server protocol
@@ -81,7 +81,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		c.Conn = nil
 		return noResponse{}
 	case COM_QUERY:
-		if r, err := c.h.HandleQuery(hack.String(data)); err != nil {
+		if r, err := c.h.HandleQuery(utils.ByteSliceToString(data)); err != nil {
 			return err
 		} else {
 			return r
@@ -89,15 +89,15 @@ func (c *Conn) dispatch(data []byte) interface{} {
 	case COM_PING:
 		return nil
 	case COM_INIT_DB:
-		if err := c.h.UseDB(hack.String(data)); err != nil {
+		if err := c.h.UseDB(utils.ByteSliceToString(data)); err != nil {
 			return err
 		} else {
 			return nil
 		}
 	case COM_FIELD_LIST:
 		index := bytes.IndexByte(data, 0x00)
-		table := hack.String(data[0:index])
-		wildcard := hack.String(data[index+1:])
+		table := utils.ByteSliceToString(data[0:index])
+		wildcard := utils.ByteSliceToString(data[index+1:])
 
 		if fs, err := c.h.HandleFieldList(table, wildcard); err != nil {
 			return err
@@ -108,7 +108,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		c.stmtID++
 		st := new(Stmt)
 		st.ID = c.stmtID
-		st.Query = hack.String(data)
+		st.Query = utils.ByteSliceToString(data)
 		var err error
 		if st.Params, st.Columns, st.Context, err = c.h.HandleStmtPrepare(st.Query); err != nil {
 			return err

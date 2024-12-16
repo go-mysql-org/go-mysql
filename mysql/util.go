@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/hack"
 )
 
 func Pstack() string {
@@ -375,7 +375,7 @@ var (
 func Escape(sql string) string {
 	dest := make([]byte, 0, 2*len(sql))
 
-	for _, w := range hack.Slice(sql) {
+	for _, w := range utils.StringToByteSlice(sql) {
 		if c := EncodeMap[w]; c == DONTESCAPE {
 			dest = append(dest, w)
 		} else {

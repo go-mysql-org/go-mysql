@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/hack"
 )
 
 type StreamingType int
@@ -263,7 +263,7 @@ func (r *Resultset) GetString(row, column int) (string, error) {
 	case string:
 		return v, nil
 	case []byte:
-		return hack.String(v), nil
+		return utils.ByteSliceToString(v), nil
 	case int, int8, int16, int32, int64,
 		uint, uint8, uint16, uint32, uint64:
 		return fmt.Sprintf("%d", v), nil

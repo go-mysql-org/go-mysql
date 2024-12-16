@@ -17,8 +17,8 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/hack"
 )
 
 var customTLSMutex sync.Mutex
@@ -352,7 +352,7 @@ func newRows(r *mysql.Resultset) (*rows, error) {
 	rs.columns = make([]string, len(r.Fields))
 
 	for i, f := range r.Fields {
-		rs.columns[i] = hack.String(f.Name)
+		rs.columns[i] = utils.ByteSliceToString(f.Name)
 	}
 	rs.step = 0
 
@@ -389,13 +389,15 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 	return nil
 }
 
+var driverName = "mysql"
+
 func init() {
 	options["compress"] = CompressOption
 	options["collation"] = CollationOption
 	options["readTimeout"] = ReadTimeoutOption
 	options["writeTimeout"] = WriteTimeoutOption
 
-	sql.Register("mysql", driver{})
+	sql.Register(driverName, driver{})
 }
 
 // SetCustomTLSConfig sets a custom TLSConfig for the address (host:port) of the supplied DSN.
