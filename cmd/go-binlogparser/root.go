@@ -46,7 +46,8 @@ func init() {
 	rootCmd.PersistentFlags().StringSlice("exclude-tables", nil, "exclude tables")
 	rootCmd.PersistentFlags().Bool("flashback", false, "flashback")
 	rootCmd.PersistentFlags().BoolP("idempotent", "i", false, "idempotent mode")
-	rootCmd.PersistentFlags().Bool("disable-log-bin", false, "disable_log_bin")
+	rootCmd.PersistentFlags().Bool("disable-log-bin", false, "disable sql_log_bin")
+	rootCmd.PersistentFlags().Bool("disable-foreign-key-checks", false, "set session foreign_key_checks=0")
 
 	//rootCmd.PersistentFlags().Bool("rows-strict", false, "no statement query allowed")
 	_ = viper.BindPFlag("databases", rootCmd.PersistentFlags().Lookup("databases"))

@@ -17,27 +17,6 @@ import (
 	driver "github.com/pingcap/tidb/pkg/parser/test_driver"
 )
 
-/*
-package util
-
-import (
-"bytes"
-"errors"
-"fmt"
-"regexp"
-"strconv"
-"strings"
-
-"github.com/pingcap/parser"
-"github.com/pingcap/parser/ast"
-"github.com/pingcap/parser/format"
-_model "github.com/pingcap/parser/model"
-"github.com/pingcap/parser/mysql"
-"github.com/pingcap/parser/opcode"
-"github.com/pingcap/tidb/sessionctx/stmtctx"
-driver "github.com/pingcap/tidb/types/parser_driver"
-)
-*/
 func ParseSql(sql string) ([]ast.StmtNode, error) {
 	p := parser.New()
 	stmts, _, err := p.Parse(sql, "", "")

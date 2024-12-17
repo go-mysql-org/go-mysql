@@ -254,12 +254,31 @@ func (i *TableMapColumnInfo) GetValuePrinted(v interface{}) interface{} {
 		return "NULL"
 	} else if i.IsBinary {
 		return hex.EncodeToString(v.([]byte))
-		// return base64.RawStdEncoding.EncodeToString(v.([]byte))
 	}
 	if !i.IsNumeric {
-		return fmt.Sprintf("'%s'", v)
+		switch v.(type) {
+		case string:
+			return fmt.Sprintf("'%s'", GetPrintString([]byte(v.(string))))
+		case []byte:
+			return fmt.Sprintf("'%s'", GetPrintString(v.([]byte)))
+		default:
+			return fmt.Sprintf("'%s'", v)
+		}
 	}
+
 	return v
+}
+
+func GetPrintString(buf []byte) string {
+	var newBuf bytes.Buffer
+	for _, s := range buf {
+		if s <= 31 { // 0x1F 控制字符，以 16进制输出
+			newBuf.WriteString(fmt.Sprintf("\\x%02x", s))
+		} else {
+			newBuf.WriteByte(s)
+		}
+	}
+	return newBuf.String()
 }
 
 func (i *TableMapColumnInfo) GetTypeString(e *TableMapEvent, pos int) string {

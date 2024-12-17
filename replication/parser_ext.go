@@ -26,16 +26,17 @@ type PrintEventInfo struct {
 	footerBuf         *bytes.Buffer
 	tableMapRawBase64 map[uint64][]byte
 
-	begin         string
-	commit        string
-	short         bool
-	idempotent    bool
-	disableLogBin bool
-	autocommit    bool
-	delimiter     string
-	rowsStart     string
-	rowsEnd       string
-	verboseLevel  int
+	begin                   string
+	commit                  string
+	short                   bool
+	idempotent              bool
+	disableLogBin           bool
+	disableForeignKeyChecks bool
+	autocommit              bool
+	delimiter               string
+	rowsStart               string
+	rowsEnd                 string
+	verboseLevel            int
 	// The X in --base64-output=X
 	base64OutputMode         string
 	verbose                  uint8
@@ -90,6 +91,7 @@ func (i *PrintEventInfo) Init() {
 	i.short = viper.GetBool("short")
 	i.idempotent = viper.GetBool("idempotent")
 	i.disableLogBin = viper.GetBool("disable-log-bin")
+	i.disableForeignKeyChecks = viper.GetBool("disable-foreign-key-checks")
 	i.autocommit = viper.GetBool("autocommit")
 	i.charset = viper.GetString("set-charset")
 	i.verboseLevel = viper.GetInt("verbose")
@@ -132,6 +134,9 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 			if p.disableLogBin {
 				buf.WriteString("/*!32316 SET @OLD_SQL_LOG_BIN=@@SQL_LOG_BIN, SQL_LOG_BIN=0*/;\n")
 			}
+			if p.disableForeignKeyChecks {
+				buf.WriteString("/*!32316 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0*/;\n")
+			}
 			buf.WriteString("/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;\n")
 			if p.idempotent {
 				buf.WriteString("/*!50700 SET @@SESSION.RBR_EXEC_MODE=IDEMPOTENT*/;\n")
@@ -171,6 +176,9 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 				if p.disableLogBin {
 					buf.WriteString("/*!32316 SET SQL_LOG_BIN=@OLD_SQL_LOG_BIN*/;\n")
 				}
+				if p.disableForeignKeyChecks {
+					buf.WriteString("/*!32316 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS*/;\n")
+				}
 				buf.WriteString("/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;\n")
 				if p.idempotent {
 					buf.WriteString("/*!50700 SET @@SESSION.RBR_EXEC_MODE=STRICT*/;\n")
@@ -200,6 +208,9 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 			buf.WriteString("/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;\n")
 			if p.disableLogBin {
 				buf.WriteString("/*!32316 SET SQL_LOG_BIN=@OLD_SQL_LOG_BIN*/;\n")
+			}
+			if p.disableForeignKeyChecks {
+				buf.WriteString("/*!32316 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS*/;\n")
 			}
 			buf.WriteString("/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;\n")
 			if p.idempotent {
@@ -240,9 +251,9 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 				}
 			} else {
 				buf.WriteString(fmt.Sprintf("# at %d\n", e.Header.LogPos-e.Header.EventSize))
-				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s EndLogPos=%d Db=%s Table=%s TableID=%d",
+				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s EndLogPos=%d Db=%s Table=%s TableID=%d Rows=%d/%d",
 					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(),
-					e.Header.LogPos, r.Table.GetSchema(), r.Table.Table, r.TableID) + "\n")
+					e.Header.LogPos, r.Table.GetSchema(), r.Table.Table, r.TableID, r.RowsMatched, r.rowsCount) + "\n")
 				buf.WriteString(fmt.Sprintf("%s%s\n", p.begin, p.delimiter))
 
 				buf.WriteString(p.rowsStart + "\n")
@@ -271,9 +282,9 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 				}
 			} else {
 				buf.WriteString(fmt.Sprintf("# at %d\n", e.Header.LogPos-e.Header.EventSize))
-				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s EndLogPos=%d Db=%s Table=%s TableID=%d",
+				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s EndLogPos=%d Db=%s Table=%s TableID=%d Rows=%d/%d",
 					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(),
-					e.Header.LogPos, r.Table.GetSchema(), r.Table.Table, r.TableID) + "\n")
+					e.Header.LogPos, r.Table.GetSchema(), r.Table.Table, r.TableID, r.RowsMatched, r.rowsCount) + "\n")
 				buf.WriteString(fmt.Sprintf("%s%s\n", p.begin, p.delimiter))
 
 				buf.WriteString(p.rowsStart + "\n")
@@ -302,9 +313,9 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 				}
 			} else {
 				buf.WriteString(fmt.Sprintf("# at %d\n", e.Header.LogPos-e.Header.EventSize))
-				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s EndLogPos=%d Db=%s Table=%s TableID=%d",
+				buf.WriteString(fmt.Sprintf("# Timestamp=%s ServerId=%d EventType=%s EndLogPos=%d Db=%s Table=%s TableID=%d Rows=%d/%d",
 					unixTimeToStr(e.Header.Timestamp), e.Header.ServerID, r.GetEventType().String(),
-					e.Header.LogPos, r.Table.GetSchema(), r.Table.Table, r.TableID) + "\n")
+					e.Header.LogPos, r.Table.GetSchema(), r.Table.Table, r.TableID, r.RowsMatched, r.rowsCount) + "\n")
 				buf.WriteString(fmt.Sprintf("%s%s\n", p.begin, p.delimiter))
 
 				buf.WriteString(p.rowsStart + "\n")
