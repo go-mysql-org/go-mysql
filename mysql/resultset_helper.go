@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/hack"
+
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 func FormatTextValue(value interface{}) ([]byte, error) {
@@ -40,7 +41,7 @@ func FormatTextValue(value interface{}) ([]byte, error) {
 	case []byte:
 		return v, nil
 	case string:
-		return hack.Slice(v), nil
+		return utils.StringToByteSlice(v), nil
 	case time.Time:
 		return hack.Slice(v.Format(time.DateTime)), nil
 	case nil:
@@ -117,7 +118,7 @@ func formatBinaryValue(value interface{}) ([]byte, error) {
 	case []byte:
 		return v, nil
 	case string:
-		return hack.Slice(v), nil
+		return utils.StringToByteSlice(v), nil
 	case time.Time:
 		return toBinaryDateTime(v)
 	default:
@@ -175,7 +176,7 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 
 	if len(values) == 0 {
 		for i, name := range names {
-			r.Fields[i] = &Field{Name: hack.Slice(name), Charset: 33, Type: MYSQL_TYPE_NULL}
+			r.Fields[i] = &Field{Name: utils.StringToByteSlice(name), Charset: 33, Type: MYSQL_TYPE_NULL}
 		}
 		return r, nil
 	}
@@ -192,7 +193,7 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 				return nil, errors.Trace(err)
 			}
 			if r.Fields[j] == nil {
-				r.Fields[j] = &Field{Name: hack.Slice(names[j]), Type: typ}
+				r.Fields[j] = &Field{Name: utils.StringToByteSlice(names[j]), Type: typ}
 				err = formatField(r.Fields[j], value)
 				if err != nil {
 					return nil, errors.Trace(err)
@@ -260,7 +261,7 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 			if i == 0 {
 				field := &Field{Type: typ}
 				r.Fields[j] = field
-				field.Name = hack.Slice(names[j])
+				field.Name = utils.StringToByteSlice(names[j])
 
 				if err = formatField(field, value); err != nil {
 					return nil, errors.Trace(err)

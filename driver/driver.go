@@ -17,8 +17,8 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/hack"
 )
 
 var customTLSMutex sync.Mutex
@@ -352,7 +352,7 @@ func newRows(r *mysql.Resultset) (*rows, error) {
 	rs.columns = make([]string, len(r.Fields))
 
 	for i, f := range r.Fields {
-		rs.columns[i] = hack.String(f.Name)
+		rs.columns[i] = utils.ByteSliceToString(f.Name)
 	}
 	rs.step = 0
 

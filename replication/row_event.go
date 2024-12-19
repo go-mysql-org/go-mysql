@@ -11,9 +11,9 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
-	"github.com/siddontang/go/hack"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 var errMissingTableMapEvent = errors.New("invalid table id, no corresponding table map event")
@@ -1393,7 +1393,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 				var d []byte
 				d, err = e.decodeJsonBinary(data[meta:n])
 				if err == nil {
-					v = hack.String(d)
+					v = utils.ByteSliceToString(d)
 				}
 			}
 		}
@@ -1417,11 +1417,11 @@ func decodeString(data []byte, length int) (v string, n int) {
 		length = int(data[0])
 
 		n = length + 1
-		v = hack.String(data[1:n])
+		v = utils.ByteSliceToString(data[1:n])
 	} else {
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + 2
-		v = hack.String(data[2:n])
+		v = utils.ByteSliceToString(data[2:n])
 	}
 
 	return
