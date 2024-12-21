@@ -44,6 +44,14 @@ const (
 	FieldValueTypeString
 )
 
+func NewFieldValue(t FieldValueType, v uint64, str []byte) FieldValue {
+	return FieldValue{
+		Type:  t,
+		value: v,
+		str:   str,
+	}
+}
+
 func (f *Field) Parse(p FieldData) (err error) {
 	f.Data = p
 
