@@ -1,7 +1,11 @@
 package mysql
 
 import (
+	"encoding/binary"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -49,5 +53,95 @@ func TestFormatBinaryTime(t *testing.T) {
 			require.NoError(t, err)
 		}
 		require.Equal(t, test.Expect, string(got), "test case %v", test.Data)
+	}
+}
+
+// mysql driver parse binary datetime
+func parseBinaryDateTime(num uint64, data []byte, loc *time.Location) (time.Time, error) {
+	switch num {
+	case 0:
+		return time.Time{}, nil
+	case 4:
+		return time.Date(
+			int(binary.LittleEndian.Uint16(data[:2])), // year
+			time.Month(data[2]),                       // month
+			int(data[3]),                              // day
+			0, 0, 0, 0,
+			loc,
+		), nil
+	case 7:
+		return time.Date(
+			int(binary.LittleEndian.Uint16(data[:2])), // year
+			time.Month(data[2]),                       // month
+			int(data[3]),                              // day
+			int(data[4]),                              // hour
+			int(data[5]),                              // minutes
+			int(data[6]),                              // seconds
+			0,
+			loc,
+		), nil
+	case 11:
+		return time.Date(
+			int(binary.LittleEndian.Uint16(data[:2])), // year
+			time.Month(data[2]),                       // month
+			int(data[3]),                              // day
+			int(data[4]),                              // hour
+			int(data[5]),                              // minutes
+			int(data[6]),                              // seconds
+			int(binary.LittleEndian.Uint32(data[7:11]))*1000, // nanoseconds
+			loc,
+		), nil
+	}
+	return time.Time{}, fmt.Errorf("invalid DATETIME packet length %d", num)
+}
+
+func TestToBinaryDateTime(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    time.Time
+		expected string
+	}{
+		{
+			name:     "Zero time",
+			input:    time.Time{},
+			expected: "",
+		},
+		{
+			name:     "Date with nanoseconds",
+			input:    time.Date(2023, 10, 10, 10, 10, 10, 123456000, time.UTC),
+			expected: "2023-10-10 10:10:10.123456 +0000 UTC",
+		},
+		{
+			name:     "Date with time",
+			input:    time.Date(2023, 10, 10, 10, 10, 10, 0, time.UTC),
+			expected: "2023-10-10 10:10:10 +0000 UTC",
+		},
+		{
+			name:     "Date only",
+			input:    time.Date(2023, 10, 10, 0, 0, 0, 0, time.UTC),
+			expected: "2023-10-10 00:00:00 +0000 UTC",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := toBinaryDateTime(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(result) == 0 {
+				return
+			}
+			num := uint64(result[0])
+			data := result[1:]
+			date, err := parseBinaryDateTime(num, data, time.UTC)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !strings.EqualFold(date.String(), tt.expected) {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
 	}
 }
