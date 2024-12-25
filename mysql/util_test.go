@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -49,5 +50,66 @@ func TestFormatBinaryTime(t *testing.T) {
 			require.NoError(t, err)
 		}
 		require.Equal(t, test.Expect, string(got), "test case %v", test.Data)
+	}
+}
+
+func TestToBinaryDateTime(t *testing.T) {
+	var (
+		DateTimeNano         = "2006-01-02 15:04:05.000000"
+		formatBinaryDateTime = func(n int, data []byte) string {
+			date, err := FormatBinaryDateTime(n, data)
+			if err != nil {
+				return ""
+			}
+			return string(date)
+		}
+	)
+
+	tests := []struct {
+		Name   string
+		Data   time.Time
+		Expect func(n int, data []byte) string
+		Error  bool
+	}{
+		{
+			Name:   "Zero time",
+			Data:   time.Time{},
+			Expect: nil,
+		},
+		{
+			Name:   "Date with nanoseconds",
+			Data:   time.Date(2023, 10, 10, 10, 10, 10, 123456000, time.UTC),
+			Expect: formatBinaryDateTime,
+		},
+		{
+			Name:   "Date with time",
+			Data:   time.Date(2023, 10, 10, 10, 10, 10, 0, time.UTC),
+			Expect: formatBinaryDateTime,
+		},
+		{
+			Name:   "Date only",
+			Data:   time.Date(2023, 10, 10, 0, 0, 0, 0, time.UTC),
+			Expect: formatBinaryDateTime,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			got, err := toBinaryDateTime(test.Data)
+			if test.Error {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			if len(got) == 0 {
+				return
+			}
+			tmp := test.Expect(int(got[0]), got[1:])
+			if int(got[0]) < 11 {
+				require.Equal(t, tmp, test.Data.Format(time.DateTime), "test case %v", test.Data.String())
+			} else {
+				require.Equal(t, tmp, test.Data.Format(DateTimeNano), "test case %v", test.Data.String())
+			}
+		})
 	}
 }
