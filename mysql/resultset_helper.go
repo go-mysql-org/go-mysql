@@ -3,6 +3,7 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -43,7 +44,7 @@ func FormatTextValue(value interface{}) ([]byte, error) {
 	case string:
 		return utils.StringToByteSlice(v), nil
 	case time.Time:
-		return hack.Slice(v.Format(time.DateTime)), nil
+		return utils.StringToByteSlice(v.Format(time.DateTime)), nil
 	case nil:
 		return nil, nil
 	default:
@@ -55,7 +56,7 @@ func toBinaryDateTime(t time.Time) ([]byte, error) {
 	var buf bytes.Buffer
 
 	if t.IsZero() {
-		return nil, nil
+		return nil, fmt.Errorf("zero time")
 	}
 
 	year, month, day := t.Year(), t.Month(), t.Day()
