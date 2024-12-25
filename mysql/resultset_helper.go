@@ -3,7 +3,6 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -56,7 +55,7 @@ func toBinaryDateTime(t time.Time) ([]byte, error) {
 	var buf bytes.Buffer
 
 	if t.IsZero() {
-		return nil, fmt.Errorf("zero time")
+		return nil, nil
 	}
 
 	year, month, day := t.Year(), t.Month(), t.Day()

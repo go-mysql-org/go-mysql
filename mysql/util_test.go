@@ -75,7 +75,6 @@ func TestToBinaryDateTime(t *testing.T) {
 			Name:   "Zero time",
 			Data:   time.Time{},
 			Expect: nil,
-			Error:  true,
 		},
 		{
 			Name:   "Date with nanoseconds",
