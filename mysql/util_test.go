@@ -112,5 +112,4 @@ func TestToBinaryDateTime(t *testing.T) {
 			}
 		})
 	}
-
 }
