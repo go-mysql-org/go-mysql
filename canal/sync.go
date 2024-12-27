@@ -7,6 +7,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
@@ -253,7 +254,7 @@ func (c *Canal) updateTable(header *replication.EventHeader, db, table string) (
 }
 func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	var newDelay uint32
-	now := uint32(time.Now().Unix())
+	now := uint32(utils.Now().Unix())
 	if now >= ev.Header.Timestamp {
 		newDelay = now - ev.Header.Timestamp
 	}

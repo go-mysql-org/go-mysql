@@ -18,6 +18,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/test_util"
 	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 var delay = 50
@@ -131,13 +132,13 @@ func (s *cacheTestSuite) runSelect() {
 
 func (s *cacheTestSuite) TestCache() {
 	// first connection
-	t1 := time.Now()
+	t1 := utils.Now()
 	var err error
 	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, s.serverAddr, *testDB, s.tlsPara))
 	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
-	t2 := time.Now()
+	t2 := utils.Now()
 
 	d1 := int(t2.Sub(t1).Nanoseconds() / 1e6)
 	//log.Debugf("first connection took %d milliseconds", d1)
@@ -149,12 +150,12 @@ func (s *cacheTestSuite) TestCache() {
 	}
 
 	// second connection
-	t3 := time.Now()
+	t3 := utils.Now()
 	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, s.serverAddr, *testDB, s.tlsPara))
 	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
-	t4 := time.Now()
+	t4 := utils.Now()
 
 	d2 := int(t4.Sub(t3).Nanoseconds() / 1e6)
 	//log.Debugf("second connection took %d milliseconds", d2)

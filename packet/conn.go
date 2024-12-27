@@ -150,7 +150,7 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 // newCompressedPacketReader creates a new compressed packet reader.
 func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 	if c.readTimeout != 0 {
-		if err := c.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+		if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 			return nil, err
 		}
 	}
@@ -200,7 +200,7 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 		// Call ReadAtLeast with the currentPacketReader as it may change on every iteration
 		// of this loop.
 		if c.readTimeout != 0 {
-			if err := c.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+			if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 				return written, err
 			}
 		}
@@ -344,7 +344,7 @@ func (c *Conn) WritePacket(data []byte) error {
 
 func (c *Conn) writeWithTimeout(b []byte) (n int, err error) {
 	if c.writeTimeout != 0 {
-		if err := c.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+		if err := c.SetWriteDeadline(utils.Now().Add(c.writeTimeout)); err != nil {
 			return n, err
 		}
 	}

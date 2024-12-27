@@ -19,6 +19,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 var (
@@ -227,7 +228,7 @@ func (b *BinlogSyncer) close() {
 	b.cancel()
 
 	if b.c != nil {
-		err := b.c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		err := b.c.SetReadDeadline(utils.Now().Add(100 * time.Millisecond))
 		if err != nil {
 			b.cfg.Logger.Warnf(`could not set read deadline: %s`, err)
 		}
@@ -288,7 +289,7 @@ func (b *BinlogSyncer) registerSlave() error {
 
 	//set read timeout
 	if b.cfg.ReadTimeout > 0 {
-		_ = b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
+		_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
 	}
 
 	if b.cfg.RecvBufferSize > 0 {
@@ -791,7 +792,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 		//set read timeout
 		if b.cfg.ReadTimeout > 0 {
-			_ = b.c.SetReadDeadline(time.Now().Add(b.cfg.ReadTimeout))
+			_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
 		}
 
 		// Reset retry count on successful packet receieve

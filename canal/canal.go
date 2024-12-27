@@ -18,6 +18,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/siddontang/go-log/log"
@@ -231,7 +232,7 @@ func (c *Canal) run() error {
 		c.cancel()
 	}()
 
-	c.master.UpdateTimestamp(uint32(time.Now().Unix()))
+	c.master.UpdateTimestamp(uint32(utils.Now().Unix()))
 
 	if !c.dumped {
 		c.dumped = true
@@ -373,7 +374,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 		// if DiscardNoMetaRowEvent is true, we just log this error
 		if c.cfg.DiscardNoMetaRowEvent {
 			c.tableLock.Lock()
-			c.errorTablesGetTime[key] = time.Now()
+			c.errorTablesGetTime[key] = utils.Now()
 			c.tableLock.Unlock()
 			// log error and return ErrMissingTableMeta
 			c.cfg.Logger.Errorf("canal get table meta err: %v", errors.Trace(err))
