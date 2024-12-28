@@ -12,7 +12,7 @@ import (
 )
 
 func TestCustomTimeNow(t *testing.T) {
-	precision = time.Millisecond
+	precision := time.Millisecond
 
 	for i := 0; i < 1000; i++ {
 		timestamp := time.Now().UnixNano()
