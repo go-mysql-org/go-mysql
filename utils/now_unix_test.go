@@ -4,7 +4,6 @@ package utils
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -15,13 +14,12 @@ func TestCustomTimeNow(t *testing.T) {
 	precision := time.Millisecond
 
 	for i := 0; i < 1000; i++ {
-		timestamp := time.Now().UnixNano()
-		customTimestamp := Now().UnixNano()
+		timestamp := time.Now()
+		customTimestamp := Now()
 
 		// two timestamp should within 1 percistion
-		assert.Equal(t, timestamp+int64(precision) >= customTimestamp && timestamp-int64(precision) <= customTimestamp, true, fmt.Sprintf("Loop: %d: customTimestamp should within %s. timestamp: %d, customTimestamp: %d", i, precision.String(), timestamp, customTimestamp))
+		assert.WithinDuration(t, timestamp, customTimestamp, precision, fmt.Sprintf("Loop: %d: customTimestamp should within %s. timestamp: %d, customTimestamp: %d", i, precision.String(), timestamp.UnixNano(), customTimestamp.UnixNano()))
 
-		os.Setenv("TZ", fmt.Sprintf("UTC%d", 14-i%27))
 		time.Sleep(time.Nanosecond)
 	}
 }

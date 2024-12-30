@@ -10,7 +10,7 @@ import (
 // Now is a faster method to get current time
 func Now() time.Time {
 	var tv syscall.Timeval
-	if err := syscall.Gettimeofday(&tv); nil != err {
+	if err := syscall.Gettimeofday(&tv); err != nil {
 		// If it failed at syscall, use time package instead
 		return time.Now()
 	}
