@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 type DumpConfig struct {
@@ -142,7 +143,7 @@ func NewDefaultConfig() *Config {
 	c.User = mysql.DEFAULT_USER
 	c.Password = mysql.DEFAULT_PASSWORD
 	c.Charset = mysql.DEFAULT_CHARSET
-	c.ServerID = uint32(rand.New(rand.NewSource(time.Now().Unix())).Intn(1000)) + 1001
+	c.ServerID = uint32(rand.New(rand.NewSource(utils.Now().Unix())).Intn(1000)) + 1001
 	c.Flavor = mysql.DEFAULT_FLAVOR
 
 	c.Dump.ExecutionPath = mysql.DEFAULT_DUMP_EXECUTION_PATH

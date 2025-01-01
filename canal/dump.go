@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/schema"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
 )
@@ -142,7 +143,7 @@ func (c *Canal) dump() error {
 		return errors.New("mysqldump does not exist")
 	}
 
-	c.master.UpdateTimestamp(uint32(time.Now().Unix()))
+	c.master.UpdateTimestamp(uint32(utils.Now().Unix()))
 
 	h := &dumpParseHandler{c: c}
 	// If users call StartFromGTID with empty position to start dumping with gtid,
@@ -167,7 +168,7 @@ func (c *Canal) dump() error {
 		h.pos = uint64(pos.Pos)
 	}
 
-	start := time.Now()
+	start := utils.Now()
 	c.cfg.Logger.Info("try dump MySQL and parse")
 	if err := c.dumper.DumpAndParse(h); err != nil {
 		return errors.Trace(err)

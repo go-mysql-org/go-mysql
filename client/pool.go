@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
 
@@ -247,7 +248,7 @@ func (pool *Pool) putConnection(connection Connection) {
 }
 
 func (pool *Pool) nowTs() Timestamp {
-	return Timestamp(time.Now().Unix())
+	return Timestamp(utils.Now().Unix())
 }
 
 func (pool *Pool) getConnection(ctx context.Context) (Connection, error) {
@@ -553,7 +554,7 @@ func (pool *Pool) startNewConnections(count int) {
 }
 
 func (pool *Pool) ping(conn *Conn) error {
-	deadline := time.Now().Add(100 * time.Millisecond)
+	deadline := utils.Now().Add(100 * time.Millisecond)
 	_ = conn.SetDeadline(deadline)
 	err := conn.Ping()
 	if err != nil {
