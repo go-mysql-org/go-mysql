@@ -79,8 +79,9 @@ func (r *Resultset) Reset(fieldsCount int) {
 	}
 }
 
-// RowNumber is returning the number of rows in the Resultset
-// For a nil ResultSet 0 is returned
+// RowNumber is returning the number of rows in the [Resultset].
+//
+// For a nil [Resultset] 0 is returned.
 func (r *Resultset) RowNumber() int {
 	if r == nil {
 		return 0
@@ -88,8 +89,9 @@ func (r *Resultset) RowNumber() int {
 	return len(r.Values)
 }
 
-// ColumnNumber is returning the number of fields in the Resultset
-// For a nil ResultSet 0 is returned
+// ColumnNumber is returning the number of fields in the [Resultset].
+//
+// For a nil [Resultset] 0 is returned.
 func (r *Resultset) ColumnNumber() int {
 	if r == nil {
 		return 0
