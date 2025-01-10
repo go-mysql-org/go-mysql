@@ -348,14 +348,6 @@ func (b *BinlogSyncer) registerSlave() error {
 		}
 	}
 
-	if err = b.writeRegisterSlaveCommand(); err != nil {
-		return errors.Trace(err)
-	}
-
-	if _, err = b.c.ReadOKPacket(); err != nil {
-		return errors.Trace(err)
-	}
-
 	serverUUID, err := uuid.NewUUID()
 	if err != nil {
 		b.cfg.Logger.Errorf("failed to get new uuid %v", err)
@@ -363,6 +355,14 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 	if _, err = b.c.Execute(fmt.Sprintf("SET @slave_uuid = '%s', @replica_uuid = '%s'", serverUUID, serverUUID)); err != nil {
 		b.cfg.Logger.Errorf("failed to set @slave_uuid = '%s', err: %v", serverUUID, err)
+		return errors.Trace(err)
+	}
+
+	if err = b.writeRegisterSlaveCommand(); err != nil {
+		return errors.Trace(err)
+	}
+
+	if _, err = b.c.ReadOKPacket(); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -596,7 +596,7 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	hostname := b.localHostname()
 
 	// This should be the name of slave host not the host we are connecting to.
-	data := make([]byte, 4+1+4+1+len(hostname)+1+len(b.cfg.User)+1+len(b.cfg.Password)+2+4+4)
+	data := make([]byte, 4+1+4+1+len(hostname)+1+len(b.cfg.User)+1+2+4+4)
 	pos := 4
 
 	data[pos] = COM_REGISTER_SLAVE
@@ -616,10 +616,8 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	n = copy(data[pos:], b.cfg.User)
 	pos += n
 
-	data[pos] = uint8(len(b.cfg.Password))
+	data[pos] = uint8(0)
 	pos++
-	n = copy(data[pos:], b.cfg.Password)
-	pos += n
 
 	binary.LittleEndian.PutUint16(data[pos:], b.cfg.Port)
 	pos += 2
