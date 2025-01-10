@@ -87,6 +87,9 @@ func (r *Resultset) RowNumber() int {
 }
 
 func (r *Resultset) ColumnNumber() int {
+	if r == nil {
+		return 0
+	}
 	return len(r.Fields)
 }
 
