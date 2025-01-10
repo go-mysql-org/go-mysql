@@ -348,14 +348,6 @@ func (b *BinlogSyncer) registerSlave() error {
 		}
 	}
 
-	if err = b.writeRegisterSlaveCommand(); err != nil {
-		return errors.Trace(err)
-	}
-
-	if _, err = b.c.ReadOKPacket(); err != nil {
-		return errors.Trace(err)
-	}
-
 	serverUUID, err := uuid.NewUUID()
 	if err != nil {
 		b.cfg.Logger.Errorf("failed to get new uuid %v", err)
@@ -363,6 +355,14 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 	if _, err = b.c.Execute(fmt.Sprintf("SET @slave_uuid = '%s', @replica_uuid = '%s'", serverUUID, serverUUID)); err != nil {
 		b.cfg.Logger.Errorf("failed to set @slave_uuid = '%s', err: %v", serverUUID, err)
+		return errors.Trace(err)
+	}
+
+	if err = b.writeRegisterSlaveCommand(); err != nil {
+		return errors.Trace(err)
+	}
+
+	if _, err = b.c.ReadOKPacket(); err != nil {
 		return errors.Trace(err)
 	}
 
