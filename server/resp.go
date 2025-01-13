@@ -10,7 +10,7 @@ import (
 
 func (c *Conn) writeOK(r *Result) error {
 	if r == nil {
-		r = &Result{}
+		r = NewResultReserveResultset(0)
 	}
 
 	r.Status |= c.status

@@ -185,6 +185,7 @@ func (s *clientTestSuite) TestConn_Insert() {
 	pkg, err := s.c.Execute(str)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), uint64(1), pkg.AffectedRows)
+	require.EqualValues(s.T(), 0, pkg.ColumnNumber())
 }
 
 func (s *clientTestSuite) TestConn_Insert2() {
