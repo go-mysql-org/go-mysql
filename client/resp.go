@@ -39,7 +39,7 @@ func (c *Conn) handleOKPacket(data []byte) (*Result, error) {
 	var n int
 	var pos = 1
 
-	r := new(Result)
+	r := NewResultReserveResultset(0)
 
 	r.AffectedRows, _, n = LengthEncodedInt(data[pos:])
 	pos += n
@@ -283,9 +283,7 @@ func (c *Conn) readResultset(data []byte, binary bool) (*Result, error) {
 		return nil, ErrMalformPacket
 	}
 
-	result := &Result{
-		Resultset: NewResultset(int(count)),
-	}
+	result := NewResultReserveResultset(int(count))
 
 	if err := c.readResultColumns(result); err != nil {
 		return nil, errors.Trace(err)

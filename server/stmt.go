@@ -336,7 +336,7 @@ func (c *Conn) handleStmtReset(data []byte) (*Result, error) {
 
 	s.ResetParams()
 
-	return &Result{}, nil
+	return NewResultReserveResultset(0), nil
 }
 
 // stmt close command has no response

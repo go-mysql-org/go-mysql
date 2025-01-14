@@ -343,10 +343,10 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 	// streaming session
 	// if this would end up in WriteValue, it would just be ignored as all
 	// responses should have been handled in perResultCallback
-	return &Result{Resultset: &Resultset{
-		Streaming:     StreamingMultiple,
-		StreamingDone: true,
-	}}, nil
+	rs := NewResultset(0)
+	rs.Streaming = StreamingMultiple
+	rs.StreamingDone = true
+	return NewResult(rs), nil
 }
 
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset

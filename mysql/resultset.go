@@ -22,6 +22,8 @@ const (
 	StreamingMultiple
 )
 
+// Resultset should be created with NewResultset to avoid nil pointer and reduce
+// GC pressure.
 type Resultset struct {
 	Fields     []*Field
 	FieldNames map[string]int
@@ -61,9 +63,7 @@ func (r *Resultset) Reset(fieldsCount int) {
 	r.RowDatas = r.RowDatas[:0]
 
 	if r.FieldNames != nil {
-		for k := range r.FieldNames {
-			delete(r.FieldNames, k)
-		}
+		clear(r.FieldNames)
 	} else {
 		r.FieldNames = make(map[string]int)
 	}
@@ -80,22 +80,12 @@ func (r *Resultset) Reset(fieldsCount int) {
 }
 
 // RowNumber is returning the number of rows in the [Resultset].
-//
-// For a nil [Resultset] 0 is returned.
 func (r *Resultset) RowNumber() int {
-	if r == nil {
-		return 0
-	}
 	return len(r.Values)
 }
 
 // ColumnNumber is returning the number of fields in the [Resultset].
-//
-// For a nil [Resultset] 0 is returned.
 func (r *Resultset) ColumnNumber() int {
-	if r == nil {
-		return 0
-	}
 	return len(r.Fields)
 }
 
