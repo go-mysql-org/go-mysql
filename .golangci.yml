@@ -30,3 +30,6 @@ linters-settings:
       - fieldalignment
       - lostcancel
       - shadow
+issues:
+  exclude-files:
+    - client/examples_test.go

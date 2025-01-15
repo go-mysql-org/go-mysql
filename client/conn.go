@@ -265,10 +265,15 @@ func (c *Conn) GetDB() string {
 	return c.db
 }
 
+// GetServerVersion returns the version of the server as reported by the server
+// in the initial server greeting.
 func (c *Conn) GetServerVersion() string {
 	return c.serverVersion
 }
 
+// CompareServerVersion is comparing version v against the version
+// of the server and returns 0 if they are equal, and 1 if the server version
+// is higher and -1 if the server version is lower.
 func (c *Conn) CompareServerVersion(v string) (int, error) {
 	return CompareServerVersions(c.serverVersion, v)
 }
@@ -294,13 +299,6 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 // When ExecuteMultiple is used, the connection should have the SERVER_MORE_RESULTS_EXISTS
 // flag set to signal the server multiple queries are executed. Handling the responses
 // is up to the implementation of perResultCallback.
-//
-// Example:
-//
-// queries := "SELECT 1; SELECT NOW();"
-// conn.ExecuteMultiple(queries, func(result *mysql.Result, err error) {
-// // Use the result as you want
-// })
 func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCallback) (*Result, error) {
 	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
 		return nil, errors.Trace(err)
@@ -354,15 +352,6 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 // When given, perResultCallback will be called once per result
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
-//
-// Example:
-//
-// var result mysql.Result
-// conn.ExecuteSelectStreaming(`SELECT ... LIMIT 100500`, &result, func(row []mysql.FieldValue) error {
-// // Use the row as you want.
-// // You must not save FieldValue.AsString() value after this callback is done. Copy it if you need.
-// return nil
-// }, nil)
 func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
 	if err := c.writeCommandStr(COM_QUERY, command); err != nil {
 		return errors.Trace(err)
@@ -494,6 +483,8 @@ func (c *Conn) exec(query string) (*Result, error) {
 	return c.readResult(false)
 }
 
+// CapabilityString is returning a string with the names of capability flags
+// separated by "|". Examples of capability names are CLIENT_DEPRECATE_EOF and CLIENT_PROTOCOL_41.
 func (c *Conn) CapabilityString() string {
 	var caps []string
 	capability := c.capability
