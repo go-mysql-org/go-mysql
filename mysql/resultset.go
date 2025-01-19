@@ -185,12 +185,45 @@ func (r *Resultset) GetUintByName(row int, name string) (uint64, error) {
 }
 
 func (r *Resultset) GetInt(row, column int) (int64, error) {
-	v, err := r.GetUint(row, column)
+	d, err := r.GetValue(row, column)
 	if err != nil {
 		return 0, err
 	}
 
-	return int64(v), nil
+	switch v := d.(type) {
+	case int:
+		return int64(v), nil
+	case int8:
+		return int64(v), nil
+	case int16:
+		return int64(v), nil
+	case int32:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case uint:
+		return int64(v), nil
+	case uint8:
+		return int64(v), nil
+	case uint16:
+		return int64(v), nil
+	case uint32:
+		return int64(v), nil
+	case uint64:
+		return int64(v), nil
+	case float32:
+		return int64(v), nil
+	case float64:
+		return int64(v), nil
+	case string:
+		return strconv.ParseInt(v, 10, 64)
+	case []byte:
+		return strconv.ParseInt(string(v), 10, 64)
+	case nil:
+		return 0, nil
+	default:
+		return 0, errors.Errorf("data type is %T", v)
+	}
 }
 
 func (r *Resultset) GetIntByName(row int, name string) (int64, error) {
