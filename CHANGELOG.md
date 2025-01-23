@@ -1,4 +1,4 @@
-## Tag v1.10.1 (2025-01-23)
+## Tag v1.11.0 (2025-01-23)
 * mysql: Fix GetInt() with negative text result [#972](https://github.com/go-mysql-org/go-mysql/pull/972) ([dveeden](https://github.com/dveeden))
 * client: Update docs [#970](https://github.com/go-mysql-org/go-mysql/pull/970) ([dveeden](https://github.com/dveeden))
 * Cleanup: remove clear_vendor.sh [#971](https://github.com/go-mysql-org/go-mysql/pull/971) ([dveeden](https://github.com/dveeden))
