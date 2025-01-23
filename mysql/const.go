@@ -26,6 +26,9 @@ const (
 	AUTH_SHA256_PASSWORD       = "sha256_password"
 )
 
+// SERVER_STATUS_flags_enum
+// https://dev.mysql.com/doc/dev/mysql-server/latest/mysql__com_8h.html#a1d854e841086925be1883e4d7b4e8cad
+// https://github.com/mysql/mysql-server/blob/500c3117e6f638043c4fea8aacf17d63a8d07de6/include/mysql_com.h#L809-L864
 const (
 	SERVER_STATUS_IN_TRANS             uint16 = 0x0001
 	SERVER_STATUS_AUTOCOMMIT           uint16 = 0x0002
@@ -39,8 +42,11 @@ const (
 	SERVER_STATUS_METADATA_CHANGED     uint16 = 0x0400
 	SERVER_QUERY_WAS_SLOW              uint16 = 0x0800
 	SERVER_PS_OUT_PARAMS               uint16 = 0x1000
+	SERVER_STATUS_IN_TRANS_READONLY    uint16 = 0x2000
+	SERVER_SESSION_STATE_CHANGED       uint16 = 0x4000
 )
 
+// https://github.com/mysql/mysql-server/blob/6b6d3ed3d5c6591b446276184642d7d0504ecc86/include/my_command.h#L48-L103
 const (
 	COM_SLEEP byte = iota
 	COM_QUIT
@@ -74,6 +80,8 @@ const (
 	COM_DAEMON
 	COM_BINLOG_DUMP_GTID
 	COM_RESET_CONNECTION
+	COM_CLONE
+	COM_SUBSCRIBE_GROUP_REPLICATION_STREAM
 )
 
 const (
