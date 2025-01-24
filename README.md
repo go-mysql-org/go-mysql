@@ -543,15 +543,15 @@ Or you can implement your own [`log.Handler`](https://pkg.go.dev/github.com/sidd
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
 ```
-replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.10.0
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.11.0
 ```
 
 This can be done by running this command:
 ```
-go mod edit -replace=github.com/siddontang/go-mysql=github.com/go-mysql-org/go-mysql@v1.10.0
+go mod edit -replace=github.com/siddontang/go-mysql=github.com/go-mysql-org/go-mysql@v1.11.0
 ```
 
-v1.10.0 - is the last tag in repo, feel free to choose what you want.
+v1.11.0 - is the last tag in repo, feel free to choose what you want.
 
 ## Credits
 
