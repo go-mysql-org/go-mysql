@@ -194,10 +194,12 @@ func (c *Conn) handshake() error {
 	return nil
 }
 
+// Close directly closes the connection. Use Quit() to first send COM_QUIT to the server and then close the connection.
 func (c *Conn) Close() error {
 	return c.Conn.Close()
 }
 
+// Quit sends COM_QUIT to the server and then closes the connection. Use Close() to directly close the connection.
 func (c *Conn) Quit() error {
 	if err := c.writeCommand(COM_QUIT); err != nil {
 		return err
@@ -375,6 +377,7 @@ func (c *Conn) Rollback() error {
 	return errors.Trace(err)
 }
 
+// SetAttributes sets connection attributes
 func (c *Conn) SetAttributes(attributes map[string]string) {
 	for k, v := range attributes {
 		c.attributes[k] = v
@@ -407,6 +410,7 @@ func (c *Conn) GetCollation() string {
 	return c.collation
 }
 
+// FieldList uses COM_FIELD_LIST to get a list of fields from a table
 func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 	if err := c.writeCommandStrStr(COM_FIELD_LIST, table, wildcard); err != nil {
 		return nil, errors.Trace(err)
@@ -446,10 +450,12 @@ func (c *Conn) SetAutoCommit() error {
 	return nil
 }
 
+// IsAutoCommit returns true if SERVER_STATUS_AUTOCOMMIT is set
 func (c *Conn) IsAutoCommit() bool {
 	return c.status&SERVER_STATUS_AUTOCOMMIT > 0
 }
 
+// IsInTransaction returns true if SERVER_STATUS_IN_TRANS is set
 func (c *Conn) IsInTransaction() bool {
 	return c.status&SERVER_STATUS_IN_TRANS > 0
 }
@@ -485,6 +491,7 @@ func (c *Conn) exec(query string) (*Result, error) {
 
 // CapabilityString is returning a string with the names of capability flags
 // separated by "|". Examples of capability names are CLIENT_DEPRECATE_EOF and CLIENT_PROTOCOL_41.
+// These are defined as constants in the mysql package.
 func (c *Conn) CapabilityString() string {
 	var caps []string
 	capability := c.capability
@@ -568,6 +575,8 @@ func (c *Conn) CapabilityString() string {
 	return strings.Join(caps, "|")
 }
 
+// StatusString returns a "|" separated list of status fields. Example status values are SERVER_QUERY_WAS_SLOW and SERVER_STATUS_AUTOCOMMIT.
+// These are defined as constants in the mysql package.
 func (c *Conn) StatusString() string {
 	var stats []string
 	status := c.status

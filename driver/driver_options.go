@@ -12,6 +12,8 @@ import (
 // The value represents the query string parameter value supplied by in the DNS.
 type DriverOption func(c *client.Conn, value string) error
 
+// UseSslOption sets the connection to use a tls.Config with InsecureSkipVerify set to true.
+// Use SetTLSConfig() if you need a custom tls.Config
 func UseSslOption(c *client.Conn) error {
 	c.UseSSL(true)
 	return nil
