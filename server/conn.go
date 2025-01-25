@@ -156,6 +156,8 @@ func (c *Conn) Charset() uint8 {
 	return c.charset
 }
 
+// Attributes returns the connection attributes.
+// Note that this is only sent to the server if CLIENT_CONNECT_ATTRS is set.
 func (c *Conn) Attributes() map[string]string {
 	return c.attributes
 }
