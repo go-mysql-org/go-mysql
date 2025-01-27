@@ -147,7 +147,7 @@ func (s *Stmt) write(args ...interface{}) error {
 		default:
 			return fmt.Errorf("invalid argument type %T", args[i])
 		}
-		paramNames[i] = []byte{0} // lenght encoded, no name
+		paramNames[i] = []byte{0} // length encoded, no name
 		if paramFlags[i] == nil {
 			paramFlags[i] = []byte{0}
 		}
