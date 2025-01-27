@@ -56,6 +56,8 @@ type Conn struct {
 	authPluginName string
 
 	connectionID uint32
+
+	queryAttributes []QueryAttribute
 }
 
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
@@ -481,10 +483,40 @@ func (c *Conn) ReadOKPacket() (*Result, error) {
 	return c.readOK()
 }
 
+// Sends COM_QUERY
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html
 func (c *Conn) exec(query string) (*Result, error) {
-	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
+	var buf bytes.Buffer
+
+	if c.capability&CLIENT_QUERY_ATTRIBUTES > 0 {
+		numParams := len(c.queryAttributes)
+		buf.Write(PutLengthEncodedInt(uint64(numParams)))
+		buf.WriteByte(0x1) // parameter_set_count, unused
+		if numParams > 0 {
+			// null_bitmap, length: (num_params+7)/8
+			for i := 0; i < (numParams+7)/8; i++ {
+				buf.WriteByte(0x0)
+			}
+			buf.WriteByte(0x1) // new_params_bind_flag, unused
+			for _, qa := range c.queryAttributes {
+				buf.Write(qa.TypeAndFlag())
+				buf.Write(PutLengthEncodedString([]byte(qa.Name)))
+			}
+			for _, qa := range c.queryAttributes {
+				buf.Write(qa.ValueBytes())
+			}
+		}
+	}
+
+	_, err := buf.Write(utils.StringToByteSlice(query))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.writeCommandBuf(COM_QUERY, buf.Bytes()); err != nil {
 		return nil, errors.Trace(err)
 	}
+	c.queryAttributes = nil
 
 	return c.readResult(false)
 }
@@ -618,4 +650,9 @@ func (c *Conn) StatusString() string {
 	}
 
 	return strings.Join(stats, "|")
+}
+
+func (c *Conn) SetQueryAttributes(attrs ...QueryAttribute) error {
+	c.queryAttributes = attrs
+	return nil
 }

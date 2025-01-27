@@ -203,6 +203,7 @@ func (c *Conn) writeAuthHandshake() error {
 		CLIENT_LONG_PASSWORD | CLIENT_TRANSACTIONS | CLIENT_PLUGIN_AUTH
 	// Adjust client capability flags based on server support
 	capability |= c.capability & CLIENT_LONG_FLAG
+	capability |= c.capability & CLIENT_QUERY_ATTRIBUTES
 	// Adjust client capability flags on specific client requests
 	// Only flags that would make any sense setting and aren't handled elsewhere
 	// in the library are supported here
