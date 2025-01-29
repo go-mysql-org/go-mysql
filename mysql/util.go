@@ -443,9 +443,7 @@ func init() {
 	for i := range EncodeMap {
 		EncodeMap[i] = DONTESCAPE
 	}
-	for i := range EncodeMap {
-		if to, ok := encodeRef[byte(i)]; ok {
-			EncodeMap[byte(i)] = to
-		}
+	for k, v := range encodeRef {
+		EncodeMap[k] = v
 	}
 }

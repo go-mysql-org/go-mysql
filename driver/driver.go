@@ -27,7 +27,12 @@ var customTLSMutex sync.Mutex
 var (
 	dsnRegex           = regexp.MustCompile("@[^@]+/[^@/]+")
 	customTLSConfigMap = make(map[string]*tls.Config)
-	options            = make(map[string]DriverOption)
+	options            = map[string]DriverOption{
+		"compress":     CompressOption,
+		"collation":    CollationOption,
+		"readTimeout":  ReadTimeoutOption,
+		"writeTimeout": WriteTimeoutOption,
+	}
 
 	// can be provided by clients to allow more control in handling Go and database
 	// types beyond the default Value types allowed
@@ -392,11 +397,6 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 var driverName = "mysql"
 
 func init() {
-	options["compress"] = CompressOption
-	options["collation"] = CollationOption
-	options["readTimeout"] = ReadTimeoutOption
-	options["writeTimeout"] = WriteTimeoutOption
-
 	sql.Register(driverName, driver{})
 }
 
