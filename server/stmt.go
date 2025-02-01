@@ -10,16 +10,10 @@ import (
 	"github.com/pingcap/errors"
 )
 
-var paramFieldData []byte
-var columnFieldData []byte
-
-func init() {
-	var p = &Field{Name: []byte("?")}
-	var c = &Field{}
-
-	paramFieldData = p.Dump()
-	columnFieldData = c.Dump()
-}
+var (
+	paramFieldData  = (&Field{Name: []byte("?")}).Dump()
+	columnFieldData = (&Field{}).Dump()
+)
 
 type Stmt struct {
 	ID    uint32

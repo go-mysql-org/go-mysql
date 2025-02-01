@@ -2,12 +2,19 @@ package replication
 
 import (
 	"fmt"
-	"strings"
 	"time"
 )
 
 var (
-	fracTimeFormat []string
+	fracTimeFormat = [7]string{
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04:05.0",
+		"2006-01-02 15:04:05.00",
+		"2006-01-02 15:04:05.000",
+		"2006-01-02 15:04:05.0000",
+		"2006-01-02 15:04:05.00000",
+		"2006-01-02 15:04:05.000000",
+	}
 )
 
 // fracTime is a help structure wrapping Golang Time.
@@ -55,13 +62,4 @@ func microSecTimestampToTime(ts uint64) time.Time {
 		return time.Time{}
 	}
 	return time.Unix(int64(ts/1000000), int64(ts%1000000)*1000)
-}
-
-func init() {
-	fracTimeFormat = make([]string, 7)
-	fracTimeFormat[0] = "2006-01-02 15:04:05"
-
-	for i := 1; i <= 6; i++ {
-		fracTimeFormat[i] = fmt.Sprintf("2006-01-02 15:04:05.%s", strings.Repeat("0", i))
-	}
 }
