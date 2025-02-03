@@ -105,9 +105,13 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 	c := new(Conn)
 
 	c.BufferSize = defaultBufferSize
+	clientVersion := "unknown"
+	if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		clientVersion = buildInfo.Main.Version
+	}
 	c.attributes = map[string]string{
-		"_client_name": "go-mysql",
-		// "_client_version": "0.1",
+		"_client_name":     "go-mysql",
+		"_client_version":  clientVersion,
 		"_os":              runtime.GOOS,
 		"_platform":        runtime.GOARCH,
 		"_runtime_version": runtime.Version(),
