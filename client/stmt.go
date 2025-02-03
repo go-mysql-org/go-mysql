@@ -94,6 +94,8 @@ func (s *Stmt) write(args ...interface{}) error {
 		if args[i] == nil {
 			nullBitmap[i/8] |= 1 << (uint(i) % 8)
 			paramTypes[i] = []byte{MYSQL_TYPE_NULL}
+			paramNames[i] = []byte{0} // length encoded, no name
+			paramFlags[i] = []byte{0}
 			continue
 		}
 
