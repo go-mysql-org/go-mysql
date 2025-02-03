@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -58,6 +59,8 @@ type Conn struct {
 	connectionID uint32
 
 	queryAttributes []QueryAttribute
+
+	includeLine bool
 }
 
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
@@ -488,6 +491,18 @@ func (c *Conn) ReadOKPacket() (*Result, error) {
 func (c *Conn) exec(query string) (*Result, error) {
 	var buf bytes.Buffer
 
+	if c.includeLine {
+		_, file, line, ok := runtime.Caller(2)
+		if ok {
+			lineAttr := QueryAttribute{
+				Name:  "_line",
+				Value: fmt.Sprintf("%s:%d", file, line),
+			}
+			c.queryAttributes = append(c.queryAttributes, lineAttr)
+		}
+
+	}
+
 	if c.capability&CLIENT_QUERY_ATTRIBUTES > 0 {
 		numParams := len(c.queryAttributes)
 		buf.Write(PutLengthEncodedInt(uint64(numParams)))
@@ -655,4 +670,10 @@ func (c *Conn) StatusString() string {
 func (c *Conn) SetQueryAttributes(attrs ...QueryAttribute) error {
 	c.queryAttributes = attrs
 	return nil
+}
+
+// IncludeLine can be passed as option when connecting to include the file name and line number
+// of the caller as query attribute when sending queries.
+func (c *Conn) IncludeLine() {
+	c.includeLine = true
 }

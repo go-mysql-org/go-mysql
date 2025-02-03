@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"runtime"
 
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
@@ -62,6 +63,18 @@ func (s *Stmt) write(args ...interface{}) error {
 
 	if len(args) != paramsNum {
 		return fmt.Errorf("argument mismatch, need %d but got %d", s.params, len(args))
+	}
+
+	if s.conn.includeLine {
+		_, file, line, ok := runtime.Caller(2)
+		if ok {
+			lineAttr := QueryAttribute{
+				Name:  "_line",
+				Value: fmt.Sprintf("%s:%d", file, line),
+			}
+			s.conn.queryAttributes = append(s.conn.queryAttributes, lineAttr)
+		}
+
 	}
 
 	qaLen := len(s.conn.queryAttributes)
