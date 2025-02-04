@@ -107,9 +107,28 @@ func (c *Conn) handleStmtExecute(data []byte) (*Result, error) {
 
 	flag := data[pos]
 	pos++
-	//now we only support CURSOR_TYPE_NO_CURSOR flag
-	if flag != 0 {
-		return nil, NewError(ER_UNKNOWN_ERROR, fmt.Sprintf("unsupported flag %d", flag))
+
+	// Supported types:
+	// - CURSOR_TYPE_NO_CURSOR
+	// - PARAMETER_COUNT_AVAILABLE
+
+	// Make sure the first 4 bits are 0.
+	if flag>>4 != 0 {
+		return nil, NewError(ER_UNKNOWN_ERROR, fmt.Sprintf("unsupported flags 0x%x", flag))
+	}
+
+	// Test for unsupported flags in the remaining 4 bits.
+	if flag&CURSOR_TYPE_READ_ONLY > 0 {
+		return nil, NewError(ER_UNKNOWN_ERROR,
+			fmt.Sprintf("unsupported flag %s", "CURSOR_TYPE_READ_ONLY"))
+	}
+	if flag&CURSOR_TYPE_FOR_UPDATE > 0 {
+		return nil, NewError(ER_UNKNOWN_ERROR,
+			fmt.Sprintf("unsupported flag %s", "CURSOR_TYPE_FOR_UPDATE"))
+	}
+	if flag&CURSOR_TYPE_READ_ONLY > 0 {
+		return nil, NewError(ER_UNKNOWN_ERROR,
+			fmt.Sprintf("unsupported flag %s", "CURSOR_TYPE_SCROLLABLE"))
 	}
 
 	//skip iteration-count, always 1
