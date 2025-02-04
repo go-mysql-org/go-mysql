@@ -119,23 +119,23 @@ func (s *Stmt) write(args ...interface{}) error {
 			paramValues[i] = Uint64ToBytes(uint64(v))
 		case uint8:
 			paramTypes[i] = []byte{MYSQL_TYPE_TINY}
-			paramFlags[i] = []byte{UNSIGNED_FLAG}
+			paramFlags[i] = []byte{BINARY_FLAG}
 			paramValues[i] = []byte{v}
 		case uint16:
 			paramTypes[i] = []byte{MYSQL_TYPE_SHORT}
-			paramFlags[i] = []byte{UNSIGNED_FLAG}
+			paramFlags[i] = []byte{BINARY_FLAG}
 			paramValues[i] = Uint16ToBytes(v)
 		case uint32:
 			paramTypes[i] = []byte{MYSQL_TYPE_LONG}
-			paramFlags[i] = []byte{UNSIGNED_FLAG}
+			paramFlags[i] = []byte{BINARY_FLAG}
 			paramValues[i] = Uint32ToBytes(v)
 		case uint:
 			paramTypes[i] = []byte{MYSQL_TYPE_LONGLONG}
-			paramFlags[i] = []byte{UNSIGNED_FLAG}
+			paramFlags[i] = []byte{BINARY_FLAG}
 			paramValues[i] = Uint64ToBytes(uint64(v))
 		case uint64:
 			paramTypes[i] = []byte{MYSQL_TYPE_LONGLONG}
-			paramFlags[i] = []byte{UNSIGNED_FLAG}
+			paramFlags[i] = []byte{BINARY_FLAG}
 			paramValues[i] = Uint64ToBytes(v)
 		case bool:
 			paramTypes[i] = []byte{MYSQL_TYPE_TINY}
