@@ -190,7 +190,7 @@ func (s *Stmt) write(args ...interface{}) error {
 	data.Write([]byte{byte(s.id), byte(s.id >> 8), byte(s.id >> 16), byte(s.id >> 24)})
 
 	flags := CURSOR_TYPE_NO_CURSOR
-	if s.conn.capability&CLIENT_QUERY_ATTRIBUTES > 0 && len(s.conn.queryAttributes) > 0 {
+	if paramsNum > 0 {
 		flags |= PARAMETER_COUNT_AVAILABLE
 	}
 	data.WriteByte(flags)
