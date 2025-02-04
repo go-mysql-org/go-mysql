@@ -23,7 +23,7 @@ func (qa *QueryAttribute) TypeAndFlag() []byte {
 	case string:
 		return []byte{MYSQL_TYPE_STRING, 0x0}
 	case uint64:
-		return []byte{MYSQL_TYPE_LONGLONG, UNSIGNED_FLAG}
+		return []byte{MYSQL_TYPE_LONGLONG, PARAM_UNSIGNED}
 	default:
 		log.Warnf("query attribute with unsupported type %T", v)
 	}

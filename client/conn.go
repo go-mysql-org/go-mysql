@@ -508,7 +508,6 @@ func (c *Conn) exec_send(query string) error {
 			}
 			c.queryAttributes = append(c.queryAttributes, lineAttr)
 		}
-
 	}
 
 	if c.capability&CLIENT_QUERY_ATTRIBUTES > 0 {
@@ -675,6 +674,7 @@ func (c *Conn) StatusString() string {
 	return strings.Join(stats, "|")
 }
 
+// SetQueryAttributes sets the query attributes to be send along with the next query
 func (c *Conn) SetQueryAttributes(attrs ...QueryAttribute) error {
 	c.queryAttributes = attrs
 	return nil

@@ -74,7 +74,6 @@ func (s *Stmt) write(args ...interface{}) error {
 			}
 			s.conn.queryAttributes = append(s.conn.queryAttributes, lineAttr)
 		}
-
 	}
 
 	qaLen := len(s.conn.queryAttributes)
