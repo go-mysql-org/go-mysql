@@ -107,7 +107,6 @@ func (c *Conn) handleStmtExecute(data []byte) (*Result, error) {
 
 	flag := data[pos]
 	pos++
-
 	// Supported types:
 	// - CURSOR_TYPE_NO_CURSOR
 	// - PARAMETER_COUNT_AVAILABLE
@@ -126,7 +125,7 @@ func (c *Conn) handleStmtExecute(data []byte) (*Result, error) {
 		return nil, NewError(ER_UNKNOWN_ERROR,
 			fmt.Sprintf("unsupported flag %s", "CURSOR_TYPE_FOR_UPDATE"))
 	}
-	if flag&CURSOR_TYPE_READ_ONLY > 0 {
+	if flag&CURSOR_TYPE_SCROLLABLE > 0 {
 		return nil, NewError(ER_UNKNOWN_ERROR,
 			fmt.Sprintf("unsupported flag %s", "CURSOR_TYPE_SCROLLABLE"))
 	}
