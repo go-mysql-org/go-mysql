@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -105,11 +106,18 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 
 	c.BufferSize = defaultBufferSize
 	c.attributes = map[string]string{
-		"_client_name": "go-mysql",
-		// "_client_version": "0.1",
+		"_client_name":     "go-mysql",
 		"_os":              runtime.GOOS,
 		"_platform":        runtime.GOARCH,
 		"_runtime_version": runtime.Version(),
+	}
+	if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		for _, bi := range buildInfo.Deps {
+			if bi.Path == "github.com/go-mysql-org/go-mysql" {
+				c.attributes["_client_version"] = bi.Version
+				break
+			}
+		}
 	}
 
 	if network == "" {
