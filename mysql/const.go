@@ -179,6 +179,10 @@ const (
 )
 
 const (
+	PARAM_UNSIGNED = 128
+)
+
+const (
 	DEFAULT_ADDR                  = "127.0.0.1:3306"
 	DEFAULT_IPV6_ADDR             = "[::1]:3306"
 	DEFAULT_USER                  = "root"
