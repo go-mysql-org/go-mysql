@@ -501,7 +501,7 @@ func (c *Conn) exec(query string) (*Result, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return errors.Trace(c.readResult(false))
+	return c.readResult(false)
 }
 
 // Sends COM_QUERY
