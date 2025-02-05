@@ -65,8 +65,8 @@ func (s *Stmt) write(args ...interface{}) error {
 		return fmt.Errorf("argument mismatch, need %d but got %d", s.params, len(args))
 	}
 
-	if s.conn.includeLine {
-		_, file, line, ok := runtime.Caller(2)
+	if s.conn.includeLine >= 0 {
+		_, file, line, ok := runtime.Caller(s.conn.includeLine)
 		if ok {
 			lineAttr := QueryAttribute{
 				Name:  "_line",

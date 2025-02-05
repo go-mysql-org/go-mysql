@@ -60,7 +60,8 @@ type Conn struct {
 
 	queryAttributes []QueryAttribute
 
-	includeLine bool
+	// Include the file + line as query attribute. The number set which frame in the stack should be used.
+	includeLine int
 }
 
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
@@ -104,6 +105,7 @@ type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbName string, dialer Dialer, options ...Option) (*Conn, error) {
 	c := new(Conn)
 
+	c.includeLine = -1
 	c.BufferSize = defaultBufferSize
 	c.attributes = map[string]string{
 		"_client_name":     "go-mysql",
@@ -507,8 +509,8 @@ func (c *Conn) exec(query string) (*Result, error) {
 func (c *Conn) exec_send(query string) error {
 	var buf bytes.Buffer
 
-	if c.includeLine {
-		_, file, line, ok := runtime.Caller(2)
+	if c.includeLine >= 0 {
+		_, file, line, ok := runtime.Caller(c.includeLine)
 		if ok {
 			lineAttr := QueryAttribute{
 				Name:  "_line",
@@ -690,6 +692,8 @@ func (c *Conn) SetQueryAttributes(attrs ...QueryAttribute) error {
 
 // IncludeLine can be passed as option when connecting to include the file name and line number
 // of the caller as query attribute `_line` when sending queries.
-func (c *Conn) IncludeLine() {
-	c.includeLine = true
+// The argument is used the dept in the stack. The top level is go-mysql and then there are the
+// levels of the application.
+func (c *Conn) IncludeLine(frame int) {
+	c.includeLine = frame
 }
