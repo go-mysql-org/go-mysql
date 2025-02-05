@@ -497,9 +497,9 @@ func (c *Conn) ReadOKPacket() (*Result, error) {
 func (c *Conn) exec(query string) (*Result, error) {
 	err := c.exec_send(query)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
-	return c.readResult(false)
+	return errors.Trace(c.readResult(false))
 }
 
 // Sends COM_QUERY
@@ -689,7 +689,7 @@ func (c *Conn) SetQueryAttributes(attrs ...QueryAttribute) error {
 }
 
 // IncludeLine can be passed as option when connecting to include the file name and line number
-// of the caller as query attribute when sending queries.
+// of the caller as query attribute `_line` when sending queries.
 func (c *Conn) IncludeLine() {
 	c.includeLine = true
 }
