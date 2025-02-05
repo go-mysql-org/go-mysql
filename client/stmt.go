@@ -59,13 +59,14 @@ func (s *Stmt) Close() error {
 
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html
 func (s *Stmt) write(args ...interface{}) error {
+	defer clear(s.conn.queryAttributes)
 	paramsNum := s.params
 
 	if len(args) != paramsNum {
 		return fmt.Errorf("argument mismatch, need %d but got %d", s.params, len(args))
 	}
 
-	if s.conn.includeLine >= 0 {
+	if (s.conn.capability&CLIENT_QUERY_ATTRIBUTES > 0) && (s.conn.includeLine >= 0) {
 		_, file, line, ok := runtime.Caller(s.conn.includeLine)
 		if ok {
 			lineAttr := QueryAttribute{
@@ -227,7 +228,6 @@ func (s *Stmt) write(args ...interface{}) error {
 	}
 
 	s.conn.ResetSequence()
-	s.conn.queryAttributes = nil
 
 	return s.conn.WritePacket(data.Bytes())
 }

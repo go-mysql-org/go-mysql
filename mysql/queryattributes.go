@@ -8,6 +8,8 @@ import (
 
 // Query Attributes in MySQL are key/value pairs passed along with COM_QUERY or COM_STMT_EXECUTE
 //
+// Supported Value types: string, uint64
+//
 // Resources:
 // - https://dev.mysql.com/doc/refman/8.4/en/query-attributes.html
 // - https://github.com/mysql/mysql-server/blob/trunk/include/mysql/components/services/mysql_query_attributes.h

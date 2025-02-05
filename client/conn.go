@@ -508,19 +508,20 @@ func (c *Conn) exec(query string) (*Result, error) {
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html
 func (c *Conn) execSend(query string) error {
 	var buf bytes.Buffer
-
-	if c.includeLine >= 0 {
-		_, file, line, ok := runtime.Caller(c.includeLine)
-		if ok {
-			lineAttr := QueryAttribute{
-				Name:  "_line",
-				Value: fmt.Sprintf("%s:%d", file, line),
-			}
-			c.queryAttributes = append(c.queryAttributes, lineAttr)
-		}
-	}
+	defer clear(c.queryAttributes)
 
 	if c.capability&CLIENT_QUERY_ATTRIBUTES > 0 {
+		if c.includeLine >= 0 {
+			_, file, line, ok := runtime.Caller(c.includeLine)
+			if ok {
+				lineAttr := QueryAttribute{
+					Name:  "_line",
+					Value: fmt.Sprintf("%s:%d", file, line),
+				}
+				c.queryAttributes = append(c.queryAttributes, lineAttr)
+			}
+		}
+
 		numParams := len(c.queryAttributes)
 		buf.Write(PutLengthEncodedInt(uint64(numParams)))
 		buf.WriteByte(0x1) // parameter_set_count, unused
@@ -548,7 +549,6 @@ func (c *Conn) execSend(query string) error {
 	if err := c.writeCommandBuf(COM_QUERY, buf.Bytes()); err != nil {
 		return errors.Trace(err)
 	}
-	c.queryAttributes = nil
 
 	return nil
 }
