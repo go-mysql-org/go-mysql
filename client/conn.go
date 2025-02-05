@@ -316,7 +316,7 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 // flag set to signal the server multiple queries are executed. Handling the responses
 // is up to the implementation of perResultCallback.
 func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCallback) (*Result, error) {
-	if err := c.exec_send(query); err != nil {
+	if err := c.execSend(query); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -369,7 +369,7 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
 func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
-	if err := c.exec_send(command); err != nil {
+	if err := c.execSend(command); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -497,7 +497,7 @@ func (c *Conn) ReadOKPacket() (*Result, error) {
 
 // Send COM_QUERY and read the result
 func (c *Conn) exec(query string) (*Result, error) {
-	err := c.exec_send(query)
+	err := c.execSend(query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -506,7 +506,7 @@ func (c *Conn) exec(query string) (*Result, error) {
 
 // Sends COM_QUERY
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html
-func (c *Conn) exec_send(query string) error {
+func (c *Conn) execSend(query string) error {
 	var buf bytes.Buffer
 
 	if c.includeLine >= 0 {
