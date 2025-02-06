@@ -194,3 +194,13 @@ func (s *connTestSuite) TestAttributes() {
 	require.Equal(s.T(), "go-mysql", s.c.attributes["_client_name"])
 	require.Equal(s.T(), "attrvalue", s.c.attributes["attrtest"])
 }
+
+func (s *connTestSuite) TestSetQueryAttributes() {
+	qa := mysql.QueryAttribute{
+		Name:  "qattr1",
+		Value: "qattr1val",
+	}
+	s.c.SetQueryAttributes(qa)
+	expected := []mysql.QueryAttribute([]mysql.QueryAttribute{mysql.QueryAttribute{Name: "qattr1", Value: "qattr1val"}})
+	require.Equal(s.T(), expected, s.c.queryAttributes)
+}
