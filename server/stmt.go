@@ -101,7 +101,7 @@ func (c *Conn) handleStmtExecute(data []byte) (*Result, error) {
 
 	s, ok := c.stmts[id]
 	if !ok {
-		return nil, NewDefaultError(ER_UNKNOWN_STMT_HANDLER,
+		return nil, NewDefaultError(ER_UNKNOWN_STMT_HANDLER, 5,
 			strconv.FormatUint(uint64(id), 10), "stmt_execute")
 	}
 
@@ -339,7 +339,7 @@ func (c *Conn) handleStmtReset(data []byte) (*Result, error) {
 
 	s, ok := c.stmts[id]
 	if !ok {
-		return nil, NewDefaultError(ER_UNKNOWN_STMT_HANDLER,
+		return nil, NewDefaultError(ER_UNKNOWN_STMT_HANDLER, 5,
 			strconv.FormatUint(uint64(id), 10), "stmt_reset")
 	}
 
