@@ -187,10 +187,10 @@ const (
 	DEFAULT_IPV6_ADDR             = "[::1]:3306"
 	DEFAULT_USER                  = "root"
 	DEFAULT_PASSWORD              = ""
-	DEFAULT_FLAVOR                = "mysql"
-	DEFAULT_CHARSET               = "utf8"
-	DEFAULT_COLLATION_ID   uint8  = 33
-	DEFAULT_COLLATION_NAME string = "utf8_general_ci"
+	DEFAULT_FLAVOR                = MySQLFlavor
+	DEFAULT_CHARSET               = "utf8mb4"
+	DEFAULT_COLLATION_ID   uint8  = 255
+	DEFAULT_COLLATION_NAME string = "utf8mb4_0900_ai_ci"
 )
 
 const (
