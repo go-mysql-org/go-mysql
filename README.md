@@ -1,14 +1,32 @@
 # go-mysql
 
-A pure go library to handle MySQL network protocol and replication as used by MySQL and MariaDB.
+A pure Go library to handle MySQL network protocol and replication as used by MySQL and MariaDB.
 
 ![semver](https://img.shields.io/github/v/tag/go-mysql-org/go-mysql)
 ![example workflow](https://github.com/go-mysql-org/go-mysql/actions/workflows/ci.yml/badge.svg)
 ![gomod version](https://img.shields.io/github/go-mod/go-version/go-mysql-org/go-mysql/master)
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-mysql-org/go-mysql.svg)](https://pkg.go.dev/github.com/go-mysql-org/go-mysql)
 
+## Platform Support
+
+As a pure Go library, this project follows [Go's minimum requirements](https://go.dev/wiki/MinimumRequirements).
+
+This library has been tested or deployed on the following operating systems and architectures:
+
+| Operating System | Architecture | Runtime Supported | CI | Notes                                                                                                                          |
+|------------------|--------------|-------------------|----|--------------------------------------------------------------------------------------------------------------------------------|
+| Linux            | amd64        | ✅                | ✅ | Check GitHub Actions of this project.                                                                                          |
+| Linux            | s390x        | ✅                | ✅ | A daily CI runs on an s390x VM, supported by the [IBM Z and LinuxONE Community](https://www.ibm.com/community/z/open-source/). |
+| Linux            | arm64        | ✅                | ❌ | Deployed in a production environment of a user.                                                                                |
+| FreeBSD          | amd64        | ✅                | ❌ | Sporadically tested by developers.                                                                                             |
+
+Other platforms supported by Go may also work, but they have not been verified. Feel free to report your test results.
+
+This library is not compatible with [TinyGo](https://tinygo.org/).
+
 ## Changelog
-This repo uses [Changelog](CHANGELOG.md).
+
+This library uses [Changelog](CHANGELOG.md).
 
 ---
 # Content
