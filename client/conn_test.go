@@ -200,7 +200,13 @@ func (s *connTestSuite) TestSetQueryAttributes() {
 		Name:  "qattr1",
 		Value: "qattr1val",
 	}
-	s.c.SetQueryAttributes(qa)
-	expected := []mysql.QueryAttribute([]mysql.QueryAttribute{mysql.QueryAttribute{Name: "qattr1", Value: "qattr1val"}})
+	err := s.c.SetQueryAttributes(qa)
+	require.NoError(s.T(), err)
+	expected := []mysql.QueryAttribute{
+		mysql.QueryAttribute{
+			Name:  "qattr1",
+			Value: "qattr1val",
+		},
+	}
 	require.Equal(s.T(), expected, s.c.queryAttributes)
 }
