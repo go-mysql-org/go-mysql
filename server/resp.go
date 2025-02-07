@@ -230,7 +230,7 @@ func (c *Conn) WriteValue(value interface{}) error {
 	case nil:
 		return c.writeOK(nil)
 	case *mysql.Result:
-		if v != nil && v.Resultset != nil {
+		if v != nil && v.HasResultset() {
 			return c.writeResultset(v.Resultset)
 		} else {
 			return c.writeOK(v)
