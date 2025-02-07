@@ -11,10 +11,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
-
-	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 const (
@@ -103,7 +102,7 @@ func (h *EventHeader) Decode(data []byte) error {
 
 func (h *EventHeader) Dump(w io.Writer) {
 	fmt.Fprintf(w, "=== %s ===\n", h.EventType)
-	fmt.Fprintf(w, "Date: %s\n", time.Unix(int64(h.Timestamp), 0).Format(TimeFormat))
+	fmt.Fprintf(w, "Date: %s\n", time.Unix(int64(h.Timestamp), 0).Format(mysql.TimeFormat))
 	fmt.Fprintf(w, "Log position: %d\n", h.LogPos)
 	fmt.Fprintf(w, "Event size: %d\n", h.EventSize)
 }
@@ -335,7 +334,7 @@ type XIDEvent struct {
 	XID uint64
 
 	// in fact XIDEvent dosen't have the GTIDSet information, just for beneficial to use
-	GSet GTIDSet
+	GSet mysql.GTIDSet
 }
 
 func (e *XIDEvent) Decode(data []byte) error {
@@ -363,7 +362,7 @@ type QueryEvent struct {
 	compressed bool
 
 	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
-	GSet GTIDSet
+	GSet mysql.GTIDSet
 }
 
 func (e *QueryEvent) Decode(data []byte) error {
@@ -394,7 +393,7 @@ func (e *QueryEvent) Decode(data []byte) error {
 	pos++
 
 	if e.compressed {
-		decompressedQuery, err := DecompressMariadbData(data[pos:])
+		decompressedQuery, err := mysql.DecompressMariadbData(data[pos:])
 		if err != nil {
 			return err
 		}
@@ -461,12 +460,12 @@ func (e *GTIDEvent) Decode(data []byte) error {
 			if len(data)-pos < 7 {
 				return nil
 			}
-			e.ImmediateCommitTimestamp = FixedLengthInt(data[pos : pos+7])
+			e.ImmediateCommitTimestamp = mysql.FixedLengthInt(data[pos : pos+7])
 			pos += 7
 			if (e.ImmediateCommitTimestamp & (uint64(1) << 55)) != 0 {
 				// If the most significant bit set, another 7 byte follows representing OriginalCommitTimestamp
 				e.ImmediateCommitTimestamp &= ^(uint64(1) << 55)
-				e.OriginalCommitTimestamp = FixedLengthInt(data[pos : pos+7])
+				e.OriginalCommitTimestamp = mysql.FixedLengthInt(data[pos : pos+7])
 				pos += 7
 			} else {
 				// Otherwise OriginalCommitTimestamp == ImmediateCommitTimestamp
@@ -478,7 +477,7 @@ func (e *GTIDEvent) Decode(data []byte) error {
 				return nil
 			}
 			var n int
-			e.TransactionLength, _, n = LengthEncodedInt(data[pos:])
+			e.TransactionLength, _, n = mysql.LengthEncodedInt(data[pos:])
 			pos += n
 
 			// IMMEDIATE_SERVER_VERSION_LENGTH = 4
@@ -524,12 +523,12 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
-func (e *GTIDEvent) GTIDNext() (GTIDSet, error) {
+func (e *GTIDEvent) GTIDNext() (mysql.GTIDSet, error) {
 	u, err := uuid.FromBytes(e.SID)
 	if err != nil {
 		return nil, err
 	}
-	return ParseMysqlGTIDSet(strings.Join([]string{u.String(), strconv.FormatInt(e.GNO, 10)}, ":"))
+	return mysql.ParseMysqlGTIDSet(strings.Join([]string{u.String(), strconv.FormatInt(e.GNO, 10)}, ":"))
 }
 
 // ImmediateCommitTime returns the commit time of this trx on the immediate server
@@ -655,7 +654,7 @@ func (e *MariadbBinlogCheckPointEvent) Dump(w io.Writer) {
 }
 
 type MariadbGTIDEvent struct {
-	GTID     MariadbGTID
+	GTID     mysql.MariadbGTID
 	Flags    byte
 	CommitID uint64
 }
@@ -695,12 +694,12 @@ func (e *MariadbGTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
-func (e *MariadbGTIDEvent) GTIDNext() (GTIDSet, error) {
-	return ParseMariadbGTIDSet(e.GTID.String())
+func (e *MariadbGTIDEvent) GTIDNext() (mysql.GTIDSet, error) {
+	return mysql.ParseMariadbGTIDSet(e.GTID.String())
 }
 
 type MariadbGTIDListEvent struct {
-	GTIDs []MariadbGTID
+	GTIDs []mysql.MariadbGTID
 }
 
 func (e *MariadbGTIDListEvent) Decode(data []byte) error {
@@ -710,7 +709,7 @@ func (e *MariadbGTIDListEvent) Decode(data []byte) error {
 
 	count := v & uint32((1<<28)-1)
 
-	e.GTIDs = make([]MariadbGTID, count)
+	e.GTIDs = make([]mysql.MariadbGTID, count)
 
 	for i := uint32(0); i < count; i++ {
 		e.GTIDs[i].DomainID = binary.LittleEndian.Uint32(data[pos:])

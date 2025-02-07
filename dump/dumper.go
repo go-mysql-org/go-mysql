@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-log/log"
 	"github.com/siddontang/go-log/loggers"
@@ -81,7 +81,7 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 	d.Password = password
 	d.Tables = make([]string, 0, 16)
 	d.Databases = make([]string, 0, 16)
-	d.Charset = DEFAULT_CHARSET
+	d.Charset = mysql.DEFAULT_CHARSET
 	d.IgnoreTables = make(map[string][]string)
 	d.ExtraOptions = make([]string, 0, 5)
 	d.masterDataSkipped = false

@@ -179,14 +179,18 @@ const (
 )
 
 const (
+	PARAM_UNSIGNED = 128
+)
+
+const (
 	DEFAULT_ADDR                  = "127.0.0.1:3306"
 	DEFAULT_IPV6_ADDR             = "[::1]:3306"
 	DEFAULT_USER                  = "root"
 	DEFAULT_PASSWORD              = ""
-	DEFAULT_FLAVOR                = "mysql"
-	DEFAULT_CHARSET               = "utf8"
-	DEFAULT_COLLATION_ID   uint8  = 33
-	DEFAULT_COLLATION_NAME string = "utf8_general_ci"
+	DEFAULT_FLAVOR                = MySQLFlavor
+	DEFAULT_CHARSET               = "utf8mb4"
+	DEFAULT_COLLATION_ID   uint8  = 255
+	DEFAULT_COLLATION_NAME string = "utf8mb4_0900_ai_ci"
 )
 
 const (
@@ -208,4 +212,13 @@ const (
 	MYSQL_COMPRESS_NONE = iota
 	MYSQL_COMPRESS_ZLIB
 	MYSQL_COMPRESS_ZSTD
+)
+
+// See enum_cursor_type in mysql.h
+const (
+	CURSOR_TYPE_NO_CURSOR     byte = 0x0
+	CURSOR_TYPE_READ_ONLY     byte = 0x1
+	CURSOR_TYPE_FOR_UPDATE    byte = 0x2
+	CURSOR_TYPE_SCROLLABLE    byte = 0x4
+	PARAMETER_COUNT_AVAILABLE byte = 0x8
 )

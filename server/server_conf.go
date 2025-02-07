@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var defaultServer = NewDefaultServer()
@@ -50,11 +50,11 @@ func NewDefaultServer() *Server {
 	return &Server{
 		serverVersion:   "8.0.11",
 		protocolVersion: 10,
-		capability: CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
-			CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_SSL |
-			CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CLIENT_CONNECT_ATTRS,
-		collationId:       DEFAULT_COLLATION_ID,
-		defaultAuthMethod: AUTH_NATIVE_PASSWORD,
+		capability: mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
+			mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION | mysql.CLIENT_PLUGIN_AUTH | mysql.CLIENT_SSL |
+			mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | mysql.CLIENT_CONNECT_ATTRS,
+		collationId:       mysql.DEFAULT_COLLATION_ID,
+		defaultAuthMethod: mysql.AUTH_NATIVE_PASSWORD,
 		pubKey:            getPublicKeyFromCert(certPem),
 		tlsConfig:         tlsConf,
 		cacheShaPassword:  new(sync.Map),
@@ -78,11 +78,11 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 	//if !isAuthMethodAllowedByServer(defaultAuthMethod, allowedAuthMethods) {
 	//	panic(fmt.Sprintf("default auth method is not one of the allowed auth methods"))
 	//}
-	var capFlag = CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG | CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
-		CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH | CLIENT_CONNECT_ATTRS |
-		CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
+	var capFlag = mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
+		mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION | mysql.CLIENT_PLUGIN_AUTH | mysql.CLIENT_CONNECT_ATTRS |
+		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
 	if tlsConfig != nil {
-		capFlag |= CLIENT_SSL
+		capFlag |= mysql.CLIENT_SSL
 	}
 	return &Server{
 		serverVersion:     serverVersion,
@@ -97,7 +97,7 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 }
 
 func isAuthMethodSupported(authMethod string) bool {
-	return authMethod == AUTH_NATIVE_PASSWORD || authMethod == AUTH_CACHING_SHA2_PASSWORD || authMethod == AUTH_SHA256_PASSWORD
+	return authMethod == mysql.AUTH_NATIVE_PASSWORD || authMethod == mysql.AUTH_CACHING_SHA2_PASSWORD || authMethod == mysql.AUTH_SHA256_PASSWORD
 }
 
 func (s *Server) InvalidateCache(username string, host string) {

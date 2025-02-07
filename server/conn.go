@@ -5,7 +5,7 @@ import (
 	"net"
 	"sync/atomic"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
 )
 
@@ -57,7 +57,7 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 		h:                  h,
 		connectionID:       atomic.AddUint32(&baseConnID, 1),
 		stmts:              make(map[uint32]*Stmt),
-		salt:               RandomBuf(20),
+		salt:               mysql.RandomBuf(20),
 	}
 	c.closed.Store(false)
 
@@ -85,7 +85,7 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, 
 		h:                  h,
 		connectionID:       atomic.AddUint32(&baseConnID, 1),
 		stmts:              make(map[uint32]*Stmt),
-		salt:               RandomBuf(20),
+		salt:               mysql.RandomBuf(20),
 	}
 	c.closed.Store(false)
 
@@ -104,11 +104,12 @@ func (c *Conn) handshake() error {
 
 	if err := c.readHandshakeResponse(); err != nil {
 		if errors.Is(err, ErrAccessDenied) {
-			var usingPasswd uint16 = ER_YES
+			var usingPasswd uint16 = mysql.ER_YES
 			if errors.Is(err, ErrAccessDeniedNoPassword) {
-				usingPasswd = ER_NO
+				usingPasswd = mysql.ER_NO
 			}
-			err = NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), MySQLErrName[usingPasswd])
+			err = mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.user,
+				c.RemoteAddr().String(), mysql.MySQLErrName[usingPasswd])
 		}
 		_ = c.writeError(err)
 		return err
@@ -167,19 +168,19 @@ func (c *Conn) ConnectionID() uint32 {
 }
 
 func (c *Conn) IsAutoCommit() bool {
-	return c.HasStatus(SERVER_STATUS_AUTOCOMMIT)
+	return c.HasStatus(mysql.SERVER_STATUS_AUTOCOMMIT)
 }
 
 func (c *Conn) IsInTransaction() bool {
-	return c.HasStatus(SERVER_STATUS_IN_TRANS)
+	return c.HasStatus(mysql.SERVER_STATUS_IN_TRANS)
 }
 
 func (c *Conn) SetInTransaction() {
-	c.SetStatus(SERVER_STATUS_IN_TRANS)
+	c.SetStatus(mysql.SERVER_STATUS_IN_TRANS)
 }
 
 func (c *Conn) ClearInTransaction() {
-	c.UnsetStatus(SERVER_STATUS_IN_TRANS)
+	c.UnsetStatus(mysql.SERVER_STATUS_IN_TRANS)
 }
 
 func (c *Conn) SetStatus(status uint16) {
