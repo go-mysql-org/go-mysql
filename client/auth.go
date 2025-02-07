@@ -275,7 +275,7 @@ func (c *Conn) writeAuthHandshake() error {
 	data[11] = 0x00
 
 	// Charset [1 byte]
-	// use default collation id 33 here, is `utf8mb3_general_ci`
+	// use default collation id 255 here, is `utf8mb4_0900_ai_ci`
 	collationName := c.collation
 	if len(collationName) == 0 {
 		collationName = DEFAULT_COLLATION_NAME
