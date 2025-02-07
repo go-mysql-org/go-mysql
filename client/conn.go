@@ -14,7 +14,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/parser/charset"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/go-mysql-org/go-mysql/utils"
 )
@@ -58,20 +58,20 @@ type Conn struct {
 
 	connectionID uint32
 
-	queryAttributes []QueryAttribute
+	queryAttributes []mysql.QueryAttribute
 
 	// Include the file + line as query attribute. The number set which frame in the stack should be used.
 	includeLine int
 }
 
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
-type SelectPerRowCallback func(row []FieldValue) error
+type SelectPerRowCallback func(row []mysql.FieldValue) error
 
 // This function will be called once per result from ExecuteSelectStreaming
-type SelectPerResultCallback func(result *Result) error
+type SelectPerResultCallback func(result *mysql.Result) error
 
 // This function will be called once per result from ExecuteMultiple
-type ExecPerResultCallback func(result *Result, err error)
+type ExecPerResultCallback func(result *mysql.Result, err error)
 
 func getNetProto(addr string) string {
 	proto := "tcp"
@@ -138,7 +138,7 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 	c.proto = network
 
 	// use default charset here, utf-8
-	c.charset = DEFAULT_CHARSET
+	c.charset = mysql.DEFAULT_CHARSET
 
 	// Apply configuration functions.
 	for _, option := range options {
@@ -161,10 +161,10 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 		return nil, errors.Trace(err)
 	}
 
-	if c.ccaps&CLIENT_COMPRESS > 0 {
-		c.Conn.Compression = MYSQL_COMPRESS_ZLIB
-	} else if c.ccaps&CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
-		c.Conn.Compression = MYSQL_COMPRESS_ZSTD
+	if c.ccaps&mysql.CLIENT_COMPRESS > 0 {
+		c.Conn.Compression = mysql.MYSQL_COMPRESS_ZLIB
+	} else if c.ccaps&mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
+		c.Conn.Compression = mysql.MYSQL_COMPRESS_ZSTD
 	}
 
 	// if a collation was set with a ID of > 255, then we need to call SET NAMES ...
@@ -215,14 +215,14 @@ func (c *Conn) Close() error {
 
 // Quit sends COM_QUIT to the server and then closes the connection. Use Close() to directly close the connection.
 func (c *Conn) Quit() error {
-	if err := c.writeCommand(COM_QUIT); err != nil {
+	if err := c.writeCommand(mysql.COM_QUIT); err != nil {
 		return err
 	}
 	return c.Close()
 }
 
 func (c *Conn) Ping() error {
-	if err := c.writeCommand(COM_PING); err != nil {
+	if err := c.writeCommand(mysql.COM_PING); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -265,7 +265,7 @@ func (c *Conn) UseDB(dbName string) error {
 		return nil
 	}
 
-	if err := c.writeCommandStr(COM_INIT_DB, dbName); err != nil {
+	if err := c.writeCommandStr(mysql.COM_INIT_DB, dbName); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -291,17 +291,17 @@ func (c *Conn) GetServerVersion() string {
 // of the server and returns 0 if they are equal, and 1 if the server version
 // is higher and -1 if the server version is lower.
 func (c *Conn) CompareServerVersion(v string) (int, error) {
-	return CompareServerVersions(c.serverVersion, v)
+	return mysql.CompareServerVersions(c.serverVersion, v)
 }
 
-func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
+func (c *Conn) Execute(command string, args ...interface{}) (*mysql.Result, error) {
 	if len(args) == 0 {
 		return c.exec(command)
 	} else {
 		if s, err := c.Prepare(command); err != nil {
 			return nil, errors.Trace(err)
 		} else {
-			var r *Result
+			var r *mysql.Result
 			r, err = s.Execute(args...)
 			s.Close()
 			return r, err
@@ -315,13 +315,13 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 // When ExecuteMultiple is used, the connection should have the SERVER_MORE_RESULTS_EXISTS
 // flag set to signal the server multiple queries are executed. Handling the responses
 // is up to the implementation of perResultCallback.
-func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCallback) (*Result, error) {
+func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCallback) (*mysql.Result, error) {
 	if err := c.execSend(query); err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	var err error
-	var result *Result
+	var result *mysql.Result
 
 	bs := utils.ByteSliceGet(16)
 	defer utils.ByteSlicePut(bs)
@@ -333,13 +333,13 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 		}
 
 		switch bs.B[0] {
-		case OK_HEADER:
+		case mysql.OK_HEADER:
 			result, err = c.handleOKPacket(bs.B)
-		case ERR_HEADER:
+		case mysql.ERR_HEADER:
 			err = c.handleErrorPacket(bytes.Repeat(bs.B, 1))
 			result = nil
-		case LocalInFile_HEADER:
-			err = ErrMalformPacket
+		case mysql.LocalInFile_HEADER:
+			err = mysql.ErrMalformPacket
 			result = nil
 		default:
 			result, err = c.readResultset(bs.B, false)
@@ -348,7 +348,7 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 		perResultCallback(result, err)
 
 		// if there was an error of this was the last result, stop looping
-		if err != nil || result.Status&SERVER_MORE_RESULTS_EXISTS == 0 {
+		if err != nil || result.Status&mysql.SERVER_MORE_RESULTS_EXISTS == 0 {
 			break
 		}
 	}
@@ -357,10 +357,10 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 	// streaming session
 	// if this would end up in WriteValue, it would just be ignored as all
 	// responses should have been handled in perResultCallback
-	rs := NewResultset(0)
-	rs.Streaming = StreamingMultiple
+	rs := mysql.NewResultset(0)
+	rs.Streaming = mysql.StreamingMultiple
 	rs.StreamingDone = true
-	return NewResult(rs), nil
+	return mysql.NewResult(rs), nil
 }
 
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset
@@ -368,7 +368,7 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 // When given, perResultCallback will be called once per result
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
-func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
+func (c *Conn) ExecuteSelectStreaming(command string, result *mysql.Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
 	if err := c.execSend(command); err != nil {
 		return errors.Trace(err)
 	}
@@ -425,13 +425,13 @@ func (c *Conn) GetCollation() string {
 }
 
 // FieldList uses COM_FIELD_LIST to get a list of fields from a table
-func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
-	if err := c.writeCommandStrStr(COM_FIELD_LIST, table, wildcard); err != nil {
+func (c *Conn) FieldList(table string, wildcard string) ([]*mysql.Field, error) {
+	if err := c.writeCommandStrStr(mysql.COM_FIELD_LIST, table, wildcard); err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	fs := make([]*Field, 0, 4)
-	var f *Field
+	fs := make([]*mysql.Field, 0, 4)
+	var f *mysql.Field
 	for {
 		data, err := c.ReadPacket()
 		if err != nil {
@@ -439,7 +439,7 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 		}
 
 		// ERR Packet
-		if data[0] == ERR_HEADER {
+		if data[0] == mysql.ERR_HEADER {
 			return nil, c.handleErrorPacket(data)
 		}
 
@@ -448,7 +448,7 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*Field, error) {
 			return fs, nil
 		}
 
-		if f, err = FieldData(data).Parse(); err != nil {
+		if f, err = mysql.FieldData(data).Parse(); err != nil {
 			return nil, errors.Trace(err)
 		}
 		fs = append(fs, f)
@@ -466,12 +466,12 @@ func (c *Conn) SetAutoCommit() error {
 
 // IsAutoCommit returns true if SERVER_STATUS_AUTOCOMMIT is set
 func (c *Conn) IsAutoCommit() bool {
-	return c.status&SERVER_STATUS_AUTOCOMMIT > 0
+	return c.status&mysql.SERVER_STATUS_AUTOCOMMIT > 0
 }
 
 // IsInTransaction returns true if SERVER_STATUS_IN_TRANS is set
 func (c *Conn) IsInTransaction() bool {
-	return c.status&SERVER_STATUS_IN_TRANS > 0
+	return c.status&mysql.SERVER_STATUS_IN_TRANS > 0
 }
 
 func (c *Conn) GetCharset() string {
@@ -482,7 +482,7 @@ func (c *Conn) GetConnectionID() uint32 {
 	return c.connectionID
 }
 
-func (c *Conn) HandleOKPacket(data []byte) *Result {
+func (c *Conn) HandleOKPacket(data []byte) *mysql.Result {
 	r, _ := c.handleOKPacket(data)
 	return r
 }
@@ -491,12 +491,12 @@ func (c *Conn) HandleErrorPacket(data []byte) error {
 	return c.handleErrorPacket(data)
 }
 
-func (c *Conn) ReadOKPacket() (*Result, error) {
+func (c *Conn) ReadOKPacket() (*mysql.Result, error) {
 	return c.readOK()
 }
 
 // Send COM_QUERY and read the result
-func (c *Conn) exec(query string) (*Result, error) {
+func (c *Conn) exec(query string) (*mysql.Result, error) {
 	err := c.execSend(query)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -510,11 +510,11 @@ func (c *Conn) execSend(query string) error {
 	var buf bytes.Buffer
 	defer clear(c.queryAttributes)
 
-	if c.capability&CLIENT_QUERY_ATTRIBUTES > 0 {
+	if c.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 {
 		if c.includeLine >= 0 {
 			_, file, line, ok := runtime.Caller(c.includeLine)
 			if ok {
-				lineAttr := QueryAttribute{
+				lineAttr := mysql.QueryAttribute{
 					Name:  "_line",
 					Value: fmt.Sprintf("%s:%d", file, line),
 				}
@@ -523,7 +523,7 @@ func (c *Conn) execSend(query string) error {
 		}
 
 		numParams := len(c.queryAttributes)
-		buf.Write(PutLengthEncodedInt(uint64(numParams)))
+		buf.Write(mysql.PutLengthEncodedInt(uint64(numParams)))
 		buf.WriteByte(0x1) // parameter_set_count, unused
 		if numParams > 0 {
 			// null_bitmap, length: (num_params+7)/8
@@ -533,7 +533,7 @@ func (c *Conn) execSend(query string) error {
 			buf.WriteByte(0x1) // new_params_bind_flag, unused
 			for _, qa := range c.queryAttributes {
 				buf.Write(qa.TypeAndFlag())
-				buf.Write(PutLengthEncodedString([]byte(qa.Name)))
+				buf.Write(mysql.PutLengthEncodedString([]byte(qa.Name)))
 			}
 			for _, qa := range c.queryAttributes {
 				buf.Write(qa.ValueBytes())
@@ -546,7 +546,7 @@ func (c *Conn) execSend(query string) error {
 		return err
 	}
 
-	if err := c.writeCommandBuf(COM_QUERY, buf.Bytes()); err != nil {
+	if err := c.writeCommandBuf(mysql.COM_QUERY, buf.Bytes()); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -567,69 +567,69 @@ func (c *Conn) CapabilityString() string {
 		capability ^= field
 
 		switch field {
-		case CLIENT_LONG_PASSWORD:
+		case mysql.CLIENT_LONG_PASSWORD:
 			caps = append(caps, "CLIENT_LONG_PASSWORD")
-		case CLIENT_FOUND_ROWS:
+		case mysql.CLIENT_FOUND_ROWS:
 			caps = append(caps, "CLIENT_FOUND_ROWS")
-		case CLIENT_LONG_FLAG:
+		case mysql.CLIENT_LONG_FLAG:
 			caps = append(caps, "CLIENT_LONG_FLAG")
-		case CLIENT_CONNECT_WITH_DB:
+		case mysql.CLIENT_CONNECT_WITH_DB:
 			caps = append(caps, "CLIENT_CONNECT_WITH_DB")
-		case CLIENT_NO_SCHEMA:
+		case mysql.CLIENT_NO_SCHEMA:
 			caps = append(caps, "CLIENT_NO_SCHEMA")
-		case CLIENT_COMPRESS:
+		case mysql.CLIENT_COMPRESS:
 			caps = append(caps, "CLIENT_COMPRESS")
-		case CLIENT_ODBC:
+		case mysql.CLIENT_ODBC:
 			caps = append(caps, "CLIENT_ODBC")
-		case CLIENT_LOCAL_FILES:
+		case mysql.CLIENT_LOCAL_FILES:
 			caps = append(caps, "CLIENT_LOCAL_FILES")
-		case CLIENT_IGNORE_SPACE:
+		case mysql.CLIENT_IGNORE_SPACE:
 			caps = append(caps, "CLIENT_IGNORE_SPACE")
-		case CLIENT_PROTOCOL_41:
+		case mysql.CLIENT_PROTOCOL_41:
 			caps = append(caps, "CLIENT_PROTOCOL_41")
-		case CLIENT_INTERACTIVE:
+		case mysql.CLIENT_INTERACTIVE:
 			caps = append(caps, "CLIENT_INTERACTIVE")
-		case CLIENT_SSL:
+		case mysql.CLIENT_SSL:
 			caps = append(caps, "CLIENT_SSL")
-		case CLIENT_IGNORE_SIGPIPE:
+		case mysql.CLIENT_IGNORE_SIGPIPE:
 			caps = append(caps, "CLIENT_IGNORE_SIGPIPE")
-		case CLIENT_TRANSACTIONS:
+		case mysql.CLIENT_TRANSACTIONS:
 			caps = append(caps, "CLIENT_TRANSACTIONS")
-		case CLIENT_RESERVED:
+		case mysql.CLIENT_RESERVED:
 			caps = append(caps, "CLIENT_RESERVED")
-		case CLIENT_SECURE_CONNECTION:
+		case mysql.CLIENT_SECURE_CONNECTION:
 			caps = append(caps, "CLIENT_SECURE_CONNECTION")
-		case CLIENT_MULTI_STATEMENTS:
+		case mysql.CLIENT_MULTI_STATEMENTS:
 			caps = append(caps, "CLIENT_MULTI_STATEMENTS")
-		case CLIENT_MULTI_RESULTS:
+		case mysql.CLIENT_MULTI_RESULTS:
 			caps = append(caps, "CLIENT_MULTI_RESULTS")
-		case CLIENT_PS_MULTI_RESULTS:
+		case mysql.CLIENT_PS_MULTI_RESULTS:
 			caps = append(caps, "CLIENT_PS_MULTI_RESULTS")
-		case CLIENT_PLUGIN_AUTH:
+		case mysql.CLIENT_PLUGIN_AUTH:
 			caps = append(caps, "CLIENT_PLUGIN_AUTH")
-		case CLIENT_CONNECT_ATTRS:
+		case mysql.CLIENT_CONNECT_ATTRS:
 			caps = append(caps, "CLIENT_CONNECT_ATTRS")
-		case CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA:
+		case mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA:
 			caps = append(caps, "CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA")
-		case CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS:
+		case mysql.CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS:
 			caps = append(caps, "CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS")
-		case CLIENT_SESSION_TRACK:
+		case mysql.CLIENT_SESSION_TRACK:
 			caps = append(caps, "CLIENT_SESSION_TRACK")
-		case CLIENT_DEPRECATE_EOF:
+		case mysql.CLIENT_DEPRECATE_EOF:
 			caps = append(caps, "CLIENT_DEPRECATE_EOF")
-		case CLIENT_OPTIONAL_RESULTSET_METADATA:
+		case mysql.CLIENT_OPTIONAL_RESULTSET_METADATA:
 			caps = append(caps, "CLIENT_OPTIONAL_RESULTSET_METADATA")
-		case CLIENT_ZSTD_COMPRESSION_ALGORITHM:
+		case mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM:
 			caps = append(caps, "CLIENT_ZSTD_COMPRESSION_ALGORITHM")
-		case CLIENT_QUERY_ATTRIBUTES:
+		case mysql.CLIENT_QUERY_ATTRIBUTES:
 			caps = append(caps, "CLIENT_QUERY_ATTRIBUTES")
-		case MULTI_FACTOR_AUTHENTICATION:
+		case mysql.MULTI_FACTOR_AUTHENTICATION:
 			caps = append(caps, "MULTI_FACTOR_AUTHENTICATION")
-		case CLIENT_CAPABILITY_EXTENSION:
+		case mysql.CLIENT_CAPABILITY_EXTENSION:
 			caps = append(caps, "CLIENT_CAPABILITY_EXTENSION")
-		case CLIENT_SSL_VERIFY_SERVER_CERT:
+		case mysql.CLIENT_SSL_VERIFY_SERVER_CERT:
 			caps = append(caps, "CLIENT_SSL_VERIFY_SERVER_CERT")
-		case CLIENT_REMEMBER_OPTIONS:
+		case mysql.CLIENT_REMEMBER_OPTIONS:
 			caps = append(caps, "CLIENT_REMEMBER_OPTIONS")
 		default:
 			caps = append(caps, fmt.Sprintf("(%d)", field))
@@ -652,29 +652,29 @@ func (c *Conn) StatusString() string {
 		status ^= field
 
 		switch field {
-		case SERVER_STATUS_IN_TRANS:
+		case mysql.SERVER_STATUS_IN_TRANS:
 			stats = append(stats, "SERVER_STATUS_IN_TRANS")
-		case SERVER_STATUS_AUTOCOMMIT:
+		case mysql.SERVER_STATUS_AUTOCOMMIT:
 			stats = append(stats, "SERVER_STATUS_AUTOCOMMIT")
-		case SERVER_MORE_RESULTS_EXISTS:
+		case mysql.SERVER_MORE_RESULTS_EXISTS:
 			stats = append(stats, "SERVER_MORE_RESULTS_EXISTS")
-		case SERVER_STATUS_NO_GOOD_INDEX_USED:
+		case mysql.SERVER_STATUS_NO_GOOD_INDEX_USED:
 			stats = append(stats, "SERVER_STATUS_NO_GOOD_INDEX_USED")
-		case SERVER_STATUS_NO_INDEX_USED:
+		case mysql.SERVER_STATUS_NO_INDEX_USED:
 			stats = append(stats, "SERVER_STATUS_NO_INDEX_USED")
-		case SERVER_STATUS_CURSOR_EXISTS:
+		case mysql.SERVER_STATUS_CURSOR_EXISTS:
 			stats = append(stats, "SERVER_STATUS_CURSOR_EXISTS")
-		case SERVER_STATUS_LAST_ROW_SEND:
+		case mysql.SERVER_STATUS_LAST_ROW_SEND:
 			stats = append(stats, "SERVER_STATUS_LAST_ROW_SEND")
-		case SERVER_STATUS_DB_DROPPED:
+		case mysql.SERVER_STATUS_DB_DROPPED:
 			stats = append(stats, "SERVER_STATUS_DB_DROPPED")
-		case SERVER_STATUS_NO_BACKSLASH_ESCAPED:
+		case mysql.SERVER_STATUS_NO_BACKSLASH_ESCAPED:
 			stats = append(stats, "SERVER_STATUS_NO_BACKSLASH_ESCAPED")
-		case SERVER_STATUS_METADATA_CHANGED:
+		case mysql.SERVER_STATUS_METADATA_CHANGED:
 			stats = append(stats, "SERVER_STATUS_METADATA_CHANGED")
-		case SERVER_QUERY_WAS_SLOW:
+		case mysql.SERVER_QUERY_WAS_SLOW:
 			stats = append(stats, "SERVER_QUERY_WAS_SLOW")
-		case SERVER_PS_OUT_PARAMS:
+		case mysql.SERVER_PS_OUT_PARAMS:
 			stats = append(stats, "SERVER_PS_OUT_PARAMS")
 		default:
 			stats = append(stats, fmt.Sprintf("(%d)", field))
@@ -685,7 +685,7 @@ func (c *Conn) StatusString() string {
 }
 
 // SetQueryAttributes sets the query attributes to be send along with the next query
-func (c *Conn) SetQueryAttributes(attrs ...QueryAttribute) error {
+func (c *Conn) SetQueryAttributes(attrs ...mysql.QueryAttribute) error {
 	c.queryAttributes = attrs
 	return nil
 }

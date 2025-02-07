@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
-	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/utils"
 )
@@ -17,15 +16,15 @@ type Handler interface {
 	UseDB(dbName string) error
 	//handle COM_QUERY command, like SELECT, INSERT, UPDATE, etc...
 	//If Result has a Resultset (SELECT, SHOW, etc...), we will send this as the response, otherwise, we will send Result
-	HandleQuery(query string) (*Result, error)
+	HandleQuery(query string) (*mysql.Result, error)
 	//handle COM_FILED_LIST command
-	HandleFieldList(table string, fieldWildcard string) ([]*Field, error)
+	HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error)
 	//handle COM_STMT_PREPARE, params is the param number for this statement, columns is the column number
 	//context will be used later for statement execute
 	HandleStmtPrepare(query string) (params int, columns int, context interface{}, err error)
 	//handle COM_STMT_EXECUTE, context is the previous one set in prepare
 	//query is the statement prepare query, and args is the params for this statement
-	HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error)
+	HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error)
 	//handle COM_STMT_CLOSE, context is the previous one set in prepare
 	//this handler has no response
 	HandleStmtClose(context interface{}) error
@@ -38,8 +37,8 @@ type Handler interface {
 type ReplicationHandler interface {
 	// handle Replication command
 	HandleRegisterSlave(data []byte) error
-	HandleBinlogDump(pos Position) (*replication.BinlogStreamer, error)
-	HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error)
+	HandleBinlogDump(pos mysql.Position) (*replication.BinlogStreamer, error)
+	HandleBinlogDumpGTID(gtidSet *mysql.MysqlGTIDSet) (*replication.BinlogStreamer, error)
 }
 
 // HandleCommand is handling commands received by the server
@@ -76,25 +75,25 @@ func (c *Conn) dispatch(data []byte) interface{} {
 	data = data[1:]
 
 	switch cmd {
-	case COM_QUIT:
+	case mysql.COM_QUIT:
 		c.Close()
 		c.Conn = nil
 		return noResponse{}
-	case COM_QUERY:
+	case mysql.COM_QUERY:
 		if r, err := c.h.HandleQuery(utils.ByteSliceToString(data)); err != nil {
 			return err
 		} else {
 			return r
 		}
-	case COM_PING:
+	case mysql.COM_PING:
 		return nil
-	case COM_INIT_DB:
+	case mysql.COM_INIT_DB:
 		if err := c.h.UseDB(utils.ByteSliceToString(data)); err != nil {
 			return err
 		} else {
 			return nil
 		}
-	case COM_FIELD_LIST:
+	case mysql.COM_FIELD_LIST:
 		index := bytes.IndexByte(data, 0x00)
 		table := utils.ByteSliceToString(data[0:index])
 		wildcard := utils.ByteSliceToString(data[index+1:])
@@ -104,7 +103,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		} else {
 			return fs
 		}
-	case COM_STMT_PREPARE:
+	case mysql.COM_STMT_PREPARE:
 		c.stmtID++
 		st := new(Stmt)
 		st.ID = c.stmtID
@@ -117,41 +116,41 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			c.stmts[c.stmtID] = st
 			return st
 		}
-	case COM_STMT_EXECUTE:
+	case mysql.COM_STMT_EXECUTE:
 		if r, err := c.handleStmtExecute(data); err != nil {
 			return err
 		} else {
 			return r
 		}
-	case COM_STMT_CLOSE:
+	case mysql.COM_STMT_CLOSE:
 		if err := c.handleStmtClose(data); err != nil {
 			return err
 		}
 		return noResponse{}
-	case COM_STMT_SEND_LONG_DATA:
+	case mysql.COM_STMT_SEND_LONG_DATA:
 		if err := c.handleStmtSendLongData(data); err != nil {
 			return err
 		}
 		return noResponse{}
-	case COM_STMT_RESET:
+	case mysql.COM_STMT_RESET:
 		if r, err := c.handleStmtReset(data); err != nil {
 			return err
 		} else {
 			return r
 		}
-	case COM_SET_OPTION:
+	case mysql.COM_SET_OPTION:
 		if err := c.h.HandleOtherCommand(cmd, data); err != nil {
 			return err
 		}
 
 		return eofResponse{}
-	case COM_REGISTER_SLAVE:
+	case mysql.COM_REGISTER_SLAVE:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			return h.HandleRegisterSlave(data)
 		} else {
 			return c.h.HandleOtherCommand(cmd, data)
 		}
-	case COM_BINLOG_DUMP:
+	case mysql.COM_BINLOG_DUMP:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			pos, err := parseBinlogDump(data)
 			if err != nil {
@@ -165,7 +164,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		} else {
 			return c.h.HandleOtherCommand(cmd, data)
 		}
-	case COM_BINLOG_DUMP_GTID:
+	case mysql.COM_BINLOG_DUMP_GTID:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			gtidSet, err := parseBinlogDumpGTID(data)
 			if err != nil {
@@ -200,7 +199,7 @@ func (h EmptyHandler) UseDB(dbName string) error {
 }
 
 // HandleQuery is called for COM_QUERY
-func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
+func (h EmptyHandler) HandleQuery(query string) (*mysql.Result, error) {
 	log.Printf("Received: Query: %s", query)
 
 	// These two queries are implemented for minimal support for MySQL Shell
@@ -223,7 +222,7 @@ func (h EmptyHandler) HandleQuery(query string) (*Result, error) {
 // HandleFieldList is called for COM_FIELD_LIST packets
 // Note that COM_FIELD_LIST has been deprecated since MySQL 5.7.11
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_field_list.html
-func (h EmptyHandler) HandleFieldList(table string, fieldWildcard string) ([]*Field, error) {
+func (h EmptyHandler) HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error) {
 	log.Printf("Received: FieldList: table=%s, fieldWildcard:%s", table, fieldWildcard)
 	return nil, fmt.Errorf("not supported now")
 }
@@ -239,7 +238,7 @@ func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, er
 //revive:disable:unused-parameter
 
 // HandleStmtExecute is called for COM_STMT_EXECUTE
-func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*Result, error) {
+func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error) {
 	log.Printf("Received: StmtExecute: %s (args: %v)", query, args)
 	return nil, fmt.Errorf("not supported now")
 }
@@ -259,13 +258,13 @@ func (h EmptyReplicationHandler) HandleRegisterSlave(data []byte) error {
 }
 
 // HandleBinlogDump is called for COM_BINLOG_DUMP (non-GTID)
-func (h EmptyReplicationHandler) HandleBinlogDump(pos Position) (*replication.BinlogStreamer, error) {
+func (h EmptyReplicationHandler) HandleBinlogDump(pos mysql.Position) (*replication.BinlogStreamer, error) {
 	log.Printf("Received: BinlogDump: pos=%s", pos.String())
 	return nil, fmt.Errorf("not supported now")
 }
 
 // HandleBinlogDumpGTID is called for COM_BINLOG_DUMP_GTID
-func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*replication.BinlogStreamer, error) {
+func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet *mysql.MysqlGTIDSet) (*replication.BinlogStreamer, error) {
 	log.Printf("Received: BinlogDumpGTID: gtidSet=%s", gtidSet.String())
 	return nil, fmt.Errorf("not supported now")
 }
@@ -273,8 +272,8 @@ func (h EmptyReplicationHandler) HandleBinlogDumpGTID(gtidSet *MysqlGTIDSet) (*r
 // HandleOtherCommand is called for commands not handled elsewhere
 func (h EmptyHandler) HandleOtherCommand(cmd byte, data []byte) error {
 	log.Printf("Received: OtherCommand: cmd=%x, data=%x", cmd, data)
-	return NewError(
-		ER_UNKNOWN_ERROR,
+	return mysql.NewError(
+		mysql.ER_UNKNOWN_ERROR,
 		fmt.Sprintf("command %d is not supported now", cmd),
 	)
 }

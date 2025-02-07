@@ -7,7 +7,7 @@ import (
 	"math"
 	"runtime"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
@@ -33,7 +33,7 @@ func (s *Stmt) WarningsNum() int {
 	return s.warnings
 }
 
-func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
+func (s *Stmt) Execute(args ...interface{}) (*mysql.Result, error) {
 	if err := s.write(args...); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -41,7 +41,7 @@ func (s *Stmt) Execute(args ...interface{}) (*Result, error) {
 	return s.conn.readResult(true)
 }
 
-func (s *Stmt) ExecuteSelectStreaming(result *Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback, args ...interface{}) error {
+func (s *Stmt) ExecuteSelectStreaming(result *mysql.Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback, args ...interface{}) error {
 	if err := s.write(args...); err != nil {
 		return errors.Trace(err)
 	}
@@ -50,7 +50,7 @@ func (s *Stmt) ExecuteSelectStreaming(result *Result, perRowCb SelectPerRowCallb
 }
 
 func (s *Stmt) Close() error {
-	if err := s.conn.writeCommandUint32(COM_STMT_CLOSE, s.id); err != nil {
+	if err := s.conn.writeCommandUint32(mysql.COM_STMT_CLOSE, s.id); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -66,10 +66,10 @@ func (s *Stmt) write(args ...interface{}) error {
 		return fmt.Errorf("argument mismatch, need %d but got %d", s.params, len(args))
 	}
 
-	if (s.conn.capability&CLIENT_QUERY_ATTRIBUTES > 0) && (s.conn.includeLine >= 0) {
+	if (s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0) && (s.conn.includeLine >= 0) {
 		_, file, line, ok := runtime.Caller(s.conn.includeLine)
 		if ok {
-			lineAttr := QueryAttribute{
+			lineAttr := mysql.QueryAttribute{
 				Name:  "_line",
 				Value: fmt.Sprintf("%s:%d", file, line),
 			}
@@ -93,7 +93,7 @@ func (s *Stmt) write(args ...interface{}) error {
 	for i := range args {
 		if args[i] == nil {
 			nullBitmap[i/8] |= 1 << (uint(i) % 8)
-			paramTypes[i] = []byte{MYSQL_TYPE_NULL}
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_NULL}
 			paramNames[i] = []byte{0} // length encoded, no name
 			paramFlags[i] = []byte{0}
 			continue
@@ -103,62 +103,62 @@ func (s *Stmt) write(args ...interface{}) error {
 
 		switch v := args[i].(type) {
 		case int8:
-			paramTypes[i] = []byte{MYSQL_TYPE_TINY}
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_TINY}
 			paramValues[i] = []byte{byte(v)}
 		case int16:
-			paramTypes[i] = []byte{MYSQL_TYPE_SHORT}
-			paramValues[i] = Uint16ToBytes(uint16(v))
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_SHORT}
+			paramValues[i] = mysql.Uint16ToBytes(uint16(v))
 		case int32:
-			paramTypes[i] = []byte{MYSQL_TYPE_LONG}
-			paramValues[i] = Uint32ToBytes(uint32(v))
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_LONG}
+			paramValues[i] = mysql.Uint32ToBytes(uint32(v))
 		case int:
-			paramTypes[i] = []byte{MYSQL_TYPE_LONGLONG}
-			paramValues[i] = Uint64ToBytes(uint64(v))
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_LONGLONG}
+			paramValues[i] = mysql.Uint64ToBytes(uint64(v))
 		case int64:
-			paramTypes[i] = []byte{MYSQL_TYPE_LONGLONG}
-			paramValues[i] = Uint64ToBytes(uint64(v))
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_LONGLONG}
+			paramValues[i] = mysql.Uint64ToBytes(uint64(v))
 		case uint8:
-			paramTypes[i] = []byte{MYSQL_TYPE_TINY}
-			paramFlags[i] = []byte{PARAM_UNSIGNED}
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_TINY}
+			paramFlags[i] = []byte{mysql.PARAM_UNSIGNED}
 			paramValues[i] = []byte{v}
 		case uint16:
-			paramTypes[i] = []byte{MYSQL_TYPE_SHORT}
-			paramFlags[i] = []byte{PARAM_UNSIGNED}
-			paramValues[i] = Uint16ToBytes(v)
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_SHORT}
+			paramFlags[i] = []byte{mysql.PARAM_UNSIGNED}
+			paramValues[i] = mysql.Uint16ToBytes(v)
 		case uint32:
-			paramTypes[i] = []byte{MYSQL_TYPE_LONG}
-			paramFlags[i] = []byte{PARAM_UNSIGNED}
-			paramValues[i] = Uint32ToBytes(v)
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_LONG}
+			paramFlags[i] = []byte{mysql.PARAM_UNSIGNED}
+			paramValues[i] = mysql.Uint32ToBytes(v)
 		case uint:
-			paramTypes[i] = []byte{MYSQL_TYPE_LONGLONG}
-			paramFlags[i] = []byte{PARAM_UNSIGNED}
-			paramValues[i] = Uint64ToBytes(uint64(v))
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_LONGLONG}
+			paramFlags[i] = []byte{mysql.PARAM_UNSIGNED}
+			paramValues[i] = mysql.Uint64ToBytes(uint64(v))
 		case uint64:
-			paramTypes[i] = []byte{MYSQL_TYPE_LONGLONG}
-			paramFlags[i] = []byte{PARAM_UNSIGNED}
-			paramValues[i] = Uint64ToBytes(v)
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_LONGLONG}
+			paramFlags[i] = []byte{mysql.PARAM_UNSIGNED}
+			paramValues[i] = mysql.Uint64ToBytes(v)
 		case bool:
-			paramTypes[i] = []byte{MYSQL_TYPE_TINY}
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_TINY}
 			if v {
 				paramValues[i] = []byte{1}
 			} else {
 				paramValues[i] = []byte{0}
 			}
 		case float32:
-			paramTypes[i] = []byte{MYSQL_TYPE_FLOAT}
-			paramValues[i] = Uint32ToBytes(math.Float32bits(v))
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_FLOAT}
+			paramValues[i] = mysql.Uint32ToBytes(math.Float32bits(v))
 		case float64:
-			paramTypes[i] = []byte{MYSQL_TYPE_DOUBLE}
-			paramValues[i] = Uint64ToBytes(math.Float64bits(v))
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_DOUBLE}
+			paramValues[i] = mysql.Uint64ToBytes(math.Float64bits(v))
 		case string:
-			paramTypes[i] = []byte{MYSQL_TYPE_STRING}
-			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_STRING}
+			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v))), v...)
 		case []byte:
-			paramTypes[i] = []byte{MYSQL_TYPE_STRING}
-			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_STRING}
+			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v))), v...)
 		case json.RawMessage:
-			paramTypes[i] = []byte{MYSQL_TYPE_STRING}
-			paramValues[i] = append(PutLengthEncodedInt(uint64(len(v))), v...)
+			paramTypes[i] = []byte{mysql.MYSQL_TYPE_STRING}
+			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v))), v...)
 		default:
 			return fmt.Errorf("invalid argument type %T", args[i])
 		}
@@ -174,7 +174,7 @@ func (s *Stmt) write(args ...interface{}) error {
 		paramTypes[(i + paramsNum)] = []byte{tf[0]}
 		paramFlags[i+paramsNum] = []byte{tf[1]}
 		paramValues[i+paramsNum] = qa.ValueBytes()
-		paramNames[i+paramsNum] = PutLengthEncodedString([]byte(qa.Name))
+		paramNames[i+paramsNum] = mysql.PutLengthEncodedString([]byte(qa.Name))
 	}
 
 	data := utils.BytesBufferGet()
@@ -186,22 +186,22 @@ func (s *Stmt) write(args ...interface{}) error {
 	}
 
 	data.Write([]byte{0, 0, 0, 0})
-	data.WriteByte(COM_STMT_EXECUTE)
+	data.WriteByte(mysql.COM_STMT_EXECUTE)
 	data.Write([]byte{byte(s.id), byte(s.id >> 8), byte(s.id >> 16), byte(s.id >> 24)})
 
-	flags := CURSOR_TYPE_NO_CURSOR
+	flags := mysql.CURSOR_TYPE_NO_CURSOR
 	if paramsNum > 0 {
-		flags |= PARAMETER_COUNT_AVAILABLE
+		flags |= mysql.PARAMETER_COUNT_AVAILABLE
 	}
 	data.WriteByte(flags)
 
 	//iteration-count, always 1
 	data.Write([]byte{1, 0, 0, 0})
 
-	if paramsNum > 0 || (s.conn.capability&CLIENT_QUERY_ATTRIBUTES > 0 && (flags&PARAMETER_COUNT_AVAILABLE > 0)) {
-		if s.conn.capability&CLIENT_QUERY_ATTRIBUTES > 0 {
+	if paramsNum > 0 || (s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 && (flags&mysql.PARAMETER_COUNT_AVAILABLE > 0)) {
+		if s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 {
 			paramsNum += len(s.conn.queryAttributes)
-			data.Write(PutLengthEncodedInt(uint64(paramsNum)))
+			data.Write(mysql.PutLengthEncodedInt(uint64(paramsNum)))
 		}
 		if paramsNum > 0 {
 			data.Write(nullBitmap)
@@ -214,7 +214,7 @@ func (s *Stmt) write(args ...interface{}) error {
 					data.Write(paramTypes[i])
 					data.Write(paramFlags[i])
 
-					if s.conn.capability&CLIENT_QUERY_ATTRIBUTES > 0 {
+					if s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 {
 						data.Write(paramNames[i])
 					}
 				}
@@ -233,7 +233,7 @@ func (s *Stmt) write(args ...interface{}) error {
 }
 
 func (c *Conn) Prepare(query string) (*Stmt, error) {
-	if err := c.writeCommandStr(COM_STMT_PREPARE, query); err != nil {
+	if err := c.writeCommandStr(mysql.COM_STMT_PREPARE, query); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -242,10 +242,10 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 		return nil, errors.Trace(err)
 	}
 
-	if data[0] == ERR_HEADER {
+	if data[0] == mysql.ERR_HEADER {
 		return nil, c.handleErrorPacket(data)
-	} else if data[0] != OK_HEADER {
-		return nil, ErrMalformPacket
+	} else if data[0] != mysql.OK_HEADER {
+		return nil, mysql.ErrMalformPacket
 	}
 
 	s := new(Stmt)
