@@ -15,7 +15,7 @@ This library has been tested or deployed on the following operating systems and 
 
 | Operating System | Architecture | Runtime Supported | CI | Notes                                                                                                                          |
 |------------------|--------------|-------------------|----|--------------------------------------------------------------------------------------------------------------------------------|
-| Linux            | amd64        | ✅                | ✅ | Check GitHub Actions of this project                                                                                           |
+| Linux            | amd64        | ✅                | ✅ | Check GitHub Actions of this project.                                                                                          |
 | Linux            | s390x        | ✅                | ✅ | A daily CI runs on an s390x VM, supported by the [IBM Z and LinuxONE Community](https://www.ibm.com/community/z/open-source/). |
 | Linux            | arm64        | ✅                | ❌ | Deployed in a production environment of a user.                                                                                |
 | FreeBSD          | amd64        | ✅                | ❌ | Sporadically tested by developers.                                                                                             |
@@ -25,7 +25,8 @@ Other platforms supported by Go may also work, but they have not been verified. 
 This library is not compatible with [TinyGo](https://tinygo.org/).
 
 ## Changelog
-This repo uses [Changelog](CHANGELOG.md).
+
+This library uses [Changelog](CHANGELOG.md).
 
 ---
 # Content
