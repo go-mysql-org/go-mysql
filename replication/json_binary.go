@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/goccy/go-json"
 	"github.com/pingcap/errors"
-
-	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 const (
@@ -340,7 +339,7 @@ func (d *jsonBinaryDecoder) decodeInt16(data []byte) int16 {
 		return 0
 	}
 
-	v := ParseBinaryInt16(data[0:2])
+	v := mysql.ParseBinaryInt16(data[0:2])
 	return v
 }
 
@@ -349,7 +348,7 @@ func (d *jsonBinaryDecoder) decodeUint16(data []byte) uint16 {
 		return 0
 	}
 
-	v := ParseBinaryUint16(data[0:2])
+	v := mysql.ParseBinaryUint16(data[0:2])
 	return v
 }
 
@@ -358,7 +357,7 @@ func (d *jsonBinaryDecoder) decodeInt32(data []byte) int32 {
 		return 0
 	}
 
-	v := ParseBinaryInt32(data[0:4])
+	v := mysql.ParseBinaryInt32(data[0:4])
 	return v
 }
 
@@ -367,7 +366,7 @@ func (d *jsonBinaryDecoder) decodeUint32(data []byte) uint32 {
 		return 0
 	}
 
-	v := ParseBinaryUint32(data[0:4])
+	v := mysql.ParseBinaryUint32(data[0:4])
 	return v
 }
 
@@ -376,7 +375,7 @@ func (d *jsonBinaryDecoder) decodeInt64(data []byte) int64 {
 		return 0
 	}
 
-	v := ParseBinaryInt64(data[0:8])
+	v := mysql.ParseBinaryInt64(data[0:8])
 	return v
 }
 
@@ -385,7 +384,7 @@ func (d *jsonBinaryDecoder) decodeUint64(data []byte) uint64 {
 		return 0
 	}
 
-	v := ParseBinaryUint64(data[0:8])
+	v := mysql.ParseBinaryUint64(data[0:8])
 	return v
 }
 
@@ -394,7 +393,7 @@ func (d *jsonBinaryDecoder) decodeDouble(data []byte) float64 {
 		return 0
 	}
 
-	v := ParseBinaryFloat64(data[0:8])
+	v := mysql.ParseBinaryFloat64(data[0:8])
 	return v
 }
 
@@ -432,11 +431,11 @@ func (d *jsonBinaryDecoder) decodeOpaque(data []byte) interface{} {
 	data = data[n : l+n]
 
 	switch tp {
-	case MYSQL_TYPE_NEWDECIMAL:
+	case mysql.MYSQL_TYPE_NEWDECIMAL:
 		return d.decodeDecimal(data)
-	case MYSQL_TYPE_TIME:
+	case mysql.MYSQL_TYPE_TIME:
 		return d.decodeTime(data)
-	case MYSQL_TYPE_DATE, MYSQL_TYPE_DATETIME, MYSQL_TYPE_TIMESTAMP:
+	case mysql.MYSQL_TYPE_DATE, mysql.MYSQL_TYPE_DATETIME, mysql.MYSQL_TYPE_TIMESTAMP:
 		return d.decodeDateTime(data)
 	default:
 		return utils.ByteSliceToString(data)
@@ -554,7 +553,7 @@ func (e *RowsEvent) decodeJsonPartialBinary(data []byte) (*JsonDiff, error) {
 	}
 	data = data[1:]
 
-	pathLength, _, n := LengthEncodedInt(data)
+	pathLength, _, n := mysql.LengthEncodedInt(data)
 	data = data[n:]
 
 	path := data[:pathLength]
@@ -570,7 +569,7 @@ func (e *RowsEvent) decodeJsonPartialBinary(data []byte) (*JsonDiff, error) {
 		return diff, nil
 	}
 
-	valueLength, _, n := LengthEncodedInt(data)
+	valueLength, _, n := mysql.LengthEncodedInt(data)
 	data = data[n:]
 
 	d, err := e.decodeJsonBinary(data[:valueLength])

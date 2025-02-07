@@ -9,7 +9,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 )
 
@@ -20,13 +20,13 @@ func (c *Conn) handleAuthSwitchResponse() error {
 	}
 
 	switch c.authPluginName {
-	case AUTH_NATIVE_PASSWORD:
+	case mysql.AUTH_NATIVE_PASSWORD:
 		if err := c.acquirePassword(); err != nil {
 			return err
 		}
 		return c.compareNativePasswordAuthData(authData, c.password)
 
-	case AUTH_CACHING_SHA2_PASSWORD:
+	case mysql.AUTH_CACHING_SHA2_PASSWORD:
 		if !c.cachingSha2FullAuth {
 			// Switched auth method but no MoreData packet send yet
 			if err := c.compareCacheSha2PasswordAuthData(authData); err != nil {
@@ -45,7 +45,7 @@ func (c *Conn) handleAuthSwitchResponse() error {
 		c.writeCachingSha2Cache()
 		return nil
 
-	case AUTH_SHA256_PASSWORD:
+	case mysql.AUTH_SHA256_PASSWORD:
 		cont, err := c.handlePublicKeyRetrieval(authData)
 		if err != nil {
 			return err
