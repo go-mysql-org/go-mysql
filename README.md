@@ -7,6 +7,16 @@ A pure go library to handle MySQL network protocol and replication as used by My
 ![gomod version](https://img.shields.io/github/go-mod/go-version/go-mysql-org/go-mysql/master)
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-mysql-org/go-mysql.svg)](https://pkg.go.dev/github.com/go-mysql-org/go-mysql)
 
+## Platform Support
+
+This project has been tested or deployed on the following operating systems and architectures:
+
+| Operating System | Architecture | Supported | CI | Notes                                                                                                                  |
+|------------------|--------------|-----------|----|------------------------------------------------------------------------------------------------------------------------|
+| Linux            | amd64        | ✅        | ✅ | Check GitHub Actions of this project                                                                                   |
+| Linux            | s390x        | ✅        | ✅ | A daily CI runs on s390x VM, supported by [IBM Z and LinuxOne Community](https://www.ibm.com/community/z/open-source/) |
+| Linux            | arm64        | ✅        | ❌ | Deployed in a production environment of a user                                                                         |
+
 ## Changelog
 This repo uses [Changelog](CHANGELOG.md).
 
