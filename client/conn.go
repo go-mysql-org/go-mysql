@@ -57,6 +57,11 @@ type Conn struct {
 	authPluginName string
 
 	connectionID uint32
+
+	queryAttributes []QueryAttribute
+
+	// Include the file + line as query attribute. The number set which frame in the stack should be used.
+	includeLine int
 }
 
 // This function will be called for every row in resultset from ExecuteSelectStreaming.
@@ -100,6 +105,7 @@ type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbName string, dialer Dialer, options ...Option) (*Conn, error) {
 	c := new(Conn)
 
+	c.includeLine = -1
 	c.BufferSize = defaultBufferSize
 	c.attributes = map[string]string{
 		"_client_name":     "go-mysql",
@@ -310,7 +316,7 @@ func (c *Conn) Execute(command string, args ...interface{}) (*Result, error) {
 // flag set to signal the server multiple queries are executed. Handling the responses
 // is up to the implementation of perResultCallback.
 func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCallback) (*Result, error) {
-	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
+	if err := c.execSend(query); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -363,7 +369,7 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 //
 // ExecuteSelectStreaming should be used only for SELECT queries with a large response resultset for memory preserving.
 func (c *Conn) ExecuteSelectStreaming(command string, result *Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
-	if err := c.writeCommandStr(COM_QUERY, command); err != nil {
+	if err := c.execSend(command); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -489,12 +495,62 @@ func (c *Conn) ReadOKPacket() (*Result, error) {
 	return c.readOK()
 }
 
+// Send COM_QUERY and read the result
 func (c *Conn) exec(query string) (*Result, error) {
-	if err := c.writeCommandStr(COM_QUERY, query); err != nil {
+	err := c.execSend(query)
+	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
 	return c.readResult(false)
+}
+
+// Sends COM_QUERY
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html
+func (c *Conn) execSend(query string) error {
+	var buf bytes.Buffer
+	defer clear(c.queryAttributes)
+
+	if c.capability&CLIENT_QUERY_ATTRIBUTES > 0 {
+		if c.includeLine >= 0 {
+			_, file, line, ok := runtime.Caller(c.includeLine)
+			if ok {
+				lineAttr := QueryAttribute{
+					Name:  "_line",
+					Value: fmt.Sprintf("%s:%d", file, line),
+				}
+				c.queryAttributes = append(c.queryAttributes, lineAttr)
+			}
+		}
+
+		numParams := len(c.queryAttributes)
+		buf.Write(PutLengthEncodedInt(uint64(numParams)))
+		buf.WriteByte(0x1) // parameter_set_count, unused
+		if numParams > 0 {
+			// null_bitmap, length: (num_params+7)/8
+			for i := 0; i < (numParams+7)/8; i++ {
+				buf.WriteByte(0x0)
+			}
+			buf.WriteByte(0x1) // new_params_bind_flag, unused
+			for _, qa := range c.queryAttributes {
+				buf.Write(qa.TypeAndFlag())
+				buf.Write(PutLengthEncodedString([]byte(qa.Name)))
+			}
+			for _, qa := range c.queryAttributes {
+				buf.Write(qa.ValueBytes())
+			}
+		}
+	}
+
+	_, err := buf.Write(utils.StringToByteSlice(query))
+	if err != nil {
+		return err
+	}
+
+	if err := c.writeCommandBuf(COM_QUERY, buf.Bytes()); err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 // CapabilityString is returning a string with the names of capability flags
@@ -626,4 +682,18 @@ func (c *Conn) StatusString() string {
 	}
 
 	return strings.Join(stats, "|")
+}
+
+// SetQueryAttributes sets the query attributes to be send along with the next query
+func (c *Conn) SetQueryAttributes(attrs ...QueryAttribute) error {
+	c.queryAttributes = attrs
+	return nil
+}
+
+// IncludeLine can be passed as option when connecting to include the file name and line number
+// of the caller as query attribute `_line` when sending queries.
+// The argument is used the dept in the stack. The top level is go-mysql and then there are the
+// levels of the application.
+func (c *Conn) IncludeLine(frame int) {
+	c.includeLine = frame
 }
