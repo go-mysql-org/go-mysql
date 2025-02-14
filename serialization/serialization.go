@@ -82,7 +82,7 @@ type FieldString struct {
 }
 
 func (f FieldString) String() string {
-	return string(f.Value)
+	return f.Value
 }
 
 type Marshaler interface {
@@ -129,7 +129,10 @@ func Unmarshal(data []byte, v interface{}) error {
 				// Rewind the reader and skip.
 				m.Fields[i].ID = i
 				m.Fields[i].Skipped = true
-				r.Seek(-1, io.SeekCurrent)
+				_, err := r.Seek(-1, io.SeekCurrent)
+				if err!=nil {
+					return err
+				}
 				continue
 			}
 			m.Fields[i].ID = int(tmpField[0] / 2)
