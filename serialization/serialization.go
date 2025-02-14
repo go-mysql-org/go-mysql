@@ -130,7 +130,7 @@ func Unmarshal(data []byte, v interface{}) error {
 				m.Fields[i].ID = i
 				m.Fields[i].Skipped = true
 				_, err := r.Seek(-1, io.SeekCurrent)
-				if err!=nil {
+				if err != nil {
 					return err
 				}
 				continue
