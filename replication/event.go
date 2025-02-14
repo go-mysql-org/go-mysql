@@ -630,6 +630,15 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 
 func (e *GtidTaggedLogEvent) Dump(w io.Writer) {
 	fmt.Println(e.msg.String())
+
+	f, err := e.msg.GetFieldByName("immediate_server_version")
+	if err != nil {
+		return
+	}
+
+	if v, ok := f.Type.(serialization.FieldIntVar); ok {
+		fmt.Printf("Immediate server version: %d\n",v.Value)
+	}
 }
 
 type BeginLoadQueryEvent struct {

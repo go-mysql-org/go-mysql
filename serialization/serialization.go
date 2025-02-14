@@ -27,6 +27,15 @@ func (m *Message) String() (text string) {
 	return
 }
 
+func (m *Message) GetFieldByName(name string) (Field, error) {
+	for _, f := range m.Format.Fields {
+		if f.Name == name {
+			return f, nil
+		}
+	}
+	return Field{}, fmt.Errorf("field not found: %s", name)
+}
+
 type Format struct {
 	Size                  uint64
 	LastNonIgnorableField int
