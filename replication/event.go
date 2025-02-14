@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/serialization"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 )
@@ -541,6 +542,94 @@ func (e *GTIDEvent) ImmediateCommitTime() time.Time {
 // or zero time if not available.
 func (e *GTIDEvent) OriginalCommitTime() time.Time {
 	return microSecTimestampToTime(e.OriginalCommitTimestamp)
+}
+
+type GtidTaggedLogEvent struct {
+	msg serialization.Message
+}
+
+func (e *GtidTaggedLogEvent) Decode(data []byte) error {
+	e.msg = serialization.Message{
+		Format: serialization.Format{
+			Fields: []serialization.Field{
+				{
+					Name: "gtid_flags",
+					Type: serialization.FieldIntFixed{
+						Length: 1,
+					},
+				},
+				{
+					Name: "uuid",
+					Type: serialization.FieldIntFixed{
+						Length: 16,
+					},
+				},
+				{
+					Name: "gno",
+					Type: serialization.FieldIntVar{},
+				},
+				{
+					Name: "tag",
+					Type: serialization.FieldString{},
+				},
+				{
+					Name: "last_committed",
+					Type: serialization.FieldIntVar{},
+				},
+				{
+					Name: "sequence_number",
+					Type: serialization.FieldIntVar{},
+				},
+				{
+					Name: "immediate_commit_timestamp",
+					Type: serialization.FieldIntVar{
+						Unsigned: true,
+					},
+				},
+				{
+					Name: "original_commit_timestamp",
+					Type: serialization.FieldIntVar{
+						Unsigned: true,
+					},
+					Optional: true,
+				},
+				{
+					Name: "transaction_length",
+					Type: serialization.FieldIntVar{
+						Unsigned: true,
+					},
+				},
+				{
+					Name: "immediate_server_version",
+					Type: serialization.FieldIntVar{
+						Unsigned: true,
+					},
+				},
+				{
+					Name: "original_server_version",
+					Type: serialization.FieldIntVar{
+						Unsigned: true,
+					},
+					Optional: true,
+				},
+				{
+					Name:     "commit_group_ticket",
+					Optional: true,
+				},
+			},
+		},
+	}
+
+	err := serialization.Unmarshal(data, &e.msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *GtidTaggedLogEvent) Dump(w io.Writer) {
+	fmt.Println(e.msg.String())
 }
 
 type BeginLoadQueryEvent struct {
