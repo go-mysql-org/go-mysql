@@ -34,9 +34,11 @@ type Format struct {
 }
 
 func (f *Format) String() (text string) {
-	text += fmt.Sprintf("Format (Size: %d, LastNonIgnorableField: %d)\n", f.Size, f.LastNonIgnorableField)
+	text += fmt.Sprintf("Format (Size: %d, LastNonIgnorableField: %d)\n",
+		f.Size, f.LastNonIgnorableField)
 	for _, f := range f.Fields {
-		text += fmt.Sprintf("Field %02d (Name: %s, Skipped: %t, Type: %T)\n", f.ID, f.Name, f.Skipped, f.Type)
+		text += fmt.Sprintf("Field %02d (Name: %s, Skipped: %t, Type: %T)\n",
+			f.ID, f.Name, f.Skipped, f.Type)
 		if f.Type != nil {
 			text += fmt.Sprintf("  Value: %s\n", f.Type.String())
 		}
@@ -125,8 +127,8 @@ func Unmarshal(data []byte, v interface{}) error {
 				return err
 			}
 			if int(tmpField[0]/2) != i {
-				// The field number we got doesn't match what we expect, so a field was skipped.
-				// Rewind the reader and skip.
+				// The field number we got doesn't match what we expect,
+				// so a field was skipped. Rewind the reader and skip.
 				m.Fields[i].ID = i
 				m.Fields[i].Skipped = true
 				_, err := r.Seek(-1, io.SeekCurrent)
@@ -167,15 +169,19 @@ func Unmarshal(data []byte, v interface{}) error {
 				case 2:
 					tNum = uint64(binary.LittleEndian.Uint16(fieldBytes))
 				case 3:
-					tNum = uint64(binary.LittleEndian.Uint32(slices.Concat(fieldBytes, []byte{0x0})))
+					tNum = uint64(binary.LittleEndian.Uint32(
+						slices.Concat(fieldBytes, []byte{0x0})))
 				case 4:
 					tNum = uint64(binary.LittleEndian.Uint32(fieldBytes))
 				case 5:
-					tNum = binary.LittleEndian.Uint64(slices.Concat(fieldBytes, []byte{0x0, 0x0, 0x0}))
+					tNum = binary.LittleEndian.Uint64(
+						slices.Concat(fieldBytes, []byte{0x0, 0x0, 0x0}))
 				case 6:
-					tNum = binary.LittleEndian.Uint64(slices.Concat(fieldBytes, []byte{0x0, 0x0}))
+					tNum = binary.LittleEndian.Uint64(
+						slices.Concat(fieldBytes, []byte{0x0, 0x0}))
 				case 7:
-					tNum = binary.LittleEndian.Uint64(slices.Concat(fieldBytes, []byte{0x0}))
+					tNum = binary.LittleEndian.Uint64(
+						slices.Concat(fieldBytes, []byte{0x0}))
 				case 8:
 					tNum = binary.LittleEndian.Uint64(fieldBytes)
 				}
