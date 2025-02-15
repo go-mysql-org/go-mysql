@@ -149,31 +149,63 @@ func TestDecodeVar(t *testing.T) {
 			123,
 			"",
 		},
+		// {
+		// 	[]byte{0xc3, 02, 0x0b},
+		// 	true,
+		// 	90200,
+		// 	"",
+		// },
 		{
-			[]byte{0xc3, 02, 0x0b},
+			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+			// But converted to LE
+			[]byte{0b11111011, 0b11111111, 0b00000111},
 			true,
-			90200,
+			65535,
+			"",
+		},
+		{
+			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+			// But converted to LE
+			[]byte{0b11111011, 0b11111111, 0b00001111},
+			false,
+			65535,
 			"",
 		},
 		// {
-		// 	[]byte{0x5d, 0x03},
-		// 	true,
-		// 	215,
+		// 	// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+		// 	// But converted to LE
+		// 	[]byte{0b11101011, 0b11111111, 0b00001111},
+		// 	false,
+		// 	-65535,
 		// 	"",
 		// },
 		// {
-		// 	[]byte{0x7f, 0x39, 0x7d, 0x89, 0x70, 0xdb, 0x2d, 0x06},
-		// 	true,
-		// 	1739270369410361,
+		// 	// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+		// 	// But converted to LE
+		// 	[]byte{0b11111011, 0b11111111, 0b00001111},
+		// 	false,
+		// 	-65536,
 		// 	"",
 		// },
+		{
+			[]byte{0x5d, 0x03},
+			true,
+			215,
+			"",
+		},
+		{
+			[]byte{0x7f, 0x39, 0x7d, 0x89, 0x70, 0xdb, 0x2d, 0x06},
+			true,
+			1739270369410361,
+			"",
+		},
 	}
 
 	for _, tc := range testcases{
 		r, err := decodeVar(bytes.NewReader(tc.input), tc.unsigned)
 		if tc.err == "" {
 			require.NoError(t, err)
-			require.Equal(t, tc.result, r)
+			require.Equal(t, tc.result, r, tc.result)
 		} else {
 			require.ErrorContains(t, err, tc.err)
 		}

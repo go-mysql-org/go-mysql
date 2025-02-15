@@ -191,7 +191,6 @@ func decodeString(r io.Reader) (string, error) {
 	if n != int(firstByte[0]/2) {
 		return "", fmt.Errorf("only read %d bytes, expected %d", n, firstByte[0]/2)
 	}
-	fmt.Printf("string: %s (%x)\n", string(strBytes), strBytes)
 	return string(strBytes), nil
 }
 
@@ -271,7 +270,7 @@ func decodeVar(r io.ReadSeeker, unsigned bool) (uint64, error) {
 		tNum = binary.LittleEndian.Uint64(fieldBytes)
 	}
 	if unsigned {
-		return tNum >> (tb + 2) * 2, nil
+		return (tNum >> (tb + 2) * 2)+1, nil
 	}
 	return tNum >> (tb + 2), nil
 }
