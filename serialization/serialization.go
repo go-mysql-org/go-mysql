@@ -240,9 +240,12 @@ func decodeVar(r io.ReadSeeker, unsigned bool) (uint64, error) {
 		return 0, err
 	}
 	fieldBytes := make([]byte, tb+1)
-	_, err = r.Read(fieldBytes)
+	n, err := r.Read(fieldBytes)
 	if err != nil {
 		return 0, err
+	}
+	if n != tb+1{
+		return 0, fmt.Errorf("only read %d bytes, expected %d", n, tb+1)
 	}
 	var tNum uint64
 	switch len(fieldBytes) {

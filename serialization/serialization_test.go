@@ -112,7 +112,69 @@ func TestDecodeString(t *testing.T) {
 		if tc.err == "" {
 			require.NoError(t, err)
 			require.Equal(t, tc.result, s)
-		}else {
+		} else {
+			require.ErrorContains(t, err, tc.err)
+		}
+	}
+}
+
+func TestDecodeVar(t *testing.T) {
+	testcases := []struct {
+		input  []byte
+		unsigned bool
+		result uint64
+		err    string
+	}{
+		{
+			[]byte{},
+			false,
+			0,
+			"EOF",
+		},
+		{
+			[]byte{0xd9},
+			false,
+			0,
+			"only read ",
+		},
+		{
+			[]byte{0x4},
+			false,
+			1,
+			"",
+		},
+		{
+			[]byte{0xd9, 0x03},
+			false,
+			123,
+			"",
+		},
+		{
+			[]byte{0xc3, 02, 0x0b},
+			true,
+			90200,
+			"",
+		},
+		// {
+		// 	[]byte{0x5d, 0x03},
+		// 	true,
+		// 	215,
+		// 	"",
+		// },
+		// {
+		// 	[]byte{0x7f, 0x39, 0x7d, 0x89, 0x70, 0xdb, 0x2d, 0x06},
+		// 	true,
+		// 	1739270369410361,
+		// 	"",
+		// },
+	}
+
+	for _, tc := range testcases{
+		r, err := decodeVar(bytes.NewReader(tc.input), tc.unsigned)
+		if tc.err == "" {
+			require.NoError(t, err)
+			require.Equal(t, tc.result, r)
+		} else {
 			require.ErrorContains(t, err, tc.err)
 		}
 	}
