@@ -78,3 +78,42 @@ func TestDecodeFixed(t *testing.T) {
 
 	}
 }
+
+func TestDecodeString(t *testing.T) {
+	testcases := []struct {
+		input  []byte
+		result string
+		err    string
+	}{
+		{
+			[]byte{0x18, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c},
+			"abcdefghijkl",
+			"",
+		},
+		{
+			[]byte{0x18, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67},
+			"",
+			"only read ",
+		},
+		{
+			[]byte{},
+			"",
+			"EOF",
+		},
+		{
+			[]byte{0x18},
+			"",
+			"EOF",
+		},
+	}
+
+	for _, tc := range testcases {
+		s, err := decodeString(bytes.NewReader(tc.input))
+		if tc.err == "" {
+			require.NoError(t, err)
+			require.Equal(t, tc.result, s)
+		}else {
+			require.ErrorContains(t, err, tc.err)
+		}
+	}
+}

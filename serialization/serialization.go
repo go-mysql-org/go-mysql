@@ -1,3 +1,8 @@
+// Package serialization is for working with the mysql::serialization format
+//
+// mysql::serialization is a serialization format introduced with tagged GTIDs
+//
+// https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
 package serialization
 
 import (
@@ -10,10 +15,7 @@ import (
 	"strings"
 )
 
-// mysql::serialization is a serialization format introduced with tagged GTIDs
-//
-// https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
-
+// Message is a mysql::serialization message
 type Message struct {
 	Version uint8 // >= 0
 	Format  Format
@@ -27,6 +29,7 @@ func (m *Message) String() (text string) {
 	return
 }
 
+// GetFieldByName returns a field if the name matches and an error if there is no match
 func (m *Message) GetFieldByName(name string) (Field, error) {
 	for _, f := range m.Format.Fields {
 		if f.Name == name {
@@ -36,6 +39,7 @@ func (m *Message) GetFieldByName(name string) (Field, error) {
 	return Field{}, fmt.Errorf("field not found: %s", name)
 }
 
+// Format is describing a `message_format`
 type Format struct {
 	Size                  uint64
 	LastNonIgnorableField int
@@ -96,10 +100,6 @@ func (f FieldString) String() string {
 	return f.Value
 }
 
-type Marshaler interface {
-	MarshalMySQLSerial() ([]byte, error)
-}
-
 func Unmarshal(data []byte, v interface{}) error {
 	r := bytes.NewReader(data)
 	switch m := v.(type) {
@@ -149,69 +149,22 @@ func Unmarshal(data []byte, v interface{}) error {
 			m.Fields[i].ID = int(tmpField[0] / 2)
 			switch f := m.Fields[i].Type.(type) {
 			case FieldIntFixed:
-				tmpVal, err := decodeFixed(r, f.Length)
+				f.Value, err = decodeFixed(r, f.Length)
 				if err != nil {
 					return err
 				}
-				f.Value = tmpVal
 				m.Fields[i].Type = f
 			case FieldIntVar:
-				firstByte := make([]byte, 1)
-				_, err := r.Read(firstByte)
+				f.Value, err = decodeVar(r, f.Unsigned)
 				if err != nil {
 					return err
-				}
-				tb := trailingOneBitCount(firstByte[0])
-				_, err = r.Seek(-1, io.SeekCurrent)
-				if err != nil {
-					return err
-				}
-				fieldBytes := make([]byte, tb+1)
-				_, err = r.Read(fieldBytes)
-				if err != nil {
-					return err
-				}
-				var tNum uint64
-				switch len(fieldBytes) {
-				case 1:
-					tNum = uint64(fieldBytes[0])
-				case 2:
-					tNum = uint64(binary.LittleEndian.Uint16(fieldBytes))
-				case 3:
-					tNum = uint64(binary.LittleEndian.Uint32(
-						slices.Concat(fieldBytes, []byte{0x0})))
-				case 4:
-					tNum = uint64(binary.LittleEndian.Uint32(fieldBytes))
-				case 5:
-					tNum = binary.LittleEndian.Uint64(
-						slices.Concat(fieldBytes, []byte{0x0, 0x0, 0x0}))
-				case 6:
-					tNum = binary.LittleEndian.Uint64(
-						slices.Concat(fieldBytes, []byte{0x0, 0x0}))
-				case 7:
-					tNum = binary.LittleEndian.Uint64(
-						slices.Concat(fieldBytes, []byte{0x0}))
-				case 8:
-					tNum = binary.LittleEndian.Uint64(fieldBytes)
-				}
-				if f.Unsigned {
-					f.Value = tNum >> (tb + 2) * 2
-				} else {
-					f.Value = tNum >> (tb + 2)
 				}
 				m.Fields[i].Type = f
 			case FieldString:
-				firstByte := make([]byte, 1)
-				_, err := r.Read(firstByte)
+				f.Value, err = decodeString(r)
 				if err != nil {
 					return err
 				}
-				strBytes := make([]byte, firstByte[0]/2)
-				_, err = r.Read(strBytes)
-				if err != nil {
-					return err
-				}
-				f.Value = string(strBytes)
 				m.Fields[i].Type = f
 			default:
 				return fmt.Errorf("unsupported field type: %T", m.Fields[i].Type)
@@ -222,6 +175,24 @@ func Unmarshal(data []byte, v interface{}) error {
 		return fmt.Errorf("unsupported type: %T", v)
 	}
 	return nil
+}
+
+func decodeString(r io.Reader) (string, error) {
+	firstByte := make([]byte, 1)
+	_, err := r.Read(firstByte)
+	if err != nil {
+		return "", err
+	}
+	strBytes := make([]byte, firstByte[0]/2)
+	n, err := r.Read(strBytes)
+	if err != nil {
+		return "", err
+	}
+	if n != int(firstByte[0]/2) {
+		return "", fmt.Errorf("only read %d bytes, expected %d", n, firstByte[0]/2)
+	}
+	fmt.Printf("string: %s (%x)\n", string(strBytes), strBytes)
+	return string(strBytes), nil
 }
 
 func decodeFixed(r io.Reader, len int) ([]byte, error) {
@@ -255,6 +226,51 @@ func decodeFixed(r io.Reader, len int) ([]byte, error) {
 		}
 	}
 	return b.Bytes(), nil
+}
+
+func decodeVar(r io.ReadSeeker, unsigned bool) (uint64, error) {
+	firstByte := make([]byte, 1)
+	_, err := r.Read(firstByte)
+	if err != nil {
+		return 0, err
+	}
+	tb := trailingOneBitCount(firstByte[0])
+	_, err = r.Seek(-1, io.SeekCurrent)
+	if err != nil {
+		return 0, err
+	}
+	fieldBytes := make([]byte, tb+1)
+	_, err = r.Read(fieldBytes)
+	if err != nil {
+		return 0, err
+	}
+	var tNum uint64
+	switch len(fieldBytes) {
+	case 1:
+		tNum = uint64(fieldBytes[0])
+	case 2:
+		tNum = uint64(binary.LittleEndian.Uint16(fieldBytes))
+	case 3:
+		tNum = uint64(binary.LittleEndian.Uint32(
+			slices.Concat(fieldBytes, []byte{0x0})))
+	case 4:
+		tNum = uint64(binary.LittleEndian.Uint32(fieldBytes))
+	case 5:
+		tNum = binary.LittleEndian.Uint64(
+			slices.Concat(fieldBytes, []byte{0x0, 0x0, 0x0}))
+	case 6:
+		tNum = binary.LittleEndian.Uint64(
+			slices.Concat(fieldBytes, []byte{0x0, 0x0}))
+	case 7:
+		tNum = binary.LittleEndian.Uint64(
+			slices.Concat(fieldBytes, []byte{0x0}))
+	case 8:
+		tNum = binary.LittleEndian.Uint64(fieldBytes)
+	}
+	if unsigned {
+		return tNum >> (tb + 2) * 2, nil
+	}
+	return tNum >> (tb + 2), nil
 }
 
 func trailingOneBitCount(b byte) (count int) {
