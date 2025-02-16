@@ -84,11 +84,18 @@ func (f FieldIntFixed) String() string {
 }
 
 type FieldIntVar struct {
-	Value    uint64
-	Unsigned bool
+	Value int64
 }
 
 func (f FieldIntVar) String() string {
+	return fmt.Sprintf("%d", f.Value)
+}
+
+type FieldUintVar struct {
+	Value uint64
+}
+
+func (f FieldUintVar) String() string {
 	return fmt.Sprintf("%d", f.Value)
 }
 
@@ -154,10 +161,26 @@ func Unmarshal(data []byte, v interface{}) error {
 					return err
 				}
 				m.Fields[i].Type = f
-			case FieldIntVar:
-				f.Value, err = decodeVar(r, f.Unsigned)
+			case FieldUintVar:
+				val, err := decodeVar(r, true)
 				if err != nil {
 					return err
+				}
+				if uintval, ok := val.(uint64); ok {
+					f.Value = uintval
+				} else {
+					return errors.New("unexpected type, expecting uint64")
+				}
+				m.Fields[i].Type = f
+			case FieldIntVar:
+				val, err := decodeVar(r, false)
+				if err != nil {
+					return err
+				}
+				if intval, ok := val.(int64); ok {
+					f.Value = intval
+				} else {
+					return errors.New("unexpected type, expecting int64")
 				}
 				m.Fields[i].Type = f
 			case FieldString:
@@ -227,7 +250,7 @@ func decodeFixed(r io.Reader, len int) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func decodeVar(r io.ReadSeeker, unsigned bool) (uint64, error) {
+func decodeVar(r io.ReadSeeker, unsigned bool) (interface{}, error) {
 	firstByte := make([]byte, 1)
 	_, err := r.Read(firstByte)
 	if err != nil {
@@ -243,7 +266,7 @@ func decodeVar(r io.ReadSeeker, unsigned bool) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n != tb+1{
+	if n != tb+1 {
 		return 0, fmt.Errorf("only read %d bytes, expected %d", n, tb+1)
 	}
 	var tNum uint64
@@ -270,9 +293,9 @@ func decodeVar(r io.ReadSeeker, unsigned bool) (uint64, error) {
 		tNum = binary.LittleEndian.Uint64(fieldBytes)
 	}
 	if unsigned {
-		return (tNum >> (tb + 2) * 2)+1, nil
+		return (tNum >> (tb + 2) * 2) + 1, nil
 	}
-	return tNum >> (tb + 2), nil
+	return int64(tNum >> (tb + 2)), nil
 }
 
 func trailingOneBitCount(b byte) (count int) {

@@ -582,34 +582,24 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 				},
 				{
 					Name: "immediate_commit_timestamp",
-					Type: serialization.FieldIntVar{
-						Unsigned: true,
-					},
+					Type: serialization.FieldUintVar{},
 				},
 				{
-					Name: "original_commit_timestamp",
-					Type: serialization.FieldIntVar{
-						Unsigned: true,
-					},
+					Name:     "original_commit_timestamp",
+					Type:     serialization.FieldUintVar{},
 					Optional: true,
 				},
 				{
 					Name: "transaction_length",
-					Type: serialization.FieldIntVar{
-						Unsigned: true,
-					},
+					Type: serialization.FieldUintVar{},
 				},
 				{
 					Name: "immediate_server_version",
-					Type: serialization.FieldIntVar{
-						Unsigned: true,
-					},
+					Type: serialization.FieldUintVar{},
 				},
 				{
-					Name: "original_server_version",
-					Type: serialization.FieldIntVar{
-						Unsigned: true,
-					},
+					Name:     "original_server_version",
+					Type:     serialization.FieldUintVar{},
 					Optional: true,
 				},
 				{
@@ -637,7 +627,7 @@ func (e *GtidTaggedLogEvent) Dump(w io.Writer) {
 	}
 
 	if v, ok := f.Type.(serialization.FieldIntVar); ok {
-		fmt.Printf("Immediate server version: %d\n",v.Value)
+		fmt.Printf("Immediate server version: %d\n", v.Value)
 	}
 }
 
