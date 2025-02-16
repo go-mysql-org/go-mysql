@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/bits"
 	"slices"
 	"strings"
 )
@@ -298,17 +299,6 @@ func decodeVar(r io.ReadSeeker, unsigned bool) (interface{}, error) {
 	return int64(tNum >> (tb + 2)), nil
 }
 
-func trailingOneBitCount(b byte) (count int) {
-	var i byte = 0x1
-	for {
-		if b&i == 0 {
-			break
-		}
-		count++
-		if i >= 0x80 {
-			break
-		}
-		i = i << 1
-	}
-	return
+func trailingOneBitCount(b byte) int {
+	return bits.TrailingZeros8(^b)
 }
