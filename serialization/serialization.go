@@ -60,6 +60,7 @@ func (f *Format) String() (text string) {
 	return text
 }
 
+// Field represents a `message_field`
 type Field struct {
 	ID       int
 	Type     FieldType
@@ -68,10 +69,15 @@ type Field struct {
 	Skipped  bool
 }
 
+// FieldType represents a `type_field`
 type FieldType interface {
 	fmt.Stringer
 }
 
+// FieldIntFixed is for values with a fixed length.
+// This is also known as the 'fixlen_integer_format'.
+// The encoded value can vary be between 1 and 2 times
+// of that of the value before encoding.
 type FieldIntFixed struct {
 	Length int // Length of value before encoding, encoded value can be more
 	Value  []byte
@@ -84,6 +90,8 @@ func (f FieldIntFixed) String() string {
 	return fmt.Sprintf("0x%x", f.Value)
 }
 
+// FieldIntVar is using the signed integer variant of the 'varlen_integer_format'
+// and encodes a value as a byte sequence of 1-9 bytes depending on the value.
 type FieldIntVar struct {
 	Value int64
 }
@@ -92,6 +100,8 @@ func (f FieldIntVar) String() string {
 	return fmt.Sprintf("%d", f.Value)
 }
 
+// FieldUintVar is using the usigned integer variant of the 'varlen_integer_format'
+// and encodes a value as a byte sequence of 1-9 bytes depending on the value.
 type FieldUintVar struct {
 	Value uint64
 }
@@ -100,6 +110,7 @@ func (f FieldUintVar) String() string {
 	return fmt.Sprintf("%d", f.Value)
 }
 
+// FieldString is a 'string_format' field
 type FieldString struct {
 	Value string
 }
@@ -118,7 +129,7 @@ func Unmarshal(data []byte, v interface{}) error {
 		if err != nil {
 			return err
 		}
-		m.Version = tmpVer[0] / 2
+		m.Version = tmpVer[0] >> 1
 
 		err = Unmarshal(data[messageLen:], &m.Format)
 		if err != nil {
@@ -131,8 +142,8 @@ func Unmarshal(data []byte, v interface{}) error {
 		if err != nil {
 			return err
 		}
-		m.Size = uint64(tmpFormat[0] / 2)
-		m.LastNonIgnorableField = int(tmpFormat[1] / 2)
+		m.Size = uint64(tmpFormat[0] >> 1)
+		m.LastNonIgnorableField = int(tmpFormat[1] >> 1)
 
 		for i := 0; i < len(m.Fields); i++ {
 			tmpField := make([]byte, 1)
@@ -154,7 +165,7 @@ func Unmarshal(data []byte, v interface{}) error {
 				}
 				continue
 			}
-			m.Fields[i].ID = int(tmpField[0] / 2)
+			m.Fields[i].ID = int(tmpField[0] >> 1)
 			switch f := m.Fields[i].Type.(type) {
 			case FieldIntFixed:
 				f.Value, err = decodeFixed(r, f.Length)
@@ -207,12 +218,12 @@ func decodeString(r io.Reader) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	strBytes := make([]byte, firstByte[0]/2)
+	strBytes := make([]byte, firstByte[0] >> 1)
 	n, err := r.Read(strBytes)
 	if err != nil {
 		return "", err
 	}
-	if n != int(firstByte[0]/2) {
+	if n != int(firstByte[0] >> 1) {
 		return "", fmt.Errorf("only read %d bytes, expected %d", n, firstByte[0]/2)
 	}
 	return string(strBytes), nil
@@ -228,7 +239,7 @@ func decodeFixed(r io.Reader, len int) ([]byte, error) {
 			return nil, err
 		}
 		if tmpInt[0]%2 == 0 {
-			b.WriteByte(tmpInt[0] / 2)
+			b.WriteByte(tmpInt[0] >> 1)
 		} else {
 			tmpInt2 := make([]byte, 1)
 			_, err := r.Read(tmpInt2)
