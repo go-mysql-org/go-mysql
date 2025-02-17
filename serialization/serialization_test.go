@@ -157,6 +157,7 @@ func TestDecodeVar(t *testing.T) {
 		{
 			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
 			// But converted to LE
+			// unsigned integer, 65535
 			[]byte{0b11111011, 0b11111111, 0b00000111},
 			true,
 			uint64(65535),
@@ -165,27 +166,30 @@ func TestDecodeVar(t *testing.T) {
 		{
 			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
 			// But converted to LE
-			[]byte{0b11111011, 0b11111111, 0b00001111},
+			// signed integer, 65535
+			[]byte{0b11110011, 0b11111111, 0b00001111},
 			false,
 			int64(65535),
 			"",
 		},
-		// {
-		// 	// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
-		// 	// But converted to LE
-		// 	[]byte{0b11101011, 0b11111111, 0b00001111},
-		// 	false,
-		// 	int64(-65535),
-		// 	"",
-		// },
-		// {
-		// 	// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
-		// 	// But converted to LE
-		// 	[]byte{0b11111011, 0b11111111, 0b00001111},
-		// 	false,
-		// 	int64(-65536),
-		// 	"",
-		// },
+		{
+			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+			// But converted to LE
+			// signed integer, -65535
+			[]byte{0b11101011, 0b11111111, 0b00001111},
+			false,
+			int64(-65535),
+			"",
+		},
+		{
+			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+			// But converted to LE
+			// signed integer, 65536
+			[]byte{0b11111011, 0b11111111, 0b00001111},
+			false,
+			int64(-65536),
+			"",
+		},
 		{
 			[]byte{0x5d, 0x03},
 			true,

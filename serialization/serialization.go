@@ -296,7 +296,10 @@ func decodeVar(r io.ReadSeeker, unsigned bool) (interface{}, error) {
 	if unsigned {
 		return tNum >> (tb + 1), nil
 	}
-	return int64(tNum >> (tb + 2)), nil
+	if positive := (tNum>>(tb+1))&1==0; positive {
+		return int64(tNum >> (tb + 2)), nil
+	}
+	return int64(-(1+(tNum >> (tb + 2)))), nil
 }
 
 func trailingOneBitCount(b byte) int {
