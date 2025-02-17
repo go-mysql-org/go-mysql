@@ -294,7 +294,7 @@ func decodeVar(r io.ReadSeeker, unsigned bool) (interface{}, error) {
 		tNum = binary.LittleEndian.Uint64(fieldBytes)
 	}
 	if unsigned {
-		return (tNum >> (tb + 2) * 2) + 1, nil
+		return tNum >> (tb + 1), nil
 	}
 	return int64(tNum >> (tb + 2)), nil
 }

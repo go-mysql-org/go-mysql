@@ -148,12 +148,12 @@ func TestDecodeVar(t *testing.T) {
 			int64(123),
 			"",
 		},
-		// {
-		// 	[]byte{0xc3, 02, 0x0b},
-		// 	true,
-		// 	uint64(90200),
-		// 	"",
-		// },
+		{
+			[]byte{0xc3, 02, 0x0b},
+			true,
+			uint64(90200),
+			"",
+		},
 		{
 			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
 			// But converted to LE
