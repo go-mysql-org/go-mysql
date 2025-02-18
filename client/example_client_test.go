@@ -9,16 +9,26 @@ import (
 
 func Example() {
 	// Connect MySQL at 127.0.0.1:3306, with user root, an empty password and database test
-	conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test")
-
+	conn, err := client.Connect("127.0.0.1:3306", "root", "", "test")
 	// Or to use SSL/TLS connection if MySQL server supports TLS
-	//conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.UseSSL(true)})
+	//conn, err := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.UseSSL(true)})
 
 	// Or to set your own client-side certificates for identity verification for security
 	//tlsConfig := NewClientTLSConfig(caPem, certPem, keyPem, false, "your-server-name")
-	//conn, _ := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.SetTLSConfig(tlsConfig)})
+	//conn, err := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.SetTLSConfig(tlsConfig)})
+	if err != nil {
+		msg := fmt.Sprintf(`
+This example needs a MySQL listening on 127.0.0.1:3006 with user "root" and 
+empty password. Please check the connectivity using mysql client.
+---
+Connect to MySQL failed: %v`, err)
+		panic(msg)
+	}
 
-	conn.Ping()
+	err = conn.Ping()
+	if err != nil {
+		panic(err)
+	}
 
 	// (re)create the t1 table
 	r, err := conn.Execute(`DROP TABLE IF EXISTS t1`)

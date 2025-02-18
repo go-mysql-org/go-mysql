@@ -190,7 +190,8 @@ You can see [go-mysql-elasticsearch](https://github.com/go-mysql-org/go-mysql-el
 
 Client package supports a simple MySQL connection driver which you can use it to communicate with MySQL server. 
 
-For an example see [`example_client_test.go`](client/example_client_test.go)
+For an example see [`example_client_test.go`](client/example_client_test.go). You can run this testable example with 
+`go test -v ./client -run Example`.
 
 Tested MySQL versions for the client include:
 - 5.5.x
