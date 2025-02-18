@@ -517,7 +517,7 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	if e.Tag != "" {
 		fmt.Fprintf(w, "GTID_NEXT: %s:%s:%d\n", u.String(), e.Tag, e.GNO)
 	} else {
-		fmt.Fprintf(w, "GTID_NEXT: %s:%s%d\n", u.String(), e.GNO)
+		fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
 	}
 	fmt.Fprintf(w, "LAST_COMMITTED: %d\n", e.LastCommitted)
 	fmt.Fprintf(w, "SEQUENCE_NUMBER: %d\n", e.SequenceNumber)
@@ -670,7 +670,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if v, ok := f.Type.(serialization.FieldIntVar); ok {
 		e.LastCommitted = v.Value
 	} else {
-		return errors.New("failed to get last_comitted field")
+		return errors.New("failed to get last_committed field")
 	}
 
 	f, err = e.msg.GetFieldByName("sequence_number")
