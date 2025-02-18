@@ -1,7 +1,6 @@
 package serialization
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -49,13 +48,13 @@ func TestDecodeFixed(t *testing.T) {
 			[]byte{0xee, 0x81},
 			16,
 			[]byte{},
-			"EOF",
+			"data truncated",
 		},
 		{
 			[]byte{},
 			16,
 			[]byte{},
-			"EOF",
+			"data truncated",
 		},
 		{
 			[]byte{0xee, 0x81, 0x04, 0xc1, 0x02, 0x01, 0x03, 0x41, 0x03, 0x81, 0x03, 0xc1, 0x03, 0xc5, 0x03, 0x22,
@@ -67,7 +66,7 @@ func TestDecodeFixed(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		actual, err := decodeFixed(bytes.NewReader(tc.input), tc.len)
+		actual, _, err := decodeFixed(tc.input, 0, tc.len)
 		if tc.err == "" {
 			require.NoError(t, err)
 			require.Equal(t, tc.result, actual)
@@ -92,22 +91,22 @@ func TestDecodeString(t *testing.T) {
 		{
 			[]byte{0x18, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67},
 			"",
-			"only read ",
+			"string truncated",
 		},
 		{
 			[]byte{},
 			"",
-			"EOF",
+			"string truncated, expected at least one byte",
 		},
 		{
 			[]byte{0x18},
 			"",
-			"EOF",
+			"string truncated, expected length",
 		},
 	}
 
 	for _, tc := range testcases {
-		s, err := decodeString(bytes.NewReader(tc.input))
+		s, _, err := decodeString(tc.input, 0)
 		if tc.err == "" {
 			require.NoError(t, err)
 			require.Equal(t, tc.result, s)
@@ -128,13 +127,13 @@ func TestDecodeVar(t *testing.T) {
 			[]byte{},
 			false,
 			0,
-			"EOF",
+			"data truncated",
 		},
 		{
 			[]byte{0xd9},
 			false,
 			0,
-			"only read ",
+			"truncated data",
 		},
 		{
 			[]byte{0x4},
@@ -205,7 +204,7 @@ func TestDecodeVar(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		r, err := decodeVar(bytes.NewReader(tc.input), tc.unsigned)
+		r, _, err := decodeVar(tc.input, 0, tc.unsigned)
 		if tc.err == "" {
 			require.NoError(t, err)
 			require.Equal(t, tc.result, r, tc.result)

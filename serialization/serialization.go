@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math/bits"
 	"slices"
 	"strings"
@@ -120,61 +119,42 @@ func (f FieldString) String() string {
 }
 
 func Unmarshal(data []byte, v interface{}) error {
-	r := bytes.NewReader(data)
 	switch m := v.(type) {
 	case *Message:
-		messageLen := 1
-		tmpVer := make([]byte, messageLen)
-		_, err := r.Read(tmpVer)
-		if err != nil {
-			return err
-		}
-		m.Version = tmpVer[0] >> 1
-
-		err = Unmarshal(data[messageLen:], &m.Format)
+		m.Version = data[0] >> 1
+		err := Unmarshal(data[1:], &m.Format)
 		if err != nil {
 			return err
 		}
 	case *Format:
-		formatLen := 2
-		tmpFormat := make([]byte, formatLen)
-		_, err := r.Read(tmpFormat)
-		if err != nil {
-			return err
-		}
-		m.Size = uint64(tmpFormat[0] >> 1)
-		m.LastNonIgnorableField = int(tmpFormat[1] >> 1)
+		pos := uint64(0)
+		m.Size = uint64(data[pos] >> 1)
+		pos++
+		m.LastNonIgnorableField = int(data[pos] >> 1)
+		pos++
 
 		for i := 0; i < len(m.Fields); i++ {
-			tmpField := make([]byte, 1)
-			_, err := r.Read(tmpField)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				return err
-			}
-			if int(tmpField[0]/2) != i {
+			if int(pos)+1 > len(data) || int(data[pos]>>1) != i {
 				// The field number we got doesn't match what we expect,
-				// so a field was skipped. Rewind the reader and skip.
+				// so a field was skipped.
 				m.Fields[i].ID = i
 				m.Fields[i].Skipped = true
-				_, err := r.Seek(-1, io.SeekCurrent)
-				if err != nil {
-					return err
-				}
 				continue
 			}
-			m.Fields[i].ID = int(tmpField[0] >> 1)
+			m.Fields[i].ID = int(data[pos] >> 1)
+			pos++
+			var n uint64
+			var err error
 			switch f := m.Fields[i].Type.(type) {
 			case FieldIntFixed:
-				f.Value, err = decodeFixed(r, f.Length)
+				f.Value, n, err = decodeFixed(data, pos, f.Length)
 				if err != nil {
 					return err
 				}
 				m.Fields[i].Type = f
 			case FieldUintVar:
-				val, err := decodeVar(r, true)
+				var val interface{}
+				val, n, err = decodeVar(data, pos, true)
 				if err != nil {
 					return err
 				}
@@ -185,7 +165,8 @@ func Unmarshal(data []byte, v interface{}) error {
 				}
 				m.Fields[i].Type = f
 			case FieldIntVar:
-				val, err := decodeVar(r, false)
+				var val interface{}
+				val, n, err = decodeVar(data, pos, false)
 				if err != nil {
 					return err
 				}
@@ -196,7 +177,7 @@ func Unmarshal(data []byte, v interface{}) error {
 				}
 				m.Fields[i].Type = f
 			case FieldString:
-				f.Value, err = decodeString(r)
+				f.Value, n, err = decodeString(data, pos)
 				if err != nil {
 					return err
 				}
@@ -204,6 +185,7 @@ func Unmarshal(data []byte, v interface{}) error {
 			default:
 				return fmt.Errorf("unsupported field type: %T", m.Fields[i].Type)
 			}
+			pos = n
 		}
 
 	default:
@@ -212,105 +194,88 @@ func Unmarshal(data []byte, v interface{}) error {
 	return nil
 }
 
-func decodeString(r io.Reader) (string, error) {
-	firstByte := make([]byte, 1)
-	_, err := r.Read(firstByte)
-	if err != nil {
-		return "", err
+func decodeString(data []byte, pos uint64) (string, uint64, error) {
+	if len(data) < int(pos)+1 {
+		return "", pos, errors.New("string truncated, expected at least one byte")
 	}
-	strBytes := make([]byte, firstByte[0] >> 1)
-	n, err := r.Read(strBytes)
-	if err != nil {
-		return "", err
+	strLen := int(data[pos] >> 1)
+	pos++
+	if len(data) < int(pos)+strLen {
+		return "", pos, fmt.Errorf("string truncated, expected length: %d", strLen)
 	}
-	if n != int(firstByte[0] >> 1) {
-		return "", fmt.Errorf("only read %d bytes, expected %d", n, firstByte[0]/2)
-	}
-	return string(strBytes), nil
+	return string(data[pos : pos+uint64(strLen)]), pos + uint64(strLen), nil
 }
 
-func decodeFixed(r io.Reader, len int) ([]byte, error) {
+func decodeFixed(data []byte, pos uint64, intlen int) ([]byte, uint64, error) {
 	var b bytes.Buffer
 
-	tmpInt := make([]byte, 1)
 	for {
-		_, err := r.Read(tmpInt)
-		if err != nil {
-			return nil, err
+		if len(data) < int(pos)+1 {
+			return b.Bytes(), pos, errors.New("data truncated")
 		}
-		if tmpInt[0]%2 == 0 {
-			b.WriteByte(tmpInt[0] >> 1)
+		if data[pos]%2 == 0 {
+			b.WriteByte(data[pos] >> 1)
 		} else {
-			tmpInt2 := make([]byte, 1)
-			_, err := r.Read(tmpInt2)
-			if err != nil {
-				return nil, err
+			if len(data) < int(pos)+2 {
+				return b.Bytes(), pos, errors.New("data truncated")
 			}
-			switch tmpInt2[0] {
+			switch data[pos+1] {
 			case 0x2:
-				b.WriteByte((tmpInt[0] >> 2) + 0x80)
+				b.WriteByte((data[pos] >> 2) + 0x80)
 			case 0x3:
-				b.WriteByte((tmpInt[0] >> 2) + 0xc0)
+				b.WriteByte((data[pos] >> 2) + 0xc0)
 			default:
-				return nil, fmt.Errorf("unknown decoding for %v", tmpInt2[0])
+				return nil, pos, fmt.Errorf("unknown decoding for %v", data[pos])
 			}
+			pos++
 		}
-		if b.Len() == len {
+		pos++
+		if b.Len() == intlen {
 			break
 		}
 	}
-	return b.Bytes(), nil
+	return b.Bytes(), pos, nil
 }
 
-func decodeVar(r io.ReadSeeker, unsigned bool) (interface{}, error) {
-	firstByte := make([]byte, 1)
-	_, err := r.Read(firstByte)
-	if err != nil {
-		return 0, err
+func decodeVar(data []byte, pos uint64, unsigned bool) (interface{}, uint64, error) {
+	if len(data) < int(pos)+1 {
+		return 0, pos, errors.New("data truncated")
 	}
-	tb := trailingOneBitCount(firstByte[0])
-	_, err = r.Seek(-1, io.SeekCurrent)
-	if err != nil {
-		return 0, err
-	}
-	fieldBytes := make([]byte, tb+1)
-	n, err := r.Read(fieldBytes)
-	if err != nil {
-		return 0, err
-	}
-	if n != tb+1 {
-		return 0, fmt.Errorf("only read %d bytes, expected %d", n, tb+1)
+	flen := trailingOneBitCount(data[pos]) + 1
+	if len(data) < int(pos)+flen {
+		return 0, pos, fmt.Errorf("truncated data, expected length: %d", flen)
 	}
 	var tNum uint64
-	switch len(fieldBytes) {
+	switch flen {
 	case 1:
-		tNum = uint64(fieldBytes[0])
+		tNum = uint64(data[pos])
 	case 2:
-		tNum = uint64(binary.LittleEndian.Uint16(fieldBytes))
+		tNum = uint64(binary.LittleEndian.Uint16(data[pos : int(pos)+flen]))
 	case 3:
 		tNum = uint64(binary.LittleEndian.Uint32(
-			slices.Concat(fieldBytes, []byte{0x0})))
+			slices.Concat(data[pos:int(pos)+flen], []byte{0x0})))
 	case 4:
-		tNum = uint64(binary.LittleEndian.Uint32(fieldBytes))
+		tNum = uint64(binary.LittleEndian.Uint32(data[pos : int(pos)+flen]))
 	case 5:
 		tNum = binary.LittleEndian.Uint64(
-			slices.Concat(fieldBytes, []byte{0x0, 0x0, 0x0}))
+			slices.Concat(data[pos:int(pos)+flen], []byte{0x0, 0x0, 0x0}))
 	case 6:
 		tNum = binary.LittleEndian.Uint64(
-			slices.Concat(fieldBytes, []byte{0x0, 0x0}))
+			slices.Concat(data[pos:int(pos)+flen], []byte{0x0, 0x0}))
 	case 7:
 		tNum = binary.LittleEndian.Uint64(
-			slices.Concat(fieldBytes, []byte{0x0}))
+			slices.Concat(data[pos:int(pos)+flen], []byte{0x0}))
 	case 8:
-		tNum = binary.LittleEndian.Uint64(fieldBytes)
+		tNum = binary.LittleEndian.Uint64(data[pos : int(pos)+flen])
 	}
+	pos += uint64(flen)
 	if unsigned {
-		return tNum >> (tb + 1), nil
+		return tNum >> flen, pos, nil
 	}
-	if positive := (tNum>>(tb+1))&1 == 0; positive {
-		return int64(tNum >> (tb + 2)), nil
+	if positive := (tNum>>flen)&1 == 0; positive {
+		return int64(tNum >> (flen + 1)), pos, nil
 	}
-	return int64(-(1 + (tNum >> (tb + 2)))), nil
+	return int64(-(1 + (tNum >> (flen + 1)))), pos, nil
 }
 
 func trailingOneBitCount(b byte) int {
