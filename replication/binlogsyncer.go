@@ -756,14 +756,16 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 				return
 			}
 
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
 			for {
 				select {
 				case <-b.ctx.Done():
 					s.close()
 					return
-				case <-time.After(time.Second):
+				case <-ticker.C:
 					b.retryCount++
-					if err = b.retrySync(); err != nil {
+					if err := b.retrySync(); err != nil {
 						if b.cfg.MaxReconnectAttempts > 0 && b.retryCount >= b.cfg.MaxReconnectAttempts {
 							b.cfg.Logger.Errorf(
 								"retry sync err: %v, exceeded max retries (%d)",
