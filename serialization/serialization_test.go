@@ -154,7 +154,7 @@ func TestDecodeVar(t *testing.T) {
 			"",
 		},
 		{
-			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlhtml
 			// But converted to LE
 			// unsigned integer, 65535
 			[]byte{0b11111011, 0b11111111, 0b00000111},
@@ -163,7 +163,7 @@ func TestDecodeVar(t *testing.T) {
 			"",
 		},
 		{
-			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlhtml
 			// But converted to LE
 			// signed integer, 65535
 			[]byte{0b11110011, 0b11111111, 0b00001111},
@@ -172,7 +172,7 @@ func TestDecodeVar(t *testing.T) {
 			"",
 		},
 		{
-			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlhtml
 			// But converted to LE
 			// signed integer, -65535
 			[]byte{0b11101011, 0b11111111, 0b00001111},
@@ -181,7 +181,7 @@ func TestDecodeVar(t *testing.T) {
 			"",
 		},
 		{
-			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlSerialization.html
+			// From the example on https://dev.mysql.com/doc/dev/mysql-server/latest/PageLibsMysqlhtml
 			// But converted to LE
 			// signed integer, 65536
 			[]byte{0b11111011, 0b11111111, 0b00001111},
@@ -212,4 +212,176 @@ func TestDecodeVar(t *testing.T) {
 			require.ErrorContains(t, err, tc.err)
 		}
 	}
+}
+
+func TestUmarshal_event1(t *testing.T) {
+	data := []byte{0x2, 0x76, 0x0, 0x0, 0x2, 0x2, 0x25, 0x2, 0xdc, 0xf0, 0x9, 0x2, 0x30, 0xf9, 0x3, 0x22, 0xbd, 0x3,
+		0xad, 0x2, 0x21, 0x2, 0x44, 0x44, 0x5a, 0x68, 0x51, 0x3, 0x22, 0x4, 0x4, 0x6, 0xc, 0x66, 0x6f, 0x6f, 0x62,
+		0x61, 0x7a, 0x8, 0x0, 0xa, 0x4, 0xc, 0x7f, 0x15, 0x83, 0x22, 0x2d, 0x5c, 0x2e, 0x6, 0x10, 0x49, 0x3, 0x12,
+		0xc3, 0x2, 0xb}
+
+	msg := Message{
+		Format: Format{
+			Fields: []Field{
+				{
+					Name: "gtid_flags",
+					Type: FieldIntFixed{
+						Length: 1,
+					},
+				},
+				{
+					Name: "uuid",
+					Type: FieldIntFixed{
+						Length: 16,
+					},
+				},
+				{
+					Name: "gno",
+					Type: FieldIntVar{},
+				},
+				{
+					Name: "tag",
+					Type: FieldString{},
+				},
+				{
+					Name: "last_committed",
+					Type: FieldIntVar{},
+				},
+				{
+					Name: "sequence_number",
+					Type: FieldIntVar{},
+				},
+				{
+					Name: "immediate_commit_timestamp",
+					Type: FieldUintVar{},
+				},
+				{
+					Name:     "original_commit_timestamp",
+					Type:     FieldUintVar{},
+					Optional: true,
+				},
+				{
+					Name: "transaction_length",
+					Type: FieldUintVar{},
+				},
+				{
+					Name: "immediate_server_version",
+					Type: FieldUintVar{},
+				},
+				{
+					Name:     "original_server_version",
+					Type:     FieldUintVar{},
+					Optional: true,
+				},
+				{
+					Name:     "commit_group_ticket",
+					Optional: true,
+				},
+			},
+		},
+	}
+
+	expected := Message{
+		Version: 1,
+		Format: Format{
+			Size: 59,
+			Fields: []Field{
+				{
+					Name: "gtid_flags",
+					ID:   0,
+					Type: FieldIntFixed{
+						Length: 1,
+						Value:  []uint8{01},
+					},
+				},
+				{
+					Name: "uuid",
+					ID:   1,
+					Type: FieldIntFixed{
+						Length: 16,
+						Value: []uint8{0x89, 0x6e, 0x78, 0x82, 0x18, 0xfe, 0x11, 0xef, 0xab,
+							0x88, 0x22, 0x22, 0x2d, 0x34, 0xd4, 0x11},
+					},
+				},
+				{
+					Name: "gno",
+					ID:   2,
+					Type: FieldIntVar{
+						Value: 1,
+					},
+				},
+				{
+					Name: "tag",
+					ID:   3,
+					Type: FieldString{
+						Value: "foobaz",
+					},
+				},
+				{
+					Name: "last_committed",
+					ID:   4,
+					Type: FieldIntVar{
+						Value: 0,
+					},
+				},
+				{
+					Name: "sequence_number",
+					ID:   5,
+					Type: FieldIntVar{
+						Value: 1,
+					},
+				},
+				{
+					Name: "immediate_commit_timestamp",
+					ID:   6,
+					Type: FieldUintVar{
+						Value: 1739823289369365,
+					},
+				},
+				{
+					Name:     "original_commit_timestamp",
+					ID:       7,
+					Type:     FieldUintVar{},
+					Optional: true,
+					Skipped:  true,
+				},
+				{
+					Name: "transaction_length",
+					ID:   8,
+					Type: FieldUintVar{
+						Value: 210,
+					},
+				},
+				{
+					Name: "immediate_server_version",
+					ID:   9,
+					Type: FieldUintVar{
+						Value: 90200,
+					},
+				},
+				{
+					Name:     "original_server_version",
+					ID:       10,
+					Type:     FieldUintVar{},
+					Optional: true,
+					Skipped:  true,
+				},
+				{
+					Name:     "commit_group_ticket",
+					ID:       11,
+					Optional: true,
+					Skipped:  true,
+				},
+			},
+		},
+	}
+
+	err := Unmarshal(data, &msg)
+	require.NoError(t, err)
+
+	for i, f := range msg.Format.Fields {
+		require.Equal(t, expected.Format.Fields[i], f)
+	}
+
+	require.Equal(t, expected, msg)
 }
