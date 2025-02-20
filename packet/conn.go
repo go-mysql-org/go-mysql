@@ -31,6 +31,7 @@ type Conn struct {
 
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	ctx          context.Context
 
 	// Buffered reader for net.Conn in Non-TLS connection only to address replication performance issue.
 	// See https://github.com/go-mysql-org/go-mysql/pull/422 for more details.
