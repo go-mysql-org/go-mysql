@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/pingcap/tidb/pkg/parser"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -99,7 +98,7 @@ func (s *canalTestSuite) SetupSuite() {
 
 	s.execute("SET GLOBAL binlog_format = 'ROW'")
 
-	s.c.SetEventHandler(&testEventHandler{})
+	s.c.SetEventHandler(&testEventHandler{T: s.T()})
 	go func() {
 		set, _ := mysql.ParseGTIDSet("mysql", "")
 		err = s.c.StartFromGTID(set)
@@ -126,10 +125,11 @@ func (s *canalTestSuite) execute(query string, args ...interface{}) *mysql.Resul
 
 type testEventHandler struct {
 	DummyEventHandler
+	T *testing.T
 }
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
-	log.Infof("OnRow %s %v\n", e.Action, e.Rows)
+	h.T.Log("OnRow", e.Action, e.Rows)
 	umi, ok := e.Rows[0][4].(uint32) // 4th col is umi. mysqldump gives uint64 instead of uint32
 	if ok && (umi != umiA && umi != umiB && umi != umiC) {
 		return fmt.Errorf("invalid unsigned medium int %d", umi)

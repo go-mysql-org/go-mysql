@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -40,7 +39,6 @@ type mockHandler struct {
 }
 
 func TestDriverOptions_SetRetriesOn(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 	var wg sync.WaitGroup
@@ -66,7 +64,6 @@ func TestDriverOptions_SetRetriesOn(t *testing.T) {
 }
 
 func TestDriverOptions_SetRetriesOff(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 	var wg sync.WaitGroup
@@ -117,7 +114,6 @@ func TestDriverOptions_SetCompression(t *testing.T) {
 }
 
 func TestDriverOptions_ConnectTimeout(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 
@@ -135,7 +131,6 @@ func TestDriverOptions_ConnectTimeout(t *testing.T) {
 }
 
 func TestDriverOptions_BufferSize(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 
@@ -161,7 +156,6 @@ func TestDriverOptions_BufferSize(t *testing.T) {
 }
 
 func TestDriverOptions_ReadTimeout(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 
@@ -183,7 +177,6 @@ func TestDriverOptions_ReadTimeout(t *testing.T) {
 }
 
 func TestDriverOptions_writeTimeout(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 
@@ -231,7 +224,6 @@ func TestDriverOptions_namedValueChecker(t *testing.T) {
 		return nil
 	})
 
-	log.SetLevel(log.LevelDebug)
 	srv := CreateMockServer(t)
 	defer srv.Stop()
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?writeTimeout=1s")

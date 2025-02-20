@@ -15,7 +15,6 @@ require (
 	github.com/pingcap/errors v0.11.5-0.20240311024730-e056997136bb
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20241118164214-4f047be191be
 	github.com/shopspring/decimal v1.2.0
-	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07
 	github.com/stretchr/testify v1.8.4
 )
 
