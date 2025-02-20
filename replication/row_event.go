@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/bits"
 	"strconv"
 	"strings"
 	"time"
@@ -754,7 +755,7 @@ func (e *TableMapEvent) VisibilityMap() map[int]bool {
 	if len(e.VisibilityBitmap) == 0 {
 		return nil
 	}
-	ret := make(map[int]bool)
+	ret := make(map[int]bool, len(e.VisibilityBitmap)*8)
 	i := 0
 	for _, field := range e.VisibilityBitmap {
 		for c := 0x80; c != 0; c >>= 1 {
@@ -1146,15 +1147,19 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 	}
 
 	row := make([]interface{}, e.ColumnCount)
-	skips := make([]int, 0)
 
 	// refer: https://github.com/alibaba/canal/blob/c3e38e50e269adafdd38a48c63a1740cde304c67/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogBuffer.java#L63
 	count := 0
-	for i := 0; i < int(e.ColumnCount); i++ {
-		if isBitSet(bitmap, i) {
+	col := 0
+	for ; col+8 <= int(e.ColumnCount); col += 8 {
+		count += bits.OnesCount8(bitmap[col>>3])
+	}
+	for ; col < int(e.ColumnCount); col++ {
+		if isBitSet(bitmap, col) {
 			count++
 		}
 	}
+	skips := make([]int, 0, int(e.ColumnCount)-count)
 	count = bitmapByteSize(count)
 
 	nullBitmap := data[pos : pos+count]
