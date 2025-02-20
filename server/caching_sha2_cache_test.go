@@ -12,7 +12,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -25,8 +24,6 @@ import (
 // NOTE the idea here is to plugin a throttled credential provider so that the first connection (cache miss) will take longer time
 // than the second connection (cache hit). Remember to set the password for MySQL user otherwise it won't cache empty password.
 func TestCachingSha2Cache(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-
 	remoteProvider := &RemoteThrottleProvider{
 		InMemoryProvider: NewInMemoryProvider(),
 	}
@@ -42,8 +39,6 @@ func TestCachingSha2Cache(t *testing.T) {
 }
 
 func TestCachingSha2CacheTLS(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-
 	remoteProvider := &RemoteThrottleProvider{
 		InMemoryProvider: NewInMemoryProvider(),
 	}

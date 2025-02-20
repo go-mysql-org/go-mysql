@@ -3,6 +3,7 @@ package canal
 import (
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -49,7 +50,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 			e == schema.ErrMissingTableMeta {
 			return nil
 		}
-		h.c.cfg.Logger.Errorf("get %s.%s information err: %v", db, table, err)
+		h.c.cfg.Logger.Error("error getting table information", slog.String("databse", db), slog.String("table", table), slog.Any("error", err))
 		return errors.Trace(err)
 	}
 
@@ -163,7 +164,7 @@ func (c *Canal) dump() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		c.cfg.Logger.Infof("skip master data, get current binlog position %v", pos)
+		c.cfg.Logger.Info("skip master data, get current binlog position", slog.Any("pos", pos))
 		h.name = pos.Name
 		h.pos = uint64(pos.Pos)
 	}
@@ -185,8 +186,8 @@ func (c *Canal) dump() error {
 		c.master.UpdateGTIDSet(h.gset)
 		startPos = h.gset
 	}
-	c.cfg.Logger.Infof("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
-		time.Since(start).Seconds(), startPos)
+	c.cfg.Logger.Info(fmt.Sprintf("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
+		time.Since(start).Seconds(), startPos))
 	return nil
 }
 
@@ -196,7 +197,7 @@ func (c *Canal) tryDump() error {
 	if (len(pos.Name) > 0 && pos.Pos > 0) ||
 		(gset != nil && gset.String() != "") {
 		// we will sync with binlog name and position
-		c.cfg.Logger.Infof("skip dump, use last binlog replication pos %s or GTID set %v", pos, gset)
+		c.cfg.Logger.Info(fmt.Sprintf("skip dump, use last binlog replication pos %s or GTID set %v", pos, gset))
 		return nil
 	}
 
