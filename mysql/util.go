@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"filippo.io/edwards25519"
 	"github.com/Masterminds/semver"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
@@ -81,6 +83,44 @@ func CalcCachingSha2Password(scramble []byte, password string) []byte {
 	}
 
 	return message1
+}
+
+// Taken from https://github.com/go-sql-driver/mysql/pull/1518
+func CalcEd25519Password(scramble []byte, password string) ([]byte, error) {
+	// Derived from https://github.com/MariaDB/server/blob/d8e6bb00888b1f82c031938f4c8ac5d97f6874c3/plugin/auth_ed25519/ref10/sign.c
+	// Code style is from https://cs.opensource.google/go/go/+/refs/tags/go1.21.5:src/crypto/ed25519/ed25519.go;l=207
+	h := sha512.Sum512([]byte(password))
+
+	s, err := edwards25519.NewScalar().SetBytesWithClamping(h[:32])
+	if err != nil {
+		return nil, err
+	}
+	A := (&edwards25519.Point{}).ScalarBaseMult(s)
+
+	mh := sha512.New()
+	mh.Write(h[32:])
+	mh.Write(scramble)
+	messageDigest := mh.Sum(nil)
+	r, err := edwards25519.NewScalar().SetUniformBytes(messageDigest)
+	if err != nil {
+		return nil, err
+	}
+
+	R := (&edwards25519.Point{}).ScalarBaseMult(r)
+
+	kh := sha512.New()
+	kh.Write(R.Bytes())
+	kh.Write(A.Bytes())
+	kh.Write(scramble)
+	hramDigest := kh.Sum(nil)
+	k, err := edwards25519.NewScalar().SetUniformBytes(hramDigest)
+	if err != nil {
+		return nil, err
+	}
+
+	S := k.MultiplyAdd(k, s, r)
+
+	return append(R.Bytes(), S.Bytes()...), nil
 }
 
 func EncryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, error) {
