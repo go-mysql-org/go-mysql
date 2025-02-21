@@ -74,7 +74,7 @@ func testBackup(t *testSyncerSuite, isSynchronous bool) {
 		// Set up a BackupEventHandler for synchronous mode
 		backupHandler := NewBackupEventHandler(
 			func(filename string) (io.WriteCloser, error) {
-				return os.OpenFile(path.Join(binlogDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
+				return os.OpenFile(path.Join(binlogDir, filename), os.O_CREATE|os.O_WRONLY, 0o644)
 			},
 		)
 		t.b.cfg.SynchronousEventHandler = backupHandler

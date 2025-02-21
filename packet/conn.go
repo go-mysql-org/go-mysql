@@ -20,8 +20,10 @@ import (
 	"github.com/pingcap/errors"
 )
 
-const MinCompressionLength = 50
-const DefaultBufferSize = 16 * 1024
+const (
+	MinCompressionLength = 50
+	DefaultBufferSize    = 16 * 1024
+)
 
 // Conn is the base class to handle MySQL protocol.
 type Conn struct {

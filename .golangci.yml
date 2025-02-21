@@ -3,18 +3,19 @@ linters:
   enable:
     # All code is ready for:
     - errcheck
-    - staticcheck
-    - typecheck
-    - unused
-    - misspell
-    - nolintlint
+    - gofumpt
     - goimports
-    - nakedret
-    - unconvert
-    - whitespace
     - govet
     - gosimple
     - ineffassign
+    - misspell
+    - nakedret
+    - nolintlint
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unused
+    - whitespace
     # ToDo:
     #- gocritic
     #- golint

@@ -12,24 +12,24 @@ import (
 
 // Handler is what a server needs to implement the client-server protocol
 type Handler interface {
-	//handle COM_INIT_DB command, you can check whether the dbName is valid, or other.
+	// handle COM_INIT_DB command, you can check whether the dbName is valid, or other.
 	UseDB(dbName string) error
-	//handle COM_QUERY command, like SELECT, INSERT, UPDATE, etc...
-	//If Result has a Resultset (SELECT, SHOW, etc...), we will send this as the response, otherwise, we will send Result
+	// handle COM_QUERY command, like SELECT, INSERT, UPDATE, etc...
+	// If Result has a Resultset (SELECT, SHOW, etc...), we will send this as the response, otherwise, we will send Result
 	HandleQuery(query string) (*mysql.Result, error)
-	//handle COM_FILED_LIST command
+	// handle COM_FILED_LIST command
 	HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error)
-	//handle COM_STMT_PREPARE, params is the param number for this statement, columns is the column number
-	//context will be used later for statement execute
+	// handle COM_STMT_PREPARE, params is the param number for this statement, columns is the column number
+	// context will be used later for statement execute
 	HandleStmtPrepare(query string) (params int, columns int, context interface{}, err error)
-	//handle COM_STMT_EXECUTE, context is the previous one set in prepare
-	//query is the statement prepare query, and args is the params for this statement
+	// handle COM_STMT_EXECUTE, context is the previous one set in prepare
+	// query is the statement prepare query, and args is the params for this statement
 	HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error)
-	//handle COM_STMT_CLOSE, context is the previous one set in prepare
-	//this handler has no response
+	// handle COM_STMT_CLOSE, context is the previous one set in prepare
+	// this handler has no response
 	HandleStmtClose(context interface{}) error
-	//handle any other command that is not currently handled by the library,
-	//default implementation for this method will return an ER_UNKNOWN_ERROR
+	// handle any other command that is not currently handled by the library,
+	// default implementation for this method will return an ER_UNKNOWN_ERROR
 	HandleOtherCommand(cmd byte, data []byte) error
 }
 
@@ -184,8 +184,7 @@ func (c *Conn) dispatch(data []byte) interface{} {
 }
 
 // EmptyHandler is a mostly empty implementation for demonstration purposes
-type EmptyHandler struct {
-}
+type EmptyHandler struct{}
 
 // EmptyReplicationHandler is a empty handler that implements the replication protocol
 type EmptyReplicationHandler struct {

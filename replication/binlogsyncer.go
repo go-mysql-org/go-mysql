@@ -22,9 +22,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
-var (
-	errSyncRunning = errors.New("Sync is running, must Close first")
-)
+var errSyncRunning = errors.New("Sync is running, must Close first")
 
 // BinlogSyncerConfig is the configuration for BinlogSyncer.
 type BinlogSyncerConfig struct {
@@ -110,8 +108,8 @@ type BinlogSyncerConfig struct {
 	// https://mariadb.com/kb/en/library/annotate_rows_event/
 	DumpCommandFlag uint16
 
-	//Option function is used to set outside of BinlogSyncerConfig， between mysql connection and COM_REGISTER_SLAVE
-	//For MariaDB: slave_gtid_ignore_duplicates、skip_replication、slave_until_gtid
+	// Option function is used to set outside of BinlogSyncerConfig， between mysql connection and COM_REGISTER_SLAVE
+	// For MariaDB: slave_gtid_ignore_duplicates、skip_replication、slave_until_gtid
 	Option func(*client.Conn) error
 
 	// Set Logger
@@ -287,7 +285,7 @@ func (b *BinlogSyncer) registerSlave() error {
 		}
 	}
 
-	//set read timeout
+	// set read timeout
 	if b.cfg.ReadTimeout > 0 {
 		_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
 	}
@@ -306,8 +304,8 @@ func (b *BinlogSyncer) registerSlave() error {
 	// save last last connection id for kill
 	b.lastConnectionID = b.c.GetConnectionID()
 
-	//for mysql 5.6+, binlog has a crc32 checksum
-	//before mysql 5.6, this will not work, don't matter.:-)
+	// for mysql 5.6+, binlog has a crc32 checksum
+	// before mysql 5.6, this will not work, don't matter.:-)
 	if r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM'"); err != nil {
 		return errors.Trace(err)
 	} else {
@@ -622,7 +620,7 @@ func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
 	binary.LittleEndian.PutUint16(data[pos:], b.cfg.Port)
 	pos += 2
 
-	//replication rank, not used
+	// replication rank, not used
 	binary.LittleEndian.PutUint32(data[pos:], 0)
 	pos += 4
 
@@ -788,7 +786,7 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			continue
 		}
 
-		//set read timeout
+		// set read timeout
 		if b.cfg.ReadTimeout > 0 {
 			_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
 		}

@@ -109,7 +109,7 @@ func (s *cacheTestSuite) onAccept() {
 }
 
 func (s *cacheTestSuite) onConn(conn net.Conn) {
-	//co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
+	// co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
 	co, err := NewCustomizedConn(conn, s.server, s.credProvider, &testCacheHandler{s})
 	require.NoError(s.T(), err)
 	for {
@@ -141,7 +141,7 @@ func (s *cacheTestSuite) TestCache() {
 	t2 := utils.Now()
 
 	d1 := int(t2.Sub(t1).Nanoseconds() / 1e6)
-	//log.Debugf("first connection took %d milliseconds", d1)
+	// log.Debugf("first connection took %d milliseconds", d1)
 
 	require.GreaterOrEqual(s.T(), d1, delay)
 
@@ -158,7 +158,7 @@ func (s *cacheTestSuite) TestCache() {
 	t4 := utils.Now()
 
 	d2 := int(t4.Sub(t3).Nanoseconds() / 1e6)
-	//log.Debugf("second connection took %d milliseconds", d2)
+	// log.Debugf("second connection took %d milliseconds", d2)
 
 	require.Less(s.T(), d2, delay)
 	if s.db != nil {
@@ -182,7 +182,7 @@ func (h *testCacheHandler) handleQuery(query string, binary bool) (*mysql.Result
 	case "select":
 		var r *mysql.Resultset
 		var err error
-		//for handle go mysql driver select @@max_allowed_packet
+		// for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
 			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
 				{mysql.MaxPayloadLen},
@@ -232,6 +232,7 @@ func (h *testCacheHandler) HandleQuery(query string) (*mysql.Result, error) {
 func (h *testCacheHandler) HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error) {
 	return nil, nil
 }
+
 func (h *testCacheHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx interface{}, err error) {
 	return 0, 0, nil, nil
 }

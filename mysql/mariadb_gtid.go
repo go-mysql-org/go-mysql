@@ -50,7 +50,8 @@ func ParseMariadbGTID(str string) (*MariadbGTID, error) {
 	return &MariadbGTID{
 		DomainID:       uint32(domainID),
 		ServerID:       uint32(serverID),
-		SequenceNumber: sequenceID}, nil
+		SequenceNumber: sequenceID,
+	}, nil
 }
 
 func (gtid *MariadbGTID) String() string {
@@ -145,7 +146,7 @@ func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 // Update updates mariadb gtid set
 func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 	sp := strings.Split(GTIDStr, ",")
-	//todo, handle redundant same uuid
+	// todo, handle redundant same uuid
 	for i := 0; i < len(sp); i++ {
 		gtid, err := ParseMariadbGTID(sp[i])
 		if err != nil {

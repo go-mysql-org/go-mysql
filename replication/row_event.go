@@ -207,13 +207,13 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 	for i, t := range e.ColumnType {
 		switch t {
 		case mysql.MYSQL_TYPE_STRING:
-			var x = uint16(data[pos]) << 8 // real type
-			x += uint16(data[pos+1])       // pack or field length
+			x := uint16(data[pos]) << 8 // real type
+			x += uint16(data[pos+1])    // pack or field length
 			e.ColumnMeta[i] = x
 			pos += 2
 		case mysql.MYSQL_TYPE_NEWDECIMAL:
-			var x = uint16(data[pos]) << 8 // precision
-			x += uint16(data[pos+1])       // decimals
+			x := uint16(data[pos]) << 8 // precision
+			x += uint16(data[pos+1])    // decimals
 			e.ColumnMeta[i] = x
 			pos += 2
 		case mysql.MYSQL_TYPE_VAR_STRING,
@@ -1187,7 +1187,6 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 		var n int
 		var err error
 		row[i], n, err = e.decodeValue(data[pos:], e.Table.ColumnType[i], e.Table.ColumnMeta[i], isPartial)
-
 		if err != nil {
 			return 0, err
 		}
@@ -1216,7 +1215,7 @@ func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
 
 // see mysql sql/log_event.cc log_event_print_value
 func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool) (v interface{}, n int, err error) {
-	var length = 0
+	length := 0
 
 	if tp == mysql.MYSQL_TYPE_STRING {
 		if meta >= 256 {
@@ -1690,8 +1689,10 @@ func decodeDatetime2(data []byte, dec uint16) (interface{}, int, error) {
 	}, n, nil
 }
 
-const TIMEF_OFS int64 = 0x800000000000
-const TIMEF_INT_OFS int64 = 0x800000
+const (
+	TIMEF_OFS     int64 = 0x800000000000
+	TIMEF_INT_OFS int64 = 0x800000
+)
 
 func decodeTime2(data []byte, dec uint16) (string, int, error) {
 	// time  binary length

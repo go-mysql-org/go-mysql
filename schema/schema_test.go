@@ -13,8 +13,10 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-var schema = flag.String("schema", "test", "MySQL Database")
-var pwd = flag.String("pwd", "", "MySQL password")
+var (
+	schema = flag.String("schema", "test", "MySQL Database")
+	pwd    = flag.String("pwd", "", "MySQL password")
+)
 
 type schemaTestSuite struct {
 	suite.Suite

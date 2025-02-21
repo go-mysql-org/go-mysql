@@ -39,8 +39,7 @@ var (
 	namedValueCheckers []CheckNamedValueFunc
 )
 
-type driver struct {
-}
+type driver struct{}
 
 type connInfo struct {
 	standardDSN bool
@@ -109,7 +108,6 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 	)
 
 	ci, err := parseDSN(dsn)
-
 	if err != nil {
 		return nil, err
 	}
@@ -184,8 +182,10 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 
 type CheckNamedValueFunc func(*sqldriver.NamedValue) error
 
-var _ sqldriver.NamedValueChecker = &conn{}
-var _ sqldriver.Validator = &conn{}
+var (
+	_ sqldriver.NamedValueChecker = &conn{}
+	_ sqldriver.Validator         = &conn{}
+)
 
 type state struct {
 	valid bool

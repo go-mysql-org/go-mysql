@@ -204,8 +204,10 @@ func PutLengthEncodedInt(n uint64) []byte {
 		// handles case n <= 0xffffffffffffffff
 		// using 'default' instead of 'case' to avoid static analysis error
 		// SA4003: every value of type uint64 is <= math.MaxUint64
-		return []byte{0xfe, byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24),
-			byte(n >> 32), byte(n >> 40), byte(n >> 48), byte(n >> 56)}
+		return []byte{
+			0xfe, byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24),
+			byte(n >> 32), byte(n >> 40), byte(n >> 48), byte(n >> 56),
+		}
 	}
 }
 

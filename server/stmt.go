@@ -41,17 +41,17 @@ func (s *Stmt) ResetParams() {
 func (c *Conn) writePrepare(s *Stmt) error {
 	data := make([]byte, 4, 128)
 
-	//status ok
+	// status ok
 	data = append(data, 0)
-	//stmt id
+	// stmt id
 	data = append(data, mysql.Uint32ToBytes(s.ID)...)
-	//number columns
+	// number columns
 	data = append(data, mysql.Uint16ToBytes(uint16(s.Columns))...)
-	//number params
+	// number params
 	data = append(data, mysql.Uint16ToBytes(uint16(s.Params))...)
-	//filter [00]
+	// filter [00]
 	data = append(data, 0)
-	//warning count
+	// warning count
 	data = append(data, 0, 0)
 
 	if err := c.WritePacket(data); err != nil {
@@ -127,7 +127,7 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 		return nil, mysql.NewError(mysql.ER_UNKNOWN_ERROR, "unsupported flag CURSOR_TYPE_SCROLLABLE")
 	}
 
-	//skip iteration-count, always 1
+	// skip iteration-count, always 1
 	pos += 4
 
 	var nullBitmaps []byte
@@ -144,7 +144,7 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 		nullBitmaps = data[pos : pos+nullBitmapLen]
 		pos += nullBitmapLen
 
-		//new param bound flag
+		// new param bound flag
 		if data[pos] == 1 {
 			pos++
 			if len(data) < (pos + (paramNum << 1)) {

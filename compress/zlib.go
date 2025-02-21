@@ -27,8 +27,10 @@ var (
 	}
 )
 
-var _ io.WriteCloser = zlibWriter{}
-var _ io.ReadCloser = zlibReader{}
+var (
+	_ io.WriteCloser = zlibWriter{}
+	_ io.ReadCloser  = zlibReader{}
+)
 
 type zlibWriter struct {
 	w *zlib.Writer

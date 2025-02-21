@@ -1,12 +1,12 @@
 package replication
 
 const (
-	//we only support MySQL 5.0.0+ binlog format, maybe???
+	// we only support MySQL 5.0.0+ binlog format, maybe???
 	MinBinlogVersion = 4
 )
 
 var (
-	//binlog header [ fe `bin` ]
+	// binlog header [ fe `bin` ]
 	BinLogFileHeader = []byte{0xfe, 0x62, 0x69, 0x6e}
 
 	SemiSyncIndicator byte = 0xef

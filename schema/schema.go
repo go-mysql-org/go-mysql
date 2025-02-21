@@ -15,9 +15,11 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
-var ErrTableNotExist = errors.New("table is not exist")
-var ErrMissingTableMeta = errors.New("missing table meta")
-var HAHealthCheckSchema = "mysql.ha_health_check"
+var (
+	ErrTableNotExist    = errors.New("table is not exist")
+	ErrMissingTableMeta = errors.New("missing table meta")
+	HAHealthCheckSchema = "mysql.ha_health_check"
+)
 
 // Different column type
 const (

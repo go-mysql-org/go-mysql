@@ -12,9 +12,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-var (
-	ErrSkip = errors.New("Handler error, but skipped")
-)
+var ErrSkip = errors.New("Handler error, but skipped")
 
 type ParseHandler interface {
 	// Parse CHANGE MASTER TO MASTER_LOG_FILE=name, MASTER_LOG_POS=pos;
