@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
-	"slices"
 	"strings"
 )
 
@@ -245,7 +244,6 @@ func decodeVar(data []byte, pos uint64, unsigned bool) (interface{}, uint64, err
 	if len(data) < int(pos)+flen {
 		return 0, pos, fmt.Errorf("truncated data, expected length: %d", flen)
 	}
-	var tNum uint64
 	var tNumBytes [8]byte
 	copy(tNumBytes[:], data[pos:int(pos)+flen])
 	tNum := binary.LittleEndian.Uint64(tNumBytes[:])
