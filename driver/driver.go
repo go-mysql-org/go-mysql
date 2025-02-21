@@ -124,7 +124,6 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 		return nil, err
 	}
 	return ci.Connect(context.Background())
-
 }
 
 func (ci connInfo) Connect(ctx context.Context) (sqldriver.Conn, error) {
