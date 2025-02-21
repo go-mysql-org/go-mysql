@@ -11,11 +11,10 @@ func Example() {
 	// Connect MySQL at 127.0.0.1:3306, with user root, an empty password and database test
 	conn, err := client.Connect("127.0.0.1:3306", "root", "", "test")
 	// Or to use SSL/TLS connection if MySQL server supports TLS
-	//conn, err := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.UseSSL(true)})
-
+	// conn, err := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.UseSSL(true)})
 	// Or to set your own client-side certificates for identity verification for security
-	//tlsConfig := NewClientTLSConfig(caPem, certPem, keyPem, false, "your-server-name")
-	//conn, err := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.SetTLSConfig(tlsConfig)})
+	// tlsConfig := NewClientTLSConfig(caPem, certPem, keyPem, false, "your-server-name")
+	// conn, err := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.SetTLSConfig(tlsConfig)})
 	if err != nil {
 		msg := fmt.Sprintf(`
 This example needs a MySQL listening on 127.0.0.1:3006 with user "root" and 
