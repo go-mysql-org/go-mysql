@@ -246,28 +246,9 @@ func decodeVar(data []byte, pos uint64, unsigned bool) (interface{}, uint64, err
 		return 0, pos, fmt.Errorf("truncated data, expected length: %d", flen)
 	}
 	var tNum uint64
-	switch flen {
-	case 1:
-		tNum = uint64(data[pos])
-	case 2:
-		tNum = uint64(binary.LittleEndian.Uint16(data[pos : int(pos)+flen]))
-	case 3:
-		tNum = uint64(binary.LittleEndian.Uint32(
-			slices.Concat(data[pos:int(pos)+flen], []byte{0x0})))
-	case 4:
-		tNum = uint64(binary.LittleEndian.Uint32(data[pos : int(pos)+flen]))
-	case 5:
-		tNum = binary.LittleEndian.Uint64(
-			slices.Concat(data[pos:int(pos)+flen], []byte{0x0, 0x0, 0x0}))
-	case 6:
-		tNum = binary.LittleEndian.Uint64(
-			slices.Concat(data[pos:int(pos)+flen], []byte{0x0, 0x0}))
-	case 7:
-		tNum = binary.LittleEndian.Uint64(
-			slices.Concat(data[pos:int(pos)+flen], []byte{0x0}))
-	case 8:
-		tNum = binary.LittleEndian.Uint64(data[pos : int(pos)+flen])
-	}
+	var tNumBytes [8]byte
+	copy(tNumBytes[:], data[pos:int(pos)+flen])
+	tNum := binary.LittleEndian.Uint64(tNumBytes[:])
 	pos += uint64(flen)
 	if unsigned {
 		return tNum >> flen, pos, nil
