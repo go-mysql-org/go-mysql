@@ -207,6 +207,7 @@ func decodeString(data []byte, pos uint64) (string, uint64, error) {
 
 func decodeFixed(data []byte, pos uint64, intlen int) ([]byte, uint64, error) {
 	var b bytes.Buffer
+	b.Grow(intlen * 2) // output is between 1 and 2 times that of the input
 
 	for {
 		if len(data) < int(pos)+1 {
