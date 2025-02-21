@@ -3,6 +3,7 @@
 package driver
 
 import (
+	"context"
 	"crypto/tls"
 	"database/sql"
 	sqldriver "database/sql/driver"
@@ -185,6 +186,9 @@ type CheckNamedValueFunc func(*sqldriver.NamedValue) error
 var (
 	_ sqldriver.NamedValueChecker = &conn{}
 	_ sqldriver.Validator         = &conn{}
+	_ sqldriver.Conn              = &conn{}
+	_ sqldriver.ConnBeginTx       = &conn{}
+	_ sqldriver.QueryerContext    = &conn{}
 )
 
 type state struct {
@@ -242,11 +246,43 @@ func (c *conn) Begin() (sqldriver.Tx, error) {
 	return &tx{c.Conn}, nil
 }
 
+var isolationLevelTransactionIsolation = map[sql.IsolationLevel]string{
+	sql.LevelDefault:         "",
+	sql.LevelRepeatableRead:  "REPEATABLE READ",
+	sql.LevelReadCommitted:   "READ COMMITTED",
+	sql.LevelReadUncommitted: "READ UNCOMMITTED",
+	sql.LevelSerializable:    "SERIALIZABLE",
+}
+
+func (c *conn) BeginTx(ctx context.Context, opts sqldriver.TxOptions) (sqldriver.Tx, error) {
+	isolation := sql.IsolationLevel(opts.Isolation)
+	txIsolation, ok := isolationLevelTransactionIsolation[isolation]
+	if !ok {
+		return nil, fmt.Errorf("invalid mysql transaction isolation level %s", isolation)
+	}
+	err := c.Conn.BeginTx(ctx, opts.ReadOnly, txIsolation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &tx{c.Conn}, nil
+}
+
 func buildArgs(args []sqldriver.Value) []interface{} {
 	a := make([]interface{}, len(args))
 
 	for i, arg := range args {
 		a[i] = arg
+	}
+
+	return a
+}
+
+func buildNamedArgs(args []sqldriver.NamedValue) []interface{} {
+	a := make([]interface{}, len(args))
+
+	for i, arg := range args {
+		// TODO named parameter support
+		a[i] = arg.Value
 	}
 
 	return a
@@ -278,6 +314,15 @@ func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, err
 func (c *conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, error) {
 	a := buildArgs(args)
 	r, err := c.Conn.Execute(query, a...)
+	if err != nil {
+		return nil, c.state.replyError(err)
+	}
+	return newRows(r.Resultset)
+}
+
+func (c *conn) QueryContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Rows, error) {
+	a := buildNamedArgs(args)
+	r, err := c.Conn.ExecuteContext(ctx, query, a...)
 	if err != nil {
 		return nil, c.state.replyError(err)
 	}
