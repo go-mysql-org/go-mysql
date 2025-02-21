@@ -37,13 +37,11 @@ type Resultset struct {
 	StreamingDone bool
 }
 
-var (
-	resultsetPool = sync.Pool{
-		New: func() interface{} {
-			return &Resultset{}
-		},
-	}
-)
+var resultsetPool = sync.Pool{
+	New: func() interface{} {
+		return &Resultset{}
+	},
+}
 
 func NewResultset(fieldsCount int) *Resultset {
 	r := resultsetPool.Get().(*Resultset)

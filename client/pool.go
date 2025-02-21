@@ -569,9 +569,9 @@ func (pool *Pool) ping(conn *Conn) error {
 // So before call Close, Call PutConn to put all connections that in use back to connection pool first.
 func (pool *Pool) Close() {
 	pool.cancel()
-	//wait newConnectionProducer exit.
+	// wait newConnectionProducer exit.
 	pool.wg.Wait()
-	//close idle connections
+	// close idle connections
 	pool.synchro.Lock()
 	for _, connection := range pool.synchro.idleConnections {
 		pool.synchro.stats.TotalCount--

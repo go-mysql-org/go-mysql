@@ -77,7 +77,7 @@ e7574090-b123-11e8-8bb4-005056a29643:1'
 
 	for _, tt := range tbls {
 		reader := strings.NewReader(tt.input)
-		var handler = new(testParseHandler)
+		handler := new(testParseHandler)
 
 		err := Parse(reader, handler, true)
 		require.NoError(t, err)
@@ -157,10 +157,14 @@ func TestParseLine(t *testing.T) {
 		line     string
 		expected string
 	}{
-		{line: "INSERT INTO `test` VALUES (1, 'first', 'hello mysql; 2', 'e1', 'a,b');",
-			expected: "1, 'first', 'hello mysql; 2', 'e1', 'a,b'"},
-		{line: "INSERT INTO `test` VALUES (0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b');",
-			expected: "0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b'"},
+		{
+			line:     "INSERT INTO `test` VALUES (1, 'first', 'hello mysql; 2', 'e1', 'a,b');",
+			expected: "1, 'first', 'hello mysql; 2', 'e1', 'a,b'",
+		},
+		{
+			line:     "INSERT INTO `test` VALUES (0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b');",
+			expected: "0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b'",
+		},
 	}
 
 	f := func(c rune) bool {

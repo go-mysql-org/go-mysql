@@ -14,13 +14,13 @@ import (
 
 // StartBackup starts the backup process for the binary log and writes to the backup directory.
 func (b *BinlogSyncer) StartBackup(backupDir string, p mysql.Position, timeout time.Duration) error {
-	err := os.MkdirAll(backupDir, 0755)
+	err := os.MkdirAll(backupDir, 0o755)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	if b.cfg.SynchronousEventHandler == nil {
 		return b.StartBackupWithHandler(p, timeout, func(filename string) (io.WriteCloser, error) {
-			return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
+			return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0o644)
 		})
 	} else {
 		return b.StartSynchronousBackup(p, timeout)
@@ -37,7 +37,8 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p mysql.Position, timeout t
 //     If set to 0, a default very long timeout (30 days) is used instead.
 //   - handler: A function that takes a binlog filename and returns an WriteCloser for writing raw events to.
 func (b *BinlogSyncer) StartBackupWithHandler(p mysql.Position, timeout time.Duration,
-	handler func(binlogFilename string) (io.WriteCloser, error)) (retErr error) {
+	handler func(binlogFilename string) (io.WriteCloser, error),
+) (retErr error) {
 	if timeout == 0 {
 		// a very long timeout here
 		timeout = 30 * 3600 * 24 * time.Second

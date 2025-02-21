@@ -40,7 +40,7 @@ func (e *BinlogEvent) Dump(w io.Writer) {
 }
 
 type Event interface {
-	//Dump Event, format like python-mysql-replication
+	// Dump Event, format like python-mysql-replication
 	Dump(w io.Writer)
 
 	Decode(data []byte) error
@@ -49,10 +49,10 @@ type Event interface {
 type EventError struct {
 	Header *EventHeader
 
-	//Error message
+	// Error message
 	Err string
 
-	//Event data
+	// Event data
 	Data []byte
 }
 
@@ -201,9 +201,9 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 func (e *FormatDescriptionEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Version: %d\n", e.Version)
 	fmt.Fprintf(w, "Server version: %s\n", e.ServerVersion)
-	//fmt.Fprintf(w, "Create date: %s\n", time.Unix(int64(e.CreateTimestamp), 0).Format(TimeFormat))
+	// fmt.Fprintf(w, "Create date: %s\n", time.Unix(int64(e.CreateTimestamp), 0).Format(TimeFormat))
 	fmt.Fprintf(w, "Checksum algorithm: %d\n", e.ChecksumAlgorithm)
-	//fmt.Fprintf(w, "Event header lengths: \n%s", hex.Dump(e.EventTypeHeaderLengths))
+	// fmt.Fprintf(w, "Event header lengths: \n%s", hex.Dump(e.EventTypeHeaderLengths))
 	fmt.Fprintln(w)
 }
 
@@ -390,7 +390,7 @@ func (e *QueryEvent) Decode(data []byte) error {
 	e.Schema = data[pos : pos+int(schemaLength)]
 	pos += int(schemaLength)
 
-	//skip 0x00
+	// skip 0x00
 	pos++
 
 	if e.compressed {
@@ -409,7 +409,7 @@ func (e *QueryEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Slave proxy ID: %d\n", e.SlaveProxyID)
 	fmt.Fprintf(w, "Execution time: %d\n", e.ExecutionTime)
 	fmt.Fprintf(w, "Error code: %d\n", e.ErrorCode)
-	//fmt.Fprintf(w, "Status vars: \n%s", hex.Dump(e.StatusVars))
+	// fmt.Fprintf(w, "Status vars: \n%s", hex.Dump(e.StatusVars))
 	fmt.Fprintf(w, "Schema: %s\n", e.Schema)
 	fmt.Fprintf(w, "Query: %s\n", e.Query)
 	if e.GSet != nil {

@@ -91,7 +91,7 @@ func TestMariaDBForward(t *testing.T) {
 func TestParseMariaDBGTIDSet(t *testing.T) {
 	cases := []struct {
 		gtidStr     string
-		subGTIDs    map[uint32]map[uint32]string //domain ID => gtid string
+		subGTIDs    map[uint32]map[uint32]string // domain ID => gtid string
 		expectedStr []string                     // test String()
 		hasError    bool
 	}{
@@ -231,8 +231,11 @@ func TestMariaDBGTIDSetClone(t *testing.T) {
 }
 
 func TestMariaDBGTIDSetSortedString(t *testing.T) {
-	cases := [][]string{{"", ""}, {"1-1-1", "1-1-1"},
-		{"2-2-2,1-1-1,3-2-1", "1-1-1,2-2-2,3-2-1"}}
+	cases := [][]string{
+		{"", ""},
+		{"1-1-1", "1-1-1"},
+		{"2-2-2,1-1-1,3-2-1", "1-1-1,2-2-2,3-2-1"},
+	}
 
 	for _, strs := range cases {
 		gtidSet, err := ParseMariadbGTIDSet(strs[0])

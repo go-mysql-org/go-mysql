@@ -22,7 +22,7 @@ func (e *GenericEvent) Decode(data []byte) error {
 	return nil
 }
 
-//below events are generic events, maybe later I will consider handle some.
+// below events are generic events, maybe later I will consider handle some.
 
 // type StartEventV3 struct {
 // 	Version         uint16

@@ -78,7 +78,7 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 	//if !isAuthMethodAllowedByServer(defaultAuthMethod, allowedAuthMethods) {
 	//	panic(fmt.Sprintf("default auth method is not one of the allowed auth methods"))
 	//}
-	var capFlag = mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
+	capFlag := mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
 		mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION | mysql.CLIENT_PLUGIN_AUTH | mysql.CLIENT_CONNECT_ATTRS |
 		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
 	if tlsConfig != nil {

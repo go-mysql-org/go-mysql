@@ -333,7 +333,7 @@ func (h *mockHandler) handleQuery(query string, binary bool, args []interface{})
 	case "select":
 		var r *mysql.Resultset
 		var err error
-		//for handle go mysql driver select @@max_allowed_packet
+		// for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
 			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
 				{mysql.MaxPayloadLen},
