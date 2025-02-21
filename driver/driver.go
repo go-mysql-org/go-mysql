@@ -198,6 +198,7 @@ func (ci connInfo) Connect(ctx context.Context) (sqldriver.Conn, error) {
 			var ok bool
 			select {
 			case <-ctx.Done():
+				ctx = context.Background()
 				_ = c.Conn.Close()
 			case ctx, ok = <-contexts:
 				if !ok {
