@@ -103,7 +103,7 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 			e.CompressionType, e.compressionType())
 	}
 
-	var decoder, err = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+	decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 	if err != nil {
 		return err
 	}

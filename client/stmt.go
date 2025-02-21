@@ -83,7 +83,7 @@ func (s *Stmt) write(args ...interface{}) error {
 	paramValues := make([][]byte, paramsNum+qaLen)
 	paramNames := make([][]byte, paramsNum+qaLen)
 
-	//NULL-bitmap, length: (num-params+7)
+	// NULL-bitmap, length: (num-params+7)
 	nullBitmap := make([]byte, (paramsNum+qaLen+7)>>3)
 
 	length := 1 + 4 + 1 + 4 + ((paramsNum + 7) >> 3) + 1 + (paramsNum << 1)
@@ -195,7 +195,7 @@ func (s *Stmt) write(args ...interface{}) error {
 	}
 	data.WriteByte(flags)
 
-	//iteration-count, always 1
+	// iteration-count, always 1
 	data.Write([]byte{1, 0, 0, 0})
 
 	if paramsNum > 0 || (s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 && (flags&mysql.PARAMETER_COUNT_AVAILABLE > 0)) {
@@ -206,7 +206,7 @@ func (s *Stmt) write(args ...interface{}) error {
 		if paramsNum > 0 {
 			data.Write(nullBitmap)
 
-			//new-params-bound-flag
+			// new-params-bound-flag
 			data.WriteByte(newParamBoundFlag)
 
 			if newParamBoundFlag == 1 {
@@ -219,7 +219,7 @@ func (s *Stmt) write(args ...interface{}) error {
 					}
 				}
 
-				//value of each parameter
+				// value of each parameter
 				for _, v := range paramValues {
 					data.Write(v)
 				}
@@ -253,19 +253,19 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 
 	pos := 1
 
-	//for statement id
+	// for statement id
 	s.id = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
-	//number columns
+	// number columns
 	s.columns = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
-	//number params
+	// number params
 	s.params = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
-	//warnings
+	// warnings
 	s.warnings = int(binary.LittleEndian.Uint16(data[pos:]))
 	// pos += 2
 

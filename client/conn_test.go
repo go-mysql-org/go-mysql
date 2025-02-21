@@ -203,7 +203,7 @@ func (s *connTestSuite) TestSetQueryAttributes() {
 	err := s.c.SetQueryAttributes(qa)
 	require.NoError(s.T(), err)
 	expected := []mysql.QueryAttribute{
-		mysql.QueryAttribute{
+		{
 			Name:  "qattr1",
 			Value: "qattr1val",
 		},

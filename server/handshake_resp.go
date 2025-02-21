@@ -73,21 +73,21 @@ func (c *Conn) decodeFirstPart(data []byte) (newData []byte, pos int, err error)
 		return nil, 0, errors.New("CLIENT_PROTOCOL_41 compatible client is required")
 	}
 
-	//capability
+	// capability
 	c.capability = binary.LittleEndian.Uint32(data[:4])
 	if c.capability&mysql.CLIENT_SECURE_CONNECTION == 0 {
 		return nil, 0, errors.New("CLIENT_SECURE_CONNECTION compatible client is required")
 	}
 	pos += 4
 
-	//skip max packet size
+	// skip max packet size
 	pos += 4
 
 	// connection's default character set as defined
 	c.charset = data[pos]
 	pos++
 
-	//skip reserved 23[00]
+	// skip reserved 23[00]
 	pos += 23
 
 	// is this a SSLRequest packet?
@@ -109,7 +109,7 @@ func (c *Conn) decodeFirstPart(data []byte) (newData []byte, pos int, err error)
 }
 
 func (c *Conn) readUserName(data []byte, pos int) (int, error) {
-	//user name
+	// user name
 	user := string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
 	pos += len(user) + 1
 	c.user = user

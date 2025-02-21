@@ -252,6 +252,7 @@ func (c *Canal) updateTable(header *replication.EventHeader, db, table string) (
 	}
 	return
 }
+
 func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	var newDelay uint32
 	now := uint32(utils.Now().Unix())

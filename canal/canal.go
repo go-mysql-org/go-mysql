@@ -58,8 +58,10 @@ type Canal struct {
 }
 
 // canal will retry fetching unknown table's meta after UnknownTableRetryPeriod
-var UnknownTableRetryPeriod = time.Second * time.Duration(10)
-var ErrExcludedTable = errors.New("excluded table meta")
+var (
+	UnknownTableRetryPeriod = time.Second * time.Duration(10)
+	ErrExcludedTable        = errors.New("excluded table meta")
+)
 
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)

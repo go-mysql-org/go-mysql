@@ -19,7 +19,6 @@ func (c *Conn) readUntilEOF() (err error) {
 
 	for {
 		data, err = c.ReadPacket()
-
 		if err != nil {
 			return
 		}
@@ -37,7 +36,7 @@ func (c *Conn) isEOFPacket(data []byte) bool {
 
 func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 	var n int
-	var pos = 1
+	pos := 1
 
 	r := mysql.NewResultReserveResultset(0)
 
@@ -69,7 +68,7 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 func (c *Conn) handleErrorPacket(data []byte) error {
 	e := new(mysql.MyError)
 
-	var pos = 1
+	pos := 1
 
 	e.Code = binary.LittleEndian.Uint16(data[pos:])
 	pos += 2
@@ -334,7 +333,7 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *mysql.Re
 }
 
 func (c *Conn) readResultColumns(result *mysql.Result) (err error) {
-	var i = 0
+	i := 0
 	var data []byte
 
 	for {
@@ -413,7 +412,6 @@ func (c *Conn) readResultRows(result *mysql.Result, isBinary bool) (err error) {
 
 	for i := range result.Values {
 		result.Values[i], err = result.RowDatas[i].Parse(result.Fields, isBinary, result.Values[i])
-
 		if err != nil {
 			return errors.Trace(err)
 		}

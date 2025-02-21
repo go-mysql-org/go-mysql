@@ -44,9 +44,7 @@ const (
 	jsonbValueEntrySizeLarge = 1 + jsonbLargeOffsetSize
 )
 
-var (
-	ErrCorruptedJSONDiff = fmt.Errorf("corrupted JSON diff") // ER_CORRUPTED_JSON_DIFF
-)
+var ErrCorruptedJSONDiff = fmt.Errorf("corrupted JSON diff") // ER_CORRUPTED_JSON_DIFF
 
 type (
 	// JsonDiffOperation is an enum that describes what kind of operation a JsonDiff object represents.

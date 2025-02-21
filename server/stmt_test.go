@@ -9,7 +9,7 @@ import (
 func TestHandleStmtExecute(t *testing.T) {
 	c := Conn{}
 	c.stmts = map[uint32]*Stmt{
-		1: &Stmt{},
+		1: {},
 	}
 	testcases := []struct {
 		data    []byte

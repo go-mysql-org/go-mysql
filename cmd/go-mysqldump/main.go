@@ -53,10 +53,10 @@ func main() {
 		d.AddDatabases(subs...)
 	}
 
-	var f = os.Stdout
+	f := os.Stdout
 
 	if len(*output) > 0 {
-		f, err = os.OpenFile(*output, os.O_CREATE|os.O_WRONLY, 0644)
+		f, err = os.OpenFile(*output, os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
 			fmt.Printf("Open file error %v\n", errors.ErrorStack(err))
 			os.Exit(1)

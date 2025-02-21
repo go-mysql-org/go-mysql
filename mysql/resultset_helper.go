@@ -212,7 +212,6 @@ func BuildSimpleTextResultset(names []string, values [][]interface{}) (*Resultse
 				}
 			}
 			b, err = FormatTextValue(value)
-
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -269,7 +268,6 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 			}
 
 			b, err = formatBinaryValue(value)
-
 			if err != nil {
 				return nil, errors.Trace(err)
 			}

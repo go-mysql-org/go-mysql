@@ -216,8 +216,10 @@ func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
 	}
 }
 
-type noResponse struct{}
-type eofResponse struct{}
+type (
+	noResponse  struct{}
+	eofResponse struct{}
+)
 
 func (c *Conn) WriteValue(value interface{}) error {
 	switch v := value.(type) {

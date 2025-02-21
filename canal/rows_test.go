@@ -28,20 +28,24 @@ func TestRowsEvent_handleUnsigned(t *testing.T) {
 					// column 10 is out of range and should be ignored, don't panic.
 					UnsignedColumns: []int{1, 3, 5, 7, 9, 10},
 				},
-				Rows: [][]interface{}{{
-					int8(8), int8(8),
-					int16(16), int16(16),
-					int32(32), int32(32),
-					int64(64), int64(64),
-					int(128), int(128)},
+				Rows: [][]interface{}{
+					{
+						int8(8), int8(8),
+						int16(16), int16(16),
+						int32(32), int32(32),
+						int64(64), int64(64),
+						int(128), int(128),
+					},
 				},
 			},
-			wantRows: [][]interface{}{{
-				int8(8), uint8(8),
-				int16(16), uint16(16),
-				int32(32), uint32(32),
-				int64(64), uint64(64),
-				int(128), uint(128)},
+			wantRows: [][]interface{}{
+				{
+					int8(8), uint8(8),
+					int16(16), uint16(16),
+					int32(32), uint32(32),
+					int64(64), uint64(64),
+					int(128), uint(128),
+				},
 			},
 		},
 	}

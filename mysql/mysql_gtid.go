@@ -406,7 +406,7 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 
 	sp := strings.Split(str, ",")
 
-	//todo, handle redundant same uuid
+	// todo, handle redundant same uuid
 	for i := 0; i < len(sp); i++ {
 		if set, err := ParseUUIDSet(sp[i]); err != nil {
 			return nil, errors.Trace(err)
