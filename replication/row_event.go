@@ -1154,10 +1154,8 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 	for ; col+8 <= int(e.ColumnCount); col += 8 {
 		count += bits.OnesCount8(bitmap[col>>3])
 	}
-	for ; col < int(e.ColumnCount); col++ {
-		if isBitSet(bitmap, col) {
-			count++
-		}
+	if col < int(e.ColumnCount) {
+		count += bits.OnesCount8(bitmap[col>>3] & byte((1<<(int(e.ColumnCount)-col))-1))
 	}
 	skips := make([]int, 0, int(e.ColumnCount)-count)
 	count = bitmapByteSize(count)
