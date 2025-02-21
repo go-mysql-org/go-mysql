@@ -35,8 +35,6 @@ type Conn struct {
 	// Connection read and write timeouts to set on the connection
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
-	contexts     chan context.Context
-	closed       bool
 
 	// The buffer size to use in the packet connection
 	BufferSize int
@@ -138,7 +136,6 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 	c.password = password
 	c.db = dbName
 	c.proto = network
-	c.contexts = make(chan context.Context)
 
 	// use default charset here, utf-8
 	c.charset = mysql.DEFAULT_CHARSET
@@ -187,21 +184,6 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 		}
 	}
 
-	go func() {
-		ctx := context.Background()
-		for {
-			var ok bool
-			select {
-			case <-ctx.Done():
-				_ = c.Conn.SetDeadline(time.Unix(0, 0))
-			case ctx, ok = <-c.contexts:
-				if !ok {
-					return
-				}
-			}
-		}
-	}()
-
 	return c, nil
 }
 
@@ -226,19 +208,8 @@ func (c *Conn) handshake() error {
 	return nil
 }
 
-func (c *Conn) watchCtx(ctx context.Context) func() {
-	c.contexts <- ctx
-	return func() {
-		c.contexts <- context.Background()
-	}
-}
-
 // Close directly closes the connection. Use Quit() to first send COM_QUIT to the server and then close the connection.
 func (c *Conn) Close() error {
-	if !c.closed {
-		close(c.contexts)
-		c.closed = true
-	}
 	return c.Conn.Close()
 }
 
@@ -338,11 +309,6 @@ func (c *Conn) Execute(command string, args ...interface{}) (*mysql.Result, erro
 	}
 }
 
-func (c *Conn) ExecuteContext(ctx context.Context, command string, args ...interface{}) (*mysql.Result, error) {
-	defer c.watchCtx(ctx)
-	return c.Execute(command, args...)
-}
-
 // ExecuteMultiple will call perResultCallback for every result of the multiple queries
 // that are executed.
 //
@@ -397,11 +363,6 @@ func (c *Conn) ExecuteMultiple(query string, perResultCallback ExecPerResultCall
 	return mysql.NewResult(rs), nil
 }
 
-func (c *Conn) ExecuteMultipleContext(ctx context.Context, query string, perResultCallback ExecPerResultCallback) (*mysql.Result, error) {
-	defer c.watchCtx(ctx)
-	return c.ExecuteMultiple(query, perResultCallback)
-}
-
 // ExecuteSelectStreaming will call perRowCallback for every row in resultset
 // WITHOUT saving any row data to Result.{Values/RawPkg/RowDatas} fields.
 // When given, perResultCallback will be called once per result
@@ -415,19 +376,12 @@ func (c *Conn) ExecuteSelectStreaming(command string, result *mysql.Result, perR
 	return c.readResultStreaming(false, result, perRowCallback, perResultCallback)
 }
 
-func (c *Conn) ExecuteSelectStreamingContext(ctx context.Context, command string, result *mysql.Result, perRowCallback SelectPerRowCallback, perResultCallback SelectPerResultCallback) error {
-	defer c.watchCtx(ctx)
-	return c.ExecuteSelectStreaming(command, result, perRowCallback, perResultCallback)
-}
-
 func (c *Conn) Begin() error {
 	_, err := c.exec("BEGIN")
 	return errors.Trace(err)
 }
 
-func (c *Conn) BeginTx(ctx context.Context, readOnly bool, txIsolation string) error {
-	defer c.watchCtx(ctx)()
-
+func (c *Conn) BeginTx(readOnly bool, txIsolation string) error {
 	if txIsolation != "" {
 		if _, err := c.exec("SET TRANSACTION ISOLATION LEVEL " + txIsolation); err != nil {
 			return errors.Trace(err)
