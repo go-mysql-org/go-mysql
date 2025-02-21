@@ -560,11 +560,8 @@ func (c *Conn) execSend(query string) error {
 func (c *Conn) CapabilityString() string {
 	capability := c.capability
 	caps := make([]string, 0, bits.OnesCount32(capability))
-	for i := 0; capability != 0; i++ {
-		field := uint32(1 << i)
-		if capability&field == 0 {
-			continue
-		}
+	for capability != 0 {
+		field := uint32(1 << bits.TrailingZeros32(capability))
 		capability ^= field
 
 		switch field {
@@ -645,11 +642,8 @@ func (c *Conn) CapabilityString() string {
 func (c *Conn) StatusString() string {
 	status := c.status
 	stats := make([]string, 0, bits.OnesCount16(status))
-	for i := 0; status != 0; i++ {
-		field := uint16(1 << i)
-		if status&field == 0 {
-			continue
-		}
+	for status != 0 {
+		field := uint16(1 << bits.TrailingZeros16(status))
 		status ^= field
 
 		switch field {
