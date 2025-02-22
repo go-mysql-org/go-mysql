@@ -357,7 +357,6 @@ func buildNamedArgs(args []sqldriver.NamedValue) []interface{} {
 	a := make([]interface{}, len(args))
 
 	for i, arg := range args {
-		// TODO named parameter support
 		a[i] = arg.Value
 	}
 
