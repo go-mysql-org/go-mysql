@@ -98,7 +98,7 @@ func (f FieldIntVar) String() string {
 	return fmt.Sprintf("%d", f.Value)
 }
 
-// FieldUintVar is using the usigned integer variant of the 'varlen_integer_format'
+// FieldUintVar is using the unsigned integer variant of the 'varlen_integer_format'
 // and encodes a value as a byte sequence of 1-9 bytes depending on the value.
 type FieldUintVar struct {
 	Value uint64
