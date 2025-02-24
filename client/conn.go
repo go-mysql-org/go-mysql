@@ -382,6 +382,21 @@ func (c *Conn) Begin() error {
 	return errors.Trace(err)
 }
 
+func (c *Conn) BeginTx(readOnly bool, txIsolation string) error {
+	if txIsolation != "" {
+		if _, err := c.exec("SET TRANSACTION ISOLATION LEVEL " + txIsolation); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	var err error
+	if readOnly {
+		_, err = c.exec("START TRANSACTION READ ONLY")
+	} else {
+		_, err = c.exec("START TRANSACTION")
+	}
+	return errors.Trace(err)
+}
+
 func (c *Conn) Commit() error {
 	_, err := c.exec("COMMIT")
 	return errors.Trace(err)
