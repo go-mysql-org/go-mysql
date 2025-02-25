@@ -2,6 +2,7 @@ package canal
 
 import (
 	"crypto/tls"
+	"log/slog"
 	"math/rand"
 	"net"
 	"os"
@@ -9,8 +10,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-log/loggers"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -101,7 +100,7 @@ type Config struct {
 	TLSConfig *tls.Config
 
 	// Set Logger
-	Logger loggers.Advanced
+	Logger *slog.Logger
 
 	// Set Dialer
 	Dialer client.Dialer
@@ -150,8 +149,7 @@ func NewDefaultConfig() *Config {
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
 
-	streamHandler, _ := log.NewStreamHandler(os.Stdout)
-	c.Logger = log.NewDefault(streamHandler)
+	c.Logger = slog.Default()
 
 	dialer := &net.Dialer{}
 	c.Dialer = dialer.DialContext

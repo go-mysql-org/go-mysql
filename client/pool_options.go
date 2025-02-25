@@ -1,12 +1,13 @@
 package client
 
 import (
+	"log/slog"
 	"time"
 )
 
 type (
 	poolOptions struct {
-		logFunc LogFunc
+		logger *slog.Logger
 
 		minAlive int
 		maxAlive int
@@ -40,9 +41,9 @@ func WithPoolLimits(minAlive, maxAlive, maxIdle int) PoolOption {
 	}
 }
 
-func WithLogFunc(f LogFunc) PoolOption {
+func WithLogger(logger *slog.Logger) PoolOption {
 	return func(o *poolOptions) {
-		o.logFunc = f
+		o.logger = logger
 	}
 }
 

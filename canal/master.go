@@ -1,10 +1,10 @@
 package canal
 
 import (
+	"log/slog"
 	"sync"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/siddontang/go-log/loggers"
 )
 
 type masterInfo struct {
@@ -16,11 +16,11 @@ type masterInfo struct {
 
 	timestamp uint32
 
-	logger loggers.Advanced
+	logger *slog.Logger
 }
 
 func (m *masterInfo) Update(pos mysql.Position) {
-	m.logger.Debugf("update master position %s", pos)
+	m.logger.Debug("update master position", slog.Any("pos", pos))
 
 	m.Lock()
 	m.pos = pos
@@ -28,7 +28,7 @@ func (m *masterInfo) Update(pos mysql.Position) {
 }
 
 func (m *masterInfo) UpdateTimestamp(ts uint32) {
-	m.logger.Debugf("update master timestamp %d", ts)
+	m.logger.Debug("update master timestamp", slog.Int64("ts", int64(ts)))
 
 	m.Lock()
 	m.timestamp = ts
@@ -36,7 +36,7 @@ func (m *masterInfo) UpdateTimestamp(ts uint32) {
 }
 
 func (m *masterInfo) UpdateGTIDSet(gset mysql.GTIDSet) {
-	m.logger.Debugf("update master gtid set %s", gset)
+	m.logger.Debug("update master gtid set", slog.Any("gset", gset))
 
 	m.Lock()
 	m.gset = gset

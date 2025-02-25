@@ -147,7 +147,6 @@ package main
 
 import (
 	"github.com/go-mysql-org/go-mysql/canal"
-	"github.com/siddontang/go-log/log"
 )
 
 type MyEventHandler struct {
@@ -491,26 +490,7 @@ We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driv
 
 ## Logging
 
-Logging by default is send to stdout.
-
-To disable logging completely:
-```go
-import "github.com/siddontang/go-log/log"
-...
-        nullHandler, _ := log.NewNullHandler()
-        cfg.Logger = log.NewDefault(nullHandler)
-```
-
-To write logging to any [`io.Writer`](https://pkg.go.dev/io#Writer):
-```go
-import "github.com/siddontang/go-log/log"
-...
-        w := ...
-        streamHandler, _ := log.NewStreamHandler(w)
-        cfg.Logger = log.NewDefault(streamHandler)
-```
-
-Or you can implement your own [`log.Handler`](https://pkg.go.dev/github.com/siddontang/go-log/log#Handler).
+Logging uses log/slog.
 
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
