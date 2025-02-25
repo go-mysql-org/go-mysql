@@ -360,7 +360,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	var (
 		compressedLength, uncompressedLength int
 		payload                              *bytes.Buffer
-		compressedHeader                     = make([]byte, 7)
+		compressedHeader                     [7]byte
 	)
 
 	if len(data) > MinCompressionLength {
@@ -406,7 +406,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	compressedHeader[4] = byte(uncompressedLength)
 	compressedHeader[5] = byte(uncompressedLength >> 8)
 	compressedHeader[6] = byte(uncompressedLength >> 16)
-	if _, err = compressedPacket.Write(compressedHeader); err != nil {
+	if _, err = compressedPacket.Write(compressedHeader[:]); err != nil {
 		return 0, err
 	}
 	c.CompressedSequence++
