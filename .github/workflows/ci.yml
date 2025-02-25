@@ -110,6 +110,9 @@ jobs:
       matrix:
         arch: [ "amd64", "arm64", "arm" ]
         os: [ "linux", "freebsd", "darwin" ]
+        exclude:
+          - arch: "arm"
+            os: "darwin"
     name: platforms
     runs-on: ubuntu-latest
     steps:
