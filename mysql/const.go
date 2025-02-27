@@ -24,6 +24,7 @@ const (
 	AUTH_CLEAR_PASSWORD        = "mysql_clear_password"
 	AUTH_CACHING_SHA2_PASSWORD = "caching_sha2_password"
 	AUTH_SHA256_PASSWORD       = "sha256_password"
+	AUTH_MARIADB_ED25519       = "client_ed25519"
 )
 
 // SERVER_STATUS_flags_enum

@@ -69,10 +69,10 @@ func (b *BinlogSyncer) StartBackupWithHandler(p mysql.Position, timeout time.Dur
 		}
 	}()
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
+	for {
 		select {
 		case <-ctx.Done():
 			return nil

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math/bits"
 	"net"
 	"runtime"
 	"runtime/debug"
@@ -381,6 +382,21 @@ func (c *Conn) Begin() error {
 	return errors.Trace(err)
 }
 
+func (c *Conn) BeginTx(readOnly bool, txIsolation string) error {
+	if txIsolation != "" {
+		if _, err := c.exec("SET TRANSACTION ISOLATION LEVEL " + txIsolation); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	var err error
+	if readOnly {
+		_, err = c.exec("START TRANSACTION READ ONLY")
+	} else {
+		_, err = c.exec("START TRANSACTION")
+	}
+	return errors.Trace(err)
+}
+
 func (c *Conn) Commit() error {
 	_, err := c.exec("COMMIT")
 	return errors.Trace(err)
@@ -557,13 +573,10 @@ func (c *Conn) execSend(query string) error {
 // separated by "|". Examples of capability names are CLIENT_DEPRECATE_EOF and CLIENT_PROTOCOL_41.
 // These are defined as constants in the mysql package.
 func (c *Conn) CapabilityString() string {
-	var caps []string
 	capability := c.capability
-	for i := 0; capability != 0; i++ {
-		field := uint32(1 << i)
-		if capability&field == 0 {
-			continue
-		}
+	caps := make([]string, 0, bits.OnesCount32(capability))
+	for capability != 0 {
+		field := uint32(1 << bits.TrailingZeros32(capability))
 		capability ^= field
 
 		switch field {
@@ -642,13 +655,10 @@ func (c *Conn) CapabilityString() string {
 // StatusString returns a "|" separated list of status fields. Example status values are SERVER_QUERY_WAS_SLOW and SERVER_STATUS_AUTOCOMMIT.
 // These are defined as constants in the mysql package.
 func (c *Conn) StatusString() string {
-	var stats []string
 	status := c.status
-	for i := 0; status != 0; i++ {
-		field := uint16(1 << i)
-		if status&field == 0 {
-			continue
-		}
+	stats := make([]string, 0, bits.OnesCount16(status))
+	for status != 0 {
+		field := uint16(1 << bits.TrailingZeros16(status))
 		status ^= field
 
 		switch field {

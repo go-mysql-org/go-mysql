@@ -15,7 +15,7 @@ import (
 const defaultAuthPluginName = mysql.AUTH_NATIVE_PASSWORD
 
 // defines the supported auth plugins
-var supportedAuthPlugins = []string{mysql.AUTH_NATIVE_PASSWORD, mysql.AUTH_SHA256_PASSWORD, mysql.AUTH_CACHING_SHA2_PASSWORD}
+var supportedAuthPlugins = []string{mysql.AUTH_NATIVE_PASSWORD, mysql.AUTH_SHA256_PASSWORD, mysql.AUTH_CACHING_SHA2_PASSWORD, mysql.AUTH_MARIADB_ED25519}
 
 // helper function to determine what auth methods are allowed by this client
 func authPluginAllowed(pluginName string) bool {
@@ -172,6 +172,15 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 			// see: https://dev.mysql.com/doc/internals/en/public-key-retrieval.html
 			return []byte{1}, false, nil
 		}
+	case mysql.AUTH_MARIADB_ED25519:
+		if len(authData) != 32 {
+			return nil, false, mysql.ErrMalformPacket
+		}
+		res, err := mysql.CalcEd25519Password(authData, c.password)
+		if err != nil {
+			return nil, false, err
+		}
+		return res, false, nil
 	default:
 		// not reachable
 		return nil, false, fmt.Errorf("auth plugin '%s' is not supported", c.authPluginName)
@@ -195,7 +204,7 @@ func (c *Conn) genAttributes() []byte {
 // See: http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
 func (c *Conn) writeAuthHandshake() error {
 	if !authPluginAllowed(c.authPluginName) {
-		return fmt.Errorf("unknow auth plugin name '%s'", c.authPluginName)
+		return fmt.Errorf("unknown auth plugin name '%s'", c.authPluginName)
 	}
 
 	// Set default client capabilities that reflect the abilities of this library
