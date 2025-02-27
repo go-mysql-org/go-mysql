@@ -87,6 +87,39 @@ func (f FieldIntFixed) String() string {
 	return fmt.Sprintf("0x%x", f.Value)
 }
 
+func (f *FieldIntFixed) decode(data []byte, pos uint64) (uint64, error) {
+	var b bytes.Buffer
+	b.Grow(f.Length * 2) // output is between 1 and 2 times that of the input
+
+	for {
+		if len(data) < int(pos)+1 {
+			return pos, errors.New("data truncated")
+		}
+		if data[pos]%2 == 0 {
+			b.WriteByte(data[pos] >> 1)
+		} else {
+			if len(data) < int(pos)+2 {
+				return pos, errors.New("data truncated")
+			}
+			switch data[pos+1] {
+			case 0x2:
+				b.WriteByte((data[pos] >> 2) + 0x80)
+			case 0x3:
+				b.WriteByte((data[pos] >> 2) + 0xc0)
+			default:
+				return pos, fmt.Errorf("unknown decoding for %v", data[pos])
+			}
+			pos++
+		}
+		pos++
+		if b.Len() == f.Length {
+			break
+		}
+	}
+	f.Value = b.Bytes()
+	return pos, nil
+}
+
 // FieldIntVar is using the signed integer variant of the 'varlen_integer_format'
 // and encodes a value as a byte sequence of 1-9 bytes depending on the value.
 type FieldIntVar struct {
@@ -95,6 +128,20 @@ type FieldIntVar struct {
 
 func (f FieldIntVar) String() string {
 	return fmt.Sprintf("%d", f.Value)
+}
+
+func (f *FieldIntVar) decode(data []byte, pos uint64) (uint64, error) {
+	var val interface{}
+	val, pos, err := decodeVar(data, pos, false)
+	if err != nil {
+		return pos, err
+	}
+	if intval, ok := val.(int64); ok {
+		f.Value = intval
+	} else {
+		return pos, errors.New("unexpected type, expecting int64")
+	}
+	return pos, nil
 }
 
 // FieldUintVar is using the unsigned integer variant of the 'varlen_integer_format'
@@ -107,9 +154,36 @@ func (f FieldUintVar) String() string {
 	return fmt.Sprintf("%d", f.Value)
 }
 
+func (f *FieldUintVar) decode(data []byte, pos uint64) (uint64, error) {
+	var val interface{}
+	val, pos, err := decodeVar(data, pos, true)
+	if err != nil {
+		return pos, err
+	}
+	if uintval, ok := val.(uint64); ok {
+		f.Value = uintval
+	} else {
+		return pos, errors.New("unexpected type, expecting uint64")
+	}
+	return pos, nil
+}
+
 // FieldString is a 'string_format' field
 type FieldString struct {
 	Value string
+}
+
+func (f *FieldString) decode(data []byte, pos uint64) (uint64, error) {
+	if len(data) < int(pos)+1 {
+		return pos, errors.New("string truncated, expected at least one byte")
+	}
+	strLen := int(data[pos] >> 1)
+	pos++
+	if len(data) < int(pos)+strLen {
+		return pos, fmt.Errorf("string truncated, expected length: %d", strLen)
+	}
+	f.Value = string(data[pos : pos+uint64(strLen)])
+	return pos + uint64(strLen), nil
 }
 
 func (f FieldString) String() string {
@@ -151,37 +225,25 @@ func Unmarshal(data []byte, v interface{}) error {
 			var err error
 			switch f := m.Fields[i].Type.(type) {
 			case FieldIntFixed:
-				f.Value, n, err = decodeFixed(data, pos, f.Length)
+				n, err = f.decode(data, pos)
 				if err != nil {
 					return err
 				}
 				m.Fields[i].Type = f
 			case FieldUintVar:
-				var val interface{}
-				val, n, err = decodeVar(data, pos, true)
+				n, err = f.decode(data, pos)
 				if err != nil {
 					return err
-				}
-				if uintval, ok := val.(uint64); ok {
-					f.Value = uintval
-				} else {
-					return errors.New("unexpected type, expecting uint64")
 				}
 				m.Fields[i].Type = f
 			case FieldIntVar:
-				var val interface{}
-				val, n, err = decodeVar(data, pos, false)
+				n, err = f.decode(data, pos)
 				if err != nil {
 					return err
 				}
-				if intval, ok := val.(int64); ok {
-					f.Value = intval
-				} else {
-					return errors.New("unexpected type, expecting int64")
-				}
 				m.Fields[i].Type = f
 			case FieldString:
-				f.Value, n, err = decodeString(data, pos)
+				n, err = f.decode(data, pos)
 				if err != nil {
 					return err
 				}
@@ -196,50 +258,6 @@ func Unmarshal(data []byte, v interface{}) error {
 		return fmt.Errorf("unsupported type: %T", v)
 	}
 	return nil
-}
-
-func decodeString(data []byte, pos uint64) (string, uint64, error) {
-	if len(data) < int(pos)+1 {
-		return "", pos, errors.New("string truncated, expected at least one byte")
-	}
-	strLen := int(data[pos] >> 1)
-	pos++
-	if len(data) < int(pos)+strLen {
-		return "", pos, fmt.Errorf("string truncated, expected length: %d", strLen)
-	}
-	return string(data[pos : pos+uint64(strLen)]), pos + uint64(strLen), nil
-}
-
-func decodeFixed(data []byte, pos uint64, intlen int) ([]byte, uint64, error) {
-	var b bytes.Buffer
-	b.Grow(intlen * 2) // output is between 1 and 2 times that of the input
-
-	for {
-		if len(data) < int(pos)+1 {
-			return b.Bytes(), pos, errors.New("data truncated")
-		}
-		if data[pos]%2 == 0 {
-			b.WriteByte(data[pos] >> 1)
-		} else {
-			if len(data) < int(pos)+2 {
-				return b.Bytes(), pos, errors.New("data truncated")
-			}
-			switch data[pos+1] {
-			case 0x2:
-				b.WriteByte((data[pos] >> 2) + 0x80)
-			case 0x3:
-				b.WriteByte((data[pos] >> 2) + 0xc0)
-			default:
-				return nil, pos, fmt.Errorf("unknown decoding for %v", data[pos])
-			}
-			pos++
-		}
-		pos++
-		if b.Len() == intlen {
-			break
-		}
-	}
-	return b.Bytes(), pos, nil
 }
 
 func decodeVar(data []byte, pos uint64, unsigned bool) (interface{}, uint64, error) {

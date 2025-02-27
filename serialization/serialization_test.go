@@ -70,11 +70,14 @@ func TestDecodeFixed(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		actual, _, err := decodeFixed(tc.input, 0, tc.len)
+		f := FieldIntFixed{
+			Length: tc.len,
+		}
+		_, err := f.decode(tc.input, 0)
 		if tc.err == "" {
 			require.NoError(t, err)
-			require.Equal(t, tc.result, actual)
-			require.Equal(t, tc.len, len(actual))
+			require.Equal(t, tc.result, f.Value)
+			require.Equal(t, tc.len, len(f.Value))
 		} else {
 			require.ErrorContains(t, err, tc.err)
 		}
@@ -110,10 +113,11 @@ func TestDecodeString(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		s, _, err := decodeString(tc.input, 0)
+		f := FieldString{}
+		_, err := f.decode(tc.input, 0)
 		if tc.err == "" {
 			require.NoError(t, err)
-			require.Equal(t, tc.result, s)
+			require.Equal(t, tc.result, f.Value)
 		} else {
 			require.ErrorContains(t, err, tc.err)
 		}
