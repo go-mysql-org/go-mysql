@@ -553,11 +553,10 @@ func (e *GTIDEvent) OriginalCommitTime() time.Time {
 // This is similar to GTIDEvent, but it has a tag and uses a different serialization format.
 type GtidTaggedLogEvent struct {
 	GTIDEvent
-	msg serialization.Message
 }
 
 func (e *GtidTaggedLogEvent) Decode(data []byte) error {
-	e.msg = serialization.Message{
+	msg := serialization.Message{
 		Format: serialization.Format{
 			Fields: []serialization.Field{
 				{
@@ -618,12 +617,12 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		},
 	}
 
-	err := serialization.Unmarshal(data, &e.msg)
+	err := serialization.Unmarshal(data, &msg)
 	if err != nil {
 		return err
 	}
 
-	f, err := e.msg.GetFieldByName("gtid_flags")
+	f, err := msg.GetFieldByName("gtid_flags")
 	if err != nil {
 		return err
 	}
@@ -633,7 +632,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get gtid_flags field")
 	}
 
-	f, err = e.msg.GetFieldByName("uuid")
+	f, err = msg.GetFieldByName("uuid")
 	if err != nil {
 		return err
 	}
@@ -643,7 +642,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get uuid field")
 	}
 
-	f, err = e.msg.GetFieldByName("gno")
+	f, err = msg.GetFieldByName("gno")
 	if err != nil {
 		return err
 	}
@@ -653,7 +652,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get gno field")
 	}
 
-	f, err = e.msg.GetFieldByName("tag")
+	f, err = msg.GetFieldByName("tag")
 	if err != nil {
 		return err
 	}
@@ -663,7 +662,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get tag field")
 	}
 
-	f, err = e.msg.GetFieldByName("last_committed")
+	f, err = msg.GetFieldByName("last_committed")
 	if err != nil {
 		return err
 	}
@@ -673,7 +672,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get last_committed field")
 	}
 
-	f, err = e.msg.GetFieldByName("sequence_number")
+	f, err = msg.GetFieldByName("sequence_number")
 	if err != nil {
 		return err
 	}
@@ -683,7 +682,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get sequence_number field")
 	}
 
-	f, err = e.msg.GetFieldByName("immediate_commit_timestamp")
+	f, err = msg.GetFieldByName("immediate_commit_timestamp")
 	if err != nil {
 		return err
 	}
@@ -693,7 +692,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get immediate_commit_timestamp field")
 	}
 
-	f, err = e.msg.GetFieldByName("original_commit_timestamp")
+	f, err = msg.GetFieldByName("original_commit_timestamp")
 	if err != nil {
 		return err
 	}
@@ -703,7 +702,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get original_commit_timestamp field")
 	}
 
-	f, err = e.msg.GetFieldByName("immediate_server_version")
+	f, err = msg.GetFieldByName("immediate_server_version")
 	if err != nil {
 		return err
 	}
@@ -713,7 +712,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get immediate_server_version field")
 	}
 
-	f, err = e.msg.GetFieldByName("original_server_version")
+	f, err = msg.GetFieldByName("original_server_version")
 	if err != nil {
 		return err
 	}
@@ -723,7 +722,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return errors.New("failed to get original_server_version field")
 	}
 
-	f, err = e.msg.GetFieldByName("transaction_length")
+	f, err = msg.GetFieldByName("transaction_length")
 	if err != nil {
 		return err
 	}
