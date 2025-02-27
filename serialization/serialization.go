@@ -16,8 +16,9 @@ import (
 
 // Message is a mysql::serialization message
 type Message struct {
-	Version uint8 // >= 0
-	Format  Format
+	Version    uint8 // >= 0
+	Format     Format
+	fieldIndex map[string]int
 }
 
 func (m *Message) String() (text string) {
@@ -30,10 +31,8 @@ func (m *Message) String() (text string) {
 
 // GetFieldByName returns a field if the name matches and an error if there is no match
 func (m *Message) GetFieldByName(name string) (Field, error) {
-	for _, f := range m.Format.Fields {
-		if f.Name == name {
-			return f, nil
-		}
+	if idx, ok := m.fieldIndex[name]; ok {
+		return m.Format.Fields[idx], nil
 	}
 	return Field{}, fmt.Errorf("field not found: %s", name)
 }
@@ -124,6 +123,12 @@ func Unmarshal(data []byte, v interface{}) error {
 		err := Unmarshal(data[1:], &m.Format)
 		if err != nil {
 			return err
+		}
+		if m.fieldIndex == nil {
+			m.fieldIndex = make(map[string]int, len(m.Format.Fields))
+		}
+		for _, field := range m.Format.Fields {
+			m.fieldIndex[field.Name] = field.ID
 		}
 	case *Format:
 		pos := uint64(0)

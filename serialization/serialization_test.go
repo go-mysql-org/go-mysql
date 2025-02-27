@@ -382,6 +382,20 @@ func TestUmarshal_event1(t *testing.T) {
 				},
 			},
 		},
+		fieldIndex: map[string]int{
+			"gtid_flags":                 0,
+			"uuid":                       1,
+			"gno":                        2,
+			"tag":                        3,
+			"last_committed":             4,
+			"sequence_number":            5,
+			"immediate_commit_timestamp": 6,
+			"original_commit_timestamp":  7,
+			"transaction_length":         8,
+			"immediate_server_version":   9,
+			"original_server_version":    10,
+			"commit_group_ticket":        11,
+		},
 	}
 
 	err := Unmarshal(data, &msg)
@@ -392,4 +406,8 @@ func TestUmarshal_event1(t *testing.T) {
 	}
 
 	require.Equal(t, expected, msg)
+
+	sv, err := msg.GetFieldByName("immediate_server_version")
+	require.NoError(t, err)
+	require.Equal(t, 9, sv.ID)
 }
