@@ -181,6 +181,7 @@ func bitmapByteSize(columnCount int) int {
 	MYSQL_TYPE_DOUBLE
 	MYSQL_TYPE_BLOB
 	MYSQL_TYPE_GEOMETRY
+	MYSQL_TYPE_VECTOR
 
 	//maybe
 	MYSQL_TYPE_TIME2
@@ -226,6 +227,7 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 			mysql.MYSQL_TYPE_DOUBLE,
 			mysql.MYSQL_TYPE_FLOAT,
 			mysql.MYSQL_TYPE_GEOMETRY,
+			mysql.MYSQL_TYPE_VECTOR,
 			mysql.MYSQL_TYPE_JSON:
 			e.ColumnMeta[i] = uint16(data[pos])
 			pos++
@@ -891,6 +893,7 @@ const RowsEventStmtEndFlag = 0x01
 // - mysql.MYSQL_TYPE_STRING: string
 // - mysql.MYSQL_TYPE_JSON: []byte / *replication.JsonDiff
 // - mysql.MYSQL_TYPE_GEOMETRY: []byte
+// - mysql.MYSQL_TYPE_VECTOR: []byte
 type RowsEvent struct {
 	// 0, 1, 2
 	Version int
@@ -1406,6 +1409,8 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 		// Refer https://dev.mysql.com/doc/refman/5.7/en/gis-wkb-functions.html
 		// I also find some go libs to handle WKB if possible
 		// see https://github.com/twpayne/go-geom or https://github.com/paulmach/go.geo
+		v, n, err = decodeBlob(data, meta)
+	case mysql.MYSQL_TYPE_VECTOR:
 		v, n, err = decodeBlob(data, meta)
 	default:
 		err = fmt.Errorf("unsupport type %d in binlog and don't know how to handle", tp)
