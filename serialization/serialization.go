@@ -23,7 +23,7 @@ type Message struct {
 
 func (m *Message) String() (text string) {
 	text += fmt.Sprintf("Message (version: %d)", m.Version)
-	for _, line := range strings.Split(m.Format.String(), "\n") {
+	for _, line := range m.Format.stringParts() {
 		text += "\n  " + line
 	}
 	return
@@ -45,16 +45,22 @@ type Format struct {
 }
 
 func (f *Format) String() (text string) {
-	text += fmt.Sprintf("Format (Size: %d, LastNonIgnorableField: %d)\n",
-		f.Size, f.LastNonIgnorableField)
+	return strings.Join(f.stringParts(), "\n")
+}
+
+func (f *Format) stringParts() (parts []string) {
+
+	parts = append(parts, fmt.Sprintf("Format (Size: %d, LastNonIgnorableField: %d)",
+		f.Size, f.LastNonIgnorableField))
+
 	for _, f := range f.Fields {
-		text += fmt.Sprintf("Field %02d (Name: %s, Skipped: %t, Type: %T)\n",
-			f.ID, f.Name, f.Skipped, f.Type)
+		parts = append(parts, fmt.Sprintf("Field %02d (Name: %s, Skipped: %t, Type: %T)",
+			f.ID, f.Name, f.Skipped, f.Type))
 		if f.Type != nil {
-			text += fmt.Sprintf("  Value: %s\n", f.Type.String())
+			parts = append(parts, fmt.Sprintf("  Value: %s", f.Type.String()))
 		}
 	}
-	return text
+	return
 }
 
 // Field represents a `message_field`
