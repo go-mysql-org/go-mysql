@@ -49,7 +49,6 @@ func (f *Format) String() (text string) {
 }
 
 func (f *Format) stringParts() (parts []string) {
-
 	parts = append(parts, fmt.Sprintf("Format (Size: %d, LastNonIgnorableField: %d)",
 		f.Size, f.LastNonIgnorableField))
 
@@ -225,7 +224,7 @@ func Unmarshal(data []byte, v interface{}) error {
 				m.Fields[i].Skipped = true
 				continue
 			}
-			m.Fields[i].ID = uint8(data[pos] >> 1)
+			m.Fields[i].ID = data[pos] >> 1
 			pos++
 			var n uint64
 			var err error
