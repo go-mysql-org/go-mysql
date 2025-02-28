@@ -39,8 +39,8 @@ func (m *Message) GetFieldByName(name string) (Field, error) {
 
 // Format is describing a `message_format`
 type Format struct {
-	Size                  uint64
-	LastNonIgnorableField int
+	Size                  uint8
+	LastNonIgnorableField uint8
 	Fields                []Field
 }
 
@@ -206,9 +206,9 @@ func Unmarshal(data []byte, v interface{}) error {
 		}
 	case *Format:
 		pos := uint64(0)
-		m.Size = uint64(data[pos] >> 1)
+		m.Size = data[pos] >> 1
 		pos++
-		m.LastNonIgnorableField = int(data[pos] >> 1)
+		m.LastNonIgnorableField = data[pos] >> 1
 		pos++
 
 		for i := 0; i < len(m.Fields); i++ {
