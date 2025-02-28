@@ -697,7 +697,11 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return err
 	}
 	if v, ok := f.Type.(serialization.FieldUintVar); ok {
-		e.OriginalCommitTimestamp = v.Value
+		if f.Skipped {
+			e.OriginalCommitTimestamp = e.ImmediateCommitTimestamp
+		} else {
+			e.OriginalCommitTimestamp = v.Value
+		}
 	} else {
 		return errors.New("failed to get original_commit_timestamp field")
 	}
@@ -717,7 +721,11 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return err
 	}
 	if v, ok := f.Type.(serialization.FieldUintVar); ok {
-		e.OriginalServerVersion = uint32(v.Value)
+		if f.Skipped {
+			e.OriginalServerVersion = e.ImmediateServerVersion
+		} else {
+			e.OriginalServerVersion = uint32(v.Value)
+		}
 	} else {
 		return errors.New("failed to get original_server_version field")
 	}
