@@ -386,7 +386,7 @@ func TestUmarshal_event1(t *testing.T) {
 				},
 			},
 		},
-		fieldIndex: map[string]int{
+		fieldIndex: map[string]uint8{
 			"gtid_flags":                 0,
 			"uuid":                       1,
 			"gno":                        2,
@@ -413,5 +413,5 @@ func TestUmarshal_event1(t *testing.T) {
 
 	sv, err := msg.GetFieldByName("immediate_server_version")
 	require.NoError(t, err)
-	require.Equal(t, 9, sv.ID)
+	require.Equal(t, uint8(9), sv.ID)
 }

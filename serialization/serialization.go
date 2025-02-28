@@ -18,7 +18,7 @@ import (
 type Message struct {
 	Version    uint8 // >= 0
 	Format     Format
-	fieldIndex map[string]int
+	fieldIndex map[string]uint8
 }
 
 func (m *Message) String() (text string) {
@@ -59,7 +59,7 @@ func (f *Format) String() (text string) {
 
 // Field represents a `message_field`
 type Field struct {
-	ID       int
+	ID       uint8
 	Type     FieldType
 	Optional bool
 	Name     string
@@ -199,7 +199,7 @@ func Unmarshal(data []byte, v interface{}) error {
 			return err
 		}
 		if m.fieldIndex == nil {
-			m.fieldIndex = make(map[string]int, len(m.Format.Fields))
+			m.fieldIndex = make(map[string]uint8, len(m.Format.Fields))
 		}
 		for _, field := range m.Format.Fields {
 			m.fieldIndex[field.Name] = field.ID
@@ -215,11 +215,11 @@ func Unmarshal(data []byte, v interface{}) error {
 			if int(pos)+1 > len(data) || int(data[pos]>>1) != i {
 				// The field number we got doesn't match what we expect,
 				// so a field was skipped.
-				m.Fields[i].ID = i
+				m.Fields[i].ID = uint8(i)
 				m.Fields[i].Skipped = true
 				continue
 			}
-			m.Fields[i].ID = int(data[pos] >> 1)
+			m.Fields[i].ID = uint8(data[pos] >> 1)
 			pos++
 			var n uint64
 			var err error
