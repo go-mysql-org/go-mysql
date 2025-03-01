@@ -319,13 +319,9 @@ func (b *BinlogSyncer) registerSlave() error {
 			// necessary checksummed.
 			// That preference is specified below.
 
-			if _, err = b.c.Execute(`SET @master_binlog_checksum='NONE'`); err != nil {
+			if _, err = b.c.Execute(`SET @master_binlog_checksum='NONE', @source_binlog_checksum='NONE'`); err != nil {
 				return errors.Trace(err)
 			}
-
-			// if _, err = b.c.Execute(`SET @master_binlog_checksum=@@global.binlog_checksum`); err != nil {
-			// 	return errors.Trace(err)
-			// }
 		}
 	}
 
