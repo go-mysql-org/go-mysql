@@ -47,6 +47,7 @@ func (f *Format) String() (text string) {
 }
 
 func (f *Format) stringParts() (parts []string) {
+	parts = make([]string, 0, len(f.Fields)*2+1)
 	parts = append(parts, fmt.Sprintf("Format (Size: %d, LastNonIgnorableField: %d)",
 		f.Size, f.LastNonIgnorableField))
 
