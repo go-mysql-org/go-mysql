@@ -21,12 +21,10 @@ type Message struct {
 	fieldIndex map[string]uint8
 }
 
-func (m *Message) String() (text string) {
-	text += fmt.Sprintf("Message (version: %d)", m.Version)
-	for _, line := range m.Format.stringParts() {
-		text += "\n  " + line
-	}
-	return
+func (m *Message) String() string {
+	parts := []string{fmt.Sprintf("Message (version: %d)", m.Version)}
+	parts = append(parts, m.Format.stringParts()...)
+	return strings.Join(parts, "\n  ")
 }
 
 // GetFieldByName returns a field if the name matches and an error if there is no match
