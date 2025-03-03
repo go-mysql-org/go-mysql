@@ -235,52 +235,52 @@ func TestUmarshal_event1(t *testing.T) {
 			Fields: []Field{
 				{
 					Name: "gtid_flags",
-					Type: FieldIntFixed{
+					Type: &FieldIntFixed{
 						Length: 1,
 					},
 				},
 				{
 					Name: "uuid",
-					Type: FieldIntFixed{
+					Type: &FieldIntFixed{
 						Length: 16,
 					},
 				},
 				{
 					Name: "gno",
-					Type: FieldIntVar{},
+					Type: &FieldIntVar{},
 				},
 				{
 					Name: "tag",
-					Type: FieldString{},
+					Type: &FieldString{},
 				},
 				{
 					Name: "last_committed",
-					Type: FieldIntVar{},
+					Type: &FieldIntVar{},
 				},
 				{
 					Name: "sequence_number",
-					Type: FieldIntVar{},
+					Type: &FieldIntVar{},
 				},
 				{
 					Name: "immediate_commit_timestamp",
-					Type: FieldUintVar{},
+					Type: &FieldUintVar{},
 				},
 				{
 					Name:     "original_commit_timestamp",
-					Type:     FieldUintVar{},
+					Type:     &FieldUintVar{},
 					Optional: true,
 				},
 				{
 					Name: "transaction_length",
-					Type: FieldUintVar{},
+					Type: &FieldUintVar{},
 				},
 				{
 					Name: "immediate_server_version",
-					Type: FieldUintVar{},
+					Type: &FieldUintVar{},
 				},
 				{
 					Name:     "original_server_version",
-					Type:     FieldUintVar{},
+					Type:     &FieldUintVar{},
 					Optional: true,
 				},
 				{
@@ -299,7 +299,7 @@ func TestUmarshal_event1(t *testing.T) {
 				{
 					Name: "gtid_flags",
 					ID:   0,
-					Type: FieldIntFixed{
+					Type: &FieldIntFixed{
 						Length: 1,
 						Value:  []uint8{0o1},
 					},
@@ -307,7 +307,7 @@ func TestUmarshal_event1(t *testing.T) {
 				{
 					Name: "uuid",
 					ID:   1,
-					Type: FieldIntFixed{
+					Type: &FieldIntFixed{
 						Length: 16,
 						Value: []uint8{
 							0x89, 0x6e, 0x78, 0x82, 0x18, 0xfe, 0x11, 0xef, 0xab,
@@ -318,63 +318,63 @@ func TestUmarshal_event1(t *testing.T) {
 				{
 					Name: "gno",
 					ID:   2,
-					Type: FieldIntVar{
+					Type: &FieldIntVar{
 						Value: 1,
 					},
 				},
 				{
 					Name: "tag",
 					ID:   3,
-					Type: FieldString{
+					Type: &FieldString{
 						Value: "foobaz",
 					},
 				},
 				{
 					Name: "last_committed",
 					ID:   4,
-					Type: FieldIntVar{
+					Type: &FieldIntVar{
 						Value: 0,
 					},
 				},
 				{
 					Name: "sequence_number",
 					ID:   5,
-					Type: FieldIntVar{
+					Type: &FieldIntVar{
 						Value: 1,
 					},
 				},
 				{
 					Name: "immediate_commit_timestamp",
 					ID:   6,
-					Type: FieldUintVar{
+					Type: &FieldUintVar{
 						Value: 1739823289369365,
 					},
 				},
 				{
 					Name:     "original_commit_timestamp",
 					ID:       7,
-					Type:     FieldUintVar{},
+					Type:     &FieldUintVar{},
 					Optional: true,
 					Skipped:  true,
 				},
 				{
 					Name: "transaction_length",
 					ID:   8,
-					Type: FieldUintVar{
+					Type: &FieldUintVar{
 						Value: 210,
 					},
 				},
 				{
 					Name: "immediate_server_version",
 					ID:   9,
-					Type: FieldUintVar{
+					Type: &FieldUintVar{
 						Value: 90200,
 					},
 				},
 				{
 					Name:     "original_server_version",
 					ID:       10,
-					Type:     FieldUintVar{},
+					Type:     &FieldUintVar{},
 					Optional: true,
 					Skipped:  true,
 				},
