@@ -561,52 +561,52 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 			Fields: []serialization.Field{
 				{
 					Name: "gtid_flags",
-					Type: serialization.FieldIntFixed{
+					Type: &serialization.FieldIntFixed{
 						Length: 1,
 					},
 				},
 				{
 					Name: "uuid",
-					Type: serialization.FieldIntFixed{
+					Type: &serialization.FieldIntFixed{
 						Length: 16,
 					},
 				},
 				{
 					Name: "gno",
-					Type: serialization.FieldIntVar{},
+					Type: &serialization.FieldIntVar{},
 				},
 				{
 					Name: "tag",
-					Type: serialization.FieldString{},
+					Type: &serialization.FieldString{},
 				},
 				{
 					Name: "last_committed",
-					Type: serialization.FieldIntVar{},
+					Type: &serialization.FieldIntVar{},
 				},
 				{
 					Name: "sequence_number",
-					Type: serialization.FieldIntVar{},
+					Type: &serialization.FieldIntVar{},
 				},
 				{
 					Name: "immediate_commit_timestamp",
-					Type: serialization.FieldUintVar{},
+					Type: &serialization.FieldUintVar{},
 				},
 				{
 					Name:     "original_commit_timestamp",
-					Type:     serialization.FieldUintVar{},
+					Type:     &serialization.FieldUintVar{},
 					Optional: true,
 				},
 				{
 					Name: "transaction_length",
-					Type: serialization.FieldUintVar{},
+					Type: &serialization.FieldUintVar{},
 				},
 				{
 					Name: "immediate_server_version",
-					Type: serialization.FieldUintVar{},
+					Type: &serialization.FieldUintVar{},
 				},
 				{
 					Name:     "original_server_version",
-					Type:     serialization.FieldUintVar{},
+					Type:     &serialization.FieldUintVar{},
 					Optional: true,
 				},
 				{
@@ -626,7 +626,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldIntFixed); ok {
+	if v, ok := f.Type.(*serialization.FieldIntFixed); ok {
 		e.CommitFlag = v.Value[0]
 	} else {
 		return errors.New("failed to get gtid_flags field")
@@ -636,7 +636,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldIntFixed); ok {
+	if v, ok := f.Type.(*serialization.FieldIntFixed); ok {
 		e.SID = v.Value
 	} else {
 		return errors.New("failed to get uuid field")
@@ -646,7 +646,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldIntVar); ok {
+	if v, ok := f.Type.(*serialization.FieldIntVar); ok {
 		e.GNO = v.Value
 	} else {
 		return errors.New("failed to get gno field")
@@ -656,7 +656,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldString); ok {
+	if v, ok := f.Type.(*serialization.FieldString); ok {
 		e.Tag = v.Value
 	} else {
 		return errors.New("failed to get tag field")
@@ -666,7 +666,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldIntVar); ok {
+	if v, ok := f.Type.(*serialization.FieldIntVar); ok {
 		e.LastCommitted = v.Value
 	} else {
 		return errors.New("failed to get last_committed field")
@@ -676,7 +676,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldIntVar); ok {
+	if v, ok := f.Type.(*serialization.FieldIntVar); ok {
 		e.SequenceNumber = v.Value
 	} else {
 		return errors.New("failed to get sequence_number field")
@@ -686,7 +686,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldUintVar); ok {
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
 		e.ImmediateCommitTimestamp = v.Value
 	} else {
 		return errors.New("failed to get immediate_commit_timestamp field")
@@ -696,7 +696,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldUintVar); ok {
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
 		if f.Skipped {
 			e.OriginalCommitTimestamp = e.ImmediateCommitTimestamp
 		} else {
@@ -710,7 +710,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldUintVar); ok {
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
 		e.ImmediateServerVersion = uint32(v.Value)
 	} else {
 		return errors.New("failed to get immediate_server_version field")
@@ -720,7 +720,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldUintVar); ok {
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
 		if f.Skipped {
 			e.OriginalServerVersion = e.ImmediateServerVersion
 		} else {
@@ -734,7 +734,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if v, ok := f.Type.(serialization.FieldUintVar); ok {
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
 		e.TransactionLength = v.Value
 	} else {
 		return errors.New("failed to get transaction_length field")

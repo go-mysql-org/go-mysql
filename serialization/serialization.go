@@ -73,6 +73,7 @@ type Field struct {
 // FieldType represents a `type_field`
 type FieldType interface {
 	fmt.Stringer
+	decode(data []byte, pos uint64) (uint64, error)
 }
 
 // FieldIntFixed is for values with a fixed length.
@@ -224,36 +225,9 @@ func Unmarshal(data []byte, v interface{}) error {
 				continue
 			}
 			m.Fields[i].ID = data[pos] >> 1
-			pos++
-			var n uint64
-			var err error
-			switch f := m.Fields[i].Type.(type) {
-			case FieldIntFixed:
-				n, err = f.decode(data, pos)
-				if err != nil {
-					return err
-				}
-				m.Fields[i].Type = f
-			case FieldUintVar:
-				n, err = f.decode(data, pos)
-				if err != nil {
-					return err
-				}
-				m.Fields[i].Type = f
-			case FieldIntVar:
-				n, err = f.decode(data, pos)
-				if err != nil {
-					return err
-				}
-				m.Fields[i].Type = f
-			case FieldString:
-				n, err = f.decode(data, pos)
-				if err != nil {
-					return err
-				}
-				m.Fields[i].Type = f
-			default:
-				return fmt.Errorf("unsupported field type: %T", m.Fields[i].Type)
+			n, err := m.Fields[i].Type.decode(data, pos)
+			if err != nil {
+				return err
 			}
 			pos = n
 		}
