@@ -225,6 +225,7 @@ func Unmarshal(data []byte, v interface{}) error {
 				continue
 			}
 			m.Fields[i].ID = data[pos] >> 1
+			pos++
 			n, err := m.Fields[i].Type.decode(data, pos)
 			if err != nil {
 				return err
