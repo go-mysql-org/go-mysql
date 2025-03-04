@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/pingcap/errors"
@@ -31,6 +32,8 @@ var (
 	backupPath = flag.String("backup_path", "", "backup path to store binlog files")
 
 	rawMode = flag.Bool("raw", false, "Use raw mode")
+	format  = flag.String("format", "plain", "log format")
+	verbose = flag.Bool("verbose", false, "verbose logging")
 )
 
 func main() {
@@ -48,6 +51,19 @@ func main() {
 		SemiSyncEnabled:      *semiSync,
 		UseDecimal:           true,
 		MaxReconnectAttempts: 10,
+	}
+
+	logOpts := &slog.HandlerOptions{
+		AddSource: *verbose,
+	}
+
+	switch *format {
+	case "json":
+		cfg.Logger = slog.New(slog.NewJSONHandler(os.Stderr, logOpts))
+	case "plain":
+		cfg.Logger = slog.New(slog.NewTextHandler(os.Stderr, logOpts))
+	default:
+		panic("unsupported log format")
 	}
 
 	err := mysql.ValidateFlavor(*flavor)
