@@ -50,7 +50,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 			e == schema.ErrMissingTableMeta {
 			return nil
 		}
-		h.c.cfg.Logger.Error("error getting table information", slog.String("databse", db), slog.String("table", table), slog.Any("error", err))
+		h.c.cfg.Logger.Error("error getting table information", slog.String("database", db), slog.String("table", table), slog.Any("error", err))
 		return errors.Trace(err)
 	}
 
@@ -164,7 +164,7 @@ func (c *Canal) dump() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		c.cfg.Logger.Info("skip master data, get current binlog position", slog.Any("pos", pos))
+		c.cfg.Logger.Info("skip master data, get current binlog position", slog.Any("position", pos))
 		h.name = pos.Name
 		h.pos = uint64(pos.Pos)
 	}

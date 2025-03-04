@@ -856,7 +856,7 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 	case *RotateEvent:
 		b.nextPos.Name = string(event.NextLogName)
 		b.nextPos.Pos = uint32(event.Position)
-		b.cfg.Logger.Info(fmt.Sprintf("rotate to %s", b.nextPos))
+		b.cfg.Logger.Info("rotate to next binlog", slog.String("file", b.nextPos.Name), slog.Int("position", b.nextPos))
 
 	case *GTIDEvent:
 		if b.prevGset == nil {
