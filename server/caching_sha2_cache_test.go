@@ -60,11 +60,11 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 
 type RemoteThrottleProvider struct {
 	*InMemoryProvider
-	getCredCallCnt atomic.Int64
+	getCredCallCount atomic.Int64
 }
 
 func (m *RemoteThrottleProvider) GetCredential(username string) (password string, found bool, err error) {
-	m.getCredCallCnt.Add(1)
+	m.getCredCallCount.Add(1)
 	return m.InMemoryProvider.GetCredential(username)
 }
 
@@ -139,7 +139,7 @@ func (s *cacheTestSuite) TestCache() {
 	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
-	got := s.credProvider.(*RemoteThrottleProvider).getCredCallCnt.Load()
+	got := s.credProvider.(*RemoteThrottleProvider).getCredCallCount.Load()
 	require.Equal(s.T(), int64(1), got)
 
 	if s.db != nil {
@@ -151,7 +151,7 @@ func (s *cacheTestSuite) TestCache() {
 	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
-	got = s.credProvider.(*RemoteThrottleProvider).getCredCallCnt.Load()
+	got = s.credProvider.(*RemoteThrottleProvider).getCredCallCount.Load()
 	require.Equal(s.T(), int64(1), got)
 
 	if s.db != nil {
