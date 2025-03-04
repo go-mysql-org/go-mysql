@@ -346,7 +346,7 @@ func (b *BinlogSyncer) registerSlave() error {
 		return errors.Trace(err)
 	}
 	if _, err = b.c.Execute(fmt.Sprintf("SET @slave_uuid = '%s', @replica_uuid = '%s'", serverUUID, serverUUID)); err != nil {
-		b.cfg.Logger.Error(fmt.Sprintf("failed to set @slave_uuid = '%s'", serverUUID), slog.Any("error", err))
+		b.cfg.Logger.Error(fmt.Sprintf("failed to set @slave_uuid = '%s', @replica_uuid = '%s'", serverUUID, serverUUID), slog.Any("error", err))
 		return errors.Trace(err)
 	}
 
@@ -653,17 +653,17 @@ func (b *BinlogSyncer) retrySync() error {
 	b.prevMySQLGTIDEvent = nil
 
 	if b.prevGset != nil {
-		msg := fmt.Sprintf("begin to re-sync from %s", b.prevGset.String())
+		extra := []interface{}{slog.String("GTID Set", b.prevGset.String())}
 		if b.currGset != nil {
-			msg = fmt.Sprintf("%s (last read GTID=%v)", msg, b.currGset)
+			extra = append(extra, slog.String("last read GTID", b.currGset.String()))
 		}
-		b.cfg.Logger.Info(msg)
+		b.cfg.Logger.Info("begin to re-sync", extra...)
 
 		if err := b.prepareSyncGTID(b.prevGset); err != nil {
 			return errors.Trace(err)
 		}
 	} else {
-		b.cfg.Logger.Info(fmt.Sprintf("begin to re-sync from %s", b.nextPos))
+		b.cfg.Logger.Info("begin to re-sync", slog.String("file", b.nextPos.Name), slog.Uint64("position", uint64(b.nextPos.Pos)))
 		if err := b.prepareSyncPos(b.nextPos); err != nil {
 			return errors.Trace(err)
 		}
@@ -856,7 +856,7 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 	case *RotateEvent:
 		b.nextPos.Name = string(event.NextLogName)
 		b.nextPos.Pos = uint32(event.Position)
-		b.cfg.Logger.Info("rotate to next binlog", slog.String("file", b.nextPos.Name), slog.Int("position", b.nextPos))
+		b.cfg.Logger.Info("rotate to next binlog", slog.String("file", b.nextPos.Name), slog.Uint64("position", uint64(b.nextPos.Pos)))
 
 	case *GTIDEvent:
 		if b.prevGset == nil {

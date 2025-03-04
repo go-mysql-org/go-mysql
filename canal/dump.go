@@ -186,8 +186,7 @@ func (c *Canal) dump() error {
 		c.master.UpdateGTIDSet(h.gset)
 		startPos = h.gset
 	}
-	c.cfg.Logger.Info(fmt.Sprintf("dump MySQL and parse OK, use %0.2f seconds, start binlog replication at %s",
-		time.Since(start).Seconds(), startPos))
+	c.cfg.Logger.Info("dump MySQL and parse OK", slog.Duration("use", time.Since(start)), slog.String("position", startPos.String()))
 	return nil
 }
 
@@ -197,7 +196,7 @@ func (c *Canal) tryDump() error {
 	if (len(pos.Name) > 0 && pos.Pos > 0) ||
 		(gset != nil && gset.String() != "") {
 		// we will sync with binlog name and position
-		c.cfg.Logger.Info(fmt.Sprintf("skip dump, use last binlog replication pos %s or GTID set %v", pos, gset))
+		c.cfg.Logger.Info("skip dump, use last binlog replication position or GTID set", slog.String("file", pos.Name), slog.Uint64("position", uint64(pos.Pos)), slog.Any("GTID set", gset))
 		return nil
 	}
 

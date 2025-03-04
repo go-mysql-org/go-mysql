@@ -1,7 +1,6 @@
 package canal
 
 import (
-	"fmt"
 	"log/slog"
 	"sync/atomic"
 	"time"
@@ -103,9 +102,8 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		}
 	case *replication.RowsEvent:
 		// we only focus row based event
-		err = c.handleRowsEvent(ev)
-		if err != nil {
-			c.cfg.Logger.Error(fmt.Sprintf("handle rows event at (%s, %d)", pos.Name, curPos), slog.Any("error", err))
+		if err := c.handleRowsEvent(ev); err != nil {
+			c.cfg.Logger.Error("handle rows event", slog.String("file", pos.Name), slog.Uint64("position", uint64(curPos)), slog.Any("error", err))
 			return errors.Trace(err)
 		}
 		return nil
@@ -115,7 +113,7 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		for _, subEvent := range ev.Events {
 			err = c.handleEvent(subEvent)
 			if err != nil {
-				c.cfg.Logger.Error(fmt.Sprintf("handle transaction payload subevent at (%s, %d)", pos.Name, curPos), slog.Any("error", err))
+				c.cfg.Logger.Error("handle transaction payload subevent", slog.String("file", pos.Name), slog.Uint64("position", uint64(curPos)), slog.Any("error", err))
 				return errors.Trace(err)
 			}
 		}
@@ -318,7 +316,8 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 			if curPos.Compare(pos) >= 0 {
 				return nil
 			} else {
-				c.cfg.Logger.Debug(fmt.Sprintf("master pos is %v, wait catching %v", curPos, pos))
+				c.cfg.Logger.Debug("master pos is behind, wait to catch up", slog.String("master file", curPos.Name), slog.Uint64("master position", uint64(curPos.Pos)),
+					slog.String("target file", pos.Name), slog.Uint64("target position", uint64(curPos.Pos)))
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
