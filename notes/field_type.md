@@ -63,6 +63,7 @@ Here is a list collected from `mysql-8.0/sql/field.h`:
 | |  |  +--Field_varstring                                   | MYSQL_TYPE_VARCHAR            | MYSQL_TYPE_VARCHAR    |                        |
 | |  |  +--Field_blob                                        | MYSQL_TYPE_BLOB               |                       |                        |
 | |  |     +--Field_geom                                     | MYSQL_TYPE_GEOMETRY           |                       |                        |
+| |  |     +--Field_vector                                   | MYSQL_TYPE_VECTOR             |                       |                        |
 | |  |     +--Field_json                                     | MYSQL_TYPE_JSON               |                       |                        |
 | |  |        +--Field_typed_array                           | real_type_to_type(m_elt_type) | m_elt_type            | MYSQL_TYPE_TYPED_ARRAY |
 | |  |                                                       |                               |                       |                        |

@@ -147,6 +147,8 @@ const (
 	MYSQL_TYPE_TIME2
 )
 
+const MYSQL_TYPE_VECTOR = 0xf2
+
 const (
 	MYSQL_TYPE_JSON byte = iota + 0xf5
 	MYSQL_TYPE_NEWDECIMAL
