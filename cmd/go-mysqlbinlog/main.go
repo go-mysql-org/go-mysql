@@ -59,9 +59,9 @@ func main() {
 
 	switch *format {
 	case "json":
-		cfg.Logger = slog.New(slog.NewJSONHandler(os.Stderr, logOpts))
+		cfg.Logger = slog.New(slog.NewJSONHandler(os.Stdout, logOpts))
 	case "plain":
-		cfg.Logger = slog.New(slog.NewTextHandler(os.Stderr, logOpts))
+		cfg.Logger = slog.New(slog.NewTextHandler(os.Stdout, logOpts))
 	default:
 		panic("unsupported log format")
 	}

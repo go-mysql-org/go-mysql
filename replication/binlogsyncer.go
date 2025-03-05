@@ -184,7 +184,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	// Clear the Password to avoid outputting it in logs.
 	pass := cfg.Password
 	cfg.Password = ""
-	cfg.Logger.Debug("create BinlogSyncer", slog.Any("config", cfg))
+	cfg.Logger.Info("create BinlogSyncer", slog.Any("config", cfg))
 	cfg.Password = pass
 
 	b := new(BinlogSyncer)
