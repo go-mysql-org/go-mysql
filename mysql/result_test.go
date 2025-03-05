@@ -19,6 +19,13 @@ func TestHasResultset_true(t *testing.T) {
 }
 
 // this shouldn't happen after d02e79a, but test just in case
+func TestHasResultset_nilset(t *testing.T) {
+	r := NewResultReserveResultset(0)
+	r.Resultset = nil
+	b := r.HasResultset()
+	require.Equal(t, false, b)
+}
+
 func TestHasResultset_nil(t *testing.T) {
 	var r *Result
 	b := r.HasResultset()

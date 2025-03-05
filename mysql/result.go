@@ -36,6 +36,9 @@ func (r *Result) Close() {
 }
 
 func (r *Result) HasResultset() bool {
+	if r == nil {
+		return false
+	}
 	if r.Resultset != nil && len(r.Resultset.Fields) > 0 {
 		return true
 	}
