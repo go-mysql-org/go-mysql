@@ -101,7 +101,7 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		}
 	case *replication.RowsEvent:
 		// we only focus row based event
-		err = c.handleRowsEvent(ev)
+		err = c.handleRowsEvent(ev, pos)
 		if err != nil {
 			c.cfg.Logger.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
 			return errors.Trace(err)
@@ -262,7 +262,7 @@ func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	atomic.StoreUint32(c.delay, newDelay)
 }
 
-func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
+func (c *Canal) handleRowsEvent(e *replication.BinlogEvent, nextPos mysql.Position) error {
 	ev := e.Event.(*replication.RowsEvent)
 
 	// Caveat: table may be altered at runtime.
@@ -290,7 +290,7 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 	default:
 		return errors.Errorf("%s not supported now", e.Header.EventType)
 	}
-	events := newRowsEvent(t, action, ev.Rows, e.Header)
+	events := newRowsEvent(t, action, ev.Rows, e.Header, &nextPos)
 	return c.eventHandler.OnRow(events)
 }
 

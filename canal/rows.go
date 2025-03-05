@@ -2,6 +2,7 @@ package canal
 
 import (
 	"fmt"
+	"github.com/go-mysql-org/go-mysql/mysql"
 
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
@@ -26,15 +27,18 @@ type RowsEvent struct {
 	Rows [][]interface{}
 	// Header can be used to inspect the event
 	Header *replication.EventHeader
+	// NextPos including binlog name
+	NextPos *mysql.Position
 }
 
-func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, header *replication.EventHeader) *RowsEvent {
+func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, header *replication.EventHeader, nextPos *mysql.Position) *RowsEvent {
 	e := new(RowsEvent)
 
 	e.Table = table
 	e.Action = action
 	e.Rows = rows
 	e.Header = header
+	e.NextPos = nextPos
 
 	e.handleUnsigned()
 
