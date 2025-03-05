@@ -14,10 +14,9 @@ func TestConnWriteOK(t *testing.T) {
 	clientConn := &mockconn.MockConn{}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	result := &mysql.Result{
-		AffectedRows: 1,
-		InsertId:     2,
-	}
+	result := mysql.NewResultReserveResultset(0)
+	result.AffectedRows = 1
+	result.InsertId = 2
 
 	// write ok with insertid and affectedrows set
 	err := conn.writeOK(result)
@@ -228,4 +227,37 @@ func TestConnWriteFieldValues(t *testing.T) {
 
 	// EOF
 	require.Equal(t, []byte{1, 0, 0, 4, mysql.EOF_HEADER}, clientConn.WriteBuffered[43:])
+}
+
+func TestWriteValue(t *testing.T) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+
+	// simple OK
+	err := conn.WriteValue(mysql.NewResultReserveResultset(0))
+	require.NoError(t, err)
+	expected := []byte{3, 0, 0, 0, mysql.OK_HEADER, 0, 0}
+	require.Equal(t, expected, clientConn.WriteBuffered)
+
+	// reset write buffer
+	clientConn.WriteBuffered = []byte{}
+
+	// resultset with no rows
+	rs := mysql.NewResultReserveResultset(1)
+	rs.Fields = []*mysql.Field{{Name: []byte("a")}}
+	err = conn.WriteValue(rs)
+	require.NoError(t, err)
+	expected = []byte{1, 0, 0, 1, mysql.MORE_DATE_HEADER}
+	require.Equal(t, expected, clientConn.WriteBuffered[:5])
+
+	// reset write buffer
+	clientConn.WriteBuffered = []byte{}
+
+	// resultset with rows
+	rs.Fields = []*mysql.Field{{Name: []byte("a")}}
+	rs.RowDatas = []mysql.RowData{[]byte{1, 2, 3}}
+	err = conn.WriteValue(rs)
+	require.NoError(t, err)
+	expected = []byte{1, 0, 0, 5, mysql.MORE_DATE_HEADER}
+	require.Equal(t, expected, clientConn.WriteBuffered[:5])
 }
