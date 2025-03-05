@@ -14,10 +14,9 @@ func TestConnWriteOK(t *testing.T) {
 	clientConn := &mockconn.MockConn{}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	result := &mysql.Result{
-		AffectedRows: 1,
-		InsertId:     2,
-	}
+	result := mysql.NewResultReserveResultset(0)
+	result.AffectedRows = 1
+	result.InsertId = 2
 
 	// write ok with insertid and affectedrows set
 	err := conn.writeOK(result)
