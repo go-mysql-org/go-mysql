@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/test_util"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -30,7 +29,6 @@ func (s *poolTestSuite) TestPool_Close() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	pool, err := NewPoolWithOptions(addr, *testUser, *testPassword, "",
 		WithPoolLimits(5, 10, 5),
-		WithLogFunc(log.Debugf),
 	)
 	require.NoError(s.T(), err)
 
@@ -53,7 +51,6 @@ func (s *poolTestSuite) TestPool_WrongPassword() {
 
 	_, err := NewPoolWithOptions(addr, *testUser, "wrong-password", "",
 		WithPoolLimits(5, 10, 5),
-		WithLogFunc(log.Debugf),
 		WithNewPoolPingTimeout(time.Second),
 	)
 
@@ -71,7 +68,6 @@ func (s *poolTestSuite) TestPool_WrongAddr() {
 
 	_, err = NewPoolWithOptions(laddr.String(), *testUser, *testPassword, "",
 		WithPoolLimits(5, 10, 5),
-		WithLogFunc(log.Debugf),
 		WithNewPoolPingTimeout(time.Second),
 	)
 

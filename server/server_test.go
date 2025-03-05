@@ -12,7 +12,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -60,8 +59,6 @@ func prepareServerConf() []*Server {
 }
 
 func Test(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-
 	// general tests
 	inMemProvider := NewInMemoryProvider()
 	inMemProvider.AddUser(*testUser, *testPassword)
