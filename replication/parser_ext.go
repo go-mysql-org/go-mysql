@@ -413,6 +413,7 @@ func (rf *RowsFilter) compile() error {
 	columnFields := map[string]interface{}{
 		"col": []interface{}{},
 	}
+	//fmt.Println("xxxx", rf.columnFilterExpr)
 	program, err := expr.Compile(rf.columnFilterExpr, expr.Env(columnFields))
 	if err != nil {
 		return errors.WithMessage(err, "parse rows filter expression")

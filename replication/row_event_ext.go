@@ -390,7 +390,7 @@ func (e *RowsEvent) PrintVerbose(w io.Writer, verboseLevel int) {
 	var sql_command, sql_clause1, sql_clause2 string
 	switch e.eventType {
 	case UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2:
-		sql_command = fmt.Sprintf("### UDPATE `%s`.`%s`\n", e.Table.GetSchema(), e.Table.Table)
+		sql_command = fmt.Sprintf("### UPDATE `%s`.`%s`\n", e.Table.GetSchema(), e.Table.Table)
 		for i := 0; i < len(e.Rows); i += 2 {
 			sql_clause1 = "### WHERE\n"
 			sql_clause2 = "### SET\n"

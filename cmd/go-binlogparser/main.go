@@ -355,7 +355,7 @@ func buildRowsFilterExprFromCsv(csvInput *bytes.Buffer) (exprOutput string, err 
 			}
 			rowsFilterExprs = append(rowsFilterExprs, "("+strings.Join(lineExpr, " and ")+")")
 		}
-		rowsFilterExpr = strings.Join(rowsFilterExprs, " OR ")
+		rowsFilterExpr = strings.Join(rowsFilterExprs, " or ")
 	}
 	return rowsFilterExpr, nil
 }

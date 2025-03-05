@@ -25,9 +25,11 @@ func init() {
 	rootCmd.PersistentFlags().String("start-file", "", "binlog start file name")
 	rootCmd.PersistentFlags().String("stop-file", "", "binlog stop file name")
 	rootCmd.PersistentFlags().String("binlog-dir", "", "binlog dir")
+	rootCmd.PersistentFlags().Int("threads", 1, "parse binlog threads")
 	_ = viper.BindPFlag("start-file", rootCmd.PersistentFlags().Lookup("start-file"))
 	_ = viper.BindPFlag("stop-file", rootCmd.PersistentFlags().Lookup("stop-file"))
 	_ = viper.BindPFlag("binlog-dir", rootCmd.PersistentFlags().Lookup("binlog-dir"))
+	_ = viper.BindPFlag("threads", rootCmd.PersistentFlags().Lookup("threads"))
 
 	rootCmd.PersistentFlags().StringSliceP("file", "f", nil, "binlog file name")
 	rootCmd.PersistentFlags().String("start-datetime", "", "start datetime")
