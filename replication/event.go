@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/serialization"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 )
@@ -420,6 +421,7 @@ func (e *QueryEvent) Dump(w io.Writer) {
 type GTIDEvent struct {
 	CommitFlag     uint8
 	SID            []byte
+	Tag            string
 	GNO            int64
 	LastCommitted  int64
 	SequenceNumber int64
@@ -512,7 +514,11 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 
 	fmt.Fprintf(w, "Commit flag: %d\n", e.CommitFlag)
 	u, _ := uuid.FromBytes(e.SID)
-	fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
+	if e.Tag != "" {
+		fmt.Fprintf(w, "GTID_NEXT: %s:%s:%d\n", u.String(), e.Tag, e.GNO)
+	} else {
+		fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
+	}
 	fmt.Fprintf(w, "LAST_COMMITTED: %d\n", e.LastCommitted)
 	fmt.Fprintf(w, "SEQUENCE_NUMBER: %d\n", e.SequenceNumber)
 	fmt.Fprintf(w, "Immediate commmit timestamp: %d (%s)\n", e.ImmediateCommitTimestamp, fmtTime(e.ImmediateCommitTime()))
@@ -541,6 +547,202 @@ func (e *GTIDEvent) ImmediateCommitTime() time.Time {
 // or zero time if not available.
 func (e *GTIDEvent) OriginalCommitTime() time.Time {
 	return microSecTimestampToTime(e.OriginalCommitTimestamp)
+}
+
+// GtidTaggedLogEvent is for a GTID event with a tag.
+// This is similar to GTIDEvent, but it has a tag and uses a different serialization format.
+type GtidTaggedLogEvent struct {
+	GTIDEvent
+}
+
+func (e *GtidTaggedLogEvent) Decode(data []byte) error {
+	msg := serialization.Message{
+		Format: serialization.Format{
+			Fields: []serialization.Field{
+				{
+					Name: "gtid_flags",
+					Type: &serialization.FieldIntFixed{
+						Length: 1,
+					},
+				},
+				{
+					Name: "uuid",
+					Type: &serialization.FieldIntFixed{
+						Length: 16,
+					},
+				},
+				{
+					Name: "gno",
+					Type: &serialization.FieldIntVar{},
+				},
+				{
+					Name: "tag",
+					Type: &serialization.FieldString{},
+				},
+				{
+					Name: "last_committed",
+					Type: &serialization.FieldIntVar{},
+				},
+				{
+					Name: "sequence_number",
+					Type: &serialization.FieldIntVar{},
+				},
+				{
+					Name: "immediate_commit_timestamp",
+					Type: &serialization.FieldUintVar{},
+				},
+				{
+					Name:     "original_commit_timestamp",
+					Type:     &serialization.FieldUintVar{},
+					Optional: true,
+				},
+				{
+					Name: "transaction_length",
+					Type: &serialization.FieldUintVar{},
+				},
+				{
+					Name: "immediate_server_version",
+					Type: &serialization.FieldUintVar{},
+				},
+				{
+					Name:     "original_server_version",
+					Type:     &serialization.FieldUintVar{},
+					Optional: true,
+				},
+				{
+					Name:     "commit_group_ticket",
+					Optional: true,
+				},
+			},
+		},
+	}
+
+	err := serialization.Unmarshal(data, &msg)
+	if err != nil {
+		return err
+	}
+
+	f, err := msg.GetFieldByName("gtid_flags")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldIntFixed); ok {
+		e.CommitFlag = v.Value[0]
+	} else {
+		return errors.New("failed to get gtid_flags field")
+	}
+
+	f, err = msg.GetFieldByName("uuid")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldIntFixed); ok {
+		e.SID = v.Value
+	} else {
+		return errors.New("failed to get uuid field")
+	}
+
+	f, err = msg.GetFieldByName("gno")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldIntVar); ok {
+		e.GNO = v.Value
+	} else {
+		return errors.New("failed to get gno field")
+	}
+
+	f, err = msg.GetFieldByName("tag")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldString); ok {
+		e.Tag = v.Value
+	} else {
+		return errors.New("failed to get tag field")
+	}
+
+	f, err = msg.GetFieldByName("last_committed")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldIntVar); ok {
+		e.LastCommitted = v.Value
+	} else {
+		return errors.New("failed to get last_committed field")
+	}
+
+	f, err = msg.GetFieldByName("sequence_number")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldIntVar); ok {
+		e.SequenceNumber = v.Value
+	} else {
+		return errors.New("failed to get sequence_number field")
+	}
+
+	f, err = msg.GetFieldByName("immediate_commit_timestamp")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
+		e.ImmediateCommitTimestamp = v.Value
+	} else {
+		return errors.New("failed to get immediate_commit_timestamp field")
+	}
+
+	f, err = msg.GetFieldByName("original_commit_timestamp")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
+		if f.Skipped {
+			e.OriginalCommitTimestamp = e.ImmediateCommitTimestamp
+		} else {
+			e.OriginalCommitTimestamp = v.Value
+		}
+	} else {
+		return errors.New("failed to get original_commit_timestamp field")
+	}
+
+	f, err = msg.GetFieldByName("immediate_server_version")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
+		e.ImmediateServerVersion = uint32(v.Value)
+	} else {
+		return errors.New("failed to get immediate_server_version field")
+	}
+
+	f, err = msg.GetFieldByName("original_server_version")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
+		if f.Skipped {
+			e.OriginalServerVersion = e.ImmediateServerVersion
+		} else {
+			e.OriginalServerVersion = uint32(v.Value)
+		}
+	} else {
+		return errors.New("failed to get original_server_version field")
+	}
+
+	f, err = msg.GetFieldByName("transaction_length")
+	if err != nil {
+		return err
+	}
+	if v, ok := f.Type.(*serialization.FieldUintVar); ok {
+		e.TransactionLength = v.Value
+	} else {
+		return errors.New("failed to get transaction_length field")
+	}
+
+	// TODO: add and test commit_group_ticket
+
+	return nil
 }
 
 type BeginLoadQueryEvent struct {
