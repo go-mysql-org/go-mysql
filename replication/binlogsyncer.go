@@ -171,6 +171,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 		cfg.Logger = slog.Default()
 	}
 	if cfg.ServerID == 0 {
+		cfg.Logger.Error("can't use 0 as the server ID, will panic")
 		panic("can't use 0 as the server ID")
 	}
 	if cfg.Dialer == nil {

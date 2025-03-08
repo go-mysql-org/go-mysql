@@ -492,6 +492,8 @@ We pass all tests in https://github.com/bradfitz/go-sql-test using go-mysql driv
 
 Logging uses [log/slog](https://pkg.go.dev/log/slog) and by default is sent to standard out.
 
+For the old logging package `github.com/siddontang/go-log/log`, a converting package 
+`https://github.com/serprex/slog-siddontang` is available.
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
 ```
