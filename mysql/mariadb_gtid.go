@@ -3,12 +3,12 @@ package mysql
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 )
 
 // MariadbGTID represent mariadb gtid, [domain ID]-[server-id]-[sequence]
@@ -94,7 +94,7 @@ func (gtid *MariadbGTID) forward(newer *MariadbGTID) error {
 		| mysqld-bin.000001 | 2215 | Gtid              |       111 |        2257 | BEGIN GTID 0-111-6  |
 	*/
 	if newer.SequenceNumber <= gtid.SequenceNumber {
-		log.Warnf("out of order binlog appears with gtid %s vs current position gtid %s", newer, gtid)
+		slog.Warn("out of order binlog", slog.Any("new", newer), slog.Any("current", gtid))
 	}
 
 	gtid.ServerID = newer.ServerID
