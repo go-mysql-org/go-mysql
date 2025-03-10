@@ -56,8 +56,9 @@ jobs:
     strategy:
       matrix:
         mysql_version:
-          - 8.0.40
-          - 8.4.3
+          - '5.7'
+          - '8.0'
+          - '8.4'
     name: Tests with MySQL ${{ matrix.mysql_version }}
     runs-on: ubuntu-latest
     services:
@@ -67,7 +68,12 @@ jobs:
           MYSQL_ALLOW_EMPTY_PASSWORD: yes
         ports:
           - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+        options: >-
+          --entrypoint="docker-entrypoint.sh --log-bin --server-id=100"
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
 
     steps:
       - name: MySQL versions
