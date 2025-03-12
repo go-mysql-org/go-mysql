@@ -105,7 +105,8 @@ type Config struct {
 	// Set Dialer
 	Dialer client.Dialer
 
-	// Set Localhost
+	// Set the hostname that is used when registering as replica. This is similar to `report_host` in MySQL.
+	// This will be truncated if it is longer than 255 characters.
 	Localhost string
 
 	// EventCacheCount is the capacity of the BinlogStreamer internal event channel.

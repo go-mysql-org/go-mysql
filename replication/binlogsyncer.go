@@ -573,13 +573,17 @@ func (b *BinlogSyncer) writeBinlogDumpMariadbGTIDCommand(gset mysql.GTIDSet) err
 	return b.writeBinlogDumpCommand(mysql.Position{Name: "", Pos: 0})
 }
 
-// localHostname returns the hostname that register slave would register as.
+// localHostname returns the hostname that register replica would register as.
+// this gets truncated to 255 bytes.
 func (b *BinlogSyncer) localHostname() string {
-	if len(b.cfg.Localhost) == 0 {
-		h, _ := os.Hostname()
+	h := b.cfg.Localhost
+	if len(h) == 0 {
+		h, _ = os.Hostname()
+	}
+	if len(h) <= 255 {
 		return h
 	}
-	return b.cfg.Localhost
+	return h[:255]
 }
 
 func (b *BinlogSyncer) writeRegisterSlaveCommand() error {
