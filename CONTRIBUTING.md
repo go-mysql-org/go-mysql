@@ -36,3 +36,18 @@ Example:
 $ cd client
 $ go test -args -db test2 -port 3307
 ```
+
+Testing locally with Docker or Podman can be done like this:
+```
+podman run \
+--rm \
+--env MYSQL_ALLOW_EMPTY_PASSWORD=1 \
+--env MYSQL_ROOT_HOST='%' \
+-p3307:3306 \
+-it \
+container-registry.oracle.com/mysql/community-server:8.0 \
+--gtid-mode=ON \
+--enforce-gtid-consistency=ON
+```
+
+Substitude `podman` with `docker` if you're using docker. This uses `--rm` to remove the container when it stops. It also enabled GTID by passing options to `mysqld`.
