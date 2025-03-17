@@ -15,3 +15,24 @@
 ## Asking for help
 
 - Don't be afraid to ask for help in an issue or PR.
+
+## Testing
+
+Testing is done with GitHub actions.
+
+
+If you want to run test locally you can use the following flags:
+
+```
+  -db string
+  -host string
+  -pass string
+  -port string
+  -user string
+```
+
+Example:
+```
+$ cd client
+$ go test -args -db test2 -port 3307
+```
