@@ -20,7 +20,6 @@
 
 Testing is done with GitHub actions.
 
-
 If you want to run test locally you can use the following flags:
 
 ```
