@@ -1176,6 +1176,41 @@ func TestRowsDataExtraData(t *testing.T) {
 	}
 }
 
+func TestRowsEventTypoe(t *testing.T) {
+	testcases := []struct {
+		eventType EventType
+		isInsert  bool
+		isUpdate  bool
+		isDelete  bool
+	}{
+		{WRITE_ROWS_EVENTv0, true, false, false},
+		{WRITE_ROWS_EVENTv1, true, false, false},
+		{WRITE_ROWS_EVENTv2, true, false, false},
+		{MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, true, false, false},
+		{UPDATE_ROWS_EVENTv0, false, true, false},
+		{UPDATE_ROWS_EVENTv1, false, true, false},
+		{UPDATE_ROWS_EVENTv2, false, true, false},
+		{MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1, false, true, false},
+		{DELETE_ROWS_EVENTv0, false, false, true},
+		{DELETE_ROWS_EVENTv1, false, false, true},
+		{DELETE_ROWS_EVENTv2, false, false, true},
+		{MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, false, false, true},
+
+		// Whoops, these are not rows events at all
+		{EXEC_LOAD_EVENT, false, false, false},
+		{HEARTBEAT_EVENT, false, false, false},
+	}
+
+	for _, tc := range testcases {
+		rev := new(RowsEvent)
+		rev.eventType = tc.eventType
+
+		require.Equal(t, tc.isInsert, rev.IsInsert())
+		require.Equal(t, tc.isUpdate, rev.IsUpdate())
+		require.Equal(t, tc.isDelete, rev.IsDelete())
+	}
+}
+
 func TestTableMapHelperMaps(t *testing.T) {
 	/*
 		CREATE TABLE `_types` (
