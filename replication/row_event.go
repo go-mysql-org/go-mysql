@@ -1120,6 +1120,18 @@ func (e *RowsEvent) Decode(data []byte) error {
 	return e.DecodeData(pos, data)
 }
 
+func (e *RowsEvent) IsInsert() bool {
+	return e.eventType == WRITE_ROWS_EVENTv0 || e.eventType == WRITE_ROWS_EVENTv1 || e.eventType == WRITE_ROWS_EVENTv2 || e.eventType == MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1
+}
+
+func (e *RowsEvent) IsUpdate() bool {
+	return e.eventType == UPDATE_ROWS_EVENTv0 || e.eventType == UPDATE_ROWS_EVENTv1 || e.eventType == UPDATE_ROWS_EVENTv2 || e.eventType == MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1
+}
+
+func (e *RowsEvent) IsDelete() bool {
+	return e.eventType == DELETE_ROWS_EVENTv0 || e.eventType == DELETE_ROWS_EVENTv1 || e.eventType == DELETE_ROWS_EVENTv2 || e.eventType == MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1
+}
+
 func isBitSet(bitmap []byte, i int) bool {
 	return bitmap[i>>3]&(1<<(uint(i)&7)) > 0
 }
