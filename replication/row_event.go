@@ -950,6 +950,29 @@ type RowsEvent struct {
 	ignoreJSONDecodeErr     bool
 }
 
+// EnumRowsEventType is an abridged type describing the operation which triggered the given RowsEvent.
+type EnumRowsEventType byte
+
+const (
+	EnumRowsEventTypeUnknown = EnumRowsEventType(iota)
+	EnumRowsEventTypeInsert
+	EnumRowsEventTypeUpdate
+	EnumRowsEventTypeDelete
+)
+
+func (t EnumRowsEventType) String() string {
+	switch t {
+	case EnumRowsEventTypeInsert:
+		return "Insert"
+	case EnumRowsEventTypeUpdate:
+		return "Update"
+	case EnumRowsEventTypeDelete:
+		return "Delete"
+	default:
+		return fmt.Sprintf("unknown (%d)", t)
+	}
+}
+
 // EnumRowImageType is allowed types for every row in mysql binlog.
 // See https://github.com/mysql/mysql-server/blob/1bfe02bdad6604d54913c62614bde57a055c8332/sql/rpl_record.h#L39
 // enum class enum_row_image_type { WRITE_AI, UPDATE_BI, UPDATE_AI, DELETE_BI };
@@ -1120,16 +1143,17 @@ func (e *RowsEvent) Decode(data []byte) error {
 	return e.DecodeData(pos, data)
 }
 
-func (e *RowsEvent) IsInsert() bool {
-	return e.eventType == WRITE_ROWS_EVENTv0 || e.eventType == WRITE_ROWS_EVENTv1 || e.eventType == WRITE_ROWS_EVENTv2 || e.eventType == MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1
-}
-
-func (e *RowsEvent) IsUpdate() bool {
-	return e.eventType == UPDATE_ROWS_EVENTv0 || e.eventType == UPDATE_ROWS_EVENTv1 || e.eventType == UPDATE_ROWS_EVENTv2 || e.eventType == MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1
-}
-
-func (e *RowsEvent) IsDelete() bool {
-	return e.eventType == DELETE_ROWS_EVENTv0 || e.eventType == DELETE_ROWS_EVENTv1 || e.eventType == DELETE_ROWS_EVENTv2 || e.eventType == MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1
+func (e *RowsEvent) Type() EnumRowsEventType {
+	switch e.eventType {
+	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2, MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
+		return EnumRowsEventTypeInsert
+	case UPDATE_ROWS_EVENTv0, UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2, MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
+		return EnumRowsEventTypeUpdate
+	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2, MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
+		return EnumRowsEventTypeDelete
+	default:
+		return EnumRowsEventTypeUnknown
+	}
 }
 
 func isBitSet(bitmap []byte, i int) bool {

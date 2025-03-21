@@ -1176,38 +1176,34 @@ func TestRowsDataExtraData(t *testing.T) {
 	}
 }
 
-func TestRowsEventTypoe(t *testing.T) {
+func TestRowsEventType(t *testing.T) {
 	testcases := []struct {
 		eventType EventType
-		isInsert  bool
-		isUpdate  bool
-		isDelete  bool
+		want      EnumRowsEventType
 	}{
-		{WRITE_ROWS_EVENTv0, true, false, false},
-		{WRITE_ROWS_EVENTv1, true, false, false},
-		{WRITE_ROWS_EVENTv2, true, false, false},
-		{MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, true, false, false},
-		{UPDATE_ROWS_EVENTv0, false, true, false},
-		{UPDATE_ROWS_EVENTv1, false, true, false},
-		{UPDATE_ROWS_EVENTv2, false, true, false},
-		{MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1, false, true, false},
-		{DELETE_ROWS_EVENTv0, false, false, true},
-		{DELETE_ROWS_EVENTv1, false, false, true},
-		{DELETE_ROWS_EVENTv2, false, false, true},
-		{MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, false, false, true},
+		{WRITE_ROWS_EVENTv0, EnumRowsEventTypeInsert},
+		{WRITE_ROWS_EVENTv1, EnumRowsEventTypeInsert},
+		{WRITE_ROWS_EVENTv2, EnumRowsEventTypeInsert},
+		{MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeInsert},
+		{UPDATE_ROWS_EVENTv0, EnumRowsEventTypeUpdate},
+		{UPDATE_ROWS_EVENTv1, EnumRowsEventTypeUpdate},
+		{UPDATE_ROWS_EVENTv2, EnumRowsEventTypeUpdate},
+		{MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeUpdate},
+		{DELETE_ROWS_EVENTv0, EnumRowsEventTypeDelete},
+		{DELETE_ROWS_EVENTv1, EnumRowsEventTypeDelete},
+		{DELETE_ROWS_EVENTv2, EnumRowsEventTypeDelete},
+		{MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeDelete},
 
 		// Whoops, these are not rows events at all
-		{EXEC_LOAD_EVENT, false, false, false},
-		{HEARTBEAT_EVENT, false, false, false},
+		{EXEC_LOAD_EVENT, EnumRowsEventTypeUnknown},
+		{HEARTBEAT_EVENT, EnumRowsEventTypeUnknown},
 	}
 
 	for _, tc := range testcases {
 		rev := new(RowsEvent)
 		rev.eventType = tc.eventType
 
-		require.Equal(t, tc.isInsert, rev.IsInsert())
-		require.Equal(t, tc.isUpdate, rev.IsUpdate())
-		require.Equal(t, tc.isDelete, rev.IsDelete())
+		require.Equal(t, tc.want, rev.Type())
 	}
 }
 
