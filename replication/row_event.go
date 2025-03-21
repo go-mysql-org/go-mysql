@@ -964,11 +964,11 @@ const (
 func (t EnumRowsEventType) String() string {
 	switch t {
 	case EnumRowsEventTypeInsert:
-		return "Insert"
+		return "insert"
 	case EnumRowsEventTypeUpdate:
-		return "Update"
+		return "update"
 	case EnumRowsEventTypeDelete:
-		return "Delete"
+		return "delete"
 	default:
 		return fmt.Sprintf("unknown (%d)", t)
 	}
@@ -1854,6 +1854,7 @@ func (e *RowsEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Flags: %d\n", e.Flags)
 	fmt.Fprintf(w, "Column count: %d\n", e.ColumnCount)
 	fmt.Fprintf(w, "NDB data: %s\n", e.NdbData)
+	fmt.Fprintf(w, "Event type: %s (%s)", e.Type(), e.eventType)
 
 	fmt.Fprintf(w, "Values:\n")
 	for _, rows := range e.Rows {
