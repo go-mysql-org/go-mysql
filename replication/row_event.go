@@ -905,6 +905,7 @@ type RowsEvent struct {
 	// for mariadb *_COMPRESSED_EVENT_V1
 	compressed bool
 
+	// raw event type associated with a RowsEvent
 	eventType EventType
 
 	Table *TableMapEvent
