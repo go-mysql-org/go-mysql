@@ -596,3 +596,7 @@ func (gtid *MysqlGTIDSet) Clone() GTIDSet {
 
 	return clone
 }
+
+func (s *MysqlGTIDSet) IsEmpty() bool {
+	return len(s.Sets) == 0
+}
