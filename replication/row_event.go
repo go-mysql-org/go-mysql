@@ -905,6 +905,7 @@ type RowsEvent struct {
 	// for mariadb *_COMPRESSED_EVENT_V1
 	compressed bool
 
+	// raw event type associated with a RowsEvent
 	eventType EventType
 
 	Table *TableMapEvent
@@ -948,6 +949,29 @@ type RowsEvent struct {
 	timestampStringLocation *time.Location
 	useDecimal              bool
 	ignoreJSONDecodeErr     bool
+}
+
+// EnumRowsEventType is an abridged type describing the operation which triggered the given RowsEvent.
+type EnumRowsEventType byte
+
+const (
+	EnumRowsEventTypeUnknown = EnumRowsEventType(iota)
+	EnumRowsEventTypeInsert
+	EnumRowsEventTypeUpdate
+	EnumRowsEventTypeDelete
+)
+
+func (t EnumRowsEventType) String() string {
+	switch t {
+	case EnumRowsEventTypeInsert:
+		return "insert"
+	case EnumRowsEventTypeUpdate:
+		return "update"
+	case EnumRowsEventTypeDelete:
+		return "delete"
+	default:
+		return fmt.Sprintf("unknown (%d)", t)
+	}
 }
 
 // EnumRowImageType is allowed types for every row in mysql binlog.
@@ -1118,6 +1142,19 @@ func (e *RowsEvent) Decode(data []byte) error {
 		return err
 	}
 	return e.DecodeData(pos, data)
+}
+
+func (e *RowsEvent) Type() EnumRowsEventType {
+	switch e.eventType {
+	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2, MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
+		return EnumRowsEventTypeInsert
+	case UPDATE_ROWS_EVENTv0, UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2, MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1:
+		return EnumRowsEventTypeUpdate
+	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2, MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1:
+		return EnumRowsEventTypeDelete
+	default:
+		return EnumRowsEventTypeUnknown
+	}
 }
 
 func isBitSet(bitmap []byte, i int) bool {
@@ -1817,6 +1854,7 @@ func (e *RowsEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Flags: %d\n", e.Flags)
 	fmt.Fprintf(w, "Column count: %d\n", e.ColumnCount)
 	fmt.Fprintf(w, "NDB data: %s\n", e.NdbData)
+	fmt.Fprintf(w, "Event type: %s (%s)", e.Type(), e.eventType)
 
 	fmt.Fprintf(w, "Values:\n")
 	for _, rows := range e.Rows {

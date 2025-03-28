@@ -1176,6 +1176,37 @@ func TestRowsDataExtraData(t *testing.T) {
 	}
 }
 
+func TestRowsEventType(t *testing.T) {
+	testcases := []struct {
+		eventType EventType
+		want      EnumRowsEventType
+	}{
+		{WRITE_ROWS_EVENTv0, EnumRowsEventTypeInsert},
+		{WRITE_ROWS_EVENTv1, EnumRowsEventTypeInsert},
+		{WRITE_ROWS_EVENTv2, EnumRowsEventTypeInsert},
+		{MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeInsert},
+		{UPDATE_ROWS_EVENTv0, EnumRowsEventTypeUpdate},
+		{UPDATE_ROWS_EVENTv1, EnumRowsEventTypeUpdate},
+		{UPDATE_ROWS_EVENTv2, EnumRowsEventTypeUpdate},
+		{MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeUpdate},
+		{DELETE_ROWS_EVENTv0, EnumRowsEventTypeDelete},
+		{DELETE_ROWS_EVENTv1, EnumRowsEventTypeDelete},
+		{DELETE_ROWS_EVENTv2, EnumRowsEventTypeDelete},
+		{MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeDelete},
+
+		// Whoops, these are not rows events at all
+		{EXEC_LOAD_EVENT, EnumRowsEventTypeUnknown},
+		{HEARTBEAT_EVENT, EnumRowsEventTypeUnknown},
+	}
+
+	for _, tc := range testcases {
+		rev := new(RowsEvent)
+		rev.eventType = tc.eventType
+
+		require.Equal(t, tc.want, rev.Type())
+	}
+}
+
 func TestTableMapHelperMaps(t *testing.T) {
 	/*
 		CREATE TABLE `_types` (
