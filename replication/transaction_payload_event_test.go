@@ -69,6 +69,8 @@ func TestTransactionPayloadEventDecode(t *testing.T) {
 	}
 	err := e.decodePayload()
 	require.NoError(t, err)
+
+	// Check raw events
 	require.Len(t, e.Events, 8)
 	require.Equal(t, QUERY_EVENT, e.Events[0].Header.EventType)
 	require.Equal(t, TABLE_MAP_EVENT, e.Events[1].Header.EventType)
@@ -78,4 +80,17 @@ func TestTransactionPayloadEventDecode(t *testing.T) {
 	require.Equal(t, TABLE_MAP_EVENT, e.Events[5].Header.EventType)
 	require.Equal(t, DELETE_ROWS_EVENTv2, e.Events[6].Header.EventType)
 	require.Equal(t, XID_EVENT, e.Events[7].Header.EventType)
+
+	// Check insert/update/delete rows events casting
+	ievent, ok := e.Events[2].Event.(*RowsEvent)
+	require.True(t, ok)
+	require.Equal(t, ievent.Type(), EnumRowsEventTypeInsert)
+
+	uevent, ok := e.Events[4].Event.(*RowsEvent)
+	require.True(t, ok)
+	require.Equal(t, uevent.Type(), EnumRowsEventTypeUpdate)
+
+	devent, ok := e.Events[6].Event.(*RowsEvent)
+	require.True(t, ok)
+	require.Equal(t, devent.Type(), EnumRowsEventTypeDelete)
 }
