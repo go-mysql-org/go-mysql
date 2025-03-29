@@ -256,3 +256,7 @@ func (s *MariadbGTIDSet) Contain(o GTIDSet) bool {
 
 	return true
 }
+
+func (s *MariadbGTIDSet) IsEmpty() bool {
+	return len(s.Sets) == 0
+}
