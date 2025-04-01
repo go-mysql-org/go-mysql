@@ -42,31 +42,9 @@ var baseConnID uint32 = 10000
 func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
 	p := NewInMemoryProvider()
 	p.AddUser(user, password)
+	server := NewDefaultServer()
 
-	var packetConn *packet.Conn
-	if defaultServer.tlsConfig != nil {
-		packetConn = packet.NewTLSConn(conn)
-	} else {
-		packetConn = packet.NewConn(conn)
-	}
-
-	c := &Conn{
-		Conn:               packetConn,
-		serverConf:         defaultServer,
-		credentialProvider: p,
-		h:                  h,
-		connectionID:       atomic.AddUint32(&baseConnID, 1),
-		stmts:              make(map[uint32]*Stmt),
-		salt:               mysql.RandomBuf(20),
-	}
-	c.closed.Store(false)
-
-	if err := c.handshake(); err != nil {
-		c.Close()
-		return nil, err
-	}
-
-	return c, nil
+	return NewCustomizedConn(conn, server, p, h)
 }
 
 // NewCustomizedConn: create connection with customized server settings
