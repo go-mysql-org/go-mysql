@@ -37,12 +37,15 @@ type Conn struct {
 }
 
 var baseConnID uint32 = 10000
+var defaultServer *Server
 
 // NewConn: create connection with default server settings
 // Deprecated: Use Server.NewConn instead.
 func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
-	s := NewDefaultServer()
-	return s.NewConn(conn, user, password, h)
+	if defaultServer == nil {
+		defaultServer = NewDefaultServer()
+	}
+	return defaultServer.NewConn(conn, user, password, h)
 }
 
 // NewCustomizedConn: create connection with customized server settings
