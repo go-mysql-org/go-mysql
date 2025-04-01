@@ -497,15 +497,15 @@ For the old logging package `github.com/siddontang/go-log/log`, a converting pac
 ## How to migrate to this repo
 To change the used package in your repo it's enough to add this `replace` directive to your `go.mod`:
 ```
-replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.11.0
+replace github.com/siddontang/go-mysql => github.com/go-mysql-org/go-mysql v1.12.0
 ```
 
 This can be done by running this command:
 ```
-go mod edit -replace=github.com/siddontang/go-mysql=github.com/go-mysql-org/go-mysql@v1.11.0
+go mod edit -replace=github.com/siddontang/go-mysql=github.com/go-mysql-org/go-mysql@v1.12.0
 ```
 
-v1.11.0 - is the last tag in repo, feel free to choose what you want.
+v1.12.0 - is the last tag in repo, feel free to choose what you want.
 
 ## Credits
 
