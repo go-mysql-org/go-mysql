@@ -40,8 +40,8 @@ var baseConnID uint32 = 10000
 var defaultServer *Server
  // NewConn: create connection with default server settings
 //
-// Deprecated: Use Server.NewConn instead.
-// Deprecated: Use Server.NewConn instead.
+// Deprecated: Use [Server.NewConn] instead.
+// Deprecated: Use [Server.NewConn] instead.
 func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
 	if defaultServer == nil {
 		defaultServer = NewDefaultServer()
