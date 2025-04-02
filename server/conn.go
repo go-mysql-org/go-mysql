@@ -36,8 +36,10 @@ type Conn struct {
 	closed atomic.Bool
 }
 
-var baseConnID uint32 = 10000
-var defaultServer *Server
+var (
+	baseConnID    uint32 = 10000
+	defaultServer *Server
+)
 
 // NewConn: create connection with default server settings
 //
