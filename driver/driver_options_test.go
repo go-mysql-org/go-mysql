@@ -275,6 +275,8 @@ func CreateMockServer(t *testing.T) *testServer {
 
 	handler := &mockHandler{}
 
+	s := server.NewDefaultServer()
+
 	go func() {
 		for {
 			conn, err := l.Accept()
@@ -283,7 +285,7 @@ func CreateMockServer(t *testing.T) *testServer {
 			}
 
 			go func() {
-				co, err := server.NewCustomizedConn(conn, defaultServer, inMemProvider, handler)
+				co, err := s.NewCustomizedConn(conn, inMemProvider, handler)
 				if err != nil {
 					return
 				}
