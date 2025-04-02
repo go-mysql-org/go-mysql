@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -38,17 +39,16 @@ type Conn struct {
 
 var (
 	baseConnID    uint32 = 10000
-	defaultServer *Server
+	defaultServer        = sync.OnceValue(func() *Server {
+		return NewDefaultServer()
+	})
 )
 
 // NewConn: create connection with default server settings
 //
 // Deprecated: Use [Server.NewConn] instead.
 func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
-	if defaultServer == nil {
-		defaultServer = NewDefaultServer()
-	}
-	return defaultServer.NewConn(conn, user, password, h)
+	return defaultServer().NewConn(conn, user, password, h)
 }
 
 // NewCustomizedConn: create connection with customized server settings
