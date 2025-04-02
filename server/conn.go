@@ -46,6 +46,7 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 	if defaultServer == nil {
 		defaultServer = NewDefaultServer()
 	}
+	return defaultServer.NewConn(conn, user, password, h)
 }
 
 // NewCustomizedConn: create connection with customized server settings
