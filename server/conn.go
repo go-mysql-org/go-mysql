@@ -48,7 +48,6 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 // NewCustomizedConn: create connection with customized server settings
 //
 // Deprecated: Use [Server.NewConn] instead.
-
 // NewCustomizedConn: create connection with customized server settings
 // Deprecated: Use Server.NewConn instead.
 func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
