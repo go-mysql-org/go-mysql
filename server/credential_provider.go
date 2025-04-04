@@ -5,7 +5,9 @@ import "sync"
 // interface for user credential provider
 // hint: can be extended for more functionality
 //
-// Note: if the password in a third-party credential provider could be updated at runtime, we have to invalidate the caching
+// # Important Note
+//
+// if the password in a third-party credential provider could be updated at runtime, we have to invalidate the caching
 // for 'caching_sha2_password' by calling 'func (s *Server)InvalidateCache(string, string)'.
 type CredentialProvider interface {
 	// check if the user exists
