@@ -722,7 +722,7 @@ func (b *BinlogSyncer) prepareSyncGTID(gset mysql.GTIDSet) error {
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	defer func() {
 		if e := recover(); e != nil {
-			s.closeWithError(fmt.Errorf("Err: %v\n Stack: %s", e, mysql.Pstack()))
+			s.closeWithError(fmt.Errorf("panic %v\nstack: %s", e, mysql.Pstack()))
 		}
 		b.wg.Done()
 	}()

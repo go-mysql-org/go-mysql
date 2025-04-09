@@ -303,7 +303,7 @@ func (d *Dumper) Dump(w io.Writer) error {
 		// If we only dump some tables, the dump data will not have database name
 		// which makes us hard to parse, so here we add it manually.
 
-		_, err := w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
+		_, err := fmt.Fprintf(w, "USE `%s`;\n", d.TableDB)
 		if err != nil {
 			return fmt.Errorf(`could not write USE command: %w`, err)
 		}
