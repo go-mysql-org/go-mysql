@@ -1060,7 +1060,7 @@ func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 	pos += 1
 	switch extraDataType {
 	case ENUM_EXTRA_ROW_INFO_TYPECODE_NDB:
-		var ndbLength int = int(data[pos])
+		ndbLength := int(data[pos])
 		pos += 1
 		e.NdbFormat = data[pos]
 		pos += 1
@@ -1388,7 +1388,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 			v = int64(binary.LittleEndian.Uint16(data))
 			n = 2
 		default:
-			err = fmt.Errorf("Unknown ENUM packlen=%d", l)
+			err = fmt.Errorf("unknown ENUM packlen=%d", l)
 		}
 	case mysql.MYSQL_TYPE_SET:
 		n = int(meta & 0xFF)
