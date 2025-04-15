@@ -299,7 +299,7 @@ func (p *BinlogParser) ParseFileAndPrint(fileName string, resultFileName string)
 				buf.WriteString(fmt.Sprintf("%s%s\n", p.commit, p.delimiter))
 			}
 			ioWriter.Write(buf.Bytes())
-		case UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2:
+		case UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2, TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V1, TENDB_UPDATE_ROWS_COMPRESSED_EVENT_V2:
 			buf := bytes.NewBuffer(nil)
 			r := e.Event.(*RowsEvent)
 

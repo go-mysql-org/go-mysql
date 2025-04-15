@@ -178,6 +178,7 @@ func (e *RowsEvent) DecodeData2(pos int, data []byte) (err2 error) {
 			//nolint:nakedret
 			return err3
 		}
+		//fmt.Println("xxxx", len(data), len(uncompressedBuf), len(data[pos:]))
 		data = append(data[:pos], uncompressedBuf...) // tendb
 	}
 
