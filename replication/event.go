@@ -1,8 +1,8 @@
 package replication
 
 import (
-	b64 "encoding/base64"
 	"bytes"
+	b64 "encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -374,11 +374,10 @@ type QueryEvent struct {
 	compressed bool
 
 	// in fact QueryEvent dosen't have the GTIDSet information, just for beneficial to use
-	GSet GTIDSet
+	GSet mysql.GTIDSet
 
 	dbTable        []*SchemaNode
 	DbTableMatched bool
-	GSet mysql.GTIDSet
 }
 
 func (e *QueryEvent) Decode(data []byte) error {

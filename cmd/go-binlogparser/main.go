@@ -261,9 +261,6 @@ func parseHeaderToColumnDef(columnName string) (*ColumnDef, error) {
 		}
 	} else {
 		return nil, errors.Errorf("wrong column name format %s", columnName)
-	err := p.ParseFile(*name, *offset, f)
-	if err != nil {
-		println(err.Error())
 	}
 }
 

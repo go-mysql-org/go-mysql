@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,7 +16,6 @@ import (
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/parser"
-	"github.com/siddontang/go-log/log"
 )
 
 type RowEventPrinter struct {
@@ -57,8 +56,7 @@ func (h *FlashbackEventHandler) OnRow(e *canal.RowsEvent) error {
 func NewRowEventPrinter(cfg *canal.Config) (*RowEventPrinter, error) {
 	c := new(RowEventPrinter)
 	if cfg.Logger == nil {
-		streamHandler, _ := log.NewStreamHandler(os.Stdout)
-		cfg.Logger = log.NewDefault(streamHandler)
+		cfg.Logger = slog.Default()
 	}
 	if cfg.Dialer == nil {
 		dialer := &net.Dialer{}
@@ -214,7 +212,7 @@ func (c *RowEventPrinter) GetTable(db string, table string) (*schema.Table, erro
 			c.errorTablesGetTime[key] = time.Now()
 			c.tableLock.Unlock()
 			// log error and return ErrMissingTableMeta
-			c.cfg.Logger.Errorf("canal get table meta err: %v", errors.Trace(err))
+			c.cfg.Logger.Error("canal get table meta err", slog.Any("trace", errors.Trace(err)))
 			return nil, schema.ErrMissingTableMeta
 		}
 		return nil, err

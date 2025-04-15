@@ -1098,10 +1098,8 @@ func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 	if e.compressed {
 		// mariadb and tendb share the same compress algo(zlib)?
-		uncompressedBuf, err3 := DecompressMariadbData(data[pos:])
+		uncompressedBuf, err3 := mysql.DecompressMariadbData(data[pos:])
 		if err3 != nil {
-		data, err2 = mysql.DecompressMariadbData(data[pos:])
-		if err2 != nil {
 			//nolint:nakedret
 			return err3
 		}
@@ -1180,6 +1178,8 @@ func (e *RowsEvent) SetDbTableFilter(filter *db_table_filter.DbTableFilter) {
 }
 func (e *RowsEvent) SetRowsFilter(filter *RowsFilter) {
 	e.rowsFilter = filter
+}
+
 func (e *RowsEvent) Type() EnumRowsEventType {
 	switch e.eventType {
 	case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2, MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1:
@@ -1325,20 +1325,20 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 		return nil, 0, nil
 	case mysql.MYSQL_TYPE_LONG:
 		n = 4
-		v = ParseBinaryUint32(data)
-	case MYSQL_TYPE_TINY:
+		v = mysql.ParseBinaryUint32(data)
+	case mysql.MYSQL_TYPE_TINY:
 		n = 1
-		v = ParseBinaryUint8(data)
-	case MYSQL_TYPE_SHORT:
+		v = mysql.ParseBinaryUint8(data)
+	case mysql.MYSQL_TYPE_SHORT:
 		n = 2
-		v = ParseBinaryUint16(data)
-	case MYSQL_TYPE_INT24:
+		v = mysql.ParseBinaryUint16(data)
+	case mysql.MYSQL_TYPE_INT24:
 		n = 3
-		v = ParseBinaryUint24(data)
-	case MYSQL_TYPE_LONGLONG:
+		v = mysql.ParseBinaryUint24(data)
+	case mysql.MYSQL_TYPE_LONGLONG:
 		n = 8
-		v = ParseBinaryUint64(data)
-	case MYSQL_TYPE_NEWDECIMAL:
+		v = mysql.ParseBinaryUint64(data)
+	case mysql.MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
 		v, n, err = decodeDecimal(data, int(prec), int(scale), e.useDecimal)
