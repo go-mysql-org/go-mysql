@@ -14,14 +14,16 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/compress"
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pingcap/errors"
 )
 
-const MinCompressionLength = 50
-const DefaultBufferSize = 16 * 1024
+const (
+	MinCompressionLength = 50
+	DefaultBufferSize    = 16 * 1024
+)
 
 // Conn is the base class to handle MySQL protocol.
 type Conn struct {
@@ -104,7 +106,7 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 		utils.BytesBufferPut(buf)
 	}()
 
-	if c.Compression != MYSQL_COMPRESS_NONE {
+	if c.Compression != mysql.MYSQL_COMPRESS_NONE {
 		// it's possible that we're using compression but the server response with a compressed
 		// packet with uncompressed length of 0. In this case we leave compressedReader nil. The
 		// compressedReaderActive flag is important to track the state of the reader, allowing
@@ -150,12 +152,12 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 // newCompressedPacketReader creates a new compressed packet reader.
 func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 	if c.readTimeout != 0 {
-		if err := c.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+		if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 			return nil, err
 		}
 	}
 	if _, err := io.ReadFull(c.reader, c.compressedHeader[:7]); err != nil {
-		return nil, errors.Wrapf(ErrBadConn, "io.ReadFull(compressedHeader) failed. err %v", err)
+		return nil, errors.Wrapf(mysql.ErrBadConn, "io.ReadFull(compressedHeader) failed. err %v", err)
 	}
 
 	compressedSequence := c.compressedHeader[3]
@@ -169,9 +171,9 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 	if uncompressedLength > 0 {
 		limitedReader := io.LimitReader(c.reader, int64(compressedLength))
 		switch c.Compression {
-		case MYSQL_COMPRESS_ZLIB:
+		case mysql.MYSQL_COMPRESS_ZLIB:
 			return compress.GetPooledZlibReader(limitedReader)
-		case MYSQL_COMPRESS_ZSTD:
+		case mysql.MYSQL_COMPRESS_ZSTD:
 			return zstd.NewReader(limitedReader)
 		}
 	}
@@ -180,7 +182,7 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 }
 
 func (c *Conn) currentPacketReader() io.Reader {
-	if c.Compression == MYSQL_COMPRESS_NONE || c.compressedReader == nil {
+	if c.Compression == mysql.MYSQL_COMPRESS_NONE || c.compressedReader == nil {
 		return c.reader
 	} else {
 		return c.compressedReader
@@ -200,7 +202,7 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 		// Call ReadAtLeast with the currentPacketReader as it may change on every iteration
 		// of this loop.
 		if c.readTimeout != 0 {
-			if err := c.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+			if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 				return written, err
 			}
 		}
@@ -212,7 +214,7 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 		// bytes are read. In this case, and when we have compression then advance
 		// the sequence number and reset the compressed reader to continue reading
 		// the remaining bytes in the next compressed packet.
-		if c.Compression != MYSQL_COMPRESS_NONE &&
+		if c.Compression != mysql.MYSQL_COMPRESS_NONE &&
 			(goErrors.Is(err, io.ErrUnexpectedEOF) || goErrors.Is(err, io.EOF)) {
 			// we have read to EOF and read an incomplete uncompressed packet
 			// so advance the compressed sequence number and reset the compressed reader
@@ -249,7 +251,7 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	// buffer, since copyN is capable of getting the next compressed
 	// packet and updating the Conn state with a new compressedReader.
 	if _, err := c.copyN(b, 4); err != nil {
-		return errors.Wrapf(ErrBadConn, "io.ReadFull(header) failed. err %v", err)
+		return errors.Wrapf(mysql.ErrBadConn, "io.ReadFull(header) failed. err %v", err)
 	} else {
 		// copy was successful so copy the 4 bytes from the buffer to the header
 		copy(c.header[:4], b.Bytes()[:4])
@@ -270,11 +272,11 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	}
 
 	if n, err := c.copyN(w, int64(length)); err != nil {
-		return errors.Wrapf(ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, n, length)
+		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, n, length)
 	} else if n != int64(length) {
-		return errors.Wrapf(ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", n, length)
+		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", n, length)
 	} else {
-		if length < MaxPayloadLen {
+		if length < mysql.MaxPayloadLen {
 			return nil
 		}
 
@@ -290,21 +292,23 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 func (c *Conn) WritePacket(data []byte) error {
 	length := len(data) - 4
 
-	for length >= MaxPayloadLen {
+	for length >= mysql.MaxPayloadLen {
 		data[0] = 0xff
 		data[1] = 0xff
 		data[2] = 0xff
 
 		data[3] = c.Sequence
 
-		if n, err := c.writeWithTimeout(data[:4+MaxPayloadLen]); err != nil {
-			return errors.Wrapf(ErrBadConn, "Write(payload portion) failed. err %v", err)
-		} else if n != (4 + MaxPayloadLen) {
-			return errors.Wrapf(ErrBadConn, "Write(payload portion) failed. only %v bytes written, while %v expected", n, 4+MaxPayloadLen)
+		if n, err := c.writeWithTimeout(data[:4+mysql.MaxPayloadLen]); err != nil {
+			return errors.Wrapf(mysql.ErrBadConn,
+				"Write(payload portion) failed. err %v", err)
+		} else if n != (4 + mysql.MaxPayloadLen) {
+			return errors.Wrapf(mysql.ErrBadConn,
+				"Write(payload portion) failed. only %v bytes written, while %v expected", n, 4+mysql.MaxPayloadLen)
 		} else {
 			c.Sequence++
-			length -= MaxPayloadLen
-			data = data[MaxPayloadLen:]
+			length -= mysql.MaxPayloadLen
+			data = data[mysql.MaxPayloadLen:]
 		}
 	}
 
@@ -314,17 +318,17 @@ func (c *Conn) WritePacket(data []byte) error {
 	data[3] = c.Sequence
 
 	switch c.Compression {
-	case MYSQL_COMPRESS_NONE:
+	case mysql.MYSQL_COMPRESS_NONE:
 		if n, err := c.writeWithTimeout(data); err != nil {
-			return errors.Wrapf(ErrBadConn, "Write failed. err %v", err)
+			return errors.Wrapf(mysql.ErrBadConn, "Write failed. err %v", err)
 		} else if n != len(data) {
-			return errors.Wrapf(ErrBadConn, "Write failed. only %v bytes written, while %v expected", n, len(data))
+			return errors.Wrapf(mysql.ErrBadConn, "Write failed. only %v bytes written, while %v expected", n, len(data))
 		}
-	case MYSQL_COMPRESS_ZLIB, MYSQL_COMPRESS_ZSTD:
+	case mysql.MYSQL_COMPRESS_ZLIB, mysql.MYSQL_COMPRESS_ZSTD:
 		if n, err := c.writeCompressed(data); err != nil {
-			return errors.Wrapf(ErrBadConn, "Write failed. err %v", err)
+			return errors.Wrapf(mysql.ErrBadConn, "Write failed. err %v", err)
 		} else if n != len(data) {
-			return errors.Wrapf(ErrBadConn, "Write failed. only %v bytes written, while %v expected", n, len(data))
+			return errors.Wrapf(mysql.ErrBadConn, "Write failed. only %v bytes written, while %v expected", n, len(data))
 		}
 
 		c.compressedReaderActive = false
@@ -335,7 +339,7 @@ func (c *Conn) WritePacket(data []byte) error {
 			c.compressedReader = nil
 		}
 	default:
-		return errors.Wrapf(ErrBadConn, "Write failed. Unsuppored compression algorithm set")
+		return errors.Wrapf(mysql.ErrBadConn, "Write failed. Unsuppored compression algorithm set")
 	}
 
 	c.Sequence++
@@ -344,7 +348,7 @@ func (c *Conn) WritePacket(data []byte) error {
 
 func (c *Conn) writeWithTimeout(b []byte) (n int, err error) {
 	if c.writeTimeout != 0 {
-		if err := c.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+		if err := c.SetWriteDeadline(utils.Now().Add(c.writeTimeout)); err != nil {
 			return n, err
 		}
 	}
@@ -356,7 +360,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	var (
 		compressedLength, uncompressedLength int
 		payload                              *bytes.Buffer
-		compressedHeader                     = make([]byte, 7)
+		compressedHeader                     [7]byte
 	)
 
 	if len(data) > MinCompressionLength {
@@ -365,12 +369,12 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 		defer utils.BytesBufferPut(payload)
 
 		switch c.Compression {
-		case MYSQL_COMPRESS_ZLIB:
+		case mysql.MYSQL_COMPRESS_ZLIB:
 			w, err = compress.GetPooledZlibWriter(payload)
-		case MYSQL_COMPRESS_ZSTD:
+		case mysql.MYSQL_COMPRESS_ZSTD:
 			w, err = zstd.NewWriter(payload)
 		default:
-			return 0, errors.Wrapf(ErrBadConn, "Write failed. Unsuppored compression algorithm set")
+			return 0, errors.Wrapf(mysql.ErrBadConn, "Write failed. Unsuppored compression algorithm set")
 		}
 		if err != nil {
 			return 0, err
@@ -402,7 +406,7 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	compressedHeader[4] = byte(uncompressedLength)
 	compressedHeader[5] = byte(uncompressedLength >> 8)
 	compressedHeader[6] = byte(uncompressedLength >> 16)
-	if _, err = compressedPacket.Write(compressedHeader); err != nil {
+	if _, err = compressedPacket.Write(compressedHeader[:]); err != nil {
 		return 0, err
 	}
 	c.CompressedSequence++
@@ -472,7 +476,7 @@ func (c *Conn) WritePublicKeyAuthPacket(password string, cipher []byte) error {
 }
 
 func (c *Conn) WriteEncryptedPassword(password string, seed []byte, pub *rsa.PublicKey) error {
-	enc, err := EncryptPassword(password, seed, pub)
+	enc, err := mysql.EncryptPassword(password, seed, pub)
 	if err != nil {
 		return errors.Wrap(err, "EncryptPassword failed")
 	}

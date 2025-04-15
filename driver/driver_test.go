@@ -13,9 +13,11 @@ import (
 	"github.com/go-mysql-org/go-mysql/test_util"
 )
 
-var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "", "MySQL password")
-var testDB = flag.String("db", "test", "MySQL test database")
+var (
+	testUser     = flag.String("user", "root", "MySQL user")
+	testPassword = flag.String("pass", "", "MySQL password")
+	testDB       = flag.String("db", "test", "MySQL test database")
+)
 
 func TestDriver(t *testing.T) {
 	suite.Run(t, new(testDriverSuite))

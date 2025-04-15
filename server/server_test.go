@@ -12,7 +12,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -21,15 +20,17 @@ import (
 	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 )
 
-var testUser = flag.String("user", "root", "MySQL user")
-var testPassword = flag.String("pass", "123456", "MySQL password")
-var testDB = flag.String("db", "test", "MySQL test database")
+var (
+	testUser     = flag.String("user", "root", "MySQL user")
+	testPassword = flag.String("pass", "123456", "MySQL password")
+	testDB       = flag.String("db", "test", "MySQL test database")
+)
 
 var tlsConf = NewServerTLSConfig(test_keys.CaPem, test_keys.CertPem, test_keys.KeyPem, tls.VerifyClientCertIfGiven)
 
 func prepareServerConf() []*Server {
 	// add default server without TLS
-	var servers = []*Server{
+	servers := []*Server{
 		// with default TLS
 		NewDefaultServer(),
 		// for key exchange, CLIENT_SSL must be enabled for the server and if the connection is not secured with TLS
@@ -58,14 +59,12 @@ func prepareServerConf() []*Server {
 }
 
 func Test(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-
 	// general tests
 	inMemProvider := NewInMemoryProvider()
 	inMemProvider.AddUser(*testUser, *testPassword)
 
 	servers := prepareServerConf()
-	//no TLS
+	// no TLS
 	for _, svr := range servers {
 		suite.Run(t, &serverTestSuite{
 			server:       svr,
@@ -138,7 +137,7 @@ func (s *serverTestSuite) onAccept() {
 }
 
 func (s *serverTestSuite) onConn(conn net.Conn) {
-	//co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
+	// co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
 	co, err := NewCustomizedConn(conn, s.server, s.credProvider, &testHandler{s})
 	require.NoError(s.T(), err)
 	// set SSL if defined
@@ -228,7 +227,7 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 	case "select":
 		var r *mysql.Resultset
 		var err error
-		//for handle go mysql driver select @@max_allowed_packet
+		// for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
 			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
 				{mysql.MaxPayloadLen},
@@ -242,30 +241,16 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 		if err != nil {
 			return nil, errors.Trace(err)
 		} else {
-			return &mysql.Result{
-				Status:       0,
-				Warnings:     0,
-				InsertId:     0,
-				AffectedRows: 0,
-				Resultset:    r,
-			}, nil
+			return mysql.NewResult(r), nil
 		}
 	case "insert":
-		return &mysql.Result{
-			Status:       0,
-			Warnings:     0,
-			InsertId:     1,
-			AffectedRows: 0,
-			Resultset:    nil,
-		}, nil
+		res := mysql.NewResultReserveResultset(0)
+		res.InsertId = 1
+		return res, nil
 	case "delete", "update", "replace":
-		return &mysql.Result{
-			Status:       0,
-			Warnings:     0,
-			InsertId:     0,
-			AffectedRows: 1,
-			Resultset:    nil,
-		}, nil
+		res := mysql.NewResultReserveResultset(0)
+		res.AffectedRows = 1
+		return res, nil
 	default:
 		return nil, fmt.Errorf("invalid query %s", query)
 	}
@@ -278,6 +263,7 @@ func (h *testHandler) HandleQuery(query string) (*mysql.Result, error) {
 func (h *testHandler) HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error) {
 	return nil, nil
 }
+
 func (h *testHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx interface{}, err error) {
 	ss := strings.Split(sql, " ")
 	switch strings.ToLower(ss[0]) {

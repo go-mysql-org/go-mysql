@@ -3,12 +3,12 @@ package mysql
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 )
 
 // MariadbGTID represent mariadb gtid, [domain ID]-[server-id]-[sequence]
@@ -50,7 +50,8 @@ func ParseMariadbGTID(str string) (*MariadbGTID, error) {
 	return &MariadbGTID{
 		DomainID:       uint32(domainID),
 		ServerID:       uint32(serverID),
-		SequenceNumber: sequenceID}, nil
+		SequenceNumber: sequenceID,
+	}, nil
 }
 
 func (gtid *MariadbGTID) String() string {
@@ -93,7 +94,7 @@ func (gtid *MariadbGTID) forward(newer *MariadbGTID) error {
 		| mysqld-bin.000001 | 2215 | Gtid              |       111 |        2257 | BEGIN GTID 0-111-6  |
 	*/
 	if newer.SequenceNumber <= gtid.SequenceNumber {
-		log.Warnf("out of order binlog appears with gtid %s vs current position gtid %s", newer, gtid)
+		slog.Warn("out of order binlog", slog.Any("new", newer), slog.Any("current", gtid))
 	}
 
 	gtid.ServerID = newer.ServerID
@@ -145,7 +146,7 @@ func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 // Update updates mariadb gtid set
 func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 	sp := strings.Split(GTIDStr, ",")
-	//todo, handle redundant same uuid
+	// todo, handle redundant same uuid
 	for i := 0; i < len(sp); i++ {
 		gtid, err := ParseMariadbGTID(sp[i])
 		if err != nil {
@@ -254,4 +255,8 @@ func (s *MariadbGTIDSet) Contain(o GTIDSet) bool {
 	}
 
 	return true
+}
+
+func (s *MariadbGTIDSet) IsEmpty() bool {
+	return len(s.Sets) == 0
 }

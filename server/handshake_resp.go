@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 
-	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 )
 
@@ -39,7 +39,7 @@ func (c *Conn) readHandshakeResponse() error {
 	}
 
 	// read connection attributes
-	if c.capability&CLIENT_CONNECT_ATTRS > 0 {
+	if c.capability&mysql.CLIENT_CONNECT_ATTRS > 0 {
 		// readAttributes returns new position for further processing of data
 		_, err = c.readAttributes(data, pos)
 		if err != nil {
@@ -64,35 +64,35 @@ func (c *Conn) decodeFirstPart(data []byte) (newData []byte, pos int, err error)
 	// prevent 'panic: runtime error: index out of range' error
 	defer func() {
 		if recover() != nil {
-			err = NewDefaultError(ER_HANDSHAKE_ERROR)
+			err = mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
 		}
 	}()
 
 	// check CLIENT_PROTOCOL_41
-	if uint32(binary.LittleEndian.Uint16(data[:2]))&CLIENT_PROTOCOL_41 == 0 {
+	if uint32(binary.LittleEndian.Uint16(data[:2]))&mysql.CLIENT_PROTOCOL_41 == 0 {
 		return nil, 0, errors.New("CLIENT_PROTOCOL_41 compatible client is required")
 	}
 
-	//capability
+	// capability
 	c.capability = binary.LittleEndian.Uint32(data[:4])
-	if c.capability&CLIENT_SECURE_CONNECTION == 0 {
+	if c.capability&mysql.CLIENT_SECURE_CONNECTION == 0 {
 		return nil, 0, errors.New("CLIENT_SECURE_CONNECTION compatible client is required")
 	}
 	pos += 4
 
-	//skip max packet size
+	// skip max packet size
 	pos += 4
 
 	// connection's default character set as defined
 	c.charset = data[pos]
 	pos++
 
-	//skip reserved 23[00]
+	// skip reserved 23[00]
 	pos += 23
 
 	// is this a SSLRequest packet?
 	if len(data) == (4 + 4 + 1 + 23) {
-		if c.serverConf.capability&CLIENT_SSL == 0 {
+		if c.serverConf.capability&mysql.CLIENT_SSL == 0 {
 			return nil, 0, errors.Errorf("The host '%s' does not support SSL connections", c.RemoteAddr().String())
 		}
 		// switch to TLS
@@ -109,7 +109,7 @@ func (c *Conn) decodeFirstPart(data []byte) (newData []byte, pos int, err error)
 }
 
 func (c *Conn) readUserName(data []byte, pos int) (int, error) {
-	//user name
+	// user name
 	user := string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
 	pos += len(user) + 1
 	c.user = user
@@ -117,7 +117,7 @@ func (c *Conn) readUserName(data []byte, pos int) (int, error) {
 }
 
 func (c *Conn) readDb(data []byte, pos int) (int, error) {
-	if c.capability&CLIENT_CONNECT_WITH_DB != 0 {
+	if c.capability&mysql.CLIENT_CONNECT_WITH_DB != 0 {
 		if len(data[pos:]) == 0 {
 			return pos, nil
 		}
@@ -133,13 +133,13 @@ func (c *Conn) readDb(data []byte, pos int) (int, error) {
 }
 
 func (c *Conn) readPluginName(data []byte, pos int) int {
-	if c.capability&CLIENT_PLUGIN_AUTH != 0 {
+	if c.capability&mysql.CLIENT_PLUGIN_AUTH != 0 {
 		c.authPluginName = string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
 		pos += len(c.authPluginName) + 1
 	} else {
 		// The method used is Native Authentication if both CLIENT_PROTOCOL_41 and CLIENT_SECURE_CONNECTION are set,
 		// but CLIENT_PLUGIN_AUTH is not set, so we fallback to 'mysql_native_password'
-		c.authPluginName = AUTH_NATIVE_PASSWORD
+		c.authPluginName = mysql.AUTH_NATIVE_PASSWORD
 	}
 	return pos
 }
@@ -148,23 +148,24 @@ func (c *Conn) readAuthData(data []byte, pos int) (auth []byte, authLen int, new
 	// prevent 'panic: runtime error: index out of range' error
 	defer func() {
 		if recover() != nil {
-			err = NewDefaultError(ER_HANDSHAKE_ERROR)
+			err = mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
 		}
 	}()
 
 	// length encoded data
-	if c.capability&CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA != 0 {
-		authData, isNULL, readBytes, err := LengthEncodedString(data[pos:])
+	if c.capability&mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA != 0 {
+		authData, isNULL, readBytes, err := mysql.LengthEncodedString(data[pos:])
 		if err != nil {
 			return nil, 0, 0, err
 		}
 		if isNULL {
 			// no auth length and no auth data, just \NUL, considered invalid auth data, and reject connection as MySQL does
-			return nil, 0, 0, NewDefaultError(ER_ACCESS_DENIED_ERROR, c.user, c.RemoteAddr().String(), MySQLErrName[ER_NO])
+			return nil, 0, 0, mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR,
+				c.user, c.RemoteAddr().String(), mysql.MySQLErrName[mysql.ER_NO])
 		}
 		auth = authData
 		authLen = readBytes
-	} else if c.capability&CLIENT_SECURE_CONNECTION != 0 {
+	} else if c.capability&mysql.CLIENT_SECURE_CONNECTION != 0 {
 		// auth length and auth
 		authLen = int(data[pos])
 		pos++
@@ -183,8 +184,8 @@ func (c *Conn) readAuthData(data []byte, pos int) (auth []byte, authLen int, new
 func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 	// if the client use 'sha256_password' auth method, and request for a public key
 	// we send back a keyfile with Protocol::AuthMoreData
-	if c.authPluginName == AUTH_SHA256_PASSWORD && len(authData) == 1 && authData[0] == 0x01 {
-		if c.serverConf.capability&CLIENT_SSL == 0 {
+	if c.authPluginName == mysql.AUTH_SHA256_PASSWORD && len(authData) == 1 && authData[0] == 0x01 {
+		if c.serverConf.capability&mysql.CLIENT_SSL == 0 {
 			return false, errors.New("server does not support SSL: CLIENT_SSL not enabled")
 		}
 		if err := c.writeAuthMoreDataPubkey(); err != nil {
@@ -213,7 +214,7 @@ func (c *Conn) handleAuthMatch() (bool, error) {
 
 func (c *Conn) readAttributes(data []byte, pos int) (int, error) {
 	// read length of attribute data
-	attrLen, isNull, skip := LengthEncodedInt(data[pos:])
+	attrLen, isNull, skip := mysql.LengthEncodedInt(data[pos:])
 	pos += skip
 	if isNull {
 		return pos, nil
@@ -229,7 +230,7 @@ func (c *Conn) readAttributes(data []byte, pos int) (int, error) {
 
 	// read until end of data or NUL for atrribute key/values
 	for {
-		str, isNull, strLen, err := LengthEncodedString(data[pos:])
+		str, isNull, strLen, err := mysql.LengthEncodedString(data[pos:])
 		if err != nil {
 			return -1, err
 		}

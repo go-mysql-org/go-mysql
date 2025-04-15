@@ -337,3 +337,35 @@ func mysqlGTIDfromString(t *testing.T, gtidStr string) MysqlGTIDSet {
 
 	return *gtid.(*MysqlGTIDSet)
 }
+
+func TestValidateFlavor(t *testing.T) {
+	tbls := []struct {
+		flavor string
+		valid  bool
+	}{
+		{"mysql", true},
+		{"mariadb", true},
+		{"maria", false},
+		{"MariaDB", true},
+		{"msql", false},
+		{"mArIAdb", true},
+	}
+
+	for _, f := range tbls {
+		err := ValidateFlavor(f.flavor)
+		if f.valid == true {
+			require.NoError(t, err)
+		} else {
+			require.Error(t, err)
+		}
+	}
+}
+
+func TestMysqlGTIDSetIsEmpty(t *testing.T) {
+	emptyGTIDSet := new(MysqlGTIDSet)
+	emptyGTIDSet.Sets = make(map[string]*UUIDSet)
+	require.True(t, emptyGTIDSet.IsEmpty())
+
+	nonEmptyGTIDSet := mysqlGTIDfromString(t, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
+	require.False(t, nonEmptyGTIDSet.IsEmpty())
+}

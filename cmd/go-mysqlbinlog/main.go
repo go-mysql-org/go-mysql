@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/pingcap/errors"
@@ -31,6 +32,8 @@ var (
 	backupPath = flag.String("backup_path", "", "backup path to store binlog files")
 
 	rawMode = flag.Bool("raw", false, "Use raw mode")
+	format  = flag.String("format", "plain", "log format")
+	verbose = flag.Bool("verbose", false, "verbose logging")
 )
 
 func main() {
@@ -40,13 +43,33 @@ func main() {
 		ServerID: 101,
 		Flavor:   *flavor,
 
-		Host:            *host,
-		Port:            uint16(*port),
-		User:            *user,
-		Password:        *password,
-		RawModeEnabled:  *rawMode,
-		SemiSyncEnabled: *semiSync,
-		UseDecimal:      true,
+		Host:                 *host,
+		Port:                 uint16(*port),
+		User:                 *user,
+		Password:             *password,
+		RawModeEnabled:       *rawMode,
+		SemiSyncEnabled:      *semiSync,
+		UseDecimal:           true,
+		MaxReconnectAttempts: 10,
+	}
+
+	logOpts := &slog.HandlerOptions{
+		AddSource: *verbose,
+	}
+
+	switch *format {
+	case "json":
+		cfg.Logger = slog.New(slog.NewJSONHandler(os.Stdout, logOpts))
+	case "plain":
+		cfg.Logger = slog.New(slog.NewTextHandler(os.Stdout, logOpts))
+	default:
+		panic("unsupported log format")
+	}
+
+	err := mysql.ValidateFlavor(*flavor)
+	if err != nil {
+		fmt.Printf("Flavor error: %v\n", errors.ErrorStack(err))
+		return
 	}
 
 	b := replication.NewBinlogSyncer(cfg)

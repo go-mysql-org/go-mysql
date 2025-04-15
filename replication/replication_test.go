@@ -17,6 +17,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/test_util"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 var testOutputLogs = flag.Bool("out", false, "output binlog event")
@@ -335,7 +336,7 @@ func (t *testSyncerSuite) testPositionSync() {
 
 	// Test re-sync.
 	time.Sleep(100 * time.Millisecond)
-	_ = t.b.c.SetReadDeadline(time.Now().Add(time.Millisecond))
+	_ = t.b.c.SetReadDeadline(utils.Now().Add(time.Millisecond))
 	time.Sleep(100 * time.Millisecond)
 
 	t.testSync(s)

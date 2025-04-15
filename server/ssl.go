@@ -8,7 +8,8 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
-	"time"
+
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 // NewServerTLSConfig: generate TLS config for server side
@@ -75,8 +76,8 @@ func generateAndSignRSACerts(caPem, caKey []byte) ([]byte, []byte) {
 			StreetAddress: []string{"ADDRESS"},
 			PostalCode:    []string{"POSTAL_CODE"},
 		},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().AddDate(10, 0, 0),
+		NotBefore:    utils.Now(),
+		NotAfter:     utils.Now().AddDate(10, 0, 0),
 		SubjectKeyId: []byte{1, 2, 3, 4, 6},
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:     x509.KeyUsageDigitalSignature,
@@ -112,8 +113,8 @@ func generateCA() ([]byte, []byte) {
 			StreetAddress: []string{"ADDRESS"},
 			PostalCode:    []string{"POSTAL_CODE"},
 		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(10, 0, 0),
+		NotBefore:             utils.Now(),
+		NotAfter:              utils.Now().AddDate(10, 0, 0),
 		IsCA:                  true,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageKeyEncipherment,

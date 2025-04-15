@@ -12,9 +12,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-var (
-	ErrSkip = errors.New("Handler error, but skipped")
-)
+var ErrSkip = errors.New("Handler error, but skipped")
 
 type ParseHandler interface {
 	// Parse CHANGE MASTER TO MASTER_LOG_FILE=name, MASTER_LOG_POS=pos;
@@ -23,20 +21,16 @@ type ParseHandler interface {
 	Data(schema string, table string, values []string) error
 }
 
-var binlogExp *regexp.Regexp
-var useExp *regexp.Regexp
-var valuesExp *regexp.Regexp
-var gtidExp *regexp.Regexp
-
-func init() {
-	binlogExp = regexp.MustCompile(`^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\d+);`)
-	useExp = regexp.MustCompile("^USE `(.+)`;")
+var (
+	binlogExp = regexp.MustCompile(`^CHANGE (MASTER|REPLICATION SOURCE) TO (MASTER_LOG_FILE|SOURCE_LOG_FILE)='(.+)', (MASTER_LOG_POS|SOURCE_LOG_POS)=(\d+);`)
+	useExp    = regexp.MustCompile("^USE `(.+)`;")
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
+
 	// The pattern will only match MySQL GTID, as you know SET GLOBAL gtid_slave_pos='0-1-4' is used for MariaDB.
 	// SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150';
 	// https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-concepts.html
 	gtidExp = regexp.MustCompile(`(\w{8}(-\w{4}){3}-\w{12}(:\d+(-\d+)?)+)`)
-}
+)
 
 // Parse the dump data with Dumper generate.
 // It can not parse all the data formats with mysqldump outputs
@@ -71,8 +65,8 @@ func Parse(r io.Reader, h ParseHandler, parseBinlogPos bool) error {
 				}
 			}
 			if m := binlogExp.FindAllStringSubmatch(line, -1); len(m) == 1 {
-				name := m[0][1]
-				pos, err := strconv.ParseUint(m[0][2], 10, 64)
+				name := m[0][3]
+				pos, err := strconv.ParseUint(m[0][5], 10, 64)
 				if err != nil {
 					return errors.Errorf("parse binlog %v err, invalid number", line)
 				}

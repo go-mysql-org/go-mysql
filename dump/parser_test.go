@@ -8,6 +8,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// This tests the binlogExp regexp that matches the line that mysqldump adds when called with --master-data or --source-data
+func TestBinlogExp(t *testing.T) {
+	stmts := []struct {
+		input string
+		file  string
+		pos   string
+	}{
+		{
+			// MySQL 9.1.0
+			`CHANGE REPLICATION SOURCE TO SOURCE_LOG_FILE='binlog.000002', SOURCE_LOG_POS=170923;`,
+			`binlog.000002`,
+			`170923`,
+		},
+		{
+			`CHANGE MASTER TO MASTER_LOG_FILE='mysql-bin.008995', MASTER_LOG_POS=102052485;`,
+			`mysql-bin.008995`,
+			`102052485`,
+		},
+	}
+
+	for _, stmt := range stmts {
+		m := binlogExp.FindAllStringSubmatch(stmt.input, -1)
+		require.NotNil(t, m)
+		require.Equal(t, stmt.file, m[0][3])
+		require.Equal(t, stmt.pos, m[0][5])
+	}
+}
+
 func TestParseGtidExp(t *testing.T) {
 	//	binlogExp := regexp.MustCompile("^CHANGE MASTER TO MASTER_LOG_FILE='(.+)', MASTER_LOG_POS=(\\d+);")
 	//	gtidExp := regexp.MustCompile("(\\w{8}(-\\w{4}){3}-\\w{12}:\\d+-\\d+)")
@@ -49,7 +77,7 @@ e7574090-b123-11e8-8bb4-005056a29643:1'
 
 	for _, tt := range tbls {
 		reader := strings.NewReader(tt.input)
-		var handler = new(testParseHandler)
+		handler := new(testParseHandler)
 
 		err := Parse(reader, handler, true)
 		require.NoError(t, err)
@@ -129,10 +157,14 @@ func TestParseLine(t *testing.T) {
 		line     string
 		expected string
 	}{
-		{line: "INSERT INTO `test` VALUES (1, 'first', 'hello mysql; 2', 'e1', 'a,b');",
-			expected: "1, 'first', 'hello mysql; 2', 'e1', 'a,b'"},
-		{line: "INSERT INTO `test` VALUES (0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b');",
-			expected: "0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b'"},
+		{
+			line:     "INSERT INTO `test` VALUES (1, 'first', 'hello mysql; 2', 'e1', 'a,b');",
+			expected: "1, 'first', 'hello mysql; 2', 'e1', 'a,b'",
+		},
+		{
+			line:     "INSERT INTO `test` VALUES (0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b');",
+			expected: "0x22270073646661736661736466, 'first', 'hello mysql; 2', 'e1', 'a,b'",
+		},
 	}
 
 	f := func(c rune) bool {

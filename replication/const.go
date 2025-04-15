@@ -1,12 +1,12 @@
 package replication
 
 const (
-	//we only support MySQL 5.0.0+ binlog format, maybe???
+	// we only support MySQL 5.0.0+ binlog format, maybe???
 	MinBinlogVersion = 4
 )
 
 var (
-	//binlog header [ fe `bin` ]
+	// binlog header [ fe `bin` ]
 	BinLogFileHeader = []byte{0xfe, 0x62, 0x69, 0x6e}
 
 	SemiSyncIndicator byte = 0xef
@@ -47,6 +47,9 @@ const (
 	BINLOG_MARIADB_FL_WAITED                      /*16 = FL_WAITED is set if a row lock wait (or other wait) is detected during the execution of the transaction*/
 	BINLOG_MARIADB_FL_DDL                         /*32 - FL_DDL is set for event group containing DDL*/
 )
+
+// See `Log_event_type` in binlog_event.h
+// https://github.com/mysql/mysql-server/blob/trunk/libs/mysql/binlog/event/binlog_event.h
 
 type EventType byte
 
@@ -93,6 +96,7 @@ const (
 	PARTIAL_UPDATE_ROWS_EVENT
 	TRANSACTION_PAYLOAD_EVENT
 	HEARTBEAT_LOG_EVENT_V2
+	GTID_TAGGED_LOG_EVENT
 )
 
 const (
@@ -202,6 +206,8 @@ func (e EventType) String() string {
 		return "TransactionPayloadEvent"
 	case HEARTBEAT_LOG_EVENT_V2:
 		return "HeartbeatLogEventV2"
+	case GTID_TAGGED_LOG_EVENT:
+		return "Gtid_tagged_log_event"
 	case MARIADB_START_ENCRYPTION_EVENT:
 		return "MariadbStartEncryptionEvent"
 	case MARIADB_QUERY_COMPRESSED_EVENT:

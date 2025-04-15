@@ -15,9 +15,11 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
-var ErrTableNotExist = errors.New("table is not exist")
-var ErrMissingTableMeta = errors.New("missing table meta")
-var HAHealthCheckSchema = "mysql.ha_health_check"
+var (
+	ErrTableNotExist    = errors.New("table is not exist")
+	ErrMissingTableMeta = errors.New("missing table meta")
+	HAHealthCheckSchema = "mysql.ha_health_check"
+)
 
 // Different column type
 const (
@@ -87,21 +89,21 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].Type = TYPE_DECIMAL
 	} else if strings.HasPrefix(columnType, "enum") {
 		ta.Columns[index].Type = TYPE_ENUM
-		ta.Columns[index].EnumValues = strings.Split(strings.Replace(
+		ta.Columns[index].EnumValues = strings.Split(strings.ReplaceAll(
 			strings.TrimSuffix(
 				strings.TrimPrefix(
 					columnType, "enum("),
 				")"),
-			"'", "", -1),
+			"'", ""),
 			",")
 	} else if strings.HasPrefix(columnType, "set") {
 		ta.Columns[index].Type = TYPE_SET
-		ta.Columns[index].SetValues = strings.Split(strings.Replace(
+		ta.Columns[index].SetValues = strings.Split(strings.ReplaceAll(
 			strings.TrimSuffix(
 				strings.TrimPrefix(
 					columnType, "set("),
 				")"),
-			"'", "", -1),
+			"'", ""),
 			",")
 	} else if strings.HasPrefix(columnType, "binary") {
 		ta.Columns[index].Type = TYPE_BINARY
@@ -117,7 +119,7 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].Type = TYPE_TIMESTAMP
 	} else if strings.HasPrefix(columnType, "time") {
 		ta.Columns[index].Type = TYPE_TIME
-	} else if "date" == columnType {
+	} else if columnType == "date" {
 		ta.Columns[index].Type = TYPE_DATE
 	} else if strings.HasPrefix(columnType, "bit") {
 		ta.Columns[index].Type = TYPE_BIT
@@ -144,11 +146,12 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.UnsignedColumns = append(ta.UnsignedColumns, index)
 	}
 
-	if extra == "auto_increment" {
+	switch extra {
+	case "auto_increment":
 		ta.Columns[index].IsAuto = true
-	} else if extra == "VIRTUAL GENERATED" {
+	case "VIRTUAL GENERATED":
 		ta.Columns[index].IsVirtual = true
-	} else if extra == "STORED GENERATED" {
+	case "STORED GENERATED":
 		ta.Columns[index].IsStored = true
 	}
 }

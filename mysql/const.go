@@ -24,8 +24,12 @@ const (
 	AUTH_CLEAR_PASSWORD        = "mysql_clear_password"
 	AUTH_CACHING_SHA2_PASSWORD = "caching_sha2_password"
 	AUTH_SHA256_PASSWORD       = "sha256_password"
+	AUTH_MARIADB_ED25519       = "client_ed25519"
 )
 
+// SERVER_STATUS_flags_enum
+// https://dev.mysql.com/doc/dev/mysql-server/latest/mysql__com_8h.html#a1d854e841086925be1883e4d7b4e8cad
+// https://github.com/mysql/mysql-server/blob/500c3117e6f638043c4fea8aacf17d63a8d07de6/include/mysql_com.h#L809-L864
 const (
 	SERVER_STATUS_IN_TRANS             uint16 = 0x0001
 	SERVER_STATUS_AUTOCOMMIT           uint16 = 0x0002
@@ -39,8 +43,11 @@ const (
 	SERVER_STATUS_METADATA_CHANGED     uint16 = 0x0400
 	SERVER_QUERY_WAS_SLOW              uint16 = 0x0800
 	SERVER_PS_OUT_PARAMS               uint16 = 0x1000
+	SERVER_STATUS_IN_TRANS_READONLY    uint16 = 0x2000
+	SERVER_SESSION_STATE_CHANGED       uint16 = 0x4000
 )
 
+// https://github.com/mysql/mysql-server/blob/6b6d3ed3d5c6591b446276184642d7d0504ecc86/include/my_command.h#L48-L103
 const (
 	COM_SLEEP byte = iota
 	COM_QUIT
@@ -74,6 +81,8 @@ const (
 	COM_DAEMON
 	COM_BINLOG_DUMP_GTID
 	COM_RESET_CONNECTION
+	COM_CLONE
+	COM_SUBSCRIBE_GROUP_REPLICATION_STREAM
 )
 
 const (
@@ -138,6 +147,8 @@ const (
 	MYSQL_TYPE_TIME2
 )
 
+const MYSQL_TYPE_VECTOR = 0xf2
+
 const (
 	MYSQL_TYPE_JSON byte = iota + 0xf5
 	MYSQL_TYPE_NEWDECIMAL
@@ -171,13 +182,18 @@ const (
 )
 
 const (
+	PARAM_UNSIGNED = 128
+)
+
+const (
 	DEFAULT_ADDR                  = "127.0.0.1:3306"
+	DEFAULT_IPV6_ADDR             = "[::1]:3306"
 	DEFAULT_USER                  = "root"
 	DEFAULT_PASSWORD              = ""
-	DEFAULT_FLAVOR                = "mysql"
-	DEFAULT_CHARSET               = "utf8"
-	DEFAULT_COLLATION_ID   uint8  = 33
-	DEFAULT_COLLATION_NAME string = "utf8_general_ci"
+	DEFAULT_FLAVOR                = MySQLFlavor
+	DEFAULT_CHARSET               = "utf8mb4"
+	DEFAULT_COLLATION_ID   uint8  = 255
+	DEFAULT_COLLATION_NAME string = "utf8mb4_0900_ai_ci"
 )
 
 const (
@@ -199,4 +215,13 @@ const (
 	MYSQL_COMPRESS_NONE = iota
 	MYSQL_COMPRESS_ZLIB
 	MYSQL_COMPRESS_ZSTD
+)
+
+// See enum_cursor_type in mysql.h
+const (
+	CURSOR_TYPE_NO_CURSOR     byte = 0x0
+	CURSOR_TYPE_READ_ONLY     byte = 0x1
+	CURSOR_TYPE_FOR_UPDATE    byte = 0x2
+	CURSOR_TYPE_SCROLLABLE    byte = 0x4
+	PARAMETER_COUNT_AVAILABLE byte = 0x8
 )

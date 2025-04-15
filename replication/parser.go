@@ -17,10 +17,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
-var (
-	// ErrChecksumMismatch indicates binlog checksum mismatch.
-	ErrChecksumMismatch = errors.New("binlog checksum mismatch, data may be corrupted")
-)
+// ErrChecksumMismatch indicates binlog checksum mismatch.
+var ErrChecksumMismatch = errors.New("binlog checksum mismatch, data may be corrupted")
 
 type BinlogParser struct {
 	// "mysql" or "mariadb", if not set, use "mysql" by default
@@ -195,11 +193,7 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 }
 
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
-	for {
-		if atomic.LoadUint32(&p.stopProcessing) == 1 {
-			break
-		}
-
+	for atomic.LoadUint32(&p.stopProcessing) != 1 {
 		done, err := p.parseSingleEvent(r, onEvent)
 		if err != nil {
 			if err == errMissingTableMapEvent {
@@ -326,6 +320,8 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = &GTIDEvent{}
 			case ANONYMOUS_GTID_EVENT:
 				e = &GTIDEvent{}
+			case GTID_TAGGED_LOG_EVENT:
+				e = &GtidTaggedLogEvent{}
 			case BEGIN_LOAD_QUERY_EVENT:
 				e = &BeginLoadQueryEvent{}
 			case EXECUTE_LOAD_QUERY_EVENT:
@@ -394,7 +390,6 @@ func (p *BinlogParser) Parse(data []byte) (*BinlogEvent, error) {
 	rawData := data
 
 	h, err := p.parseHeader(data)
-
 	if err != nil {
 		return nil, err
 	}

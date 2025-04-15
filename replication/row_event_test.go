@@ -400,6 +400,7 @@ func TestParseJson(t *testing.T) {
 		require.Equal(t, "101", rows.Rows[0][1])
 	}
 }
+
 func TestParseJsonDecimal(t *testing.T) {
 	// Table format:
 	// mysql> desc t10;
@@ -587,8 +588,7 @@ func TestJsonNull(t *testing.T) {
 	rows.tables[tableMapEvent.TableID] = tableMapEvent
 	rows.Version = 2
 
-	data :=
-		[]byte("r\x00\x00\x00\x00\x00\x01\x00\x02\x00\a\xff\x80\x01\x00\x00\x00B\ue4d06W\x00\x00A\x10@l\x9a\x85/\x00\x00\x00\x00\x00\x00{\xc36X\x00\x00\x00\x00")
+	data := []byte("r\x00\x00\x00\x00\x00\x01\x00\x02\x00\a\xff\x80\x01\x00\x00\x00B\ue4d06W\x00\x00A\x10@l\x9a\x85/\x00\x00\x00\x00\x00\x00{\xc36X\x00\x00\x00\x00")
 
 	rows.Rows = nil
 	err = rows.Decode(data)
@@ -1176,6 +1176,37 @@ func TestRowsDataExtraData(t *testing.T) {
 	}
 }
 
+func TestRowsEventType(t *testing.T) {
+	testcases := []struct {
+		eventType EventType
+		want      EnumRowsEventType
+	}{
+		{WRITE_ROWS_EVENTv0, EnumRowsEventTypeInsert},
+		{WRITE_ROWS_EVENTv1, EnumRowsEventTypeInsert},
+		{WRITE_ROWS_EVENTv2, EnumRowsEventTypeInsert},
+		{MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeInsert},
+		{UPDATE_ROWS_EVENTv0, EnumRowsEventTypeUpdate},
+		{UPDATE_ROWS_EVENTv1, EnumRowsEventTypeUpdate},
+		{UPDATE_ROWS_EVENTv2, EnumRowsEventTypeUpdate},
+		{MARIADB_UPDATE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeUpdate},
+		{DELETE_ROWS_EVENTv0, EnumRowsEventTypeDelete},
+		{DELETE_ROWS_EVENTv1, EnumRowsEventTypeDelete},
+		{DELETE_ROWS_EVENTv2, EnumRowsEventTypeDelete},
+		{MARIADB_DELETE_ROWS_COMPRESSED_EVENT_V1, EnumRowsEventTypeDelete},
+
+		// Whoops, these are not rows events at all
+		{EXEC_LOAD_EVENT, EnumRowsEventTypeUnknown},
+		{HEARTBEAT_EVENT, EnumRowsEventTypeUnknown},
+	}
+
+	for _, tc := range testcases {
+		rev := new(RowsEvent)
+		rev.eventType = tc.eventType
+
+		require.Equal(t, tc.want, rev.Type())
+	}
+}
+
 func TestTableMapHelperMaps(t *testing.T) {
 	/*
 		CREATE TABLE `_types` (
@@ -1364,7 +1395,8 @@ func TestInvalidEvent(t *testing.T) {
 		ColumnCount: 0x2,
 		ColumnType:  []uint8{0x3, 0xc},
 		ColumnMeta:  []uint16{0x0, 0x0},
-		NullBitmap:  []uint8{0x2}}
+		NullBitmap:  []uint8{0x2},
+	}
 
 	e2 := &RowsEvent{
 		Version:     1,

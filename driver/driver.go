@@ -3,6 +3,7 @@
 package driver
 
 import (
+	"context"
 	"crypto/tls"
 	"database/sql"
 	sqldriver "database/sql/driver"
@@ -17,8 +18,25 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go/hack"
+)
+
+var (
+	_ sqldriver.Driver             = &driver{}
+	_ sqldriver.DriverContext      = &driver{}
+	_ sqldriver.Connector          = &connInfo{}
+	_ sqldriver.NamedValueChecker  = &conn{}
+	_ sqldriver.Validator          = &conn{}
+	_ sqldriver.Conn               = &conn{}
+	_ sqldriver.Pinger             = &conn{}
+	_ sqldriver.ConnBeginTx        = &conn{}
+	_ sqldriver.ConnPrepareContext = &conn{}
+	_ sqldriver.ExecerContext      = &conn{}
+	_ sqldriver.QueryerContext     = &conn{}
+	_ sqldriver.Stmt               = &stmt{}
+	_ sqldriver.StmtExecContext    = &stmt{}
+	_ sqldriver.StmtQueryContext   = &stmt{}
 )
 
 var customTLSMutex sync.Mutex
@@ -27,15 +45,19 @@ var customTLSMutex sync.Mutex
 var (
 	dsnRegex           = regexp.MustCompile("@[^@]+/[^@/]+")
 	customTLSConfigMap = make(map[string]*tls.Config)
-	options            = make(map[string]DriverOption)
+	options            = map[string]DriverOption{
+		"compress":     CompressOption,
+		"collation":    CollationOption,
+		"readTimeout":  ReadTimeoutOption,
+		"writeTimeout": WriteTimeoutOption,
+	}
 
 	// can be provided by clients to allow more control in handling Go and database
 	// types beyond the default Value types allowed
 	namedValueCheckers []CheckNamedValueFunc
 )
 
-type driver struct {
-}
+type driver struct{}
 
 type connInfo struct {
 	standardDSN bool
@@ -97,17 +119,18 @@ func parseDSN(dsn string) (connInfo, error) {
 // Open takes a supplied DSN string and opens a connection
 // See ParseDSN for more information on the form of the DSN
 func (d driver) Open(dsn string) (sqldriver.Conn, error) {
-	var (
-		c *client.Conn
-		// by default database/sql driver retries will be enabled
-		retries = true
-	)
-
 	ci, err := parseDSN(dsn)
-
 	if err != nil {
 		return nil, err
 	}
+	return ci.Connect(context.Background())
+}
+
+func (ci connInfo) Connect(ctx context.Context) (sqldriver.Conn, error) {
+	var c *client.Conn
+	var err error
+	// by default database/sql driver retries will be enabled
+	retries := true
 
 	if ci.standardDSN {
 		var timeout time.Duration
@@ -156,41 +179,84 @@ func (d driver) Open(dsn string) (sqldriver.Conn, error) {
 			}
 		}
 
-		if timeout > 0 {
-			c, err = client.ConnectWithTimeout(ci.addr, ci.user, ci.password, ci.db, timeout, configuredOptions...)
-		} else {
-			c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db, configuredOptions...)
+		if timeout <= 0 {
+			timeout = 10 * time.Second
 		}
+		c, err = client.ConnectWithContext(ctx, ci.addr, ci.user, ci.password, ci.db, timeout, configuredOptions...)
 	} else {
 		// No more processing here. Let's only support url parameters with the newer style DSN
-		c, err = client.Connect(ci.addr, ci.user, ci.password, ci.db)
+		c, err = client.ConnectWithContext(ctx, ci.addr, ci.user, ci.password, ci.db, 10*time.Second)
 	}
 	if err != nil {
 		return nil, err
 	}
+
+	contexts := make(chan context.Context)
+	go func() {
+		ctx := context.Background()
+		for {
+			var ok bool
+			select {
+			case <-ctx.Done():
+				ctx = context.Background()
+				_ = c.Conn.Close()
+			case ctx, ok = <-contexts:
+				if !ok {
+					return
+				}
+			}
+		}
+	}()
 
 	// if retries are 'on' then return sqldriver.ErrBadConn which will trigger up to 3
 	// retries by the database/sql package. If retries are 'off' then we'll return
 	// the native go-mysql-org/go-mysql 'mysql.ErrBadConn' erorr which will prevent a retry.
 	// In this case the sqldriver.Validator interface is implemented and will return
 	// false for IsValid() signaling the connection is bad and should be discarded.
-	return &conn{Conn: c, state: &state{valid: true, useStdLibErrors: retries}}, nil
+	return &conn{
+		Conn:  c,
+		state: &state{contexts: contexts, valid: true, useStdLibErrors: retries},
+	}, nil
+}
+
+func (d driver) OpenConnector(name string) (sqldriver.Connector, error) {
+	return parseDSN(name)
+}
+
+func (ci connInfo) Driver() sqldriver.Driver {
+	return driver{}
 }
 
 type CheckNamedValueFunc func(*sqldriver.NamedValue) error
 
-var _ sqldriver.NamedValueChecker = &conn{}
-var _ sqldriver.Validator = &conn{}
-
 type state struct {
-	valid bool
+	contexts chan context.Context
+	valid    bool
 	// when true, the driver connection will return ErrBadConn from the golang Standard Library
 	useStdLibErrors bool
+}
+
+func (s *state) watchCtx(ctx context.Context) func() {
+	s.contexts <- ctx
+	return func() {
+		s.contexts <- context.Background()
+	}
+}
+
+func (s *state) Close() {
+	if s.contexts != nil {
+		close(s.contexts)
+		s.contexts = nil
+	}
 }
 
 type conn struct {
 	*client.Conn
 	state *state
+}
+
+func (c *conn) watchCtx(ctx context.Context) func() {
+	return c.state.watchCtx(ctx)
 }
 
 func (c *conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
@@ -215,6 +281,17 @@ func (c *conn) IsValid() bool {
 	return c.state.valid
 }
 
+func (c *conn) Ping(ctx context.Context) error {
+	defer c.watchCtx(ctx)()
+	if err := c.Conn.Ping(); err != nil {
+		if err == context.DeadlineExceeded || err == context.Canceled {
+			return err
+		}
+		return sqldriver.ErrBadConn
+	}
+	return nil
+}
+
 func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
 	st, err := c.Conn.Prepare(query)
 	if err != nil {
@@ -224,7 +301,13 @@ func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
 	return &stmt{Stmt: st, connectionState: c.state}, nil
 }
 
+func (c *conn) PrepareContext(ctx context.Context, query string) (sqldriver.Stmt, error) {
+	defer c.watchCtx(ctx)()
+	return c.Prepare(query)
+}
+
 func (c *conn) Close() error {
+	c.state.Close()
 	return c.Conn.Close()
 }
 
@@ -237,11 +320,44 @@ func (c *conn) Begin() (sqldriver.Tx, error) {
 	return &tx{c.Conn}, nil
 }
 
+var isolationLevelTransactionIsolation = map[sql.IsolationLevel]string{
+	sql.LevelDefault:         "",
+	sql.LevelRepeatableRead:  "REPEATABLE READ",
+	sql.LevelReadCommitted:   "READ COMMITTED",
+	sql.LevelReadUncommitted: "READ UNCOMMITTED",
+	sql.LevelSerializable:    "SERIALIZABLE",
+}
+
+func (c *conn) BeginTx(ctx context.Context, opts sqldriver.TxOptions) (sqldriver.Tx, error) {
+	defer c.watchCtx(ctx)()
+
+	isolation := sql.IsolationLevel(opts.Isolation)
+	txIsolation, ok := isolationLevelTransactionIsolation[isolation]
+	if !ok {
+		return nil, fmt.Errorf("invalid mysql transaction isolation level %s", isolation)
+	}
+	err := c.Conn.BeginTx(opts.ReadOnly, txIsolation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &tx{c.Conn}, nil
+}
+
 func buildArgs(args []sqldriver.Value) []interface{} {
 	a := make([]interface{}, len(args))
 
 	for i, arg := range args {
 		a[i] = arg
+	}
+
+	return a
+}
+
+func buildNamedArgs(args []sqldriver.NamedValue) []interface{} {
+	a := make([]interface{}, len(args))
+
+	for i, arg := range args {
+		a[i] = arg.Value
 	}
 
 	return a
@@ -263,7 +379,17 @@ func (st *state) replyError(err error) error {
 
 func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, error) {
 	a := buildArgs(args)
-	r, err := c.Conn.Execute(query, a...)
+	r, err := c.Execute(query, a...)
+	if err != nil {
+		return nil, c.state.replyError(err)
+	}
+	return &result{r}, nil
+}
+
+func (c *conn) ExecContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Result, error) {
+	defer c.watchCtx(ctx)()
+	a := buildNamedArgs(args)
+	r, err := c.Execute(query, a...)
 	if err != nil {
 		return nil, c.state.replyError(err)
 	}
@@ -272,7 +398,17 @@ func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, err
 
 func (c *conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, error) {
 	a := buildArgs(args)
-	r, err := c.Conn.Execute(query, a...)
+	r, err := c.Execute(query, a...)
+	if err != nil {
+		return nil, c.state.replyError(err)
+	}
+	return newRows(r.Resultset)
+}
+
+func (c *conn) QueryContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Rows, error) {
+	defer c.watchCtx(ctx)()
+	a := buildNamedArgs(args)
+	r, err := c.Execute(query, a...)
 	if err != nil {
 		return nil, c.state.replyError(err)
 	}
@@ -284,17 +420,32 @@ type stmt struct {
 	connectionState *state
 }
 
+func (s *stmt) watchCtx(ctx context.Context) func() {
+	return s.connectionState.watchCtx(ctx)
+}
+
 func (s *stmt) Close() error {
 	return s.Stmt.Close()
 }
 
 func (s *stmt) NumInput() int {
-	return s.Stmt.ParamNum()
+	return s.ParamNum()
 }
 
 func (s *stmt) Exec(args []sqldriver.Value) (sqldriver.Result, error) {
 	a := buildArgs(args)
-	r, err := s.Stmt.Execute(a...)
+	r, err := s.Execute(a...)
+	if err != nil {
+		return nil, s.connectionState.replyError(err)
+	}
+	return &result{r}, nil
+}
+
+func (s *stmt) ExecContext(ctx context.Context, args []sqldriver.NamedValue) (sqldriver.Result, error) {
+	defer s.watchCtx(ctx)()
+
+	a := buildNamedArgs(args)
+	r, err := s.Execute(a...)
 	if err != nil {
 		return nil, s.connectionState.replyError(err)
 	}
@@ -303,7 +454,18 @@ func (s *stmt) Exec(args []sqldriver.Value) (sqldriver.Result, error) {
 
 func (s *stmt) Query(args []sqldriver.Value) (sqldriver.Rows, error) {
 	a := buildArgs(args)
-	r, err := s.Stmt.Execute(a...)
+	r, err := s.Execute(a...)
+	if err != nil {
+		return nil, s.connectionState.replyError(err)
+	}
+	return newRows(r.Resultset)
+}
+
+func (s *stmt) QueryContext(ctx context.Context, args []sqldriver.NamedValue) (sqldriver.Rows, error) {
+	defer s.watchCtx(ctx)()
+
+	a := buildNamedArgs(args)
+	r, err := s.Execute(a...)
 	if err != nil {
 		return nil, s.connectionState.replyError(err)
 	}
@@ -327,11 +489,11 @@ type result struct {
 }
 
 func (r *result) LastInsertId() (int64, error) {
-	return int64(r.Result.InsertId), nil
+	return int64(r.InsertId), nil
 }
 
 func (r *result) RowsAffected() (int64, error) {
-	return int64(r.Result.AffectedRows), nil
+	return int64(r.AffectedRows), nil
 }
 
 type rows struct {
@@ -352,7 +514,7 @@ func newRows(r *mysql.Resultset) (*rows, error) {
 	rs.columns = make([]string, len(r.Fields))
 
 	for i, f := range r.Fields {
-		rs.columns[i] = hack.String(f.Name)
+		rs.columns[i] = utils.ByteSliceToString(f.Name)
 	}
 	rs.step = 0
 
@@ -369,14 +531,14 @@ func (r *rows) Close() error {
 }
 
 func (r *rows) Next(dest []sqldriver.Value) error {
-	if r.step >= r.Resultset.RowNumber() {
+	if r.step >= r.RowNumber() {
 		return io.EOF
 	} else if r.step == -1 {
 		return io.ErrUnexpectedEOF
 	}
 
-	for i := 0; i < r.Resultset.ColumnNumber(); i++ {
-		value, err := r.Resultset.GetValue(r.step, i)
+	for i := 0; i < r.ColumnNumber(); i++ {
+		value, err := r.GetValue(r.step, i)
 		if err != nil {
 			return err
 		}
@@ -389,13 +551,10 @@ func (r *rows) Next(dest []sqldriver.Value) error {
 	return nil
 }
 
-func init() {
-	options["compress"] = CompressOption
-	options["collation"] = CollationOption
-	options["readTimeout"] = ReadTimeoutOption
-	options["writeTimeout"] = WriteTimeoutOption
+var driverName = "mysql"
 
-	sql.Register("mysql", driver{})
+func init() {
+	sql.Register(driverName, driver{})
 }
 
 // SetCustomTLSConfig sets a custom TLSConfig for the address (host:port) of the supplied DSN.

@@ -2,6 +2,7 @@ package canal
 
 import (
 	"crypto/tls"
+	"log/slog"
 	"math/rand"
 	"net"
 	"os"
@@ -9,11 +10,10 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-log/loggers"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 type DumpConfig struct {
@@ -100,12 +100,13 @@ type Config struct {
 	TLSConfig *tls.Config
 
 	// Set Logger
-	Logger loggers.Advanced
+	Logger *slog.Logger
 
 	// Set Dialer
 	Dialer client.Dialer
 
-	// Set Localhost
+	// Set the hostname that is used when registering as replica. This is similar to `report_host` in MySQL.
+	// This will be truncated if it is longer than 255 characters.
 	Localhost string
 
 	// EventCacheCount is the capacity of the BinlogStreamer internal event channel.
@@ -142,15 +143,14 @@ func NewDefaultConfig() *Config {
 	c.User = mysql.DEFAULT_USER
 	c.Password = mysql.DEFAULT_PASSWORD
 	c.Charset = mysql.DEFAULT_CHARSET
-	c.ServerID = uint32(rand.New(rand.NewSource(time.Now().Unix())).Intn(1000)) + 1001
+	c.ServerID = uint32(rand.New(rand.NewSource(utils.Now().Unix())).Intn(1000)) + 1001
 	c.Flavor = mysql.DEFAULT_FLAVOR
 
 	c.Dump.ExecutionPath = mysql.DEFAULT_DUMP_EXECUTION_PATH
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
 
-	streamHandler, _ := log.NewStreamHandler(os.Stdout)
-	c.Logger = log.NewDefault(streamHandler)
+	c.Logger = slog.Default()
 
 	dialer := &net.Dialer{}
 	c.Dialer = dialer.DialContext
