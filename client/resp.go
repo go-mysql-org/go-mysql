@@ -121,14 +121,16 @@ func (c *Conn) handleAuthResult() error {
 	}
 
 	// handle caching_sha2_password
-	if c.authPluginName == mysql.AUTH_CACHING_SHA2_PASSWORD {
+	switch c.authPluginName {
+	case mysql.AUTH_CACHING_SHA2_PASSWORD:
 		if data == nil {
 			return nil // auth already succeeded
 		}
-		if data[0] == mysql.CACHE_SHA2_FAST_AUTH {
+		switch data[0] {
+		case mysql.CACHE_SHA2_FAST_AUTH:
 			_, err = c.readOK()
 			return err
-		} else if data[0] == mysql.CACHE_SHA2_FULL_AUTH {
+		case mysql.CACHE_SHA2_FULL_AUTH:
 			// need full authentication
 			if c.tlsConfig != nil || c.proto == "unix" {
 				if err = c.WriteClearAuthPacket(c.password); err != nil {
@@ -141,10 +143,10 @@ func (c *Conn) handleAuthResult() error {
 			}
 			_, err = c.readOK()
 			return err
-		} else {
+		default:
 			return errors.Errorf("invalid packet %x", data[0])
 		}
-	} else if c.authPluginName == mysql.AUTH_SHA256_PASSWORD {
+	case mysql.AUTH_SHA256_PASSWORD:
 		if len(data) == 0 {
 			return nil // auth already succeeded
 		}
@@ -205,11 +207,12 @@ func (c *Conn) readOK() (*mysql.Result, error) {
 		return nil, errors.Trace(err)
 	}
 
-	if data[0] == mysql.OK_HEADER {
+	switch data[0] {
+	case mysql.OK_HEADER:
 		return c.handleOKPacket(data)
-	} else if data[0] == mysql.ERR_HEADER {
+	case mysql.ERR_HEADER:
 		return nil, c.handleErrorPacket(data)
-	} else {
+	default:
 		return nil, errors.New("invalid ok packet")
 	}
 }
@@ -310,7 +313,7 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *mysql.Re
 	}
 
 	// this is a streaming resultset
-	result.Resultset.Streaming = mysql.StreamingSelect
+	result.Streaming = mysql.StreamingSelect
 
 	if err := c.readResultColumns(result); err != nil {
 		return errors.Trace(err)
@@ -327,7 +330,7 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *mysql.Re
 	}
 
 	// this resultset is done streaming
-	result.Resultset.StreamingDone = true
+	result.StreamingDone = true
 
 	return nil
 }

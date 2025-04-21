@@ -2,8 +2,8 @@ package mysql
 
 import (
 	"encoding/binary"
-
-	"github.com/siddontang/go-log/log"
+	"fmt"
+	"log/slog"
 )
 
 // Query Attributes in MySQL are key/value pairs passed along with COM_QUERY or COM_STMT_EXECUTE
@@ -27,7 +27,7 @@ func (qa *QueryAttribute) TypeAndFlag() []byte {
 	case uint64:
 		return []byte{MYSQL_TYPE_LONGLONG, PARAM_UNSIGNED}
 	default:
-		log.Warnf("query attribute with unsupported type %T", v)
+		slog.Warn("query attribute with unsupported type", slog.String("type", fmt.Sprintf("%T", v)))
 	}
 	return []byte{0x0, 0x0} // type 0x0, flag 0x0, to not break the protocol
 }
@@ -42,7 +42,7 @@ func (qa *QueryAttribute) ValueBytes() []byte {
 		binary.LittleEndian.PutUint64(b, v)
 		return b
 	default:
-		log.Warnf("query attribute with unsupported type %T", v)
+		slog.Warn("query attribute with unsupported type", slog.String("type", fmt.Sprintf("%T", v)))
 	}
 	return []byte{0x0} // 0 length value to not break the protocol
 }

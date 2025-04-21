@@ -168,7 +168,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 		return errAccessDenied(c.password)
 	}
 	// other type of credential provider, we use the cache
-	cached, ok := c.serverConf.cacheShaPassword.Load(fmt.Sprintf("%s@%s", c.user, c.Conn.LocalAddr()))
+	cached, ok := c.serverConf.cacheShaPassword.Load(fmt.Sprintf("%s@%s", c.user, c.LocalAddr()))
 	if ok {
 		// Scramble validation
 		if scrambleValidation(cached.([]byte), c.salt, clientAuthData) {

@@ -12,7 +12,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -60,8 +59,6 @@ func prepareServerConf() []*Server {
 }
 
 func Test(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-
 	// general tests
 	inMemProvider := NewInMemoryProvider()
 	inMemProvider.AddUser(*testUser, *testPassword)
@@ -244,30 +241,16 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 		if err != nil {
 			return nil, errors.Trace(err)
 		} else {
-			return &mysql.Result{
-				Status:       0,
-				Warnings:     0,
-				InsertId:     0,
-				AffectedRows: 0,
-				Resultset:    r,
-			}, nil
+			return mysql.NewResult(r), nil
 		}
 	case "insert":
-		return &mysql.Result{
-			Status:       0,
-			Warnings:     0,
-			InsertId:     1,
-			AffectedRows: 0,
-			Resultset:    nil,
-		}, nil
+		res := mysql.NewResultReserveResultset(0)
+		res.InsertId = 1
+		return res, nil
 	case "delete", "update", "replace":
-		return &mysql.Result{
-			Status:       0,
-			Warnings:     0,
-			InsertId:     0,
-			AffectedRows: 1,
-			Resultset:    nil,
-		}, nil
+		res := mysql.NewResultReserveResultset(0)
+		res.AffectedRows = 1
+		return res, nil
 	default:
 		return nil, fmt.Errorf("invalid query %s", query)
 	}

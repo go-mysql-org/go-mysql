@@ -1,35 +1,47 @@
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
-    # All code is ready for:
     - errcheck
-    - gofumpt
-    - goimports
     - govet
-    - gosimple
     - ineffassign
     - misspell
     - nakedret
     - nolintlint
     - staticcheck
-    - typecheck
     - unconvert
     - unused
     - whitespace
-    # ToDo:
-    #- gocritic
-    #- golint
-linters-settings:
-  nolintlint:
-    allow-unused: false
-    require-specific: true
-
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - lostcancel
-      - shadow
-issues:
-  exclude-files:
-    - client/examples_test.go
+  settings:
+    govet:
+      disable:
+        - fieldalignment
+        - lostcancel
+        - shadow
+      enable-all: true
+    nolintlint:
+      require-specific: true
+      allow-unused: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - client/examples_test.go
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - client/examples_test.go
+      - third_party$
+      - builtin$
+      - examples$
