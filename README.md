@@ -18,6 +18,7 @@ This library has been tested or deployed on the following operating systems and 
 | Linux            | amd64        | ✅                | ✅ | Check GitHub Actions of this project.                                                                                          |
 | Linux            | s390x        | ✅                | ✅ | A daily CI runs on an s390x VM, supported by the [IBM Z and LinuxONE Community](https://www.ibm.com/community/z/open-source/). |
 | Linux            | arm64        | ✅                | ❌ | Deployed in a production environment of a user.                                                                                |
+| Linux            | arm          | ✅                | ❌ | A test in CI to make sure builds for 32-bits platforms work.                                                                   |
 | FreeBSD          | amd64        | ✅                | ❌ | Sporadically tested by developers.                                                                                             |
 
 Other platforms supported by Go may also work, but they have not been verified. Feel free to report your test results.
