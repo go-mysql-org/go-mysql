@@ -1151,16 +1151,16 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_VARCHAR,
 		MYSQL_TYPE_VAR_STRING:
 		length = int(meta)
-		if utf8.Valid(data) {
-			v, n = decodeString(data, length)
-		} else {
+		if !utf8.Valid(data) && isLatin1(data) {
 			v, n = decodeStringLatin1(data, length)
+		} else {
+			v, n = decodeString(data, length)
 		}
 	case MYSQL_TYPE_STRING:
-		if utf8.Valid(data) {
-			v, n = decodeString(data, length)
-		} else {
+		if !utf8.Valid(data) && isLatin1(data) {
 			v, n = decodeStringLatin1(data, length)
+		} else {
+			v, n = decodeString(data, length)
 		}
 	case MYSQL_TYPE_JSON:
 		// Refer: https://github.com/shyiko/mysql-binlog-connector-java/blob/master/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L404
@@ -1236,6 +1236,14 @@ func decodeStringLatin1(data []byte, length int) (v string, n int) {
 	}
 
 	return
+}
+
+func isLatin1(data []byte) bool {
+	decoder := charmap.ISO8859_1.NewDecoder()
+	decodedBytes, _, _ := transform.Bytes(decoder, data)
+
+	// If the decoded result matches the original bytes, it suggests it's Latin1
+	return string(decodedBytes) == string(data)
 }
 
 // ref: https://github.com/mysql/mysql-server/blob/a9b0c712de3509d8d08d3ba385d41a4df6348775/strings/decimal.c#L137
