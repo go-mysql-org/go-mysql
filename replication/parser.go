@@ -308,9 +308,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 	}
 
 	if te, ok := e.(*TableMapEvent); ok {
-		if p.isLatin {
-			te.isLatin = true
-		}
+		te.isLatin = p.isLatin
 		p.tables[te.TableID] = te
 	}
 

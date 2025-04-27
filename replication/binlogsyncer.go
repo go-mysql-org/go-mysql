@@ -171,10 +171,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 }
 
 func (b *BinlogSyncer) getIsCharsetLatin1() bool {
-	if b.c != nil {
-		return b.c.GetCharset() == "latin1"
-	}
-	return false
+	return b.cfg.Charset == "latin1"
 }
 
 // Close closes the BinlogSyncer.
