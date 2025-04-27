@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/transform"
 	"io"
 	"strconv"
 	"strings"
@@ -1148,9 +1150,9 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_VARCHAR,
 		MYSQL_TYPE_VAR_STRING:
 		length = int(meta)
-		v, n = decodeString(data, length)
+		v, n = decodeStringLatin1(data, length)
 	case MYSQL_TYPE_STRING:
-		v, n = decodeString(data, length)
+		v, n = decodeStringLatin1(data, length)
 	case MYSQL_TYPE_JSON:
 		// Refer: https://github.com/shyiko/mysql-binlog-connector-java/blob/master/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L404
 		length = int(FixedLengthInt(data[0:meta]))
@@ -1199,6 +1201,29 @@ func decodeString(data []byte, length int) (v string, n int) {
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + 2
 		v = hack.String(data[2:n])
+	}
+
+	return
+}
+
+func decodeStringLatin1(data []byte, length int) (v string, n int) {
+	// Define the Latin1 decoder
+	decoder := charmap.ISO8859_1.NewDecoder()
+
+	if length < 256 {
+		// If the length is smaller than 256, extract the length from the first byte
+		length = int(data[0])
+		n = length + 1
+		// Use the decoder to convert to a string with Latin1 encoding
+		decodedBytes, _, _ := transform.Bytes(decoder, data[1:n])
+		v = string(decodedBytes)
+	} else {
+		// If the length is larger, extract it using LittleEndian
+		length = int(binary.LittleEndian.Uint16(data[0:]))
+		n = length + 2
+		// Use the decoder to convert to a string with Latin1 encoding
+		decodedBytes, _, _ := transform.Bytes(decoder, data[2:n])
+		v = string(decodedBytes)
 	}
 
 	return
