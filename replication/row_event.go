@@ -1241,9 +1241,10 @@ func decodeStringLatin1(data []byte, length int) (v string, n int) {
 func isLatin1(data []byte) bool {
 	decoder := charmap.ISO8859_1.NewDecoder()
 	decodedBytes, _, _ := transform.Bytes(decoder, data)
+	encodedBackToLatin1, _, _ := transform.Bytes(decoder, decodedBytes)
 
 	// If the decoded result matches the original bytes, it suggests it's Latin1
-	return string(decodedBytes) == string(data)
+	return string(encodedBackToLatin1) == string(data)
 }
 
 // ref: https://github.com/mysql/mysql-server/blob/a9b0c712de3509d8d08d3ba385d41a4df6348775/strings/decimal.c#L137
