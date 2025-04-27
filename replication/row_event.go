@@ -25,6 +25,7 @@ var errMissingTableMapEvent = errors.New("invalid table id, no corresponding tab
 type TableMapEvent struct {
 	flavor      string
 	tableIDSize int
+	isLatin     bool
 
 	TableID uint64
 
@@ -1151,15 +1152,14 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_VARCHAR,
 		MYSQL_TYPE_VAR_STRING:
 		length = int(meta)
-		fmt.Printf("Column charset is: %v", e.Table.ColumnCharset)
-		if !utf8.Valid(data) && len(e.Table.ColumnCharset) > 0 {
-
+		fmt.Printf("islatin is: %v", e.Table.isLatin)
+		if !utf8.Valid(data) && e.Table.isLatin {
 			v, n = decodeStringLatin1(data, length)
 		} else {
 			v, n = decodeString(data, length)
 		}
 	case MYSQL_TYPE_STRING:
-		if !utf8.Valid(data) && len(e.Table.ColumnCharset) > 0 {
+		if !utf8.Valid(data) && e.Table.isLatin {
 			v, n = decodeStringLatin1(data, length)
 		} else {
 			v, n = decodeString(data, length)
