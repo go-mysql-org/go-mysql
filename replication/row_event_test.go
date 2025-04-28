@@ -1,7 +1,10 @@
 package replication
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"testing"
 
 	. "github.com/pingcap/check"
 	"github.com/shopspring/decimal"
@@ -1339,5 +1342,102 @@ func (_ *testDecodeSuite) BenchmarkInt(c *C) {
 		for _, d := range intData {
 			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0)
 		}
+	}
+}
+
+func TestDecodeStringLatin1(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		length   int
+		wantStr  string
+		wantRead int
+	}{
+		{
+			name:     "Short Latin1 string",
+			input:    append([]byte{5}, []byte{0xe2, 'f', 'g', 'h', 0xe9}...), // length byte + 5 bytes: 'âfghé'
+			length:   5,
+			wantStr:  "âfghé",
+			wantRead: 6,
+		},
+		{
+			name:     "Empty string",
+			input:    []byte{0},
+			length:   0,
+			wantStr:  "",
+			wantRead: 1,
+		},
+		{
+			name: "Long string (>255, 2-byte length)",
+			input: func() []byte {
+				buf := new(bytes.Buffer)
+				binary.Write(buf, binary.LittleEndian, uint16(5))
+				buf.Write([]byte{0xe2, 'f', 'g', 'h', 0xe9}) // 'âfghé'
+				return buf.Bytes()
+			}(),
+			length:   300,
+			wantStr:  "âfghé",
+			wantRead: 7,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotStr, gotRead := decodeStringLatin1(tt.input, tt.length)
+			if gotStr != tt.wantStr {
+				t.Errorf("decodeStringLatin1() got string = %q, want %q", gotStr, tt.wantStr)
+			}
+			if gotRead != tt.wantRead {
+				t.Errorf("decodeStringLatin1() got read bytes = %d, want %d", gotRead, tt.wantRead)
+			}
+		})
+	}
+}
+
+func TestDecodeByCharSet(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   []byte
+		charset string
+		length  int
+		wantStr string
+	}{
+		{
+			name:    "Valid UTF-8 with UTF-8 charset",
+			input:   append([]byte{11}, []byte("hello world")...),
+			charset: "utf8",
+			length:  11,
+			wantStr: "hello world",
+		},
+		{
+			name:    "Invalid UTF-8 but charset is latin1",
+			input:   append([]byte{3}, []byte{0xe2, 0x28, 0xa1}...), // invalid utf8
+			charset: "latin1",
+			length:  3,
+			wantStr: "â(¡",
+		},
+		{
+			name:    "Invalid UTF-8 but charset is utf8",
+			input:   append([]byte{3}, []byte{0xe2, 0x28, 0xa1}...), // invalid utf8
+			charset: "utf8",
+			length:  3,
+			wantStr: "\xe2(\xa1",
+		},
+		{
+			name:    "Valid UTF-8 and charset latin1",
+			input:   append([]byte{11}, []byte("hello world")...),
+			charset: "latin1",
+			length:  11,
+			wantStr: "hello world", // because utf8.Valid is true, decodeString should be used
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotStr, _ := decodeByCharSet(tt.input, tt.charset, tt.length)
+			if gotStr != tt.wantStr {
+				t.Errorf("decodeByCharSet() = %q, want %q", gotStr, tt.wantStr)
+			}
+		})
 	}
 }

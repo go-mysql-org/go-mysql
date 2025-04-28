@@ -25,7 +25,7 @@ var errMissingTableMapEvent = errors.New("invalid table id, no corresponding tab
 type TableMapEvent struct {
 	flavor      string
 	tableIDSize int
-	isLatin     bool
+	charset     string
 
 	TableID uint64
 
@@ -1152,18 +1152,9 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_VARCHAR,
 		MYSQL_TYPE_VAR_STRING:
 		length = int(meta)
-		fmt.Printf("islatin is: %v", e.Table.isLatin)
-		if !utf8.Valid(data) && e.Table.isLatin {
-			v, n = decodeStringLatin1(data, length)
-		} else {
-			v, n = decodeString(data, length)
-		}
+		v, n = decodeByCharSet(data, e.Table.charset, length)
 	case MYSQL_TYPE_STRING:
-		if !utf8.Valid(data) && e.Table.isLatin {
-			v, n = decodeStringLatin1(data, length)
-		} else {
-			v, n = decodeString(data, length)
-		}
+		v, n = decodeByCharSet(data, e.Table.charset, length)
 	case MYSQL_TYPE_JSON:
 		// Refer: https://github.com/shyiko/mysql-binlog-connector-java/blob/master/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L404
 		length = int(FixedLengthInt(data[0:meta]))
@@ -1199,6 +1190,14 @@ func convertToString(s interface{}) (string, bool) {
 		return str, true
 	default:
 		return "", false
+	}
+}
+
+func decodeByCharSet(data []byte, charset string, length int) (v string, n int) {
+	if !utf8.Valid(data) && charset == "latin1" {
+		return decodeStringLatin1(data, length)
+	} else {
+		return decodeString(data, length)
 	}
 }
 

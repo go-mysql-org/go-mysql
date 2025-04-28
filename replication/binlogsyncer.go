@@ -163,15 +163,11 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetTimestampStringLocation(b.cfg.TimestampStringLocation)
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
-	b.parser.SetIsLatin(b.getIsCharsetLatin1())
+	b.parser.SetCharset(b.cfg.Charset)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 
 	return b
-}
-
-func (b *BinlogSyncer) getIsCharsetLatin1() bool {
-	return b.cfg.Charset == "latin1"
 }
 
 // Close closes the BinlogSyncer.
