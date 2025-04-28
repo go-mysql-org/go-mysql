@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"filippo.io/edwards25519"
-	"github.com/Masterminds/semver"
+	"github.com/Masterminds/semver/v3"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
