@@ -163,6 +163,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetTimestampStringLocation(b.cfg.TimestampStringLocation)
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
+	b.parser.SetCharset(b.cfg.Charset)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 
