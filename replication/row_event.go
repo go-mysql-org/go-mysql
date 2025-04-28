@@ -1194,11 +1194,14 @@ func convertToString(s interface{}) (string, bool) {
 }
 
 func decodeByCharSet(data []byte, charset string, length int) (v string, n int) {
-	if !utf8.Valid(data) && charset == "latin1" {
-		return decodeStringLatin1(data, length)
-	} else {
-		return decodeString(data, length)
+	if !utf8.Valid(data) {
+		if charset == "latin1" {
+			return decodeStringLatin1(data, length)
+		} else {
+			fmt.Printf("Data is not in utf8 or latin1")
+		}
 	}
+	return decodeString(data, length)
 }
 
 func decodeString(data []byte, length int) (v string, n int) {
