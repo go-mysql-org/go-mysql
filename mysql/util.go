@@ -454,6 +454,10 @@ func ErrorEqual(err1, err2 error) bool {
 }
 
 func compareSubVersion(typ, a, b, aFull, bFull string) (int, error) {
+	if a == "" || b == "" {
+		return 0, nil
+	}
+
 	var aNum, bNum int
 	var err error
 
@@ -467,6 +471,9 @@ func compareSubVersion(typ, a, b, aFull, bFull string) (int, error) {
 	return cmp.Compare(aNum, bNum), nil
 }
 
+// Compares version triplet strings, ignoring anything past `-` in version.
+// A version string like 8.0 will compare as if third triplet were a wildcard.
+// A version string like 8 will compare as if second & third triplets were wildcards.
 func CompareServerVersions(a, b string) (int, error) {
 	aNumbers, _, _ := strings.Cut(a, "-")
 	bNumbers, _, _ := strings.Cut(b, "-")
