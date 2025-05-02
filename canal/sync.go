@@ -325,12 +325,21 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 }
 
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
-	showBinlogStatus := "SHOW BINARY LOG STATUS"
-	if eq, err := c.conn.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
-		showBinlogStatus = "SHOW MASTER STATUS"
+	query := "SHOW BINARY LOG STATUS"
+	switch c.cfg.Flavor {
+	case mysql.MariaDBFlavor:
+		query = "SHOW BINLOG STATUS"
+
+		if eq, err := c.conn.CompareServerVersion("10.5.2"); (err == nil) && (eq < 0) {
+			query = "SHOW MASTER STATUS"
+		}
+	case mysql.MySQLFlavor:
+		if eq, err := c.conn.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+			query = "SHOW MASTER STATUS"
+		}
 	}
 
-	rr, err := c.Execute(showBinlogStatus)
+	rr, err := c.Execute(query)
 	if err != nil {
 		return mysql.Position{}, errors.Trace(err)
 	}
