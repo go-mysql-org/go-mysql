@@ -492,11 +492,7 @@ func CompareServerVersions(a, b string) (int, error) {
 		return minorCompare, err
 	}
 
-	if patchCompare, err := compareSubVersion("patch", aPatch, bPatch, a, b); err != nil || patchCompare != 0 {
-		return patchCompare, err
-	}
-
-	return 0, nil
+	return compareSubVersion("patch", aPatch, bPatch, a, b)
 }
 
 var encodeRef = map[byte]byte{
