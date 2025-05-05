@@ -324,16 +324,19 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 	}
 }
 
-func (c *Canal) getShowBinaryLogQuery() string {
-	switch c.cfg.Flavor {
+func getShowBinaryLogQuery(flavor, serverVersion string) string {
+	switch flavor {
 	case mysql.MariaDBFlavor:
 		// Source: https://mariadb.com/kb/en/show-binlog-status/#:~:text=SHOW%20BINLOG%20STATUS%20%2D%2D-,From%20MariaDB%2010.5.2,-Description
-		if eq, err := c.conn.CompareServerVersion("10.5.2"); (err == nil) && (eq >= 0) {
+
+		eq, err := mysql.CompareServerVersions(serverVersion, "10.5.2")
+		if (err == nil) && (eq >= 0) {
 			return "SHOW BINLOG STATUS"
 		}
 	case mysql.MySQLFlavor:
 		// Source: https://dev.mysql.com/doc/relnotes/mysql/8.4/en/news-8-4-0.html#:~:text=AND%20GTIDS)%3B-,SHOW%20MASTER%20STATUS,-(SHOW%20BINARY
-		if eq, err := c.conn.CompareServerVersion("8.4.0"); (err == nil) && (eq >= 0) {
+		eq, err := mysql.CompareServerVersions(serverVersion, "8.4.0")
+		if (err == nil) && (eq >= 0) {
 			return "SHOW BINARY LOG STATUS"
 		}
 	}
@@ -342,7 +345,7 @@ func (c *Canal) getShowBinaryLogQuery() string {
 }
 
 func (c *Canal) GetMasterPos() (mysql.Position, error) {
-	query := c.getShowBinaryLogQuery()
+	query := getShowBinaryLogQuery(c.cfg.Flavor, c.conn.GetServerVersion())
 
 	rr, err := c.Execute(query)
 	if err != nil {
