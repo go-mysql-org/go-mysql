@@ -324,17 +324,21 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 	}
 }
 
+// getShowBinaryLogQuery returns the correct SQL statement to query binlog status
+// for the given database flavor and server version.
+//
+// Sources:
+//
+//	MySQL:   https://dev.mysql.com/doc/relnotes/mysql/8.4/en/news-8-4-0.html
+//	MariaDB: https://mariadb.com/kb/en/show-binlog-status
 func getShowBinaryLogQuery(flavor, serverVersion string) string {
 	switch flavor {
 	case mysql.MariaDBFlavor:
-		// Source: https://mariadb.com/kb/en/show-binlog-status/#:~:text=SHOW%20BINLOG%20STATUS%20%2D%2D-,From%20MariaDB%2010.5.2,-Description
-
 		eq, err := mysql.CompareServerVersions(serverVersion, "10.5.2")
 		if (err == nil) && (eq >= 0) {
 			return "SHOW BINLOG STATUS"
 		}
 	case mysql.MySQLFlavor:
-		// Source: https://dev.mysql.com/doc/relnotes/mysql/8.4/en/news-8-4-0.html#:~:text=AND%20GTIDS)%3B-,SHOW%20MASTER%20STATUS,-(SHOW%20BINARY
 		eq, err := mysql.CompareServerVersions(serverVersion, "8.4.0")
 		if (err == nil) && (eq >= 0) {
 			return "SHOW BINARY LOG STATUS"
