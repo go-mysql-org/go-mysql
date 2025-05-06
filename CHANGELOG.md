@@ -1,3 +1,11 @@
+### Tag v1.13.0 (2025-05-06)
+
+* Fix canal.GetMasterPos() for mariadb. [#1030](https://github.com/go-mysql-org/go-mysql/pull/1030) ([alarbada](https://github.com/alarbada))
+* Remove semver. [#1028](https://github.com/go-mysql-org/go-mysql/pull/1028) ([serprex](https://github.com/serprex))
+* CI: Test on 32-bit arm. [#1000](https://github.com/go-mysql-org/go-mysql/pull/1000) ([dveeden](https://github.com/dveeden))
+* Golangci-lint 2. [#1024](https://github.com/go-mysql-org/go-mysql/pull/1024) ([serprex](https://github.com/serprex))
+* Server: Fix formatting of credential provider note. [#1023](https://github.com/go-mysql-org/go-mysql/pull/1023) ([dveeden](https://github.com/dveeden))
+
 ### Tag v1.12.0 (2025-04-01)
 
 > **Note:**
