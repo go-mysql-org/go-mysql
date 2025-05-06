@@ -334,9 +334,12 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	if b.cfg.HeartbeatPeriod > 0 {
-		_, err = b.c.Execute(fmt.Sprintf("SET @master_heartbeat_period=%d;", b.cfg.HeartbeatPeriod))
+		_, err = b.c.Execute(fmt.Sprintf("SET @master_heartbeat_period = %d, @source_heartbeat_period = %d",
+			b.cfg.HeartbeatPeriod, b.cfg.HeartbeatPeriod))
 		if err != nil {
-			b.cfg.Logger.Error(fmt.Sprintf("failed to set @master_heartbeat_period=%d", b.cfg.HeartbeatPeriod), slog.Any("error", err))
+			b.cfg.Logger.Error(
+				fmt.Sprintf("failed to set @master_heartbeat_period=%d, @source_heartbeat_period=%d",
+					b.cfg.HeartbeatPeriod, b.cfg.HeartbeatPeriod), slog.Any("error", err))
 			return errors.Trace(err)
 		}
 	}
