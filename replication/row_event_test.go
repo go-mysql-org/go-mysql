@@ -1361,6 +1361,42 @@ func TestDecodeStringLatin1(t *testing.T) {
 			wantRead: 6,
 		},
 		{
+			name: "Short Latin1 string with ‘",
+			input: append(
+				append([]byte{5}, []byte{0xe2, 'f', 'h', 0xe9}...),
+				[]byte("‘")...),
+			length:   5,
+			wantStr:  "âfhé'",
+			wantRead: 6,
+		},
+		{
+			name: "Short Latin1 string with ’",
+			input: append(
+				append([]byte{5}, []byte{0xe2, 'f', 'h', 0xe9}...),
+				[]byte("’")...),
+			length:   5,
+			wantStr:  "âfhé'",
+			wantRead: 6,
+		},
+		{
+			name: "Short Latin1 string with ”",
+			input: append(
+				append([]byte{5}, []byte{0xe2, 'f', 'h', 0xe9}...),
+				[]byte("”")...),
+			length:   5,
+			wantStr:  "âfhé\"",
+			wantRead: 6,
+		},
+		{
+			name: "Short Latin1 string with “",
+			input: append(
+				append([]byte{5}, []byte{0xe2, 'f', 'h', 0xe9}...),
+				[]byte("“")...),
+			length:   5,
+			wantStr:  "âfhé\"",
+			wantRead: 6,
+		},
+		{
 			name:     "Invalid UTF-8 valid Latin1",
 			input:    append([]byte{2}, []byte{0xC0, 0xAF}...), // invalid UTF-8, valid Latin1
 			length:   2,
@@ -1409,10 +1445,17 @@ func TestDecodeStringLatin1(t *testing.T) {
 		},
 		{
 			name:     "Term Date and Retro Term Policy",
-			input:    append([]byte{byte(len("06/30/2018 - Retro term date of ‘>30 day term date’ requested by ‘xxx@xxx.com’. 05/212020 used as Term effective date, due to >=30 day retro-term policy"))}, []byte("06/30/2018 - Retro term date of ‘>30 day term date’ requested by ‘xxx@xxx.com’. 05/212020 used as Term effective date, due to >=30 day retro-term policy")...),
-			length:   len("06/30/2018 - Retro term date of ‘>30 day term date’ requested by ‘xxx@xxx.com’. 05/212020 used as Term effective date, due to >=30 day retro-term policy"),
-			wantStr:  "06/30/2018 - Retro term date of ‘>30 day term date’ requested by ‘xxx@xxx.com’. 05/212020 used as Term effective date, due to >=30 day retro-term policy",
-			wantRead: len("06/30/2018 - Retro term date of ‘>30 day term date’ requested by ‘xxx@xxx.com’. 05/212020 used as Term effective date, due to >=30 day retro-term policy") + 1, // Include the prepended length byte
+			input:    append([]byte{byte(len("‘30 day â term date’"))}, []byte("‘30 day term date’")...),
+			length:   len("‘30 day term date’"),
+			wantStr:  "'30 day term date'",
+			wantRead: 18, // Include the prepended length byte
+		},
+		{
+			name:     "Term Date and Retro Term Policy",
+			input:    append([]byte{byte(len("“30 day term date”"))}, []byte("“30 day term date”")...),
+			length:   len("“30 day term date”"),
+			wantStr:  "\"30 day term date\"",
+			wantRead: 18, // Include the prepended length byte
 		},
 
 		{
@@ -1425,7 +1468,7 @@ func TestDecodeStringLatin1(t *testing.T) {
 			}(),
 			length:   12,
 			wantStr:  "Hello ' âfghé",
-			wantRead: 13,
+			wantRead: 15,
 		},
 		{
 			name:     "UTF-8 with Latin1 byte after UTF-8 valid chars",
