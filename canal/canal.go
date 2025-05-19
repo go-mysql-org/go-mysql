@@ -94,6 +94,9 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		return nil, errors.Trace(err)
 	}
 
+	if err := c.CheckColumnsCharsets(); err != nil {
+		return nil, errors.Trace(err)
+	}
 	// init table filter
 	if n := len(c.cfg.IncludeTableRegex); n > 0 {
 		c.includeTableRegex = make([]*regexp.Regexp, n)
@@ -415,6 +418,35 @@ func (c *Canal) checkBinlogRowFormat() error {
 		return errors.Errorf("binlog must ROW format, but %s now", f)
 	}
 
+	return nil
+}
+
+func (c *Canal) CheckColumnsCharsets() error {
+	for _, tableRegex := range c.cfg.IncludeTableRegex {
+		parts := strings.Split(tableRegex, ".")
+
+		dbName := parts[0]
+		tableName := parts[1]
+		query := fmt.Sprintf(`
+		SELECT 
+			COLUMN_NAME,
+			CHARACTER_SET_NAME,
+			COLLATION_NAME,
+			DATA_TYPE
+		FROM 
+			information_schema.COLUMNS
+		WHERE 
+			TABLE_SCHEMA = '%s'
+			AND TABLE_NAME = '%s'
+			AND CHARACTER_SET_NAME IS NOT NULL;
+		`, dbName, tableName)
+
+		res, err := c.Execute(query)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		println(res.GetString(0, 1))
+	}
 	return nil
 }
 

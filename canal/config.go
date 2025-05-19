@@ -50,6 +50,7 @@ type Config struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 
+	ColumnCharset   []string      `toml:"column_charset"`
 	Charset         string        `toml:"charset"`
 	ServerID        uint32        `toml:"server_id"`
 	Flavor          string        `toml:"flavor"`
