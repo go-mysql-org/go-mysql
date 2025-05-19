@@ -23,9 +23,10 @@ import (
 var errMissingTableMapEvent = errors.New("invalid table id, no corresponding table map event")
 
 type TableMapEvent struct {
-	flavor      string
-	tableIDSize int
-	charset     string
+	flavor          string
+	tableIDSize     int
+	charset         string
+	columnsCharsets []string
 
 	TableID uint64
 
@@ -976,7 +977,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 			continue
 		}
 
-		row[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.ColumnMeta[i])
+		row[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.columnsCharsets[i], table.ColumnMeta[i])
 
 		if err != nil {
 			return 0, err
@@ -1005,7 +1006,7 @@ func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
 }
 
 // see mysql sql/log_event.cc log_event_print_value
-func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{}, n int, err error) {
+func (e *RowsEvent) decodeValue(data []byte, tp byte, charset string, meta uint16) (v interface{}, n int, err error) {
 	var length int = 0
 
 	if tp == MYSQL_TYPE_STRING {
@@ -1152,9 +1153,9 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16) (v interface{
 	case MYSQL_TYPE_VARCHAR,
 		MYSQL_TYPE_VAR_STRING:
 		length = int(meta)
-		v, n = decodeByCharSet(data, e.Table.charset, length)
+		v, n = decodeByCharSet(data, charset, length)
 	case MYSQL_TYPE_STRING:
-		v, n = decodeByCharSet(data, e.Table.charset, length)
+		v, n = decodeByCharSet(data, charset, length)
 	case MYSQL_TYPE_JSON:
 		// Refer: https://github.com/shyiko/mysql-binlog-connector-java/blob/master/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L404
 		length = int(FixedLengthInt(data[0:meta]))

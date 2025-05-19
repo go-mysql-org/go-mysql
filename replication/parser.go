@@ -22,8 +22,9 @@ var (
 
 type BinlogParser struct {
 	// "mysql" or "mariadb", if not set, use "mysql" by default
-	flavor  string
-	charset string
+	flavor         string
+	charset        string
+	columnsCharset []string
 
 	format *FormatDescriptionEvent
 
@@ -309,6 +310,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 
 	if te, ok := e.(*TableMapEvent); ok {
 		te.charset = p.charset
+		te.columnsCharsets = p.columnsCharset
 		p.tables[te.TableID] = te
 	}
 

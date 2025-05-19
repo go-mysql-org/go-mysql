@@ -451,7 +451,7 @@ func (c *Canal) CheckColumnsCharsets() error {
 			charset := row[1].AsString()
 			collation := row[2].AsString()
 			dataType := row[3].AsString()
-
+			c.cfg.ColumnCharset = append(c.cfg.ColumnCharset, string(charset))
 			fmt.Printf("Column: %s, Charset: %s, Collation: %s, Type: %s\n",
 				columnName, charset, collation, dataType)
 		}
