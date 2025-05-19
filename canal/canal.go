@@ -431,7 +431,7 @@ func (c *Canal) GetColumnsCharsets() error {
 		query := fmt.Sprintf(`
 		SELECT 
 		    ORDINAL_POSITION,
-			CHARACTER_SET_NAME,
+			CHARACTER_SET_NAME
 		FROM 
 			information_schema.COLUMNS
 		WHERE 
