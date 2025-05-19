@@ -447,9 +447,9 @@ func (c *Canal) GetColumnsCharsets() error {
 
 		c.cfg.ColumnCharset = make(map[int]string)
 		for _, row := range res.Values {
-			columnIndex, _ := strconv.Atoi(string(row[0].AsString()))
+			columnIndex := row[0].AsInt64()
 			charset := row[1].AsString()
-			c.cfg.ColumnCharset[columnIndex] = string(charset)
+			c.cfg.ColumnCharset[int(columnIndex)] = string(charset)
 			fmt.Printf("Column: %s, Charset: %s\n", columnIndex, charset)
 		}
 	}
