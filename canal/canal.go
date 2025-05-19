@@ -86,6 +86,10 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		return nil, errors.Trace(err)
 	}
 
+	if err := c.GetColumnsCharsets(); err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	if err = c.prepareSyncer(); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -94,9 +98,6 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		return nil, errors.Trace(err)
 	}
 
-	if err := c.CheckColumnsCharsets(); err != nil {
-		return nil, errors.Trace(err)
-	}
 	// init table filter
 	if n := len(c.cfg.IncludeTableRegex); n > 0 {
 		c.includeTableRegex = make([]*regexp.Regexp, n)
@@ -421,7 +422,7 @@ func (c *Canal) checkBinlogRowFormat() error {
 	return nil
 }
 
-func (c *Canal) CheckColumnsCharsets() error {
+func (c *Canal) GetColumnsCharsets() error {
 	for _, tableRegex := range c.cfg.IncludeTableRegex {
 		parts := strings.Split(tableRegex, ".")
 
@@ -466,6 +467,7 @@ func (c *Canal) prepareSyncer() error {
 		User:                             c.cfg.User,
 		Password:                         c.cfg.Password,
 		Charset:                          c.cfg.Charset,
+		ColumnCharset:                    c.cfg.ColumnCharset,
 		HeartbeatPeriod:                  c.cfg.HeartbeatPeriod,
 		ReadTimeout:                      c.cfg.ReadTimeout,
 		UseDecimal:                       c.cfg.UseDecimal,

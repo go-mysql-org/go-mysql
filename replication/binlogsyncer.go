@@ -49,6 +49,9 @@ type BinlogSyncerConfig struct {
 	// Charset is for MySQL client character set
 	Charset string
 
+	// columnCharset is for MySQL client character set
+	ColumnCharset []string
+
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool
 
@@ -164,6 +167,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
 	b.parser.SetCharset(b.cfg.Charset)
+	b.parser.SetColumnsCharsets(b.cfg.columnCharset)
 	b.running = false
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 

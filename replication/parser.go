@@ -218,6 +218,10 @@ func (p *BinlogParser) SetCharset(charset string) {
 	p.charset = charset
 }
 
+func (p *BinlogParser) SetColumnsCharsets(columnCharsets []string) {
+	p.columnsCharset = columnCharsets
+}
+
 func (p *BinlogParser) parseHeader(fileName string, data []byte) (*EventHeader, error) {
 	h := new(EventHeader)
 	err := h.Decode(data)
