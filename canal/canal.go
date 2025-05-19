@@ -445,7 +445,16 @@ func (c *Canal) CheckColumnsCharsets() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		println(res.GetString(0, 1))
+
+		for _, row := range res.Values {
+			columnName := row[0].AsString()
+			charset := row[1].AsString()
+			collation := row[2].AsString()
+			dataType := row[3].AsString()
+
+			fmt.Printf("Column: %s, Charset: %s, Collation: %s, Type: %s\n",
+				columnName, charset, collation, dataType)
+		}
 	}
 	return nil
 }
