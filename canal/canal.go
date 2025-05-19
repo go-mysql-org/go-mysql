@@ -445,6 +445,7 @@ func (c *Canal) GetColumnsCharsets() error {
 			return errors.Trace(err)
 		}
 
+		c.cfg.ColumnCharset = make(map[int]string)
 		for _, row := range res.Values {
 			columnIndex, _ := strconv.Atoi(string(row[0].AsString()))
 			charset := row[1].AsString()
