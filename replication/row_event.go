@@ -977,7 +977,7 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 			continue
 		}
 
-		charset, exists := table.columnsCharsets[i]
+		charset, exists := table.columnsCharsets[i+1]
 		if !exists {
 			charset = "utf8"
 		}
