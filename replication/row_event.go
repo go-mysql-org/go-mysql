@@ -26,7 +26,7 @@ type TableMapEvent struct {
 	flavor          string
 	tableIDSize     int
 	charset         string
-	columnsCharsets []string
+	columnsCharsets map[int]string
 
 	TableID uint64
 
@@ -977,7 +977,11 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 			continue
 		}
 
-		row[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], table.columnsCharsets[i], table.ColumnMeta[i])
+		charset, exists := table.columnsCharsets[i]
+		if !exists {
+			charset = "utf8"
+		}
+		row[i], n, err = e.decodeValue(data[pos:], table.ColumnType[i], charset, table.ColumnMeta[i])
 
 		if err != nil {
 			return 0, err

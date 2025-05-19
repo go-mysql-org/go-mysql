@@ -430,10 +430,8 @@ func (c *Canal) GetColumnsCharsets() error {
 		tableName := parts[1]
 		query := fmt.Sprintf(`
 		SELECT 
-			COLUMN_NAME,
+		    ORDINAL_POSITION,
 			CHARACTER_SET_NAME,
-			COLLATION_NAME,
-			DATA_TYPE
 		FROM 
 			information_schema.COLUMNS
 		WHERE 
@@ -448,13 +446,10 @@ func (c *Canal) GetColumnsCharsets() error {
 		}
 
 		for _, row := range res.Values {
-			columnName := row[0].AsString()
+			columnIndex, _ := strconv.Atoi(string(row[0].AsString()))
 			charset := row[1].AsString()
-			collation := row[2].AsString()
-			dataType := row[3].AsString()
-			c.cfg.ColumnCharset = append(c.cfg.ColumnCharset, string(charset))
-			fmt.Printf("Column: %s, Charset: %s, Collation: %s, Type: %s\n",
-				columnName, charset, collation, dataType)
+			c.cfg.ColumnCharset[columnIndex] = string(charset)
+			fmt.Printf("Column: %s, Charset: %s\n", columnIndex, charset)
 		}
 	}
 	return nil
