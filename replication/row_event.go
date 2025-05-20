@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -1287,6 +1288,15 @@ func decodeString(data []byte, length int) (v string, n int) {
 	return
 }
 
+// Replaces smart quotes with ASCII equivalents
+func replaceUnsupportedLatin1Characters(s string) string {
+	s = string(bytes.ReplaceAll([]byte(s), []byte("‘"), []byte("'")))
+	s = string(bytes.ReplaceAll([]byte(s), []byte("’"), []byte("'")))
+	s = string(bytes.ReplaceAll([]byte(s), []byte("“"), []byte("\"")))
+	s = string(bytes.ReplaceAll([]byte(s), []byte("”"), []byte("\"")))
+	return string(s)
+}
+
 func decodeStringWithEncoder(data []byte, length int, enc encoding.Encoding) (v string, n int) {
 	// Define the Latin1 decoder
 	decoder := enc.NewDecoder()
@@ -1295,16 +1305,16 @@ func decodeStringWithEncoder(data []byte, length int, enc encoding.Encoding) (v 
 		// If the length is smaller than 256, extract the length from the first byte
 		length = int(data[0])
 		n = length + 1
-		// Use the decoder to convert to a string with given encoding
+		// Use the decoder to convert to a string with Latin1 encoding
 		decodedBytes, _, _ := transform.Bytes(decoder, data[1:n])
-		v = string(decodedBytes)
+		v = replaceUnsupportedLatin1Characters(string(decodedBytes))
 	} else {
 		// If the length is larger, extract it using LittleEndian
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + 2
 		// Use the decoder to convert to a string with given encoding
 		decodedBytes, _, _ := transform.Bytes(decoder, data[2:n])
-		v = string(decodedBytes)
+		v = replaceUnsupportedLatin1Characters(string(decodedBytes))
 	}
 
 	return

@@ -1356,11 +1356,75 @@ func TestDecodeStringLatin1(t *testing.T) {
 	}{
 		{
 			name:     "Short Latin1 string",
-			input:    append([]byte{5}, []byte{0xe2, 'f', 'g', 'h', 0xe9}...), // length byte + 5 bytes: 'âfghé'
+			input:    append([]byte{5}, []byte{0xe2, 'f', 'g', 'h', 0xe9}...), // 'âfghé'
 			length:   5,
 			charset:  "latin1",
 			wantStr:  "âfghé",
 			wantRead: 6,
+		},
+		{
+			name: "Short Latin1 string with ‘",
+			input: append(
+				append([]byte{5}, []byte{0xe2, 'f', 'h', 0xe9}...),
+				[]byte("‘")...),
+			length:   5,
+			wantStr:  "âfhé'",
+			wantRead: 6,
+		},
+		{
+			name: "Short Latin1 string with ’",
+			input: append(
+				append([]byte{5}, []byte{0xe2, 'f', 'h', 0xe9}...),
+				[]byte("’")...),
+			length:   5,
+			wantStr:  "âfhé'",
+			wantRead: 6,
+		},
+		{
+			name: "Short Latin1 string with ”",
+			input: append(
+				append([]byte{5}, []byte{0xe2, 'f', 'h', 0xe9}...),
+				[]byte("”")...),
+			length:   5,
+			wantStr:  "âfhé\"",
+			wantRead: 6,
+		},
+		{
+			name: "Short Latin1 string with “",
+			input: append(
+				append([]byte{5}, []byte{0xe2, 'f', 'h', 0xe9}...),
+				[]byte("“")...),
+			length:   5,
+			wantStr:  "âfhé\"",
+			wantRead: 6,
+		},
+		{
+			name:     "Invalid UTF-8 valid Latin1",
+			input:    append([]byte{2}, []byte{0xC0, 0xAF}...), // invalid UTF-8, valid Latin1
+			length:   2,
+			wantStr:  "À¯",
+			wantRead: 3,
+		},
+		{
+			name:     "Latin1 with null byte",
+			input:    append([]byte{4}, []byte{'A', 0x00, 'B', 'C'}...), // A\0BC
+			length:   4,
+			wantStr:  "A\u0000BC",
+			wantRead: 5,
+		},
+		{
+			name:     "Single Latin1 char",
+			input:    []byte{1, 0xE9}, // é
+			length:   1,
+			wantStr:  "é",
+			wantRead: 2,
+		},
+		{
+			name:     "High Latin1 bytes only",
+			input:    append([]byte{3}, []byte{0xA3, 0xE9, 0xF1}...), // £éñ
+			length:   3,
+			wantStr:  "£éñ",
+			wantRead: 4,
 		},
 		{
 			name:     "Empty string",
@@ -1382,6 +1446,40 @@ func TestDecodeStringLatin1(t *testing.T) {
 			charset:  "latin1",
 			wantStr:  "âfghé",
 			wantRead: 7,
+		},
+		{
+			name:     "Term Date and Retro Term Policy",
+			input:    append([]byte{byte(len("‘30 day â term date’"))}, []byte("‘30 day term date’")...),
+			length:   len("‘30 day term date’"),
+			wantStr:  "'30 day term date'",
+			wantRead: 18, // Include the prepended length byte
+		},
+		{
+			name:     "Term Date and Retro Term Policy",
+			input:    append([]byte{byte(len("“30 day term date”"))}, []byte("“30 day term date”")...),
+			length:   len("“30 day term date”"),
+			wantStr:  "\"30 day term date\"",
+			wantRead: 18, // Include the prepended length byte
+		},
+
+		{
+			name: "UTF-8 followed by Latin1",
+			input: func() []byte {
+				data := []byte{ // Hello' âfghé
+					'H', 'e', 'l', 'l', 'o', ' ', 0x27, ' ', 0xe2, 'f', 'g', 'h', 0xe9,
+				}
+				return append([]byte{12}, data...) // Prepend length byte
+			}(),
+			length:   12,
+			wantStr:  "Hello ' âfghé",
+			wantRead: 15,
+		},
+		{
+			name:     "UTF-8 with Latin1 byte after UTF-8 valid chars",
+			input:    append([]byte{7}, []byte{0xe2, ' ', 'H', 'e', 'l', 'l', 'o'}...), // 'Hello â'
+			length:   7,
+			wantStr:  "â Hello",
+			wantRead: 8,
 		},
 	}
 
