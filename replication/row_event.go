@@ -1161,9 +1161,9 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, charset string, meta uint1
 	case MYSQL_TYPE_VARCHAR,
 		MYSQL_TYPE_VAR_STRING:
 		length = int(meta)
-		v, n = decodeByCharSet(data, charset, length)
+		v, n = decodeStringByCharSet(data, charset, length)
 	case MYSQL_TYPE_STRING:
-		v, n = decodeByCharSet(data, charset, length)
+		v, n = decodeStringByCharSet(data, charset, length)
 	case MYSQL_TYPE_JSON:
 		// Refer: https://github.com/shyiko/mysql-binlog-connector-java/blob/master/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java#L404
 		length = int(FixedLengthInt(data[0:meta]))
@@ -1202,7 +1202,7 @@ func convertToString(s interface{}) (string, bool) {
 	}
 }
 
-func decodeByCharSet(data []byte, charset string, length int) (v string, n int) {
+func decodeStringByCharSet(data []byte, charset string, length int) (v string, n int) {
 	enc, err := getDecoderByCharsetName(charset)
 	if err != nil {
 		log.Errorf(err.Error())
@@ -1289,17 +1289,61 @@ func decodeString(data []byte, length int) (v string, n int) {
 }
 
 // Replaces smart quotes with ASCII equivalents
-func replaceUnsupportedLatin1Characters(s string) string {
-	s = string(bytes.ReplaceAll([]byte(s), []byte("‘"), []byte("'")))
-	s = string(bytes.ReplaceAll([]byte(s), []byte("’"), []byte("'")))
-	s = string(bytes.ReplaceAll([]byte(s), []byte("“"), []byte("\"")))
-	s = string(bytes.ReplaceAll([]byte(s), []byte("”"), []byte("\"")))
-	return string(s)
+func normalizeSmartQuotes(content []byte) []byte {
+	content = bytes.ReplaceAll(content, []byte("‘"), []byte("'"))
+	content = bytes.ReplaceAll(content, []byte("’"), []byte("'"))
+	content = bytes.ReplaceAll(content, []byte("“"), []byte("\""))
+	content = bytes.ReplaceAll(content, []byte("”"), []byte("\""))
+	return content
+}
+
+func replaceUnsupportedCharacters(data []byte, length int) []byte {
+	if len(data) == 0 {
+		return data
+	}
+
+	var content []byte
+	var prefix []byte
+
+	if length > 255 {
+		// 2-byte length prefix (LittleEndian)
+		length := int(binary.LittleEndian.Uint16(data[0:2]))
+		if length > len(data)-2 {
+			length = len(data) - 2 // safety fallback
+		}
+		content = data[2 : 2+length]
+
+		// Replace unsupported characters
+		content = normalizeSmartQuotes(content)
+
+		// Rebuild 2-byte length prefix
+		newLength := len(content)
+		prefix = make([]byte, 2)
+		binary.LittleEndian.PutUint16(prefix, uint16(newLength))
+	} else {
+		// 1-byte length prefix
+		length := int(data[0])
+		if length > len(data)-1 {
+			length = len(data) - 1
+		}
+		content = data[1 : 1+length]
+
+		// Replace unsupported characters
+		content = normalizeSmartQuotes(content)
+
+		// Rebuild 1-byte length prefix
+		prefix = []byte{byte(len(content))}
+	}
+
+	return append(prefix, content...)
 }
 
 func decodeStringWithEncoder(data []byte, length int, enc encoding.Encoding) (v string, n int) {
 	// Define the Latin1 decoder
 	decoder := enc.NewDecoder()
+	if enc != unicode.UTF8 {
+		data = replaceUnsupportedCharacters(data, length)
+	}
 
 	if length < 256 {
 		// If the length is smaller than 256, extract the length from the first byte
@@ -1307,14 +1351,14 @@ func decodeStringWithEncoder(data []byte, length int, enc encoding.Encoding) (v 
 		n = length + 1
 		// Use the decoder to convert to a string with Latin1 encoding
 		decodedBytes, _, _ := transform.Bytes(decoder, data[1:n])
-		v = replaceUnsupportedLatin1Characters(string(decodedBytes))
+		v = string(decodedBytes)
 	} else {
 		// If the length is larger, extract it using LittleEndian
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + 2
 		// Use the decoder to convert to a string with given encoding
 		decodedBytes, _, _ := transform.Bytes(decoder, data[2:n])
-		v = replaceUnsupportedLatin1Characters(string(decodedBytes))
+		v = string(decodedBytes)
 	}
 
 	return
