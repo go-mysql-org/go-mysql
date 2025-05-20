@@ -1543,6 +1543,48 @@ func TestDecodeByCharSet(t *testing.T) {
 			length:  11,
 			wantStr: "hello world", // because utf8.Valid is true, decodeString should be used
 		},
+		{
+			name:    "Windows-1251 Cyrillic",
+			input:   append([]byte{6}, []byte{0xd0, 0xe0, 0xe1, 0xee, 0xf2, 0x21}...),
+			charset: "cp1251",
+			length:  6,
+			wantStr: "Работ!",
+		},
+		{
+			name:    "Greek ISO-8859-7",
+			input:   append([]byte{5}, []byte{0xe3, 0xe5, 0xe9, 0xe1, 0x21}...),
+			charset: "greek",
+			length:  5,
+			wantStr: "γεια!",
+		},
+		{
+			name:    "Hebrew ISO-8859-8",
+			input:   append([]byte{4}, []byte{0xe9, 0xf9, 0xe8, 0x21}...),
+			charset: "hebrew",
+			length:  4,
+			wantStr: "ישט!",
+		},
+		{
+			name:    "Arabic Windows-1256",
+			input:   append([]byte{3}, []byte{0xe3, 0xe1, 0x21}...),
+			charset: "cp1256",
+			length:  3,
+			wantStr: "مل!",
+		},
+		{
+			name:    "Simplified Chinese GBK",
+			input:   append([]byte{4}, []byte{0xc4, 0xe3, 0xba, 0xc3}...),
+			charset: "gbk",
+			length:  4,
+			wantStr: "你好",
+		},
+		{
+			name:    "Traditional Chinese Big5",
+			input:   append([]byte{4}, []byte{0xa7, 0x41, 0xa6, 0x6e}...),
+			charset: "big5",
+			length:  4,
+			wantStr: "你好",
+		},
 	}
 
 	for _, tt := range tests {

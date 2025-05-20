@@ -431,7 +431,8 @@ func (c *Canal) GetColumnsCharsets() error {
 		query := fmt.Sprintf(`
 		SELECT 
 		    ORDINAL_POSITION,
-			CHARACTER_SET_NAME
+			CHARACTER_SET_NAME,
+			COLUMN_NAME
 		FROM 
 			information_schema.COLUMNS
 		WHERE 
@@ -449,8 +450,9 @@ func (c *Canal) GetColumnsCharsets() error {
 		for _, row := range res.Values {
 			columnIndex := row[0].AsInt64()
 			charset := row[1].AsString()
+			columnName := row[2].AsString()
 			c.cfg.ColumnCharset[int(columnIndex)] = string(charset)
-			fmt.Printf("Column: %s, Charset: %s\n", columnIndex, charset)
+			log.Infof("Column Name: %s, Column: %d, Charset: %s\n", columnName, columnIndex, charset)
 		}
 	}
 	return nil
