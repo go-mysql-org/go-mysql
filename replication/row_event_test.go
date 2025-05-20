@@ -1288,7 +1288,7 @@ func (_ *testDecodeSuite) BenchmarkUseDecimal(c *C) {
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range decimalData {
-			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, "utf8", d.meta)
 		}
 	}
 }
@@ -1298,7 +1298,7 @@ func (_ *testDecodeSuite) BenchmarkNotUseDecimal(c *C) {
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range decimalData {
-			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, "utf8", d.meta)
 		}
 	}
 }
@@ -1307,14 +1307,14 @@ func (_ *testDecodeSuite) TestDecimal(c *C) {
 	e := &RowsEvent{useDecimal: true}
 	e2 := &RowsEvent{useDecimal: false}
 	for _, d := range decimalData {
-		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, "utf8", d.meta)
 		c.Assert(err, IsNil)
 		// no trailing zero
 		dec, err := decimal.NewFromString(d.num)
 		c.Assert(err, IsNil)
 		c.Assert(dec.Equal(v.(decimal.Decimal)), IsTrue)
 
-		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta)
+		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, "utf8", d.meta)
 		c.Assert(err, IsNil)
 		c.Assert(v.(string), Equals, d.num)
 	}
@@ -1340,7 +1340,7 @@ func (_ *testDecodeSuite) BenchmarkInt(c *C) {
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		for _, d := range intData {
-			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0)
+			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, "utf8", 0)
 		}
 	}
 }
@@ -1350,6 +1350,7 @@ func TestDecodeStringLatin1(t *testing.T) {
 		name     string
 		input    []byte
 		length   int
+		charset  string
 		wantStr  string
 		wantRead int
 	}{
@@ -1357,6 +1358,7 @@ func TestDecodeStringLatin1(t *testing.T) {
 			name:     "Short Latin1 string",
 			input:    append([]byte{5}, []byte{0xe2, 'f', 'g', 'h', 0xe9}...), // length byte + 5 bytes: 'âfghé'
 			length:   5,
+			charset:  "latin1",
 			wantStr:  "âfghé",
 			wantRead: 6,
 		},
@@ -1364,6 +1366,7 @@ func TestDecodeStringLatin1(t *testing.T) {
 			name:     "Empty string",
 			input:    []byte{0},
 			length:   0,
+			charset:  "latin1",
 			wantStr:  "",
 			wantRead: 1,
 		},
@@ -1376,6 +1379,7 @@ func TestDecodeStringLatin1(t *testing.T) {
 				return buf.Bytes()
 			}(),
 			length:   300,
+			charset:  "latin1",
 			wantStr:  "âfghé",
 			wantRead: 7,
 		},
@@ -1383,7 +1387,7 @@ func TestDecodeStringLatin1(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotStr, gotRead := decodeStringLatin1(tt.input, tt.length)
+			gotStr, gotRead := decodeByCharSet(tt.input, tt.charset, tt.length)
 			if gotStr != tt.wantStr {
 				t.Errorf("decodeStringLatin1() got string = %q, want %q", gotStr, tt.wantStr)
 			}
@@ -1403,14 +1407,14 @@ func TestDecodeByCharSet(t *testing.T) {
 		wantStr string
 	}{
 		{
-			name:    "Valid UTF-8 with UTF-8 charset",
+			name:    "UTF-8 charset",
 			input:   append([]byte{11}, []byte("hello world")...),
 			charset: "utf8",
 			length:  11,
 			wantStr: "hello world",
 		},
 		{
-			name:    "Invalid UTF-8 but charset is latin1",
+			name:    "charset is latin1",
 			input:   append([]byte{3}, []byte{0xe2, 0x28, 0xa1}...), // invalid utf8
 			charset: "latin1",
 			length:  3,
@@ -1421,7 +1425,7 @@ func TestDecodeByCharSet(t *testing.T) {
 			input:   append([]byte{3}, []byte{0xe2, 0x28, 0xa1}...), // invalid utf8
 			charset: "utf8",
 			length:  3,
-			wantStr: "\xe2(\xa1",
+			wantStr: "�(�",
 		},
 		{
 			name:    "Valid UTF-8 and charset latin1",

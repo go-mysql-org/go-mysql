@@ -4,20 +4,23 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	. "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/pingcap/errors"
+	"github.com/shopspring/decimal"
+	"github.com/siddontang/go-log/log"
+	"github.com/siddontang/go/hack"
+	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/korean"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
+	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 	"io"
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
-
-	"github.com/pingcap/errors"
-	"github.com/shopspring/decimal"
-	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go/hack"
-
-	. "github.com/go-mysql-org/go-mysql/mysql"
 )
 
 var errMissingTableMapEvent = errors.New("invalid table id, no corresponding table map event")
@@ -1199,14 +1202,74 @@ func convertToString(s interface{}) (string, bool) {
 }
 
 func decodeByCharSet(data []byte, charset string, length int) (v string, n int) {
-	if !utf8.Valid(data) {
-		if charset == "latin1" {
-			return decodeStringLatin1(data, length)
-		} else {
-			fmt.Printf("Data is not in utf8 or latin1")
-		}
+	enc, err := getDecoderByCharsetName(charset)
+	if err != nil {
+		log.Errorf(err.Error())
+		return decodeString(data, length)
 	}
-	return decodeString(data, length)
+	return decodeStringWithEncoder(data, length, enc)
+}
+
+var charsetDecoders = map[string]encoding.Encoding{
+	// Unicode
+	"utf8":    unicode.UTF8,
+	"utf8mb4": unicode.UTF8,
+
+	// Western European
+	"latin1": charmap.ISO8859_1, // ISO 8859-1
+	"latin2": charmap.ISO8859_2, // ISO 8859-2
+	"latin5": charmap.ISO8859_9, // Turkish
+	"latin7": charmap.ISO8859_13,
+
+	// Windows encodings
+	"cp1250": charmap.Windows1250, // Central European
+	"cp1251": charmap.Windows1251, // Cyrillic
+	"cp1256": charmap.Windows1256, // Arabic
+
+	// Cyrillic
+	"koi8r": charmap.KOI8R,
+	"koi8u": charmap.KOI8U,
+
+	// Greek
+	"greek": charmap.ISO8859_7,
+
+	// Hebrew
+	"hebrew": charmap.ISO8859_8,
+
+	// Arabic
+	"arabic": charmap.ISO8859_6,
+
+	// Baltic
+	"baltic": charmap.ISO8859_4,
+
+	// Thai
+	"tis620": charmap.Windows874,
+
+	// Simplified Chinese
+	"gbk":    simplifiedchinese.GBK,
+	"gb2312": simplifiedchinese.HZGB2312,
+
+	// Traditional Chinese
+	"big5": traditionalchinese.Big5,
+
+	// Japanese
+	"sjis":      japanese.ShiftJIS,
+	"shift_jis": japanese.ShiftJIS,
+	"eucjp":     japanese.EUCJP,
+	"euc_jp":    japanese.EUCJP,
+
+	// Korean
+	"euckr":  korean.EUCKR,
+	"euc_kr": korean.EUCKR,
+}
+
+func getDecoderByCharsetName(name string) (encoding.Encoding, error) {
+	name = strings.ToLower(name)
+	enc, ok := charsetDecoders[name]
+	if !ok {
+		return nil, fmt.Errorf("unsupported charset: %s", name)
+	}
+	return enc, nil
 }
 
 func decodeString(data []byte, length int) (v string, n int) {
@@ -1224,22 +1287,22 @@ func decodeString(data []byte, length int) (v string, n int) {
 	return
 }
 
-func decodeStringLatin1(data []byte, length int) (v string, n int) {
+func decodeStringWithEncoder(data []byte, length int, enc encoding.Encoding) (v string, n int) {
 	// Define the Latin1 decoder
-	decoder := charmap.ISO8859_1.NewDecoder()
+	decoder := enc.NewDecoder()
 
 	if length < 256 {
 		// If the length is smaller than 256, extract the length from the first byte
 		length = int(data[0])
 		n = length + 1
-		// Use the decoder to convert to a string with Latin1 encoding
+		// Use the decoder to convert to a string with given encoding
 		decodedBytes, _, _ := transform.Bytes(decoder, data[1:n])
 		v = string(decodedBytes)
 	} else {
 		// If the length is larger, extract it using LittleEndian
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + 2
-		// Use the decoder to convert to a string with Latin1 encoding
+		// Use the decoder to convert to a string with given encoding
 		decodedBytes, _, _ := transform.Bytes(decoder, data[2:n])
 		v = string(decodedBytes)
 	}
