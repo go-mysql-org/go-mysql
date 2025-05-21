@@ -5,6 +5,7 @@ go 1.22
 toolchain go1.23.1
 
 require (
+	filippo.io/edwards25519 v1.1.0
 	github.com/BurntSushi/toml v1.3.2
 	github.com/Masterminds/semver v1.5.0
 	github.com/go-sql-driver/mysql v1.7.1
@@ -19,7 +20,6 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86 // indirect

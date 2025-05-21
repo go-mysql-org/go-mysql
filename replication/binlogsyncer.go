@@ -76,6 +76,9 @@ type BinlogSyncerConfig struct {
 	// Use decimal.Decimal structure for decimals.
 	UseDecimal bool
 
+	// Use FloatWithTrailingZero structure for floats.
+	UseFloatWithTrailingZero bool
+
 	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
 	RecvBufferSize int
 
@@ -197,6 +200,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetParseTime(b.cfg.ParseTime)
 	b.parser.SetTimestampStringLocation(b.cfg.TimestampStringLocation)
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
+	b.parser.SetUseFloatWithTrailingZero(b.cfg.UseFloatWithTrailingZero)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
 	b.parser.SetRowsEventDecodeFunc(b.cfg.RowsEventDecodeFunc)
 	b.parser.SetTableMapOptionalMetaDecodeFunc(b.cfg.TableMapOptionalMetaDecodeFunc)
