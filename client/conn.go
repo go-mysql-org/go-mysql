@@ -152,9 +152,9 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 
 	c.Conn = packet.NewConnWithTimeout(conn, c.ReadTimeout, c.WriteTimeout, c.BufferSize)
 	if c.tlsConfig != nil {
-		seq := c.Conn.Sequence
+		seq := c.Sequence
 		c.Conn = packet.NewTLSConnWithTimeout(conn, c.ReadTimeout, c.WriteTimeout)
-		c.Conn.Sequence = seq
+		c.Sequence = seq
 	}
 
 	if err = c.handshake(); err != nil {
@@ -163,9 +163,9 @@ func ConnectWithDialer(ctx context.Context, network, addr, user, password, dbNam
 	}
 
 	if c.ccaps&mysql.CLIENT_COMPRESS > 0 {
-		c.Conn.Compression = mysql.MYSQL_COMPRESS_ZLIB
+		c.Compression = mysql.MYSQL_COMPRESS_ZLIB
 	} else if c.ccaps&mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
-		c.Conn.Compression = mysql.MYSQL_COMPRESS_ZSTD
+		c.Compression = mysql.MYSQL_COMPRESS_ZSTD
 	}
 
 	// if a collation was set with a ID of > 255, then we need to call SET NAMES ...

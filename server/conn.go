@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -36,43 +37,39 @@ type Conn struct {
 	closed atomic.Bool
 }
 
-var baseConnID uint32 = 10000
+var (
+	baseConnID    uint32 = 10000
+	defaultServer        = sync.OnceValue(func() *Server {
+		return NewDefaultServer()
+	})
+)
 
 // NewConn: create connection with default server settings
+//
+// Deprecated: Use [Server.NewConn] instead.
 func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
-	p := NewInMemoryProvider()
-	p.AddUser(user, password)
-
-	var packetConn *packet.Conn
-	if defaultServer.tlsConfig != nil {
-		packetConn = packet.NewTLSConn(conn)
-	} else {
-		packetConn = packet.NewConn(conn)
-	}
-
-	c := &Conn{
-		Conn:               packetConn,
-		serverConf:         defaultServer,
-		credentialProvider: p,
-		h:                  h,
-		connectionID:       atomic.AddUint32(&baseConnID, 1),
-		stmts:              make(map[uint32]*Stmt),
-		salt:               mysql.RandomBuf(20),
-	}
-	c.closed.Store(false)
-
-	if err := c.handshake(); err != nil {
-		c.Close()
-		return nil, err
-	}
-
-	return c, nil
+	return defaultServer().NewConn(conn, user, password, h)
 }
 
 // NewCustomizedConn: create connection with customized server settings
+//
+// Deprecated: Use [Server.NewCustomizedConn] instead.
 func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
+	return serverConf.NewCustomizedConn(conn, p, h)
+}
+
+// NewConn: create connection with default server settings
+func (s *Server) NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
+	p := NewInMemoryProvider()
+	p.AddUser(user, password)
+
+	return s.NewCustomizedConn(conn, p, h)
+}
+
+// NewCustomizedConn: create connection with customized server settings
+func (s *Server) NewCustomizedConn(conn net.Conn, p CredentialProvider, h Handler) (*Conn, error) {
 	var packetConn *packet.Conn
-	if serverConf.tlsConfig != nil {
+	if s.tlsConfig != nil {
 		packetConn = packet.NewTLSConn(conn)
 	} else {
 		packetConn = packet.NewConn(conn)
@@ -80,7 +77,7 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, 
 
 	c := &Conn{
 		Conn:               packetConn,
-		serverConf:         serverConf,
+		serverConf:         s,
 		credentialProvider: p,
 		h:                  h,
 		connectionID:       atomic.AddUint32(&baseConnID, 1),
