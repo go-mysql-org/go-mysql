@@ -76,7 +76,7 @@ type BinlogSyncerConfig struct {
 	// Use decimal.Decimal structure for decimals.
 	UseDecimal bool
 
-	// Use FloatWithTrailingZero structure for floats.
+	// FloatWithTrailingZero structure for floats.
 	UseFloatWithTrailingZero bool
 
 	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.

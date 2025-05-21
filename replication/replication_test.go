@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/goccy/go-json"
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/test_util"
@@ -462,5 +463,82 @@ func (t *testSyncerSuite) TestMysqlBinlogCodec() {
 	for _, file := range files {
 		err = p.ParseFile(path.Join(binlogDir, file), 0, f)
 		require.NoError(t.T(), err)
+	}
+}
+
+func (t *testSyncerSuite) TestFloatWithTrailingZeros() {
+	t.setupTest(mysql.MySQLFlavor)
+
+	str := `DROP TABLE IF EXISTS test_float_zeros`
+	t.testExecute(str)
+
+	// Create table with JSON column containing float values
+	str = `CREATE TABLE test_float_zeros (
+		id INT PRIMARY KEY,
+		json_val JSON
+	)`
+	t.testExecute(str)
+
+	// Test with useFloatWithTrailingZero = true
+	t.b.cfg.UseFloatWithTrailingZero = true
+	t.testFloatWithTrailingZerosCase(true)
+
+	// Test with useFloatWithTrailingZero = false
+	t.b.cfg.UseFloatWithTrailingZero = false
+	t.testFloatWithTrailingZerosCase(false)
+}
+
+func (t *testSyncerSuite) testFloatWithTrailingZerosCase(useTrailingZero bool) {
+	// Insert values with trailing zeros in JSON
+	t.testExecute(`INSERT INTO test_float_zeros VALUES (1, '{"f": 5.1}')`)
+	t.testExecute(`INSERT INTO test_float_zeros VALUES (2, '{"f": 1.100}')`)
+
+	// Get current position
+	r, err := t.c.Execute("SHOW MASTER STATUS")
+	require.NoError(t.T(), err)
+	binFile, _ := r.GetString(0, 0)
+	binPos, _ := r.GetInt(0, 1)
+
+	// Start syncing from current position
+	s, err := t.b.StartSync(mysql.Position{Name: binFile, Pos: uint32(binPos)})
+	require.NoError(t.T(), err)
+
+	// Insert another row to trigger binlog events
+	t.testExecute(`INSERT INTO test_float_zeros VALUES (3, '{"f": 3.0}')`)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	for {
+		evt, err := s.GetEvent(ctx)
+		require.NoError(t.T(), err)
+
+		// We're interested in RowsEvent
+		if evt.Header.EventType != WRITE_ROWS_EVENTv2 {
+			continue
+		}
+
+		// Type assert to RowsEvent
+		rowsEvent := evt.Event.(*RowsEvent)
+		for _, row := range rowsEvent.Rows {
+			// The third row should contain our test values
+			if row[0].(int32) == 3 {
+				// Get the JSON value from binlog
+				jsonVal := row[1].([]byte)
+				var data struct {
+					F float64 `json:"f"`
+				}
+				err := json.Unmarshal(jsonVal, &data)
+				require.NoError(t.T(), err)
+
+				// Check if trailing zero is preserved based on useFloatWithTrailingZero
+				if useTrailingZero {
+					require.Equal(t.T(), "3.0", fmt.Sprintf("%.1f", data.F))
+				} else {
+					require.Equal(t.T(), "3", fmt.Sprintf("%.1f", data.F))
+				}
+				return
+			}
+		}
 	}
 }
