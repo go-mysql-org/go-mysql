@@ -35,10 +35,10 @@ type BinlogParser struct {
 	// used to start/stop processing
 	stopProcessing uint32
 
-	useDecimal          bool
+	useDecimal               bool
 	useFloatWithTrailingZero bool
-	ignoreJSONDecodeErr bool
-	verifyChecksum      bool
+	ignoreJSONDecodeErr      bool
+	verifyChecksum           bool
 
 	rowsEventDecodeFunc func(*RowsEvent, []byte) error
 

@@ -945,11 +945,11 @@ type RowsEvent struct {
 	Rows           [][]interface{}
 	SkippedColumns [][]int
 
-	parseTime               	bool
-	timestampStringLocation 	*time.Location
-	useDecimal              	bool
-	useFloatWithTrailingZero 	bool
-	ignoreJSONDecodeErr     	bool
+	parseTime                bool
+	timestampStringLocation  *time.Location
+	useDecimal               bool
+	useFloatWithTrailingZero bool
+	ignoreJSONDecodeErr      bool
 }
 
 // EnumRowsEventType is an abridged type describing the operation which triggered the given RowsEvent.

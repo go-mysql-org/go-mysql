@@ -135,9 +135,9 @@ func jsonbGetValueEntrySize(isSmall bool) int {
 // the common JSON encoding data.
 func (e *RowsEvent) decodeJsonBinary(data []byte) ([]byte, error) {
 	d := jsonBinaryDecoder{
-		useDecimal:      e.useDecimal,
+		useDecimal:               e.useDecimal,
 		useFloatWithTrailingZero: e.useFloatWithTrailingZero,
-		ignoreDecodeErr: e.ignoreJSONDecodeErr,
+		ignoreDecodeErr:          e.ignoreJSONDecodeErr,
 	}
 
 	if d.isDataShort(data, 1) {
@@ -153,10 +153,10 @@ func (e *RowsEvent) decodeJsonBinary(data []byte) ([]byte, error) {
 }
 
 type jsonBinaryDecoder struct {
-	useDecimal      			bool
-	useFloatWithTrailingZero 	bool
-	ignoreDecodeErr 			bool
-	err             			error
+	useDecimal               bool
+	useFloatWithTrailingZero bool
+	ignoreDecodeErr          bool
+	err                      error
 }
 
 func (d *jsonBinaryDecoder) decodeValue(tp byte, data []byte) interface{} {
