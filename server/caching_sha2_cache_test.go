@@ -58,7 +58,7 @@ type RemoteThrottleProvider struct {
 	getCredCallCount atomic.Int64
 }
 
-func (m *RemoteThrottleProvider) GetCredential(username string) (password string, found bool, err error) {
+func (m *RemoteThrottleProvider) GetCredential(username string) (credential Credential, found bool, err error) {
 	m.getCredCallCount.Add(1)
 	return m.InMemoryProvider.GetCredential(username)
 }
@@ -107,7 +107,7 @@ func (s *cacheTestSuite) onAccept() {
 
 func (s *cacheTestSuite) onConn(conn net.Conn) {
 	// co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
-	co, err := NewCustomizedConn(conn, s.server, s.credProvider, &testCacheHandler{s})
+	co, err := s.server.NewCustomizedConn(conn, s.credProvider, &testCacheHandler{s})
 	require.NoError(s.T(), err)
 	for {
 		err = co.HandleCommand()
