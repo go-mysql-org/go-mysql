@@ -62,6 +62,9 @@ func NewCredential(password string, authPluginName string) (Credential, error) {
 		}
 		c.Password = hash
 
+	case mysql.AUTH_CLEAR_PASSWORD:
+		c.Password = password
+
 	default:
 		return c, errors.Errorf("unknown authentication plugin name '%s'", c.AuthPluginName)
 	}
