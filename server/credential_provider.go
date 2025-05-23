@@ -34,8 +34,38 @@ func NewInMemoryProvider(defaultAuthMethod ...string) *InMemoryProvider {
 }
 
 type Credential struct {
-	password       string
-	authPluginName string
+	Password       string
+	AuthPluginName string
+}
+
+func NewCredential(password string, authPluginName string) (Credential, error) {
+	c := Credential{
+		AuthPluginName: authPluginName,
+	}
+
+	if password == "" {
+		c.Password = ""
+		return c, nil
+	}
+
+	switch c.AuthPluginName {
+	case mysql.AUTH_NATIVE_PASSWORD:
+		c.Password = mysql.EncodePasswordHex(mysql.NativePasswordHash([]byte(password)))
+
+	case mysql.AUTH_CACHING_SHA2_PASSWORD:
+		c.Password = auth.NewHashPassword(password, mysql.AUTH_CACHING_SHA2_PASSWORD)
+
+	case mysql.AUTH_SHA256_PASSWORD:
+		hash, err := mysql.NewSha256PasswordHash(password)
+		if err != nil {
+			return c, err
+		}
+		c.Password = hash
+
+	default:
+		return c, errors.Errorf("unknown authentication plugin name '%s'", c.AuthPluginName)
+	}
+	return c, nil
 }
 
 // implements an in memory credential provider
@@ -61,37 +91,17 @@ func (m *InMemoryProvider) GetCredential(username string) (credential Credential
 	return c, true, nil
 }
 
-func (m *InMemoryProvider) AddUser(username, password string, authPluginName ...string) error {
-	c := Credential{
-		authPluginName: m.defaultAuthMethod,
-	}
-	if len(authPluginName) > 0 {
-		c.authPluginName = authPluginName[0]
+func (m *InMemoryProvider) AddUser(username, password string, optionalAuthPluginName ...string) error {
+	authPluginName := m.defaultAuthMethod
+	if len(optionalAuthPluginName) > 0 {
+		authPluginName = optionalAuthPluginName[0]
 	}
 
-	if password == "" {
-		c.password = ""
-		m.userPool.Store(username, c)
-		return nil
+	c, err := NewCredential(password, authPluginName)
+	if err != nil {
+		return err
 	}
 
-	switch c.authPluginName {
-	case mysql.AUTH_NATIVE_PASSWORD:
-		c.password = mysql.EncodePasswordHex(mysql.NativePasswordHash([]byte(password)))
-
-	case mysql.AUTH_CACHING_SHA2_PASSWORD:
-		c.password = auth.NewHashPassword(password, mysql.AUTH_CACHING_SHA2_PASSWORD)
-
-	case mysql.AUTH_SHA256_PASSWORD:
-		hash, err := mysql.NewSha256PasswordHash(password)
-		if err != nil {
-			return err
-		}
-		c.password = hash
-
-	default:
-		return errors.Errorf("unknown authentication plugin name '%s'", c.authPluginName)
-	}
 	m.userPool.Store(username, c)
 	return nil
 }

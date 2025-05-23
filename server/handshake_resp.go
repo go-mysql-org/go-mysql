@@ -204,8 +204,8 @@ func (c *Conn) handleAuthMatch() (bool, error) {
 		return false, err
 	}
 
-	if c.authPluginName != c.credential.authPluginName {
-		if err := c.writeAuthSwitchRequest(c.credential.authPluginName); err != nil {
+	if c.authPluginName != c.credential.AuthPluginName {
+		if err := c.writeAuthSwitchRequest(c.credential.AuthPluginName); err != nil {
 			return false, err
 		}
 		// handle AuthSwitchResponse

@@ -71,7 +71,7 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 }
 
 func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Credential) error {
-	match, err := auth.CheckHashingPassword([]byte(credential.password), string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
+	match, err := auth.CheckHashingPassword([]byte(credential.Password), string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
 	if match && err == nil {
 		return nil
 	}
