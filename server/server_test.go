@@ -61,11 +61,13 @@ func prepareServerConf() []*Server {
 func Test(t *testing.T) {
 	// general tests
 	inMemProvider := NewInMemoryProvider()
-	inMemProvider.AddUser(*testUser, *testPassword)
-
 	servers := prepareServerConf()
 	// no TLS
 	for _, svr := range servers {
+		inMemProvider.userPool.Clear()
+		err := inMemProvider.AddUser(*testUser, *testPassword, svr.defaultAuthMethod)
+		require.NoError(t, err)
+
 		suite.Run(t, &serverTestSuite{
 			server:       svr,
 			credProvider: inMemProvider,
@@ -76,6 +78,10 @@ func Test(t *testing.T) {
 	// TLS if server supports
 	for _, svr := range servers {
 		if svr.tlsConfig != nil {
+			inMemProvider.userPool.Clear()
+			err := inMemProvider.AddUser(*testUser, *testPassword, svr.defaultAuthMethod)
+			require.NoError(t, err)
+
 			suite.Run(t, &serverTestSuite{
 				server:       svr,
 				credProvider: inMemProvider,
@@ -138,7 +144,7 @@ func (s *serverTestSuite) onAccept() {
 
 func (s *serverTestSuite) onConn(conn net.Conn) {
 	// co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
-	co, err := NewCustomizedConn(conn, s.server, s.credProvider, &testHandler{s})
+	co, err := s.server.NewCustomizedConn(conn, s.credProvider, &testHandler{s})
 	require.NoError(s.T(), err)
 	// set SSL if defined
 	for {
