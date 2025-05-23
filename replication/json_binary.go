@@ -3,6 +3,7 @@ package replication
 import (
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/utils"
@@ -52,6 +53,8 @@ type (
 	JsonDiffOperation byte
 )
 
+type FloatWithTrailingZero float64
+
 const (
 	// The JSON value in the given path is replaced with a new value.
 	//
@@ -96,6 +99,14 @@ func (jd *JsonDiff) String() string {
 	return fmt.Sprintf("json_diff(op:%s path:%s value:%s)", jd.Op, jd.Path, jd.Value)
 }
 
+func (f FloatWithTrailingZero) MarshalJSON() ([]byte, error) {
+	if float64(f) == float64(int(f)) {
+		return []byte(strconv.FormatFloat(float64(f), 'f', 1, 64)), nil
+	}
+
+	return []byte(strconv.FormatFloat(float64(f), 'f', -1, 64)), nil
+}
+
 func jsonbGetOffsetSize(isSmall bool) int {
 	if isSmall {
 		return jsonbSmallOffsetSize
@@ -124,8 +135,9 @@ func jsonbGetValueEntrySize(isSmall bool) int {
 // the common JSON encoding data.
 func (e *RowsEvent) decodeJsonBinary(data []byte) ([]byte, error) {
 	d := jsonBinaryDecoder{
-		useDecimal:      e.useDecimal,
-		ignoreDecodeErr: e.ignoreJSONDecodeErr,
+		useDecimal:               e.useDecimal,
+		useFloatWithTrailingZero: e.useFloatWithTrailingZero,
+		ignoreDecodeErr:          e.ignoreJSONDecodeErr,
 	}
 
 	if d.isDataShort(data, 1) {
@@ -141,9 +153,10 @@ func (e *RowsEvent) decodeJsonBinary(data []byte) ([]byte, error) {
 }
 
 type jsonBinaryDecoder struct {
-	useDecimal      bool
-	ignoreDecodeErr bool
-	err             error
+	useDecimal               bool
+	useFloatWithTrailingZero bool
+	ignoreDecodeErr          bool
+	err                      error
 }
 
 func (d *jsonBinaryDecoder) decodeValue(tp byte, data []byte) interface{} {
@@ -175,6 +188,9 @@ func (d *jsonBinaryDecoder) decodeValue(tp byte, data []byte) interface{} {
 	case JSONB_UINT64:
 		return d.decodeUint64(data)
 	case JSONB_DOUBLE:
+		if d.useFloatWithTrailingZero {
+			return d.decodeDoubleWithTrailingZero(data)
+		}
 		return d.decodeDouble(data)
 	case JSONB_STRING:
 		return d.decodeString(data)
@@ -393,6 +409,11 @@ func (d *jsonBinaryDecoder) decodeDouble(data []byte) float64 {
 
 	v := mysql.ParseBinaryFloat64(data[0:8])
 	return v
+}
+
+func (d *jsonBinaryDecoder) decodeDoubleWithTrailingZero(data []byte) FloatWithTrailingZero {
+	v := d.decodeDouble(data)
+	return FloatWithTrailingZero(v)
 }
 
 func (d *jsonBinaryDecoder) decodeString(data []byte) string {
