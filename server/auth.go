@@ -60,6 +60,9 @@ func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) err
 }
 
 func (c *Conn) acquirePassword() error {
+	if c.credential.password != "" {
+		return nil
+	}
 	credential, found, err := c.credentialProvider.GetCredential(c.user)
 	if err != nil {
 		return err

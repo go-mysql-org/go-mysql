@@ -147,7 +147,7 @@ func (s *cacheTestSuite) TestCache() {
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
 	got = s.credProvider.(*RemoteThrottleProvider).getCredCallCount.Load()
-	require.Equal(s.T(), int64(1), got)
+	require.Equal(s.T(), int64(2), got)
 
 	if s.db != nil {
 		s.db.Close()
