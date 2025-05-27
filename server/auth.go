@@ -1,11 +1,11 @@
 package server
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"fmt"
 
@@ -99,7 +99,7 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 	crypt.Reset()
 	crypt.Write(message2)
 	m := crypt.Sum(nil)
-	return bytes.Equal(m, cached)
+	return subtle.ConstantTimeCompare(m, cached) == 1
 }
 
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential Credential) error {

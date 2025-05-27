@@ -56,6 +56,7 @@ func CalcNativePassword(scramble, password []byte) []byte {
 	return Xor(scrambleHash, stage1)
 }
 
+// Xor hash1 modified in-place with XOR against hash2
 func Xor(hash1 []byte, hash2 []byte) []byte {
 	for i := range hash1 {
 		hash1[i] ^= hash2[i]
@@ -64,7 +65,7 @@ func Xor(hash1 []byte, hash2 []byte) []byte {
 }
 
 // hash_stage1 = xor(reply, sha1(public_seed, hash_stage2))
-func Stage1FromReply(scramble []byte, seed []byte, stage2 []byte) []byte {
+func stage1FromReply(scramble []byte, seed []byte, stage2 []byte) []byte {
 	crypt := sha1.New()
 	crypt.Write(seed)
 	crypt.Write(stage2)
@@ -75,8 +76,8 @@ func Stage1FromReply(scramble []byte, seed []byte, stage2 []byte) []byte {
 
 // FROM vitess.io/vitess/go/mysql/auth_server.go
 // DecodePasswordHex decodes the standard format used by MySQL
-// for 4.1 style password hashes. It drops the optionally leading * before
-// decoding the rest as a hex encoded string.
+// Password hashes in the 4.1 format always begin with a * character
+// see https://dev.mysql.com/doc/mysql-security-excerpt/5.7/en/password-hashing.html
 func DecodePasswordHex(hexEncodedPassword string) ([]byte, error) {
 	if hexEncodedPassword[0] == '*' {
 		hexEncodedPassword = hexEncodedPassword[1:]
@@ -114,7 +115,7 @@ func CompareNativePassword(reply []byte, stored []byte, seed []byte) bool {
 	}
 
 	// hash_stage1 = xor(reply, sha1(public_seed, hash_stage2))
-	stage1 := Stage1FromReply(reply, seed, stored)
+	stage1 := stage1FromReply(reply, seed, stored)
 	// andidate_hash2 = sha1(hash_stage1)
 	crypt := sha1.New()
 	crypt.Write(stage1)
@@ -146,11 +147,7 @@ func CalcCachingSha2Password(scramble []byte, password []byte) []byte {
 	crypt.Write(scramble)
 	message2 := crypt.Sum(nil)
 
-	for i := range message1 {
-		message1[i] ^= message2[i]
-	}
-
-	return message1
+	return Xor(message1, message2)
 }
 
 // Taken from https://github.com/go-sql-driver/mysql/pull/1518
@@ -239,9 +236,7 @@ func hashCrypt256(source, salt string, iterations uint64) (string, error) {
 	hashInput := []byte(source + salt)
 	var hash [32]byte
 	for i := uint64(0); i < actualIterations; i++ {
-		h := sha256.New()
-		h.Write(hashInput)
-		hash = sha256.Sum256(h.Sum(nil))
+		hash = sha256.Sum256(hashInput)
 		hashInput = hash[:]
 	}
 
@@ -275,7 +270,7 @@ func Check256HashingPassword(pwhash []byte, password string) (bool, error) {
 		return false, err
 	}
 
-	return bytes.Equal(pwhash, []byte(newHash)), nil
+	return subtle.ConstantTimeCompare(pwhash, []byte(newHash)) == 1, nil
 }
 
 // NewSha256PasswordHash creates a new password hash for sha256_password
