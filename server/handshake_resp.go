@@ -200,12 +200,14 @@ func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 func (c *Conn) handleAuthMatch() (bool, error) {
 	// if the client responds the handshake with a different auth method, the server will send the AuthSwitchRequest packet
 	// to the client to ask the client to switch.
+	if err := c.acquirePassword(); err != nil {
+		return false, err
+	}
 
-	if c.authPluginName != c.serverConf.defaultAuthMethod {
-		if err := c.writeAuthSwitchRequest(c.serverConf.defaultAuthMethod); err != nil {
+	if c.authPluginName != c.credential.AuthPluginName {
+		if err := c.writeAuthSwitchRequest(c.credential.AuthPluginName); err != nil {
 			return false, err
 		}
-		c.authPluginName = c.serverConf.defaultAuthMethod
 		// handle AuthSwitchResponse
 		return false, c.handleAuthSwitchResponse()
 	}
