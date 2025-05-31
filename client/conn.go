@@ -45,6 +45,7 @@ type Conn struct {
 	capability uint32
 	// client-set capabilities only
 	ccaps uint32
+	dcaps uint32 // disabled capabilities
 
 	attributes map[string]string
 
@@ -236,12 +237,14 @@ func (c *Conn) Ping() error {
 
 // SetCapability enables the use of a specific capability
 func (c *Conn) SetCapability(cap uint32) {
+	c.dcaps &^= cap
 	c.ccaps |= cap
 }
 
 // UnsetCapability disables the use of a specific capability
 func (c *Conn) UnsetCapability(cap uint32) {
-	c.ccaps &= ^cap
+	c.ccaps &^= cap
+	c.dcaps |= cap
 }
 
 // HasCapability returns true if the connection has the specific capability
