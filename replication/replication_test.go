@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/goccy/go-json"
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/test_util"
 	"github.com/go-mysql-org/go-mysql/utils"
+	"github.com/goccy/go-json"
 )
 
 var testOutputLogs = flag.Bool("out", false, "output binlog event")
@@ -494,7 +494,11 @@ func (t *testSyncerSuite) testFloatWithTrailingZerosCase(useTrailingZero bool) {
 	t.testExecute(`INSERT INTO test_float_zeros VALUES (2, '{"f": 1.100}')`)
 
 	// Get current position
-	r, err := t.c.Execute("SHOW MASTER STATUS")
+	showBinlogStatus := "SHOW BINARY LOG STATUS"
+	if eq, err := t.c.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+		showBinlogStatus = "SHOW MASTER STATUS"
+	}
+	r, err := t.c.Execute(showBinlogStatus)
 	require.NoError(t.T(), err)
 	binFile, _ := r.GetString(0, 0)
 	binPos, _ := r.GetInt(0, 1)
