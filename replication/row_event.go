@@ -30,7 +30,7 @@ type TableMapEvent struct {
 	flavor          string
 	tableIDSize     int
 	charset         string
-	columnsCharsets map[int]string
+	columnsCharsets map[string]map[int]string
 
 	TableID uint64
 
@@ -980,8 +980,8 @@ func (e *RowsEvent) decodeRows(data []byte, table *TableMapEvent, bitmap []byte)
 			row[i] = nil
 			continue
 		}
-
-		charset, exists := table.columnsCharsets[i+1]
+		tableRegex := fmt.Sprintf("%s.%s", table.Schema, table.Table)
+		charset, exists := table.columnsCharsets[tableRegex][i+1]
 		if !exists {
 			charset = "utf8"
 		}

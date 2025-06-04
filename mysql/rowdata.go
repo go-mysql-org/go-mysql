@@ -63,7 +63,7 @@ func (p RowData) ParseText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
 				data[i].value = utils.Float64ToUint64(val)
 			default:
 				data[i].Type = FieldValueTypeString
-				data[i].str = append(data[i].str[:0], v...)
+				data[i].Str = append(data[i].Str[:0], v...)
 			}
 
 			if err != nil {
@@ -186,7 +186,7 @@ func (p RowData) ParseBinary(f []*Field, dst []FieldValue) ([]FieldValue, error)
 
 			if !isNull {
 				data[i].Type = FieldValueTypeString
-				data[i].str = append(data[i].str[:0], v...)
+				data[i].Str = append(data[i].Str[:0], v...)
 				continue
 			} else {
 				data[i].Type = FieldValueTypeNull
@@ -205,7 +205,7 @@ func (p RowData) ParseBinary(f []*Field, dst []FieldValue) ([]FieldValue, error)
 			}
 
 			data[i].Type = FieldValueTypeString
-			data[i].str, err = FormatBinaryDate(int(num), p[pos:])
+			data[i].Str, err = FormatBinaryDate(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {
@@ -224,7 +224,7 @@ func (p RowData) ParseBinary(f []*Field, dst []FieldValue) ([]FieldValue, error)
 			}
 
 			data[i].Type = FieldValueTypeString
-			data[i].str, err = FormatBinaryDateTime(int(num), p[pos:])
+			data[i].Str, err = FormatBinaryDateTime(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {
@@ -243,7 +243,7 @@ func (p RowData) ParseBinary(f []*Field, dst []FieldValue) ([]FieldValue, error)
 			}
 
 			data[i].Type = FieldValueTypeString
-			data[i].str, err = FormatBinaryTime(int(num), p[pos:])
+			data[i].Str, err = FormatBinaryTime(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {

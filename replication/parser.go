@@ -24,7 +24,7 @@ type BinlogParser struct {
 	// "mysql" or "mariadb", if not set, use "mysql" by default
 	flavor         string
 	charset        string
-	columnsCharset map[int]string
+	columnsCharset map[string]map[int]string
 
 	format *FormatDescriptionEvent
 
@@ -218,7 +218,7 @@ func (p *BinlogParser) SetCharset(charset string) {
 	p.charset = charset
 }
 
-func (p *BinlogParser) SetColumnsCharsets(columnCharsets map[int]string) {
+func (p *BinlogParser) SetColumnsCharsets(columnCharsets map[string]map[int]string) {
 	p.columnsCharset = columnCharsets
 }
 

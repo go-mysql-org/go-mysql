@@ -50,7 +50,7 @@ type BinlogSyncerConfig struct {
 	Charset string
 
 	// columnCharset is for MySQL client character set
-	ColumnCharset map[int]string
+	ColumnCharset map[string]map[int]string
 
 	// SemiSyncEnabled enables semi-sync or not.
 	SemiSyncEnabled bool

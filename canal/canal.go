@@ -422,13 +422,11 @@ func (c *Canal) checkBinlogRowFormat() error {
 	return nil
 }
 
-func (c *Canal) GetColumnsCharsets() error {
-	for _, tableRegex := range c.cfg.IncludeTableRegex {
-		parts := strings.Split(tableRegex, ".")
-
-		dbName := parts[0]
-		tableName := parts[1]
-		query := fmt.Sprintf(`
+func (c *Canal) GenerateCharsetQuery(tableRegex string) string {
+	parts := strings.Split(tableRegex, ".")
+	dbName := parts[0]
+	tableName := parts[1]
+	query := fmt.Sprintf(`
 		SELECT 
 		    ORDINAL_POSITION,
 			CHARACTER_SET_NAME,
@@ -440,20 +438,29 @@ func (c *Canal) GetColumnsCharsets() error {
 			AND TABLE_NAME = '%s'
 			AND CHARACTER_SET_NAME IS NOT NULL;
 		`, dbName, tableName)
+	return query
+}
 
+func (c *Canal) SetColumnsCharset(tableRegex string, res *mysql.Result) {
+	c.cfg.ColumnCharset[tableRegex] = make(map[int]string)
+	for _, row := range res.Values {
+		columnIndex := row[0].AsInt64()
+		charset := row[1].AsString()
+		columnName := row[2].AsString()
+		c.cfg.ColumnCharset[tableRegex][int(columnIndex)] = string(charset)
+		log.Infof("Column Name: %s, Column: %d, Charset: %s\n", columnName, columnIndex, charset)
+	}
+}
+
+func (c *Canal) GetColumnsCharsets() error {
+	c.cfg.ColumnCharset = make(map[string]map[int]string)
+	for _, tableRegex := range c.cfg.IncludeTableRegex {
+		query := c.GenerateCharsetQuery(tableRegex)
 		res, err := c.Execute(query)
 		if err != nil {
 			return errors.Trace(err)
 		}
-
-		c.cfg.ColumnCharset = make(map[int]string)
-		for _, row := range res.Values {
-			columnIndex := row[0].AsInt64()
-			charset := row[1].AsString()
-			columnName := row[2].AsString()
-			c.cfg.ColumnCharset[int(columnIndex)] = string(charset)
-			log.Infof("Column Name: %s, Column: %d, Charset: %s\n", columnName, columnIndex, charset)
-		}
+		c.SetColumnsCharset(tableRegex, res)
 	}
 	return nil
 }

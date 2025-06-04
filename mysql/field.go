@@ -30,7 +30,7 @@ type FieldValueType uint8
 type FieldValue struct {
 	Type  FieldValueType
 	value uint64 // Also for int64 and float64
-	str   []byte
+	Str   []byte
 }
 
 const (
@@ -193,7 +193,7 @@ func (fv *FieldValue) AsFloat64() float64 {
 }
 
 func (fv *FieldValue) AsString() []byte {
-	return fv.str
+	return fv.Str
 }
 
 func (fv *FieldValue) Value() interface{} {

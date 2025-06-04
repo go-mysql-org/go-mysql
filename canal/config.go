@@ -50,12 +50,12 @@ type Config struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 
-	ColumnCharset   map[int]string `toml:"column_charset"`
-	Charset         string         `toml:"charset"`
-	ServerID        uint32         `toml:"server_id"`
-	Flavor          string         `toml:"flavor"`
-	HeartbeatPeriod time.Duration  `toml:"heartbeat_period"`
-	ReadTimeout     time.Duration  `toml:"read_timeout"`
+	ColumnCharset   map[string]map[int]string `toml:"column_charset"`
+	Charset         string                    `toml:"charset"`
+	ServerID        uint32                    `toml:"server_id"`
+	Flavor          string                    `toml:"flavor"`
+	HeartbeatPeriod time.Duration             `toml:"heartbeat_period"`
+	ReadTimeout     time.Duration             `toml:"read_timeout"`
 
 	// IncludeTableRegex or ExcludeTableRegex should contain database name
 	// Only a table which matches IncludeTableRegex and dismatches ExcludeTableRegex will be processed

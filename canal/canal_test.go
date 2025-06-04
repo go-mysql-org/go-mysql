@@ -3,6 +3,8 @@ package canal
 import (
 	"flag"
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 	"time"
 
