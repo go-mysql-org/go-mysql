@@ -380,3 +380,83 @@ func TestWithoutSchemeExp(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateCharsetQuery(t *testing.T) {
+	c := &Canal{}
+
+	tests := []struct {
+		tableRegex string
+		expected   string
+	}{
+		{
+			tableRegex: "testdb.testtable",
+			expected: `
+		SELECT 
+		    ORDINAL_POSITION,
+			CHARACTER_SET_NAME,
+			COLUMN_NAME
+		FROM 
+			information_schema.COLUMNS
+		WHERE 
+			TABLE_SCHEMA = 'testdb'
+			AND TABLE_NAME = 'testtable'
+			AND CHARACTER_SET_NAME IS NOT NULL;
+		`,
+		},
+		{
+			tableRegex: "mydb.mytable",
+			expected: `
+		SELECT 
+		    ORDINAL_POSITION,
+			CHARACTER_SET_NAME,
+			COLUMN_NAME
+		FROM 
+			information_schema.COLUMNS
+		WHERE 
+			TABLE_SCHEMA = 'mydb'
+			AND TABLE_NAME = 'mytable'
+			AND CHARACTER_SET_NAME IS NOT NULL;
+		`,
+		},
+	}
+
+	for _, tt := range tests {
+		actual := c.GenerateCharsetQuery(tt.tableRegex)
+		assert.Equal(t, normalizeSQL(tt.expected), normalizeSQL(actual))
+	}
+}
+
+// normalizeSQL trims whitespace and collapses it to make comparison easier
+func normalizeSQL(sql string) string {
+	return strings.Join(strings.Fields(sql), " ")
+}
+
+func TestSetColumnsCharset(t *testing.T) {
+	c := &Canal{
+		cfg: &Config{
+			ColumnCharset: make(map[string]map[int]string),
+		},
+	}
+
+	row1 := []mysql.FieldValue{
+		{Type: mysql.FieldValueTypeFloat, Str: []byte("1")},       // column index
+		{Type: mysql.FieldValueTypeString, Str: []byte("latin1")}, // charset
+		{Type: mysql.FieldValueTypeString, Str: []byte("col1")},   // column name
+	}
+
+	result := &mysql.Result{
+		Resultset: &mysql.Resultset{
+			Values: [][]mysql.FieldValue{row1},
+		},
+	}
+
+	// Act
+	tableRegex := "testdb.testtable"
+	c.SetColumnsCharset(tableRegex, result)
+
+	// Assert
+	expected := map[int]string{
+		0: "latin1",
+	}
+	assert.Equal(t, expected, c.cfg.ColumnCharset[tableRegex])
+}

@@ -1215,21 +1215,25 @@ var charsetDecoders = map[string]encoding.Encoding{
 	// Unicode
 	"utf8":    unicode.UTF8,
 	"utf8mb4": unicode.UTF8,
+	"utf16le": unicode.UTF16(unicode.LittleEndian, unicode.UseBOM),
+	"utf16":   unicode.UTF16(unicode.BigEndian, unicode.ExpectBOM),
 
 	// Western European
-	"latin1": charmap.ISO8859_1, // ISO 8859-1
-	"latin2": charmap.ISO8859_2, // ISO 8859-2
-	"latin5": charmap.ISO8859_9, // Turkish
+	"latin1": charmap.ISO8859_1,
+	"latin2": charmap.ISO8859_2,
+	"latin5": charmap.ISO8859_9,
 	"latin7": charmap.ISO8859_13,
 
 	// Windows encodings
-	"cp1250": charmap.Windows1250, // Central European
-	"cp1251": charmap.Windows1251, // Cyrillic
-	"cp1256": charmap.Windows1256, // Arabic
+	"cp1250": charmap.Windows1250,
+	"cp1251": charmap.Windows1251,
+	"cp1256": charmap.Windows1256,
+	"cp1257": charmap.Windows1257,
 
 	// Cyrillic
 	"koi8r": charmap.KOI8R,
 	"koi8u": charmap.KOI8U,
+	"cp866": charmap.CodePage866,
 
 	// Greek
 	"greek": charmap.ISO8859_7,
@@ -1240,15 +1244,13 @@ var charsetDecoders = map[string]encoding.Encoding{
 	// Arabic
 	"arabic": charmap.ISO8859_6,
 
-	// Baltic
-	"baltic": charmap.ISO8859_4,
-
 	// Thai
 	"tis620": charmap.Windows874,
 
 	// Simplified Chinese
-	"gbk":    simplifiedchinese.GBK,
-	"gb2312": simplifiedchinese.HZGB2312,
+	"gbk":     simplifiedchinese.GBK,
+	"gb2312":  simplifiedchinese.HZGB2312,
+	"gb18030": simplifiedchinese.GB18030,
 
 	// Traditional Chinese
 	"big5": traditionalchinese.Big5,
@@ -1257,11 +1259,18 @@ var charsetDecoders = map[string]encoding.Encoding{
 	"sjis":      japanese.ShiftJIS,
 	"shift_jis": japanese.ShiftJIS,
 	"eucjp":     japanese.EUCJP,
-	"euc_jp":    japanese.EUCJP,
 
 	// Korean
-	"euckr":  korean.EUCKR,
-	"euc_kr": korean.EUCKR,
+	"euckr": korean.EUCKR,
+
+	// DOS/mac
+	"cp850":    charmap.CodePage850,
+	"cp852":    charmap.CodePage852,
+	"macroman": charmap.Macintosh,
+
+	// Other/special cases
+	"ucs2":   unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM),
+	"binary": nil,
 }
 
 func getDecoderByCharsetName(name string) (encoding.Encoding, error) {
@@ -1349,14 +1358,12 @@ func decodeStringWithEncoder(data []byte, length int, enc encoding.Encoding) (v 
 		// If the length is smaller than 256, extract the length from the first byte
 		length = int(data[0])
 		n = length + 1
-		// Use the decoder to convert to a string with Latin1 encoding
 		decodedBytes, _, _ := transform.Bytes(decoder, data[1:n])
 		v = string(decodedBytes)
 	} else {
 		// If the length is larger, extract it using LittleEndian
 		length = int(binary.LittleEndian.Uint16(data[0:]))
 		n = length + 2
-		// Use the decoder to convert to a string with given encoding
 		decodedBytes, _, _ := transform.Bytes(decoder, data[2:n])
 		v = string(decodedBytes)
 	}
