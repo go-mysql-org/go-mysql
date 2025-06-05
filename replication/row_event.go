@@ -1249,7 +1249,7 @@ var charsetDecoders = map[string]encoding.Encoding{
 
 	// Simplified Chinese
 	"gbk":     simplifiedchinese.GBK,
-	"gb2312":  simplifiedchinese.HZGB2312,
+	"gb2312":  simplifiedchinese.GBK,
 	"gb18030": simplifiedchinese.GB18030,
 
 	// Traditional Chinese
