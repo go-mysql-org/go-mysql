@@ -119,14 +119,14 @@ func (s *connTestSuite) TestExecuteMultiple() {
 			// also, since this is not the last query, the SERVER_MORE_RESULTS_EXISTS
 			// flag should be set
 			require.True(s.T(), result.Status&mysql.SERVER_MORE_RESULTS_EXISTS > 0)
-			require.Equal(s.T(), 0, result.Resultset.RowNumber())
+			require.Equal(s.T(), 0, result.RowNumber())
 			require.Equal(s.T(), uint64(1), result.AffectedRows)
 			require.NoError(s.T(), err)
 		case 1:
 			// the SELECT query should have an resultset
 			// still not the last query, flag should be set
 			require.True(s.T(), result.Status&mysql.SERVER_MORE_RESULTS_EXISTS > 0)
-			require.Greater(s.T(), result.Resultset.RowNumber(), 0)
+			require.Greater(s.T(), result.RowNumber(), 0)
 			require.NoError(s.T(), err)
 		case 3:
 			// this query is obviously bogus so the error should be non-nil
@@ -175,7 +175,7 @@ func (s *connTestSuite) TestExecuteSelectStreaming() {
 			// result.Resultset must be defined at this point
 			require.NotNil(s.T(), result.Resultset)
 			// Check number of columns
-			require.Len(s.T(), result.Resultset.Fields, colsInResult)
+			require.Len(s.T(), result.Fields, colsInResult)
 
 			perResultCallbackCalledTimes++
 			return nil

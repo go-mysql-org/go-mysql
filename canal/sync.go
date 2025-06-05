@@ -324,13 +324,34 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 	}
 }
 
-func (c *Canal) GetMasterPos() (mysql.Position, error) {
-	showBinlogStatus := "SHOW BINARY LOG STATUS"
-	if eq, err := c.conn.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
-		showBinlogStatus = "SHOW MASTER STATUS"
+// getShowBinaryLogQuery returns the correct SQL statement to query binlog status
+// for the given database flavor and server version.
+//
+// Sources:
+//
+//	MySQL:   https://dev.mysql.com/doc/relnotes/mysql/8.4/en/news-8-4-0.html
+//	MariaDB: https://mariadb.com/kb/en/show-binlog-status
+func getShowBinaryLogQuery(flavor, serverVersion string) string {
+	switch flavor {
+	case mysql.MariaDBFlavor:
+		eq, err := mysql.CompareServerVersions(serverVersion, "10.5.2")
+		if (err == nil) && (eq >= 0) {
+			return "SHOW BINLOG STATUS"
+		}
+	case mysql.MySQLFlavor:
+		eq, err := mysql.CompareServerVersions(serverVersion, "8.4.0")
+		if (err == nil) && (eq >= 0) {
+			return "SHOW BINARY LOG STATUS"
+		}
 	}
 
-	rr, err := c.Execute(showBinlogStatus)
+	return "SHOW MASTER STATUS"
+}
+
+func (c *Canal) GetMasterPos() (mysql.Position, error) {
+	query := getShowBinaryLogQuery(c.cfg.Flavor, c.conn.GetServerVersion())
+
+	rr, err := c.Execute(query)
 	if err != nil {
 		return mysql.Position{}, errors.Trace(err)
 	}

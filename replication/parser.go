@@ -165,11 +165,7 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 }
 
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
-	for {
-		if atomic.LoadUint32(&p.stopProcessing) == 1 {
-			break
-		}
-
+	for atomic.LoadUint32(&p.stopProcessing) != 1 {
 		done, err := p.parseSingleEvent(r, onEvent)
 		if err != nil {
 			if err == errMissingTableMapEvent {

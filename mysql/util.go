@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"bytes"
+	"cmp"
 	"compress/zlib"
 	"crypto/rand"
 	"crypto/rsa"
@@ -13,11 +14,11 @@ import (
 	"io"
 	mrand "math/rand"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"filippo.io/edwards25519"
-	"github.com/Masterminds/semver"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
@@ -452,21 +453,46 @@ func ErrorEqual(err1, err2 error) bool {
 	return e1.Error() == e2.Error()
 }
 
+func compareSubVersion(typ, a, b, aFull, bFull string) (int, error) {
+	if a == "" || b == "" {
+		return 0, nil
+	}
+
+	var aNum, bNum int
+	var err error
+
+	if aNum, err = strconv.Atoi(a); err != nil {
+		return 0, fmt.Errorf("cannot parse %s version %s of %s", typ, a, aFull)
+	}
+	if bNum, err = strconv.Atoi(b); err != nil {
+		return 0, fmt.Errorf("cannot parse %s version %s of %s", typ, b, bFull)
+	}
+
+	return cmp.Compare(aNum, bNum), nil
+}
+
+// Compares version triplet strings, ignoring anything past `-` in version.
+// A version string like 8.0 will compare as if third triplet were a wildcard.
+// A version string like 8 will compare as if second & third triplets were wildcards.
 func CompareServerVersions(a, b string) (int, error) {
-	var (
-		aVer, bVer *semver.Version
-		err        error
-	)
+	aNumbers, _, _ := strings.Cut(a, "-")
+	bNumbers, _, _ := strings.Cut(b, "-")
 
-	if aVer, err = semver.NewVersion(a); err != nil {
-		return 0, fmt.Errorf("cannot parse %q as semver: %w", a, err)
+	aMajor, aRest, _ := strings.Cut(aNumbers, ".")
+	bMajor, bRest, _ := strings.Cut(bNumbers, ".")
+
+	if majorCompare, err := compareSubVersion("major", aMajor, bMajor, a, b); err != nil || majorCompare != 0 {
+		return majorCompare, err
 	}
 
-	if bVer, err = semver.NewVersion(b); err != nil {
-		return 0, fmt.Errorf("cannot parse %q as semver: %w", b, err)
+	aMinor, aPatch, _ := strings.Cut(aRest, ".")
+	bMinor, bPatch, _ := strings.Cut(bRest, ".")
+
+	if minorCompare, err := compareSubVersion("minor", aMinor, bMinor, a, b); err != nil || minorCompare != 0 {
+		return minorCompare, err
 	}
 
-	return aVer.Compare(bVer), nil
+	return compareSubVersion("patch", aPatch, bPatch, a, b)
 }
 
 var encodeRef = map[byte]byte{

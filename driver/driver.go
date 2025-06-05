@@ -379,7 +379,7 @@ func (st *state) replyError(err error) error {
 
 func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, error) {
 	a := buildArgs(args)
-	r, err := c.Conn.Execute(query, a...)
+	r, err := c.Execute(query, a...)
 	if err != nil {
 		return nil, c.state.replyError(err)
 	}
@@ -389,7 +389,7 @@ func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, err
 func (c *conn) ExecContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Result, error) {
 	defer c.watchCtx(ctx)()
 	a := buildNamedArgs(args)
-	r, err := c.Conn.Execute(query, a...)
+	r, err := c.Execute(query, a...)
 	if err != nil {
 		return nil, c.state.replyError(err)
 	}
@@ -398,7 +398,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []sqldriver.N
 
 func (c *conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, error) {
 	a := buildArgs(args)
-	r, err := c.Conn.Execute(query, a...)
+	r, err := c.Execute(query, a...)
 	if err != nil {
 		return nil, c.state.replyError(err)
 	}
@@ -408,7 +408,7 @@ func (c *conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, erro
 func (c *conn) QueryContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Rows, error) {
 	defer c.watchCtx(ctx)()
 	a := buildNamedArgs(args)
-	r, err := c.Conn.Execute(query, a...)
+	r, err := c.Execute(query, a...)
 	if err != nil {
 		return nil, c.state.replyError(err)
 	}
@@ -429,12 +429,12 @@ func (s *stmt) Close() error {
 }
 
 func (s *stmt) NumInput() int {
-	return s.Stmt.ParamNum()
+	return s.ParamNum()
 }
 
 func (s *stmt) Exec(args []sqldriver.Value) (sqldriver.Result, error) {
 	a := buildArgs(args)
-	r, err := s.Stmt.Execute(a...)
+	r, err := s.Execute(a...)
 	if err != nil {
 		return nil, s.connectionState.replyError(err)
 	}
@@ -445,7 +445,7 @@ func (s *stmt) ExecContext(ctx context.Context, args []sqldriver.NamedValue) (sq
 	defer s.watchCtx(ctx)()
 
 	a := buildNamedArgs(args)
-	r, err := s.Stmt.Execute(a...)
+	r, err := s.Execute(a...)
 	if err != nil {
 		return nil, s.connectionState.replyError(err)
 	}
@@ -454,7 +454,7 @@ func (s *stmt) ExecContext(ctx context.Context, args []sqldriver.NamedValue) (sq
 
 func (s *stmt) Query(args []sqldriver.Value) (sqldriver.Rows, error) {
 	a := buildArgs(args)
-	r, err := s.Stmt.Execute(a...)
+	r, err := s.Execute(a...)
 	if err != nil {
 		return nil, s.connectionState.replyError(err)
 	}
@@ -465,7 +465,7 @@ func (s *stmt) QueryContext(ctx context.Context, args []sqldriver.NamedValue) (s
 	defer s.watchCtx(ctx)()
 
 	a := buildNamedArgs(args)
-	r, err := s.Stmt.Execute(a...)
+	r, err := s.Execute(a...)
 	if err != nil {
 		return nil, s.connectionState.replyError(err)
 	}
@@ -489,11 +489,11 @@ type result struct {
 }
 
 func (r *result) LastInsertId() (int64, error) {
-	return int64(r.Result.InsertId), nil
+	return int64(r.InsertId), nil
 }
 
 func (r *result) RowsAffected() (int64, error) {
-	return int64(r.Result.AffectedRows), nil
+	return int64(r.AffectedRows), nil
 }
 
 type rows struct {
@@ -531,14 +531,14 @@ func (r *rows) Close() error {
 }
 
 func (r *rows) Next(dest []sqldriver.Value) error {
-	if r.step >= r.Resultset.RowNumber() {
+	if r.step >= r.RowNumber() {
 		return io.EOF
 	} else if r.step == -1 {
 		return io.ErrUnexpectedEOF
 	}
 
-	for i := 0; i < r.Resultset.ColumnNumber(); i++ {
-		value, err := r.Resultset.GetValue(r.step, i)
+	for i := 0; i < r.ColumnNumber(); i++ {
+		value, err := r.GetValue(r.step, i)
 		if err != nil {
 			return err
 		}

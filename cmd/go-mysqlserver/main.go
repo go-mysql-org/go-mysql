@@ -26,7 +26,8 @@ func main() {
 
 	// Create a connection with user root and an empty password.
 	// You can use your own handler to handle command here.
-	conn, err := server.NewConn(c, "root", "", server.EmptyHandler{})
+	srv := server.NewDefaultServer()
+	conn, err := srv.NewConn(c, "root", "", server.EmptyHandler{})
 	if err != nil {
 		log.Fatal(err)
 	}
