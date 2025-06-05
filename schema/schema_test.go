@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -174,3 +175,50 @@ func (s *schemaTestSuite) TestSchemaWithMultiValueIndex() {
 
 	require.Equal(s.T(), ta, taSqlDb)
 }
+
+// func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
+// 	_, err := s.conn.Execute(`DROP TABLE IF EXISTS invisible_idx_test`)
+// 	require.NoError(s.T(), err)
+
+// 	// Check MySQL version
+// 	hasInvisibleIndex := false
+// 	if eq, err := s.conn.CompareServerVersion("8.0.0"); err == nil && eq >= 0 {
+// 		hasInvisibleIndex = true
+// 	}
+
+// 	str := `
+//         CREATE TABLE IF NOT EXISTS invisible_idx_test (
+//             id INT,
+//             name VARCHAR(256),
+//             PRIMARY KEY(id),
+//             INDEX name_idx (name)
+//         ) ENGINE = INNODB;
+//     `
+
+// 	// Add INVISIBLE keyword only for MySQL 8.0+
+// 	if hasInvisibleIndex {
+// 		str = strings.Replace(str, "INDEX name_idx (name)", "INDEX name_idx (name) INVISIBLE", 1)
+// 	}
+
+// 	_, err = s.conn.Execute(str)
+// 	require.NoError(s.T(), err)
+
+// 	ta, err := NewTable(s.conn, *schema, "invisible_idx_test")
+// 	require.NoError(s.T(), err)
+
+// 	require.Len(s.T(), ta.Indexes, 2)
+// 	require.Equal(s.T(), "PRIMARY", ta.Indexes[0].Name)
+// 	require.True(s.T(), ta.Indexes[0].Visible)
+// 	require.Equal(s.T(), "name_idx", ta.Indexes[1].Name)
+
+// 	if hasInvisibleIndex {
+// 		require.False(s.T(), ta.Indexes[1].Visible)
+// 	} else {
+// 		require.True(s.T(), ta.Indexes[1].Visible)
+// 	}
+
+// 	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "invisible_idx_test")
+// 	require.NoError(s.T(), err)
+
+// 	require.Equal(s.T(), ta, taSqlDb)
+// }
