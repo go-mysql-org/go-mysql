@@ -320,21 +320,54 @@ func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
 	return r.Err()
 }
 
-func hasInvisibleIndexSupport(conn mysql.Executer) bool {
-	if eq, err := conn.CompareServerVersion("8.0.0"); err == nil && eq >= 0 {
+// isMySQL8OrAbove checks if the given version string represents MySQL 8.0 or above.
+// It handles various MySQL version formats including:
+// - "8.0.25"
+// - "8.4.0"
+// - "8.0.25-log"
+// - "8.0.25-0ubuntu0.20.04.1"
+func isMySQL8OrAbove(version string) bool {
+
+	// Extract the version number before any additional info (like "-log", "-ubuntu", etc.)
+	versionParts := strings.Fields(version)
+	if len(versionParts) == 0 {
+		return false
+	}
+
+	// Take the first part and remove any suffix after hyphen
+	versionStr := strings.Split(versionParts[0], "-")[0]
+
+	// Use semver comparison for accurate version checking
+	if eq, err := mysql.CompareServerVersions(versionStr, "8.0.0"); err == nil && eq >= 0 {
 		return true
 	}
+
 	return false
+}
+
+func hasInvisibleIndexSupport(conn mysql.Executer) bool {
+	versionQuery := "SELECT VERSION()"
+	r, err := conn.Execute(versionQuery)
+	if err != nil {
+		return false
+	}
+
+	if r.RowNumber() == 0 {
+		return false
+	}
+
+	version, _ := r.GetString(0, 0)
+	return isMySQL8OrAbove(version)
 }
 
 func hasInvisibleIndexSupportSqlDB(conn *sql.DB) bool {
 	versionQuery := "SELECT VERSION()"
 	var version string
 	err := conn.QueryRow(versionQuery).Scan(&version)
-	if err == nil && strings.HasPrefix(version, "8.") {
-		return true
+	if err != nil {
+		return false
 	}
-	return false
+	return isMySQL8OrAbove(version)
 }
 
 func (ta *Table) fetchIndexes(conn mysql.Executer) error {
@@ -360,7 +393,7 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 
 		// Only set to false if explicitly marked as invisible
 		if hasInvisibleIndex {
-			visible, _ := r.GetString(i, 10)
+			visible, _ := r.GetString(i, 13)
 			if visible == "NO" {
 				currentIndex.Visible = false
 			}
@@ -406,7 +439,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 				values[i] = &colName
 			case 6:
 				values[i] = &cardinality
-			case 10:
+			case 13:
 				values[i] = &visible
 			default:
 				values[i] = &unusedVal

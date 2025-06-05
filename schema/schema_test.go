@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	_ "github.com/go-mysql-org/go-mysql/driver"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/test_util"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -176,49 +176,121 @@ func (s *schemaTestSuite) TestSchemaWithMultiValueIndex() {
 	require.Equal(s.T(), ta, taSqlDb)
 }
 
-// func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
-// 	_, err := s.conn.Execute(`DROP TABLE IF EXISTS invisible_idx_test`)
-// 	require.NoError(s.T(), err)
+func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
+	_, err := s.conn.Execute(`DROP TABLE IF EXISTS invisible_idx_test`)
+	require.NoError(s.T(), err)
 
-// 	// Check MySQL version
-// 	hasInvisibleIndex := false
-// 	if eq, err := s.conn.CompareServerVersion("8.0.0"); err == nil && eq >= 0 {
-// 		hasInvisibleIndex = true
-// 	}
+	// Check MySQL version
+	hasInvisibleIndex := false
+	versionQuery := "SELECT VERSION()"
+	r, err := s.conn.Execute(versionQuery)
+	require.NoError(s.T(), err)
 
-// 	str := `
-//         CREATE TABLE IF NOT EXISTS invisible_idx_test (
-//             id INT,
-//             name VARCHAR(256),
-//             PRIMARY KEY(id),
-//             INDEX name_idx (name)
-//         ) ENGINE = INNODB;
-//     `
+	if r.RowNumber() > 0 {
+		version, _ := r.GetString(0, 0)
+		if eq, err := mysql.CompareServerVersions(version, "8.0.0"); err == nil && eq >= 0 {
+			hasInvisibleIndex = true
+		}
+	}
 
-// 	// Add INVISIBLE keyword only for MySQL 8.0+
-// 	if hasInvisibleIndex {
-// 		str = strings.Replace(str, "INDEX name_idx (name)", "INDEX name_idx (name) INVISIBLE", 1)
-// 	}
+	str := `
+        CREATE TABLE IF NOT EXISTS invisible_idx_test (
+            id INT,
+            name VARCHAR(256),
+            email VARCHAR(256),
+            PRIMARY KEY(id),
+            INDEX name_idx (name),
+            INDEX email_idx (email)
+        ) ENGINE = INNODB;
+    `
 
-// 	_, err = s.conn.Execute(str)
-// 	require.NoError(s.T(), err)
+	_, err = s.conn.Execute(str)
+	require.NoError(s.T(), err)
 
-// 	ta, err := NewTable(s.conn, *schema, "invisible_idx_test")
-// 	require.NoError(s.T(), err)
+	// Add INVISIBLE keyword only for MySQL 8.0+
+	if hasInvisibleIndex {
+		_, err = s.conn.Execute(`ALTER TABLE invisible_idx_test ALTER INDEX name_idx INVISIBLE`)
+		require.NoError(s.T(), err)
+	}
 
-// 	require.Len(s.T(), ta.Indexes, 2)
-// 	require.Equal(s.T(), "PRIMARY", ta.Indexes[0].Name)
-// 	require.True(s.T(), ta.Indexes[0].Visible)
-// 	require.Equal(s.T(), "name_idx", ta.Indexes[1].Name)
+	ta, err := NewTable(s.conn, *schema, "invisible_idx_test")
+	require.NoError(s.T(), err)
 
-// 	if hasInvisibleIndex {
-// 		require.False(s.T(), ta.Indexes[1].Visible)
-// 	} else {
-// 		require.True(s.T(), ta.Indexes[1].Visible)
-// 	}
+	require.Len(s.T(), ta.Indexes, 3)
 
-// 	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "invisible_idx_test")
-// 	require.NoError(s.T(), err)
+	// PRIMARY key should always be visible
+	require.Equal(s.T(), "PRIMARY", ta.Indexes[0].Name)
+	require.True(s.T(), ta.Indexes[0].Visible)
 
-// 	require.Equal(s.T(), ta, taSqlDb)
-// }
+	// Find name_idx and email_idx (order may vary)
+	var nameIdx, emailIdx *Index
+	for _, idx := range ta.Indexes {
+		if idx.Name == "name_idx" {
+			nameIdx = idx
+		} else if idx.Name == "email_idx" {
+			emailIdx = idx
+		}
+	}
+
+	require.NotNil(s.T(), nameIdx)
+	require.NotNil(s.T(), emailIdx)
+
+	// email_idx should always be visible (default)
+	require.True(s.T(), emailIdx.Visible)
+
+	// name_idx visibility depends on MySQL version
+	if hasInvisibleIndex {
+		require.False(s.T(), nameIdx.Visible, "name_idx should be invisible in MySQL 8.0+")
+	} else {
+		require.True(s.T(), nameIdx.Visible, "name_idx should be visible in MySQL <8.0")
+	}
+
+	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "invisible_idx_test")
+	require.NoError(s.T(), err)
+
+	require.Equal(s.T(), ta, taSqlDb)
+}
+
+func TestIndexVisibilityDefault(t *testing.T) {
+	// Test that NewIndex creates visible indexes by default
+	idx := NewIndex("test_index")
+	require.True(t, idx.Visible)
+
+	// Test AddIndex creates visible indexes by default
+	ta := &Table{Schema: "test", Name: "test_table"}
+	addedIdx := ta.AddIndex("added_index")
+	require.True(t, addedIdx.Visible)
+}
+
+func (s *schemaTestSuite) TestVisibleFieldInSchema() {
+	_, err := s.conn.Execute(`DROP TABLE IF EXISTS visible_field_test`)
+	require.NoError(s.T(), err)
+
+	str := `
+        CREATE TABLE IF NOT EXISTS visible_field_test (
+            id INT,
+            name VARCHAR(256),
+            PRIMARY KEY(id),
+            INDEX name_idx (name)
+        ) ENGINE = INNODB;
+    `
+
+	_, err = s.conn.Execute(str)
+	require.NoError(s.T(), err)
+
+	ta, err := NewTable(s.conn, *schema, "visible_field_test")
+	require.NoError(s.T(), err)
+
+	// All indexes should be visible by default
+	for _, idx := range ta.Indexes {
+		require.True(s.T(), idx.Visible, "Index %s should be visible by default", idx.Name)
+	}
+
+	// Test with SQL DB connection as well
+	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "visible_field_test")
+	require.NoError(s.T(), err)
+
+	for _, idx := range taSqlDb.Indexes {
+		require.True(s.T(), idx.Visible, "Index %s should be visible by default (SQL DB)", idx.Name)
+	}
+}
