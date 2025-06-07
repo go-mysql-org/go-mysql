@@ -1,6 +1,8 @@
 package replication
 
 import (
+	"encoding/binary"
+	"math"
 	"testing"
 
 	"github.com/goccy/go-json"
@@ -169,9 +171,9 @@ func TestJsonBinaryDecoder_decodeDoubleWithTrailingZero(t *testing.T) {
 		useFloatWithTrailingZero: true,
 	}
 
-	// Test data representing float64 in binary format (little endian)
-	// 5.0 as IEEE 754 double precision: 0x4014000000000000
-	testData := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x40}
+	// Test data representing 5.0 as IEEE 754 double precision in little endian binary format
+	testData := make([]byte, 8)
+	binary.LittleEndian.PutUint64(testData, math.Float64bits(5.0))
 
 	result := decoder.decodeDoubleWithTrailingZero(testData)
 	require.NoError(t, decoder.err)
@@ -190,28 +192,46 @@ func TestJsonBinaryDecoder_decodeValue_JSONB_DOUBLE(t *testing.T) {
 	tests := []struct {
 		name                     string
 		useFloatWithTrailingZero bool
+		value                    float64
 		expectedType             interface{}
 		expectedJSONString       string
 	}{
 		{
-			name:                     "with trailing zero enabled",
+			name:                     "positive number with trailing zero enabled",
 			useFloatWithTrailingZero: true,
+			value:                    5.0,
 			expectedType:             FloatWithTrailingZero(0),
 			expectedJSONString:       "5.0",
 		},
 		{
-			name:                     "with trailing zero disabled",
+			name:                     "positive number with trailing zero disabled",
 			useFloatWithTrailingZero: false,
+			value:                    5.0,
 			expectedType:             float64(0),
 			expectedJSONString:       "5",
 		},
+		{
+			name:                     "negative zero with trailing zero enabled",
+			useFloatWithTrailingZero: true,
+			value:                    math.Copysign(0.0, -1),
+			expectedType:             FloatWithTrailingZero(0),
+			expectedJSONString:       "-0.0",
+		},
+		{
+			name:                     "negative zero with trailing zero disabled",
+			useFloatWithTrailingZero: false,
+			value:                    math.Copysign(0.0, -1),
+			expectedType:             float64(0),
+			expectedJSONString:       "-0",
+		},
 	}
-
-	// 5.0 as IEEE 754 double precision in little endian
-	testData := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x40}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Test data as IEEE 754 double precision in little endian binary format
+			testData := make([]byte, 8)
+			binary.LittleEndian.PutUint64(testData, math.Float64bits(tt.value))
+
 			decoder := &jsonBinaryDecoder{
 				useFloatWithTrailingZero: tt.useFloatWithTrailingZero,
 			}
@@ -228,26 +248,6 @@ func TestJsonBinaryDecoder_decodeValue_JSONB_DOUBLE(t *testing.T) {
 	}
 }
 
-func TestRowsEvent_decodeJsonBinary_WithFloatTrailingZero(t *testing.T) {
-	// Create a sample JSON binary data representing {"value": 5.0}
-	// This is a simplified test - in practice the binary format would be more complex
-	rowsEvent := &RowsEvent{
-		useFloatWithTrailingZero: true,
-	}
-
-	// Mock a simple JSON binary that would contain a double value
-	// In a real scenario, this would come from actual MySQL binlog data
-	// For this test, we'll create a minimal valid structure
-
-	// This test would need actual MySQL JSON binary data to be fully functional
-	// For now, we'll test the decoding path exists and the option is respected
-	decoder := &jsonBinaryDecoder{
-		useFloatWithTrailingZero: rowsEvent.useFloatWithTrailingZero,
-	}
-
-	require.True(t, decoder.useFloatWithTrailingZero)
-}
-
 func TestBinlogParser_SetUseFloatWithTrailingZero(t *testing.T) {
 	parser := NewBinlogParser()
 
@@ -261,14 +261,6 @@ func TestBinlogParser_SetUseFloatWithTrailingZero(t *testing.T) {
 	// Test setting to false
 	parser.SetUseFloatWithTrailingZero(false)
 	require.False(t, parser.useFloatWithTrailingZero)
-}
-
-func TestBinlogSyncerConfig_UseFloatWithTrailingZero(t *testing.T) {
-	cfg := BinlogSyncerConfig{
-		UseFloatWithTrailingZero: true,
-	}
-
-	require.True(t, cfg.UseFloatWithTrailingZero)
 }
 
 func TestFloatWithTrailingZero_EdgeCases(t *testing.T) {
@@ -291,11 +283,6 @@ func TestFloatWithTrailingZero_EdgeCases(t *testing.T) {
 			name:     "scientific notation threshold",
 			input:    FloatWithTrailingZero(1e6),
 			expected: "1000000.0",
-		},
-		{
-			name:     "negative zero",
-			input:    FloatWithTrailingZero(-0.0),
-			expected: "0.0",
 		},
 		{
 			name:     "number that looks whole but has tiny fractional part",
@@ -367,20 +354,18 @@ func TestRowsEvent_UseFloatWithTrailingZero_Integration(t *testing.T) {
 	err := tableMapEvent.Decode(tableMapEventData)
 	require.NoError(t, err)
 
+	require.Greater(t, tableMapEvent.TableID, uint64(0))
+
 	// Test with useFloatWithTrailingZero enabled
 	rowsWithTrailingZero := &RowsEvent{
-		tableIDSize:              6,
 		tables:                   make(map[uint64]*TableMapEvent),
-		Version:                  2,
 		useFloatWithTrailingZero: true,
 	}
 	rowsWithTrailingZero.tables[tableMapEvent.TableID] = tableMapEvent
 
 	// Test with useFloatWithTrailingZero disabled
 	rowsWithoutTrailingZero := &RowsEvent{
-		tableIDSize:              6,
 		tables:                   make(map[uint64]*TableMapEvent),
-		Version:                  2,
 		useFloatWithTrailingZero: false,
 	}
 	rowsWithoutTrailingZero.tables[tableMapEvent.TableID] = tableMapEvent
