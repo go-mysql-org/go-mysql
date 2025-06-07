@@ -222,6 +222,8 @@ func (c *Conn) writeAuthHandshake() error {
 		c.ccaps&mysql.CLIENT_COMPRESS | c.ccaps&mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM |
 		c.ccaps&mysql.CLIENT_LOCAL_FILES
 
+	capability &^= c.clientExplicitOffCaps
+
 	// To enable TLS / SSL
 	if c.tlsConfig != nil {
 		capability |= mysql.CLIENT_SSL
