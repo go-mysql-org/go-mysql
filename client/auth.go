@@ -211,15 +211,8 @@ func (c *Conn) writeAuthHandshake() error {
 	capability := mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SECURE_CONNECTION |
 		mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_PLUGIN_AUTH
 	// Adjust client capability flags based on server support
-	// ---- Inherit capabilities that the server has and the user has NOT explicitly denied ----
-	inherit := c.capability & ^c.dcaps             // Server-side capabilities minus explicit denies
-	capability |= inherit & mysql.CLIENT_LONG_FLAG // Existing
-	// ---- Handling of CLIENT_QUERY_ATTRIBUTES ----
-	if c.ccaps&mysql.CLIENT_QUERY_ATTRIBUTES != 0 { // Explicitly ON
-		capability |= mysql.CLIENT_QUERY_ATTRIBUTES
-	} else if inherit&mysql.CLIENT_QUERY_ATTRIBUTES != 0 { // Server has it and no denial
-		capability |= mysql.CLIENT_QUERY_ATTRIBUTES
-	}
+	capability |= c.capability & mysql.CLIENT_LONG_FLAG
+	capability |= c.capability & mysql.CLIENT_QUERY_ATTRIBUTES
 	// Adjust client capability flags on specific client requests
 	// Only flags that would make any sense setting and aren't handled elsewhere
 	// in the library are supported here
@@ -228,6 +221,8 @@ func (c *Conn) writeAuthHandshake() error {
 		c.ccaps&mysql.CLIENT_PS_MULTI_RESULTS | c.ccaps&mysql.CLIENT_CONNECT_ATTRS |
 		c.ccaps&mysql.CLIENT_COMPRESS | c.ccaps&mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM |
 		c.ccaps&mysql.CLIENT_LOCAL_FILES
+
+	capability &^= c.clientExplicitOffCaps
 
 	// To enable TLS / SSL
 	if c.tlsConfig != nil {
@@ -367,8 +362,6 @@ func (c *Conn) writeAuthHandshake() error {
 		// zstd_compression_level
 		data[pos] = 0x03
 	}
-
-	c.capability = capability // update capability to the one we sent
 
 	return c.WritePacket(data)
 }
