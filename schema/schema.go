@@ -364,12 +364,9 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 		colName, _ := r.GetString(i, 4)
 		currentIndex.AddColumn(colName, cardinality)
 		currentIndex.NoneUnique, _ = r.GetUint(i, 1)
-		// Only set to false if explicitly marked as invisible
 		if hasInvisibleIndex {
 			visible, _ := r.GetString(i, 13)
-			if isIndexInvisible(visible) {
-				currentIndex.Visible = false
-			}
+			currentIndex.Visible = !isIndexInvisible(visible)
 		}
 	}
 
@@ -438,9 +435,8 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		}
 		currentIndex.NoneUnique = noneUnique
 
-		// Only set to false if explicitly marked as invisible
-		if hasInvisibleIndex && visible.Valid && isIndexInvisible(visible.String) {
-			currentIndex.Visible = false
+		if hasInvisibleIndex && visible.Valid {
+			currentIndex.Visible = !isIndexInvisible(visible.String)
 		}
 	}
 
