@@ -320,54 +320,28 @@ func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
 	return r.Err()
 }
 
-// isMySQL8OrAbove checks if the given version string represents MySQL 8.0 or above.
-// It handles various MySQL version formats including:
-// - "8.0.25"
-// - "8.4.0"
-// - "8.0.25-log"
-// - "8.0.25-0ubuntu0.20.04.1"
-func isMySQL8OrAbove(version string) bool {
-
-	// Extract the version number before any additional info (like "-log", "-ubuntu", etc.)
-	versionParts := strings.Fields(version)
-	if len(versionParts) == 0 {
-		return false
+// hasInvisibleIndexSupportFromResult checks if the result from SHOW INDEX has Visible column
+func hasInvisibleIndexSupportFromResult(r *mysql.Result) bool {
+	for name := range r.FieldNames {
+		if strings.EqualFold(name, "Visible") {
+			return true
+		}
 	}
-
-	// Take the first part and remove any suffix after hyphen
-	versionStr := strings.Split(versionParts[0], "-")[0]
-
-	// Use semver comparison for accurate version checking
-	if eq, err := mysql.CompareServerVersions(versionStr, "8.0.0"); err == nil && eq >= 0 {
-		return true
-	}
-
 	return false
 }
 
-func hasInvisibleIndexSupport(conn mysql.Executer) bool {
-	versionQuery := "SELECT VERSION()"
-	r, err := conn.Execute(versionQuery)
-	if err != nil {
-		return false
+// hasInvisibleIndexSupportFromColumns checks if the columns from SHOW INDEX include Visible column
+func hasInvisibleIndexSupportFromColumns(cols []string) bool {
+	for _, col := range cols {
+		if strings.EqualFold(col, "Visible") {
+			return true
+		}
 	}
-
-	if r.RowNumber() == 0 {
-		return false
-	}
-
-	version, _ := r.GetString(0, 0)
-	return isMySQL8OrAbove(version)
+	return false
 }
 
-func hasInvisibleIndexSupportSqlDB(conn *sql.DB) bool {
-	versionQuery := "SELECT VERSION()"
-	var version string
-	err := conn.QueryRow(versionQuery).Scan(&version)
-	if err != nil {
-		return false
-	}
-	return isMySQL8OrAbove(version)
+func isIndexInvisible(value string) bool {
+	return strings.EqualFold(value, "NO")
 }
 
 func (ta *Table) fetchIndexes(conn mysql.Executer) error {
@@ -378,7 +352,7 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	var currentIndex *Index
 	currentName := ""
 
-	hasInvisibleIndex := hasInvisibleIndexSupport(conn)
+	hasInvisibleIndex := hasInvisibleIndexSupportFromResult(r)
 
 	for i := 0; i < r.RowNumber(); i++ {
 		indexName, _ := r.GetString(i, 2)
@@ -390,11 +364,10 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 		colName, _ := r.GetString(i, 4)
 		currentIndex.AddColumn(colName, cardinality)
 		currentIndex.NoneUnique, _ = r.GetUint(i, 1)
-
 		// Only set to false if explicitly marked as invisible
 		if hasInvisibleIndex {
 			visible, _ := r.GetString(i, 13)
-			if visible == "NO" {
+			if isIndexInvisible(visible) {
 				currentIndex.Visible = false
 			}
 		}
@@ -416,8 +389,6 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 
 	var unusedVal interface{}
 
-	hasInvisibleIndex := hasInvisibleIndexSupportSqlDB(conn)
-
 	for r.Next() {
 		var indexName string
 		var colName sql.NullString
@@ -428,6 +399,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		hasInvisibleIndex := hasInvisibleIndexSupportFromColumns(cols)
 		values := make([]interface{}, len(cols))
 		for i := 0; i < len(cols); i++ {
 			switch i {
@@ -440,7 +412,9 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			case 6:
 				values[i] = &cardinality
 			case 13:
-				values[i] = &visible
+				if hasInvisibleIndex {
+					values[i] = &visible
+				}
 			default:
 				values[i] = &unusedVal
 			}
@@ -465,7 +439,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		currentIndex.NoneUnique = noneUnique
 
 		// Only set to false if explicitly marked as invisible
-		if hasInvisibleIndex && visible.Valid && visible.String == "NO" {
+		if hasInvisibleIndex && visible.Valid && isIndexInvisible(visible.String) {
 			currentIndex.Visible = false
 		}
 	}

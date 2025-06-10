@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	_ "github.com/go-mysql-org/go-mysql/driver"
-	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/test_util"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -180,19 +179,7 @@ func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
 	_, err := s.conn.Execute(`DROP TABLE IF EXISTS invisible_idx_test`)
 	require.NoError(s.T(), err)
 
-	// Check MySQL version
-	hasInvisibleIndex := false
-	versionQuery := "SELECT VERSION()"
-	r, err := s.conn.Execute(versionQuery)
-	require.NoError(s.T(), err)
-
-	if r.RowNumber() > 0 {
-		version, _ := r.GetString(0, 0)
-		if eq, err := mysql.CompareServerVersions(version, "8.0.0"); err == nil && eq >= 0 {
-			hasInvisibleIndex = true
-		}
-	}
-
+	// Create table first to check invisible index support via column presence
 	str := `
         CREATE TABLE IF NOT EXISTS invisible_idx_test (
             id INT,
@@ -207,7 +194,12 @@ func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
 	_, err = s.conn.Execute(str)
 	require.NoError(s.T(), err)
 
-	// Add INVISIBLE keyword only for MySQL 8.0+
+	// Check if invisible index support exists by checking SHOW INDEX columns
+	r, err := s.conn.Execute(fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", *schema, "invisible_idx_test"))
+	require.NoError(s.T(), err)
+	hasInvisibleIndex := hasInvisibleIndexSupportFromResult(r)
+
+	// Add INVISIBLE keyword only if database supports it
 	if hasInvisibleIndex {
 		_, err = s.conn.Execute(`ALTER TABLE invisible_idx_test ALTER INDEX name_idx INVISIBLE`)
 		require.NoError(s.T(), err)
@@ -225,9 +217,10 @@ func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
 	// Find name_idx and email_idx (order may vary)
 	var nameIdx, emailIdx *Index
 	for _, idx := range ta.Indexes {
-		if idx.Name == "name_idx" {
+		switch idx.Name {
+		case "name_idx":
 			nameIdx = idx
-		} else if idx.Name == "email_idx" {
+		case "email_idx":
 			emailIdx = idx
 		}
 	}
@@ -238,17 +231,76 @@ func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
 	// email_idx should always be visible (default)
 	require.True(s.T(), emailIdx.Visible)
 
-	// name_idx visibility depends on MySQL version
+	// name_idx visibility depends on database support for invisible indexes
 	if hasInvisibleIndex {
-		require.False(s.T(), nameIdx.Visible, "name_idx should be invisible in MySQL 8.0+")
+		require.False(s.T(), nameIdx.Visible, "name_idx should be invisible when database supports invisible indexes")
 	} else {
-		require.True(s.T(), nameIdx.Visible, "name_idx should be visible in MySQL <8.0")
+		require.True(s.T(), nameIdx.Visible, "name_idx should be visible when database doesn't support invisible indexes")
 	}
 
 	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "invisible_idx_test")
 	require.NoError(s.T(), err)
 
 	require.Equal(s.T(), ta, taSqlDb)
+}
+
+func (s *schemaTestSuite) TestInvisibleIndexColumnDetection() {
+	_, err := s.conn.Execute(`DROP TABLE IF EXISTS column_detection_test`)
+	require.NoError(s.T(), err)
+
+	str := `
+        CREATE TABLE IF NOT EXISTS column_detection_test (
+            id INT PRIMARY KEY,
+            name VARCHAR(256),
+            INDEX name_idx (name)
+        ) ENGINE = INNODB;
+    `
+
+	_, err = s.conn.Execute(str)
+	require.NoError(s.T(), err)
+
+	// Test both detection functions work consistently
+	r, err := s.conn.Execute(fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", *schema, "column_detection_test"))
+	require.NoError(s.T(), err)
+
+	hasInvisibleFromResult := hasInvisibleIndexSupportFromResult(r)
+
+	// Get columns and test the other detection function
+	cols, err := s.sqlDB.Query(fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", *schema, "column_detection_test"))
+	require.NoError(s.T(), err)
+	defer cols.Close()
+
+	columnNames, err := cols.Columns()
+	require.NoError(s.T(), err)
+	hasInvisibleFromColumns := hasInvisibleIndexSupportFromColumns(columnNames)
+
+	// Both detection methods should agree
+	require.Equal(s.T(), hasInvisibleFromResult, hasInvisibleFromColumns, "Detection methods should be consistent")
+
+	// Test that both connection types work identically
+	ta1, err := NewTable(s.conn, *schema, "column_detection_test")
+	require.NoError(s.T(), err)
+
+	ta2, err := NewTableFromSqlDB(s.sqlDB, *schema, "column_detection_test")
+	require.NoError(s.T(), err)
+
+	require.Equal(s.T(), ta1, ta2, "Both connection types should produce identical results")
+}
+
+func TestInvisibleIndexLogic(t *testing.T) {
+	// Test MySQL-style visibility logic
+	require.True(t, isIndexInvisible("NO"), "Visible=NO should be invisible")
+	require.False(t, isIndexInvisible("YES"), "Visible=YES should be visible")
+
+	// Test case insensitivity
+	require.True(t, isIndexInvisible("no"), "Should be case insensitive")
+	require.True(t, isIndexInvisible("No"), "Should be case insensitive")
+	require.False(t, isIndexInvisible("yes"), "Should be case insensitive")
+	require.False(t, isIndexInvisible("YES"), "Should be case insensitive")
+
+	// Test other values default to visible
+	require.False(t, isIndexInvisible(""), "Empty string should default to visible")
+	require.False(t, isIndexInvisible("UNKNOWN"), "Unknown value should default to visible")
 }
 
 func TestIndexVisibilityDefault(t *testing.T) {
