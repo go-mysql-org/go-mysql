@@ -76,6 +76,9 @@ type BinlogSyncerConfig struct {
 	// Use decimal.Decimal structure for decimals.
 	UseDecimal bool
 
+	// FloatWithTrailingZero structure for floats.
+	UseFloatWithTrailingZero bool
+
 	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
 	RecvBufferSize int
 
@@ -197,6 +200,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetParseTime(b.cfg.ParseTime)
 	b.parser.SetTimestampStringLocation(b.cfg.TimestampStringLocation)
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
+	b.parser.SetUseFloatWithTrailingZero(b.cfg.UseFloatWithTrailingZero)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
 	b.parser.SetRowsEventDecodeFunc(b.cfg.RowsEventDecodeFunc)
 	b.parser.SetTableMapOptionalMetaDecodeFunc(b.cfg.TableMapOptionalMetaDecodeFunc)
@@ -334,9 +338,12 @@ func (b *BinlogSyncer) registerSlave() error {
 	}
 
 	if b.cfg.HeartbeatPeriod > 0 {
-		_, err = b.c.Execute(fmt.Sprintf("SET @master_heartbeat_period=%d;", b.cfg.HeartbeatPeriod))
+		_, err = b.c.Execute(fmt.Sprintf("SET @master_heartbeat_period = %d, @source_heartbeat_period = %d",
+			b.cfg.HeartbeatPeriod, b.cfg.HeartbeatPeriod))
 		if err != nil {
-			b.cfg.Logger.Error(fmt.Sprintf("failed to set @master_heartbeat_period=%d", b.cfg.HeartbeatPeriod), slog.Any("error", err))
+			b.cfg.Logger.Error(
+				fmt.Sprintf("failed to set @master_heartbeat_period=%d, @source_heartbeat_period=%d",
+					b.cfg.HeartbeatPeriod, b.cfg.HeartbeatPeriod), slog.Any("error", err))
 			return errors.Trace(err)
 		}
 	}
@@ -722,7 +729,7 @@ func (b *BinlogSyncer) prepareSyncGTID(gset mysql.GTIDSet) error {
 func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 	defer func() {
 		if e := recover(); e != nil {
-			s.closeWithError(fmt.Errorf("Err: %v\n Stack: %s", e, mysql.Pstack()))
+			s.closeWithError(fmt.Errorf("panic %v\nstack: %s", e, mysql.Pstack()))
 		}
 		b.wg.Done()
 	}()

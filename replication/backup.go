@@ -146,14 +146,15 @@ func (h *BackupEventHandler) HandleEvent(e *BinlogEvent) error {
 	var err error
 	offset := e.Header.LogPos
 
-	if e.Header.EventType == ROTATE_EVENT {
+	switch e.Header.EventType {
+	case ROTATE_EVENT:
 		rotateEvent := e.Event.(*RotateEvent)
 		h.filename = string(rotateEvent.NextLogName)
 		if e.Header.Timestamp == 0 || offset == 0 {
 			// fake rotate event
 			return nil
 		}
-	} else if e.Header.EventType == FORMAT_DESCRIPTION_EVENT {
+	case FORMAT_DESCRIPTION_EVENT:
 		if h.w != nil {
 			if err = h.w.Close(); err != nil {
 				h.w = nil
