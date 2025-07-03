@@ -675,6 +675,8 @@ func TestDecodeDatetime2(t *testing.T) {
 	}{
 		{[]byte("\xfe\xf3\xff\x7e\xfb"), 0, true, "9999-12-31 23:59:59"},
 		{[]byte("\x99\x9a\xb8\xf7\xaa"), 0, true, "2016-10-28 15:30:42"},
+		{[]byte("\x99\x98\x38\xf7\xaa"), 0, false, "2016-00-28 15:30:42"},
+		{[]byte("\x99\x9a\x80\xf7\xaa"), 0, false, "2016-10-00 15:30:42"},
 		{[]byte("\x99\x02\xc2\x00\x00"), 0, true, "1970-01-01 00:00:00"},
 		{[]byte("\x80\x00\x00\x00\x00"), 0, false, "0000-00-00 00:00:00"},
 		{[]byte("\x80\x00\x02\xf1\x05"), 0, false, "0000-00-01 15:04:05"},
