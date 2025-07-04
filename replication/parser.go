@@ -33,7 +33,7 @@ type BinlogParser struct {
 	timestampStringLocation *time.Location
 
 	// used to start/stop processing
-	stopProcessing uint32
+	stopProcessing atomic.Bool
 
 	useDecimal               bool
 	useFloatWithTrailingZero bool
@@ -54,11 +54,11 @@ func NewBinlogParser() *BinlogParser {
 }
 
 func (p *BinlogParser) Stop() {
-	atomic.StoreUint32(&p.stopProcessing, 1)
+	p.stopProcessing.Store(true)
 }
 
 func (p *BinlogParser) Resume() {
-	atomic.StoreUint32(&p.stopProcessing, 0)
+	p.stopProcessing.Store(false)
 }
 
 func (p *BinlogParser) Reset() {
@@ -166,7 +166,7 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 }
 
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
-	for atomic.LoadUint32(&p.stopProcessing) != 1 {
+	for !p.stopProcessing.Load() {
 		done, err := p.parseSingleEvent(r, onEvent)
 		if err != nil {
 			if err == errMissingTableMapEvent {

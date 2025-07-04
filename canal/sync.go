@@ -2,7 +2,6 @@ package canal
 
 import (
 	"log/slog"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -259,7 +258,7 @@ func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	if now >= ev.Header.Timestamp {
 		newDelay = now - ev.Header.Timestamp
 	}
-	atomic.StoreUint32(c.delay, newDelay)
+	c.delay.Store(newDelay)
 }
 
 func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
