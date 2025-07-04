@@ -1336,10 +1336,10 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 			d := i64 / 1000000
 			t := i64 % 1000000
 			years := int(d / 10000)
-			months := (d % 10000) / 100
+			months := int(d%10000) / 100
 			days := int(d % 100)
 			hours := int(t / 10000)
-			minutes := int((t % 10000) / 100)
+			minutes := int(t%10000) / 100
 			seconds := int(t % 100)
 			if !e.parseTime || months == 0 || days == 0 {
 				v = fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d",
@@ -1347,12 +1347,12 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 			} else {
 				v = e.parseFracTime(fracTime{
 					Time: time.Date(
-						int(d/10000),
-						time.Month((d%10000)/100),
-						int(d%100),
-						int(t/10000),
-						int((t%10000)/100),
-						int(t%100),
+						years,
+						time.Month(months),
+						days,
+						hours,
+						minutes,
+						seconds,
 						0,
 						time.UTC,
 					),
