@@ -44,7 +44,7 @@ func formatZeroTime(frac int, dec int) string {
 	return s[0 : len(s)-(6-dec)]
 }
 
-func formatBeforeUnixZeroTime(year, month, day, hour, minute, second, frac, dec int) string {
+func formatDatetime(year, month, day, hour, minute, second, frac, dec int) string {
 	if dec == 0 {
 		return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)
 	}

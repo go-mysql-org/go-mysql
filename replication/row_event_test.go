@@ -675,6 +675,8 @@ func TestDecodeDatetime2(t *testing.T) {
 	}{
 		{[]byte("\xfe\xf3\xff\x7e\xfb"), 0, true, "9999-12-31 23:59:59"},
 		{[]byte("\x99\x9a\xb8\xf7\xaa"), 0, true, "2016-10-28 15:30:42"},
+		{[]byte("\x99\x98\x38\xf7\xaa"), 0, false, "2016-00-28 15:30:42"},
+		{[]byte("\x99\x9a\x80\xf7\xaa"), 0, false, "2016-10-00 15:30:42"},
 		{[]byte("\x99\x02\xc2\x00\x00"), 0, true, "1970-01-01 00:00:00"},
 		{[]byte("\x80\x00\x00\x00\x00"), 0, false, "0000-00-00 00:00:00"},
 		{[]byte("\x80\x00\x02\xf1\x05"), 0, false, "0000-00-01 15:04:05"},
@@ -684,17 +686,20 @@ func TestDecodeDatetime2(t *testing.T) {
 		{[]byte("\x80\x03\x82\x00\x00\x01\xe2\x40"), uint16(6), false, "0001-01-01 00:00:00.123456"},
 	}
 	for _, tc := range testcases {
-		value, _, err := decodeDatetime2(tc.data, tc.dec)
-		require.NoError(t, err)
-		switch v := value.(type) {
-		case fracTime:
-			require.True(t, tc.getFracTime)
-			require.Equal(t, tc.expected, v.String())
-		case string:
-			require.False(t, tc.getFracTime)
-			require.Equal(t, tc.expected, v)
-		default:
-			require.FailNow(t, "invalid value type: %T", value)
+		for _, parseTime := range []bool{true, false} {
+			value, _, err := decodeDatetime2(tc.data, tc.dec, parseTime)
+			require.NoError(t, err)
+			switch v := value.(type) {
+			case fracTime:
+				require.True(t, parseTime)
+				require.True(t, tc.getFracTime)
+				require.Equal(t, tc.expected, v.String())
+			case string:
+				require.False(t, parseTime && tc.getFracTime)
+				require.Equal(t, tc.expected, v)
+			default:
+				require.FailNow(t, "invalid value type: %T", value)
+			}
 		}
 	}
 }
