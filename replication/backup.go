@@ -121,7 +121,6 @@ func (b *BinlogSyncer) StartSynchronousBackup(p mysql.Position, timeout time.Dur
 
 // StartSynchronousBackupWithGTID starts the backup process using the SynchronousEventHandler in the BinlogSyncerConfig with a specified GTID set.
 func (b *BinlogSyncer) StartSynchronousBackupWithGTID(gset mysql.GTIDSet, timeout time.Duration) error {
-
 	if b.cfg.SynchronousEventHandler == nil {
 		return errors.New("SynchronousEventHandler must be set in BinlogSyncerConfig to use StartSynchronousBackupWithGTID")
 	}

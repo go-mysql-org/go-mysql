@@ -3,11 +3,12 @@ package replication
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"os"
 	"path"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/stretchr/testify/require"
 
