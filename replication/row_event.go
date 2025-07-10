@@ -1085,6 +1085,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 			//nolint:nakedret
 			return
 		}
+		pos = 0
 	}
 
 	// Rows_log_event::print_verbose()
