@@ -861,6 +861,16 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 	if e.Header.LogPos > 0 {
 		// Some events like FormatDescriptionEvent return 0, ignore.
 		b.nextPos.Pos = e.Header.LogPos
+	} else if b.cfg.Flavor == mysql.MariaDBFlavor && (e.Header.Flags&LOG_EVENT_ARTIFICIAL_F) == 0 && e.Header.LogPos == 0 {
+		// For MariaDB 11.4+, some events may have LogPos=0 but are still valid position updates
+		// if they are not artificial events (marked with LOG_EVENT_ARTIFICIAL_F flag).
+		// For such events, we calculate the next position dynamically.
+		calculatedPos := b.nextPos.Pos + e.Header.EventSize
+		e.Header.LogPos = calculatedPos
+		b.nextPos.Pos = calculatedPos
+		b.cfg.Logger.Debug("MariaDB event with LogPos=0 but not artificial, calculated position",
+			slog.String("eventType", e.Header.EventType.String()),
+			slog.Uint64("logPos", uint64(calculatedPos)))
 	}
 
 	// Handle event types to update positions and GTID sets
