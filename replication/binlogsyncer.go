@@ -128,6 +128,12 @@ type BinlogSyncerConfig struct {
 
 	EventCacheCount int
 
+	// MariaDBDynamicLogPos enables dynamic LogPos calculation for MariaDB.
+	// When enabled, automatically adds BINLOG_SEND_ANNOTATE_ROWS_EVENT flag
+	// to ensure correct position calculation in MariaDB 11.4+.
+	// Only works with MariaDB flavor.
+	MariaDBDynamicLogPos bool
+
 	// SynchronousEventHandler is used for synchronous event handling.
 	// This should not be used together with StartBackupWithHandler.
 	// If this is not nil, GetEvent does not need to be called.
@@ -509,7 +515,14 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p mysql.Position) error {
 	binary.LittleEndian.PutUint32(data[pos:], p.Pos)
 	pos += 4
 
-	binary.LittleEndian.PutUint16(data[pos:], b.cfg.DumpCommandFlag)
+	dumpCommandFlag := b.cfg.DumpCommandFlag
+	if b.cfg.MariaDBDynamicLogPos && b.cfg.Flavor == mysql.MariaDBFlavor {
+		// Add BINLOG_SEND_ANNOTATE_ROWS_EVENT flag when MariaDBDynamicLogPos is enabled.
+		// This ensures the server sends ANNOTATE_ROWS_EVENT events which are needed
+		// for correct LogPos calculation in MariaDB 11.4+, where some events have LogPos=0.
+		dumpCommandFlag |= BINLOG_SEND_ANNOTATE_ROWS_EVENT
+	}
+	binary.LittleEndian.PutUint16(data[pos:], dumpCommandFlag)
 	pos += 2
 
 	binary.LittleEndian.PutUint32(data[pos:], b.cfg.ServerID)
@@ -861,6 +874,13 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 	if e.Header.LogPos > 0 {
 		// Some events like FormatDescriptionEvent return 0, ignore.
 		b.nextPos.Pos = e.Header.LogPos
+	} else if b.shouldCalculateDynamicLogPos(e) {
+		calculatedPos := b.nextPos.Pos + e.Header.EventSize
+		e.Header.LogPos = calculatedPos
+		b.nextPos.Pos = calculatedPos
+		b.cfg.Logger.Debug("MariaDB dynamic LogPos calculation",
+			slog.String("eventType", e.Header.EventType.String()),
+			slog.Uint64("logPos", uint64(calculatedPos)))
 	}
 
 	// Handle event types to update positions and GTID sets
@@ -942,6 +962,19 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 	}
 
 	return nil
+}
+
+// shouldCalculateDynamicLogPos determines if we should calculate LogPos dynamically for MariaDB events.
+// This is needed for MariaDB 11.4+ when:
+// 1. MariaDBDynamicLogPos is enabled
+// 2. We're using MariaDB flavor
+// 3. The event has LogPos=0 (indicating server didn't set it)
+// 4. The event is not artificial (not marked with LOG_EVENT_ARTIFICIAL_F flag)
+func (b *BinlogSyncer) shouldCalculateDynamicLogPos(e *BinlogEvent) bool {
+	return b.cfg.MariaDBDynamicLogPos &&
+		b.cfg.Flavor == mysql.MariaDBFlavor &&
+		e.Header.LogPos == 0 &&
+		(e.Header.Flags&LOG_EVENT_ARTIFICIAL_F) == 0
 }
 
 // getCurrentGtidSet returns a clone of the current GTID set.
