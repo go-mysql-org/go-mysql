@@ -128,11 +128,11 @@ type BinlogSyncerConfig struct {
 
 	EventCacheCount int
 
-	// MariaDBDynamicLogPos enables dynamic LogPos calculation for MariaDB.
+	// FillZeroLogPos enables dynamic LogPos calculation for MariaDB.
 	// When enabled, automatically adds BINLOG_SEND_ANNOTATE_ROWS_EVENT flag
 	// to ensure correct position calculation in MariaDB 11.4+.
 	// Only works with MariaDB flavor.
-	MariaDBDynamicLogPos bool
+	FillZeroLogPos bool
 
 	// SynchronousEventHandler is used for synchronous event handling.
 	// This should not be used together with StartBackupWithHandler.
@@ -516,8 +516,8 @@ func (b *BinlogSyncer) writeBinlogDumpCommand(p mysql.Position) error {
 	pos += 4
 
 	dumpCommandFlag := b.cfg.DumpCommandFlag
-	if b.cfg.MariaDBDynamicLogPos && b.cfg.Flavor == mysql.MariaDBFlavor {
-		// Add BINLOG_SEND_ANNOTATE_ROWS_EVENT flag when MariaDBDynamicLogPos is enabled.
+	if b.cfg.FillZeroLogPos && b.cfg.Flavor == mysql.MariaDBFlavor {
+		// Add BINLOG_SEND_ANNOTATE_ROWS_EVENT flag when FillZeroLogPos is enabled.
 		// This ensures the server sends ANNOTATE_ROWS_EVENT events which are needed
 		// for correct LogPos calculation in MariaDB 11.4+, where some events have LogPos=0.
 		dumpCommandFlag |= BINLOG_SEND_ANNOTATE_ROWS_EVENT
@@ -966,12 +966,12 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 
 // shouldCalculateDynamicLogPos determines if we should calculate LogPos dynamically for MariaDB events.
 // This is needed for MariaDB 11.4+ when:
-// 1. MariaDBDynamicLogPos is enabled
+// 1. FillZeroLogPos is enabled
 // 2. We're using MariaDB flavor
 // 3. The event has LogPos=0 (indicating server didn't set it)
 // 4. The event is not artificial (not marked with LOG_EVENT_ARTIFICIAL_F flag)
 func (b *BinlogSyncer) shouldCalculateDynamicLogPos(e *BinlogEvent) bool {
-	return b.cfg.MariaDBDynamicLogPos &&
+	return b.cfg.FillZeroLogPos &&
 		b.cfg.Flavor == mysql.MariaDBFlavor &&
 		e.Header.LogPos == 0 &&
 		(e.Header.Flags&LOG_EVENT_ARTIFICIAL_F) == 0

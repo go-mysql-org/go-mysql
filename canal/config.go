@@ -113,6 +113,12 @@ type Config struct {
 	// the default value is 10240.
 	// if you table contain large columns, you can decrease this value to avoid OOM.
 	EventCacheCount int
+
+	// FillZeroLogPos enables dynamic LogPos calculation for MariaDB.
+	// When enabled, automatically adds BINLOG_SEND_ANNOTATE_ROWS_EVENT flag
+	// to ensure correct position calculation in MariaDB 11.4+.
+	// Only works with MariaDB flavor.
+	FillZeroLogPos bool
 }
 
 func NewConfigWithFile(name string) (*Config, error) {

@@ -466,6 +466,8 @@ func (c *Canal) prepareSyncer() error {
 		Dialer:                  c.cfg.Dialer,
 		Localhost:               c.cfg.Localhost,
 		EventCacheCount:         c.cfg.EventCacheCount,
+		FillZeroLogPos:          c.cfg.FillZeroLogPos,
+
 		RowsEventDecodeFunc: func(event *replication.RowsEvent, data []byte) error {
 			pos, err := event.DecodeHeader(data)
 			if err != nil {
