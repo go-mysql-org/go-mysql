@@ -45,6 +45,9 @@ type Conn struct {
 	capability uint32
 	// client-set capabilities only
 	ccaps uint32
+	// Capability flags explicitly disabled by the client via UnsetCapability()
+	// These flags are removed from the final advertised capability set during handshake.
+	clientExplicitOffCaps uint32
 
 	attributes map[string]string
 
@@ -234,14 +237,17 @@ func (c *Conn) Ping() error {
 	return nil
 }
 
-// SetCapability enables the use of a specific capability
+// SetCapability marks the specified flag as explicitly enabled by the client.
 func (c *Conn) SetCapability(cap uint32) {
 	c.ccaps |= cap
+	c.clientExplicitOffCaps &^= cap
 }
 
-// UnsetCapability disables the use of a specific capability
+// UnsetCapability marks the specified flag as explicitly disabled by the client.
+// This disables the flag even if the server supports it.
 func (c *Conn) UnsetCapability(cap uint32) {
-	c.ccaps &= ^cap
+	c.ccaps &^= cap
+	c.clientExplicitOffCaps |= cap
 }
 
 // HasCapability returns true if the connection has the specific capability
