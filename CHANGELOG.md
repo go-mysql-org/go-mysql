@@ -1,3 +1,23 @@
+### Tag v1.13.0 (2025-08-17)
+
+* Change FillZeroLog config name and add to canal. [#1053](https://github.com/go-mysql-org/go-mysql/pull/1053) ([nickchomey](https://github.com/nickchomey))
+* Fix(replication): calculate LogPos for non-artificial events in MariaDB 11.4+. [#1052](https://github.com/go-mysql-org/go-mysql/pull/1052) ([mefcorvi](https://github.com/mefcorvi))
+* Fix canal.GetMasterPos() for mariadb. [#1030](https://github.com/go-mysql-org/go-mysql/pull/1030) ([alarbada](https://github.com/alarbada))
+* Fix MariaDB compressed event decoding panic. [#1049](https://github.com/go-mysql-org/go-mysql/pull/1049) ([krajcik](https://github.com/krajcik))
+* Enhancement to allow backup binlogs using a specified GTID set. [#1050](https://github.com/go-mysql-org/go-mysql/pull/1050) ([dgupta2323](https://github.com/dgupta2323))
+* Replication: return string when datetime's day or month is 00. [#1047](https://github.com/go-mysql-org/go-mysql/pull/1047) ([serprex](https://github.com/serprex))
+* Prefer atomic values to atomic operations. [#1048](https://github.com/go-mysql-org/go-mysql/pull/1048) ([serprex](https://github.com/serprex))
+* Add visible field to schema Index. [#1043](https://github.com/go-mysql-org/go-mysql/pull/1043) ([chenhuiyeh](https://github.com/chenhuiyeh))
+* Client: make CLIENT_QUERY_ATTRIBUTES opt-out to restore proxy compatibility. [#1041](https://github.com/go-mysql-org/go-mysql/pull/1041) ([masahide](https://github.com/masahide))
+* Patch float with trailing zero for JSON and add useFloatWithTrailingZero flag. [#1038](https://github.com/go-mysql-org/go-mysql/pull/1038) ([chenhuiyeh](https://github.com/chenhuiyeh))
+* Replace broken links to mysqlhighavailability.com. [#1039](https://github.com/go-mysql-org/go-mysql/pull/1039) ([serprex](https://github.com/serprex))
+* Update CI. [#1034](https://github.com/go-mysql-org/go-mysql/pull/1034) ([dveeden](https://github.com/dveeden))
+* Set source_heartbeat_period as well as master_heartbeat_period.. [#1033](https://github.com/go-mysql-org/go-mysql/pull/1033) ([dveeden](https://github.com/dveeden))
+* Remove semver. [#1028](https://github.com/go-mysql-org/go-mysql/pull/1028) ([serprex](https://github.com/serprex))
+* CI: Test on 32-bit arm. [#1000](https://github.com/go-mysql-org/go-mysql/pull/1000) ([dveeden](https://github.com/dveeden))
+* Golangci-lint 2. [#1024](https://github.com/go-mysql-org/go-mysql/pull/1024) ([serprex](https://github.com/serprex))
+* Server: Fix formatting of credential provider note. [#1023](https://github.com/go-mysql-org/go-mysql/pull/1023) ([dveeden](https://github.com/dveeden))
+
 ### Tag v1.12.0 (2025-04-01)
 
 > **Note:**

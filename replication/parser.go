@@ -33,11 +33,12 @@ type BinlogParser struct {
 	timestampStringLocation *time.Location
 
 	// used to start/stop processing
-	stopProcessing uint32
+	stopProcessing atomic.Bool
 
-	useDecimal          bool
-	ignoreJSONDecodeErr bool
-	verifyChecksum      bool
+	useDecimal               bool
+	useFloatWithTrailingZero bool
+	ignoreJSONDecodeErr      bool
+	verifyChecksum           bool
 
 	rowsEventDecodeFunc func(*RowsEvent, []byte) error
 
@@ -53,11 +54,11 @@ func NewBinlogParser() *BinlogParser {
 }
 
 func (p *BinlogParser) Stop() {
-	atomic.StoreUint32(&p.stopProcessing, 1)
+	p.stopProcessing.Store(true)
 }
 
 func (p *BinlogParser) Resume() {
-	atomic.StoreUint32(&p.stopProcessing, 0)
+	p.stopProcessing.Store(false)
 }
 
 func (p *BinlogParser) Reset() {
@@ -165,7 +166,7 @@ func (p *BinlogParser) parseSingleEvent(r io.Reader, onEvent OnEventFunc) (bool,
 }
 
 func (p *BinlogParser) ParseReader(r io.Reader, onEvent OnEventFunc) error {
-	for atomic.LoadUint32(&p.stopProcessing) != 1 {
+	for !p.stopProcessing.Load() {
 		done, err := p.parseSingleEvent(r, onEvent)
 		if err != nil {
 			if err == errMissingTableMapEvent {
@@ -196,6 +197,10 @@ func (p *BinlogParser) SetTimestampStringLocation(timestampStringLocation *time.
 
 func (p *BinlogParser) SetUseDecimal(useDecimal bool) {
 	p.useDecimal = useDecimal
+}
+
+func (p *BinlogParser) SetUseFloatWithTrailingZero(useFloatWithTrailingZero bool) {
+	p.useFloatWithTrailingZero = useFloatWithTrailingZero
 }
 
 func (p *BinlogParser) SetIgnoreJSONDecodeError(ignoreJSONDecodeErr bool) {
@@ -406,6 +411,7 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 	e.parseTime = p.parseTime
 	e.timestampStringLocation = p.timestampStringLocation
 	e.useDecimal = p.useDecimal
+	e.useFloatWithTrailingZero = p.useFloatWithTrailingZero
 	e.ignoreJSONDecodeErr = p.ignoreJSONDecodeErr
 
 	switch h.EventType {
