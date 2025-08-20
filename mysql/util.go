@@ -106,7 +106,7 @@ func NativePasswordHash(password []byte) []byte {
 	// stage2Hash = SHA1(stage1Hash)
 	crypt.Reset()
 	crypt.Write(stage1)
-	return crypt.Sum(nil)
+	return crypt.Sum(stage1[:0])
 }
 
 func CompareNativePassword(reply []byte, stored []byte, seed []byte) bool {
@@ -117,13 +117,11 @@ func CompareNativePassword(reply []byte, stored []byte, seed []byte) bool {
 	// hash_stage1 = xor(reply, sha1(public_seed, hash_stage2))
 	stage1 := stage1FromReply(reply, seed, stored)
 	// andidate_hash2 = sha1(hash_stage1)
-	crypt := sha1.New()
-	crypt.Write(stage1)
-	stage2 := crypt.Sum(nil)
+	stage2 := sha1.Sum(stage1)
 
 	// check(candidate_hash2 == hash_stage2)
 	// use ConstantTimeCompare to mitigate timing based attacks
-	return subtle.ConstantTimeCompare(stage2, stored) == 1
+	return subtle.ConstantTimeCompare(stage2[:], stored) == 1
 }
 
 // CalcCachingSha2Password: Hash password using MySQL 8+ method (SHA256)
