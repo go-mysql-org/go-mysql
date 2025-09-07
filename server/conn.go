@@ -61,7 +61,9 @@ func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, 
 // NewConn: create connection with default server settings
 func (s *Server) NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
 	p := NewInMemoryProvider()
-	p.AddUser(user, password)
+	if err := p.AddUser(user, password); err != nil {
+		return nil, err
+	}
 
 	return s.NewCustomizedConn(conn, p, h)
 }

@@ -27,7 +27,7 @@ func TestCachingSha2Cache(t *testing.T) {
 	remoteProvider := &RemoteThrottleProvider{
 		InMemoryProvider: NewInMemoryProvider(),
 	}
-	remoteProvider.AddUser(*testUser, *testPassword)
+	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// no TLS
@@ -42,7 +42,7 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 	remoteProvider := &RemoteThrottleProvider{
 		InMemoryProvider: NewInMemoryProvider(),
 	}
-	remoteProvider.AddUser(*testUser, *testPassword)
+	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// TLS
