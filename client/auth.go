@@ -154,9 +154,9 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 	// password hashing
 	switch c.authPluginName {
 	case mysql.AUTH_NATIVE_PASSWORD:
-		return mysql.CalcPassword(authData[:20], []byte(c.password)), false, nil
+		return mysql.CalcNativePassword(authData[:20], []byte(c.password)), false, nil
 	case mysql.AUTH_CACHING_SHA2_PASSWORD:
-		return mysql.CalcCachingSha2Password(authData, c.password), false, nil
+		return mysql.CalcCachingSha2Password(authData, []byte(c.password)), false, nil
 	case mysql.AUTH_CLEAR_PASSWORD:
 		return []byte(c.password), true, nil
 	case mysql.AUTH_SHA256_PASSWORD:

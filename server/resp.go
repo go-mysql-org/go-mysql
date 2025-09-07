@@ -66,6 +66,7 @@ func (c *Conn) writeEOF() error {
 
 // see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_auth_switch_request.html
 func (c *Conn) writeAuthSwitchRequest(newAuthPluginName string) error {
+	c.authPluginName = newAuthPluginName
 	data := make([]byte, 4)
 	data = append(data, mysql.EOF_HEADER)
 	data = append(data, []byte(newAuthPluginName)...)

@@ -27,7 +27,7 @@ func TestCachingSha2Cache(t *testing.T) {
 	remoteProvider := &RemoteThrottleProvider{
 		InMemoryProvider: NewInMemoryProvider(),
 	}
-	remoteProvider.AddUser(*testUser, *testPassword)
+	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// no TLS
@@ -42,7 +42,7 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 	remoteProvider := &RemoteThrottleProvider{
 		InMemoryProvider: NewInMemoryProvider(),
 	}
-	remoteProvider.AddUser(*testUser, *testPassword)
+	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// TLS
@@ -58,7 +58,7 @@ type RemoteThrottleProvider struct {
 	getCredCallCount atomic.Int64
 }
 
-func (m *RemoteThrottleProvider) GetCredential(username string) (password string, found bool, err error) {
+func (m *RemoteThrottleProvider) GetCredential(username string) (credential Credential, found bool, err error) {
 	m.getCredCallCount.Add(1)
 	return m.InMemoryProvider.GetCredential(username)
 }
@@ -107,7 +107,7 @@ func (s *cacheTestSuite) onAccept() {
 
 func (s *cacheTestSuite) onConn(conn net.Conn) {
 	// co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
-	co, err := NewCustomizedConn(conn, s.server, s.credProvider, &testCacheHandler{s})
+	co, err := s.server.NewCustomizedConn(conn, s.credProvider, &testCacheHandler{s})
 	require.NoError(s.T(), err)
 	for {
 		err = co.HandleCommand()
@@ -147,7 +147,7 @@ func (s *cacheTestSuite) TestCache() {
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
 	got = s.credProvider.(*RemoteThrottleProvider).getCredCallCount.Load()
-	require.Equal(s.T(), int64(1), got)
+	require.Equal(s.T(), int64(2), got)
 
 	if s.db != nil {
 		s.db.Close()

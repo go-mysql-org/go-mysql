@@ -111,20 +111,6 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 	return n
 }
 
-func min(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func (s *IntervalSlice) InsertInterval(interval Interval) {
 	var (
 		count int
