@@ -74,10 +74,10 @@ func stage1FromReply(scramble []byte, seed []byte, stage2 []byte) []byte {
 	return Xor(scramble, seededHash)
 }
 
-// FROM vitess.io/vitess/go/mysql/auth_server.go
 // DecodePasswordHex decodes the standard format used by MySQL
 // Password hashes in the 4.1 format always begin with a * character
 // see https://dev.mysql.com/doc/mysql-security-excerpt/5.7/en/password-hashing.html
+// ref vitess.io/vitess/go/mysql/auth_server.go
 func DecodePasswordHex(hexEncodedPassword string) ([]byte, error) {
 	if hexEncodedPassword[0] == '*' {
 		hexEncodedPassword = hexEncodedPassword[1:]
