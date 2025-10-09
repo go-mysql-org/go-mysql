@@ -930,12 +930,12 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 
 	case *XIDEvent:
 		if !b.cfg.DiscardGTIDSet {
-			event.GSet = b.getCurrentGtidSet()
+			event.GSet = b.GetCurrentGtidSet()
 		}
 
 	case *QueryEvent:
 		if !b.cfg.DiscardGTIDSet {
-			event.GSet = b.getCurrentGtidSet()
+			event.GSet = b.GetCurrentGtidSet()
 		}
 	}
 
@@ -977,8 +977,8 @@ func (b *BinlogSyncer) shouldCalculateDynamicLogPos(e *BinlogEvent) bool {
 		(e.Header.Flags&LOG_EVENT_ARTIFICIAL_F) == 0
 }
 
-// getCurrentGtidSet returns a clone of the current GTID set.
-func (b *BinlogSyncer) getCurrentGtidSet() mysql.GTIDSet {
+// GetCurrentGtidSet returns a clone of the current GTID set.
+func (b *BinlogSyncer) GetCurrentGtidSet() mysql.GTIDSet {
 	if b.currGset != nil {
 		return b.currGset.Clone()
 	}
