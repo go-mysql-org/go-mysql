@@ -20,12 +20,12 @@ func (c *Conn) readUntilEOF() (err error) {
 	for {
 		data, err = c.ReadPacket()
 		if err != nil {
-			return
+			return err
 		}
 
 		// EOF Packet
 		if c.isEOFPacket(data) {
-			return
+			return err
 		}
 	}
 }

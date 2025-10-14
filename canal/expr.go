@@ -43,7 +43,7 @@ func (ve *valueExpr) GetString() string                             { return "" 
 func (ve *valueExpr) GetProjectionOffset() int                      { return 0 }
 func (ve *valueExpr) SetProjectionOffset(offset int)                {}
 func (ve *valueExpr) Restore(ctx *format.RestoreCtx) error          { return nil }
-func (ve *valueExpr) Accept(v ast.Visitor) (node ast.Node, ok bool) { return }
+func (ve *valueExpr) Accept(v ast.Visitor) (node ast.Node, ok bool) { return node, ok }
 func (ve *valueExpr) Text() string                                  { return "" }
 func (ve *valueExpr) SetText(enc charset.Encoding, text string)     {}
 func (ve *valueExpr) Format(w io.Writer)                            {}

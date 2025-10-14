@@ -344,18 +344,18 @@ func (e *TableMapEvent) decodeIntSeq(v []byte) (ret []uint64, err error) {
 		p += n
 		ret = append(ret, i)
 	}
-	return
+	return ret, err
 }
 
 func (e *TableMapEvent) decodeDefaultCharset(v []byte) (ret []uint64, err error) {
 	ret, err = e.decodeIntSeq(v)
 	if err != nil {
-		return
+		return ret, err
 	}
 	if len(ret)%2 != 1 {
 		return nil, errors.Errorf("Expect odd item in DefaultCharset but got %d", len(ret))
 	}
-	return
+	return ret, err
 }
 
 func (e *TableMapEvent) decodeColumnNames(v []byte) error {
@@ -390,7 +390,7 @@ func (e *TableMapEvent) decodeStrValue(v []byte) (ret [][][]byte, err error) {
 		}
 		ret = append(ret, vals)
 	}
-	return
+	return ret, err
 }
 
 func (e *TableMapEvent) decodeSimplePrimaryKey(v []byte) error {
@@ -561,7 +561,7 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 // i must be in range [0, ColumnCount).
 func (e *TableMapEvent) Nullable(i int) (available, nullable bool) {
 	if len(e.NullBitmap) == 0 {
-		return
+		return available, nullable
 	}
 	return true, e.NullBitmap[i/8]&(1<<uint(i%8)) != 0
 }
@@ -1082,8 +1082,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 	if e.compressed {
 		data, err2 = mysql.DecompressMariadbData(data[pos:])
 		if err2 != nil {
-			//nolint:nakedret
-			return
+			return err2
 		}
 		pos = 0
 	}
@@ -1481,7 +1480,7 @@ func decodeString(data []byte, length int) (v string, n int) {
 		v = utils.ByteSliceToString(data[2:n])
 	}
 
-	return
+	return v, n
 }
 
 // ref: https://github.com/mysql/mysql-server/blob/a9b0c712de3509d8d08d3ba385d41a4df6348775/strings/decimal.c#L137
@@ -1502,7 +1501,7 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 	case 4:
 		value = uint32(data[3]^mask) | uint32(data[2]^mask)<<8 | uint32(data[1]^mask)<<16 | uint32(data[0]^mask)<<24
 	}
-	return
+	return size, value
 }
 
 var zeros = [digitsPerInteger]byte{48, 48, 48, 48, 48, 48, 48, 48, 48}
@@ -1625,7 +1624,7 @@ func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
 			value = int64(data[0])
 		}
 	}
-	return
+	return value, err
 }
 
 func littleDecodeBit(data []byte, nbits int, length int) (value int64, err error) {
@@ -1657,7 +1656,7 @@ func littleDecodeBit(data []byte, nbits int, length int) (value int64, err error
 			value = int64(data[0])
 		}
 	}
-	return
+	return value, err
 }
 
 func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Location) (interface{}, int, error) {
@@ -1859,7 +1858,7 @@ func decodeBlob(data []byte, meta uint16) (v []byte, n int, err error) {
 		err = fmt.Errorf("invalid blob packlen = %d", meta)
 	}
 
-	return
+	return v, n, err
 }
 
 func (e *RowsEvent) Dump(w io.Writer) {

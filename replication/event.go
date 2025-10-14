@@ -254,10 +254,10 @@ func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
 		masked := make([]byte, 8)
 		copy(masked, data[1:7])
 		sidnr = binary.LittleEndian.Uint64(masked)
-		return
+		return format, sidnr
 	}
 	sidnr = binary.LittleEndian.Uint64(data[:8])
-	return
+	return format, sidnr
 }
 
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
