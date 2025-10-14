@@ -336,32 +336,15 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *mysql.Re
 }
 
 func (c *Conn) readResultColumns(result *mysql.Result) (err error) {
-	i := 0
 	var data []byte
 
-	for {
+	for i := range len(result.Fields) {
 		rawPkgLen := len(result.RawPkg)
 		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
 		if err != nil {
 			return err
 		}
 		data = result.RawPkg[rawPkgLen:]
-
-		// EOF Packet
-		if c.isEOFPacket(data) {
-			if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
-				result.Warnings = binary.LittleEndian.Uint16(data[1:])
-				// todo add strict_mode, warning will be treat as error
-				result.Status = binary.LittleEndian.Uint16(data[3:])
-				c.status = result.Status
-			}
-
-			if i != len(result.Fields) {
-				err = mysql.ErrMalformPacket
-			}
-
-			return err
-		}
 
 		if result.Fields[i] == nil {
 			result.Fields[i] = &mysql.Field{}
@@ -372,8 +355,30 @@ func (c *Conn) readResultColumns(result *mysql.Result) (err error) {
 		}
 
 		result.FieldNames[utils.ByteSliceToString(result.Fields[i].Name)] = i
+	}
 
-		i++
+	if !c.HasCapability(mysql.CLIENT_DEPRECATE_EOF) {
+		// EOF Packet
+		rawPkgLen := len(result.RawPkg)
+		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
+		if err != nil {
+			return err
+		}
+		data = result.RawPkg[rawPkgLen:]
+
+		if c.isEOFPacket(data) {
+			if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
+				result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				// todo add strict_mode, warning will be treat as error
+				result.Status = binary.LittleEndian.Uint16(data[3:])
+				c.status = result.Status
+			}
+			return nil
+		} else {
+			return mysql.ErrMalformPacket
+		}
+	} else {
+		return nil
 	}
 }
 
@@ -388,15 +393,21 @@ func (c *Conn) readResultRows(result *mysql.Result, isBinary bool) (err error) {
 		}
 		data = result.RawPkg[rawPkgLen:]
 
-		// EOF Packet
-		if c.isEOFPacket(data) {
-			if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
+		if data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff {
+			if c.HasCapability(mysql.CLIENT_DEPRECATE_EOF) {
+				// Treat like OK
+				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
+				insertId, _, m := mysql.LengthEncodedInt(data[1+n:])
+				result.Status = binary.LittleEndian.Uint16(data[1+n+m:])
+				result.AffectedRows = affectedRows
+				result.InsertId = insertId
+				c.status = result.Status
+			} else if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				// todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
 			}
-
 			break
 		}
 
