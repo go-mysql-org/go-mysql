@@ -14,22 +14,6 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
-func (c *Conn) readUntilEOF() (err error) {
-	var data []byte
-
-	for {
-		data, err = c.ReadPacket()
-		if err != nil {
-			return err
-		}
-
-		// EOF Packet
-		if c.isEOFPacket(data) {
-			return err
-		}
-	}
-}
-
 func (c *Conn) isEOFPacket(data []byte) bool {
 	return data[0] == mysql.EOF_HEADER && len(data) <= 5
 }
@@ -357,7 +341,7 @@ func (c *Conn) readResultColumns(result *mysql.Result) (err error) {
 		result.FieldNames[utils.ByteSliceToString(result.Fields[i].Name)] = i
 	}
 
-	if !c.HasCapability(mysql.CLIENT_DEPRECATE_EOF) {
+	if c.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
 		// EOF Packet
 		rawPkgLen := len(result.RawPkg)
 		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
@@ -394,7 +378,7 @@ func (c *Conn) readResultRows(result *mysql.Result, isBinary bool) (err error) {
 		data = result.RawPkg[rawPkgLen:]
 
 		if data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff {
-			if c.HasCapability(mysql.CLIENT_DEPRECATE_EOF) {
+			if c.capability&mysql.CLIENT_DEPRECATE_EOF != 0 {
 				// Treat like OK
 				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
 				insertId, _, m := mysql.LengthEncodedInt(data[1+n:])
@@ -446,9 +430,16 @@ func (c *Conn) readResultRowsStreaming(result *mysql.Result, isBinary bool, perR
 			return err
 		}
 
-		// EOF Packet
-		if c.isEOFPacket(data) {
-			if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
+		if data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff {
+			if c.capability&mysql.CLIENT_DEPRECATE_EOF != 0 {
+				// Treat like OK
+				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
+				insertId, _, m := mysql.LengthEncodedInt(data[1+n:])
+				result.Status = binary.LittleEndian.Uint16(data[1+n+m:])
+				result.AffectedRows = affectedRows
+				result.InsertId = insertId
+				c.status = result.Status
+			} else if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				// todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
