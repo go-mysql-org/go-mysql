@@ -62,5 +62,5 @@ func ErrorCode(errMsg string) (code int) {
 	var tmpStr string
 	// golang scanf doesn't support %*,so I used a temporary variable
 	_, _ = fmt.Sscanf(errMsg, "%s%d", &tmpStr, &code)
-	return
+	return code
 }

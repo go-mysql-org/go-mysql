@@ -249,7 +249,7 @@ func (c *Canal) updateTable(header *replication.EventHeader, db, table string) (
 	if err = c.eventHandler.OnTableChanged(header, db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
 		return errors.Trace(err)
 	}
-	return
+	return err
 }
 
 func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {

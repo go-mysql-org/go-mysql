@@ -143,7 +143,7 @@ func fieldType(value interface{}) (typ uint8, err error) {
 	default:
 		err = errors.Errorf("unsupport type %T for resultset", value)
 	}
-	return
+	return typ, err
 }
 
 func formatField(field *Field, value interface{}) error {

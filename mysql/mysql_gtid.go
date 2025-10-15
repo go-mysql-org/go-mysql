@@ -42,14 +42,14 @@ func parseInterval(str string) (i Interval, err error) {
 	}
 
 	if err != nil {
-		return
+		return i, err
 	}
 
 	if i.Stop <= i.Start {
 		err = errors.Errorf("invalid interval format, must n[-n] and the end must >= start")
 	}
 
-	return
+	return i, err
 }
 
 func (i Interval) String() string {
