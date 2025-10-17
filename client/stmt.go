@@ -283,7 +283,7 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 		if s.conn.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
 			if packet, err := s.conn.ReadPacket(); err != nil {
 				return nil, errors.Trace(err)
-			} else if c.isEOFPacket(packet) {
+			} else if !c.isEOFPacket(packet) {
 				return nil, mysql.ErrMalformPacket
 			}
 		}
@@ -299,7 +299,7 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 		if s.conn.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
 			if packet, err := s.conn.ReadPacket(); err != nil {
 				return nil, errors.Trace(err)
-			} else if c.isEOFPacket(packet) {
+			} else if !c.isEOFPacket(packet) {
 				return nil, mysql.ErrMalformPacket
 			}
 		}
