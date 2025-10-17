@@ -14,6 +14,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
+// this should only be called when CLIENT_DEPRECATE_EOF not enabled
 func (c *Conn) isEOFPacket(data []byte) bool {
 	return data[0] == mysql.EOF_HEADER && len(data) <= 5
 }
