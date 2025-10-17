@@ -252,7 +252,7 @@ func (c *Conn) UnsetCapability(cap uint32) {
 
 // HasCapability returns true if the connection has the specific capability
 func (c *Conn) HasCapability(cap uint32) bool {
-	return c.ccaps&cap > 0
+	return c.ccaps&cap != 0
 }
 
 // UseSSL: use default SSL
@@ -466,7 +466,7 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*mysql.Field, error) 
 		}
 
 		// EOF Packet
-		if c.isEOFPacket(data) {
+		if data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff {
 			return fs, nil
 		}
 
