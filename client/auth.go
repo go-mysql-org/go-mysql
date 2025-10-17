@@ -210,7 +210,7 @@ func (c *Conn) writeAuthHandshake() error {
 	// Set default client capabilities that reflect the abilities of this library
 	capability := mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SECURE_CONNECTION |
 		mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_PLUGIN_AUTH |
-		mysql.CLIENT_LONG_FLAG | mysql.CLIENT_QUERY_ATTRIBUTES
+		mysql.CLIENT_LONG_FLAG | mysql.CLIENT_QUERY_ATTRIBUTES | mysql.CLIENT_DEPRECATE_EOF
 	// Adjust client capability flags on specific client requests
 	// Only flags that would make any sense setting and aren't handled elsewhere
 	// in the library are supported here
@@ -218,7 +218,7 @@ func (c *Conn) writeAuthHandshake() error {
 		c.ccaps&mysql.CLIENT_MULTI_STATEMENTS | c.ccaps&mysql.CLIENT_MULTI_RESULTS |
 		c.ccaps&mysql.CLIENT_PS_MULTI_RESULTS | c.ccaps&mysql.CLIENT_CONNECT_ATTRS |
 		c.ccaps&mysql.CLIENT_COMPRESS | c.ccaps&mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM |
-		c.ccaps&mysql.CLIENT_LOCAL_FILES | c.ccaps&mysql.CLIENT_DEPRECATE_EOF
+		c.ccaps&mysql.CLIENT_LOCAL_FILES
 
 	capability &^= c.clientExplicitOffCaps
 
