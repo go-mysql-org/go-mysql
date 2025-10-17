@@ -265,9 +265,14 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	s.params = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
-	// warnings
-	s.warnings = int(binary.LittleEndian.Uint16(data[pos:]))
-	// pos += 2
+	// reserved
+	pos += 1
+
+	if len(data) >= 12 {
+		// warnings
+		s.warnings = int(binary.LittleEndian.Uint16(data[pos:]))
+		// pos += 2
+	}
 
 	if s.params > 0 {
 		if err := s.conn.readUntilEOF(); err != nil {

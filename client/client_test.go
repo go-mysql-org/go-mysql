@@ -269,6 +269,7 @@ func (s *clientTestSuite) testStmt_DropTable() {
 
 	stmt, err := s.c.Prepare(str)
 	require.NoError(s.T(), err)
+	require.Zero(s.T(), stmt.WarningsNum())
 
 	defer stmt.Close()
 
