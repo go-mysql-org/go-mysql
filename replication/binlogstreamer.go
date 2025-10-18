@@ -118,3 +118,13 @@ func (s *BinlogStreamer) AddErrorToStreamer(err error) bool {
 		return false
 	}
 }
+
+// IsErrorInStreamer checks if there is an error in the streamer.
+func (s *BinlogStreamer) IsErrorInStreamer() bool {
+	select {
+	case err := <-s.ech:
+		return err != nil
+	default:
+		return false
+	}
+}
