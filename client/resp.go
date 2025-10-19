@@ -323,7 +323,7 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *mysql.Re
 func (c *Conn) readResultColumns(result *mysql.Result) (err error) {
 	var data []byte
 
-	for i := range len(result.Fields) {
+	for i := range result.Fields {
 		rawPkgLen := len(result.RawPkg)
 		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
 		if err != nil {
