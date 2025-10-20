@@ -68,7 +68,6 @@ func (s *Server) NewConn(conn net.Conn, user string, password string, h Handler)
 	return s.NewCustomizedConn(conn, p, h)
 }
 
-// NewCustomizedConn: create connection with customized server settings
 func (s *Server) NewCustomizedConn(conn net.Conn, p CredentialProvider, h Handler) (*Conn, error) {
 	var packetConn *packet.Conn
 	if s.tlsConfig != nil {
