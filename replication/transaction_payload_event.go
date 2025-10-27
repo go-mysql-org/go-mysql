@@ -28,6 +28,7 @@ const (
 
 type TransactionPayloadEvent struct {
 	format           FormatDescriptionEvent
+	concurrency      int
 	Size             uint64
 	UncompressedSize uint64
 	CompressionType  uint64
@@ -103,7 +104,7 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 			e.CompressionType, e.compressionType())
 	}
 
-	decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+	decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(e.concurrency))
 	if err != nil {
 		return err
 	}
