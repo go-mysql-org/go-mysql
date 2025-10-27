@@ -134,6 +134,10 @@ type BinlogSyncerConfig struct {
 	// Only works with MariaDB flavor.
 	FillZeroLogPos bool
 
+	// PayloadDecoderConcurrency is used to control concurrency for decoding TransactionPayloadEvent.
+	// Default 0,  this will be set to GOMAXPROCS.
+	PayloadDecoderConcurrency int
+
 	// SynchronousEventHandler is used for synchronous event handling.
 	// This should not be used together with StartBackupWithHandler.
 	// If this is not nil, GetEvent does not need to be called.

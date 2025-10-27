@@ -40,6 +40,8 @@ type BinlogParser struct {
 	ignoreJSONDecodeErr      bool
 	verifyChecksum           bool
 
+	payloadDecoderConcurrency int
+
 	rowsEventDecodeFunc func(*RowsEvent, []byte) error
 
 	tableMapOptionalMetaDecodeFunc func([]byte) error
@@ -213,6 +215,10 @@ func (p *BinlogParser) SetVerifyChecksum(verify bool) {
 
 func (p *BinlogParser) SetFlavor(flavor string) {
 	p.flavor = flavor
+}
+
+func (p *BinlogParser) SetPayloadDecoderConcurrency(concurrency int) {
+	p.payloadDecoderConcurrency = concurrency
 }
 
 func (p *BinlogParser) SetRowsEventDecodeFunc(rowsEventDecodeFunc func(*RowsEvent, []byte) error) {
@@ -456,6 +462,7 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 func (p *BinlogParser) newTransactionPayloadEvent() *TransactionPayloadEvent {
 	e := &TransactionPayloadEvent{}
 	e.format = *p.format
+	e.concurrency = p.payloadDecoderConcurrency
 
 	return e
 }
