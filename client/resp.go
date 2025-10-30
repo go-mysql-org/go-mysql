@@ -14,9 +14,11 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
-// this should only be called when CLIENT_DEPRECATE_EOF not enabled
 func (c *Conn) isEOFPacket(data []byte) bool {
-	return data[0] == mysql.EOF_HEADER && len(data) <= 5
+	// 0xffffff due to https://dev.mysql.com/worklog/task/?id=7766
+	// "Server will never send OK packet longer than 16777216 bytes thus limiting
+	// size of OK packet to be 16777215 bytes"
+	return data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff
 }
 
 func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
@@ -378,7 +380,7 @@ func (c *Conn) readResultRows(result *mysql.Result, isBinary bool) (err error) {
 		}
 		data = result.RawPkg[rawPkgLen:]
 
-		if data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff {
+		if c.isEOFPacket(data) {
 			if c.capability&mysql.CLIENT_DEPRECATE_EOF != 0 {
 				// Treat like OK
 				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
@@ -431,7 +433,7 @@ func (c *Conn) readResultRowsStreaming(result *mysql.Result, isBinary bool, perR
 			return err
 		}
 
-		if data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff {
+		if c.isEOFPacket(data) {
 			if c.capability&mysql.CLIENT_DEPRECATE_EOF != 0 {
 				// Treat like OK
 				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
