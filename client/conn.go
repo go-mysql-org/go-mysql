@@ -466,7 +466,7 @@ func (c *Conn) FieldList(table string, wildcard string) ([]*mysql.Field, error) 
 		}
 
 		// EOF Packet
-		if data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff {
+		if c.isEOFPacket(data) {
 			return fs, nil
 		}
 
