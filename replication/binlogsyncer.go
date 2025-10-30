@@ -134,6 +134,10 @@ type BinlogSyncerConfig struct {
 	// Only works with MariaDB flavor.
 	FillZeroLogPos bool
 
+	// PayloadDecoderConcurrency is used to control concurrency for decoding TransactionPayloadEvent.
+	// Default 0,  this will be set to GOMAXPROCS.
+	PayloadDecoderConcurrency int
+
 	// SynchronousEventHandler is used for synchronous event handling.
 	// This should not be used together with StartBackupWithHandler.
 	// If this is not nil, GetEvent does not need to be called.
@@ -208,6 +212,7 @@ func NewBinlogSyncer(cfg BinlogSyncerConfig) *BinlogSyncer {
 	b.parser.SetUseDecimal(b.cfg.UseDecimal)
 	b.parser.SetUseFloatWithTrailingZero(b.cfg.UseFloatWithTrailingZero)
 	b.parser.SetVerifyChecksum(b.cfg.VerifyChecksum)
+	b.parser.SetPayloadDecoderConcurrency(cfg.PayloadDecoderConcurrency)
 	b.parser.SetRowsEventDecodeFunc(b.cfg.RowsEventDecodeFunc)
 	b.parser.SetTableMapOptionalMetaDecodeFunc(b.cfg.TableMapOptionalMetaDecodeFunc)
 	b.running = false
