@@ -252,7 +252,7 @@ func (c *Conn) UnsetCapability(cap uint32) {
 
 // HasCapability returns true if the connection has the specific capability
 func (c *Conn) HasCapability(cap uint32) bool {
-	return c.ccaps&cap > 0
+	return c.ccaps&cap != 0
 }
 
 // UseSSL: use default SSL

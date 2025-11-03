@@ -92,7 +92,7 @@ func (c *Conn) readInitialHandshake() error {
 		pos += 2
 
 		// The upper 2 bytes of the Capabilities Flags
-		c.capability = uint32(binary.LittleEndian.Uint16(data[pos:pos+2]))<<16 | c.capability
+		c.capability |= uint32(binary.LittleEndian.Uint16(data[pos:pos+2])) << 16
 		pos += 2
 
 		// length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
@@ -209,10 +209,8 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Set default client capabilities that reflect the abilities of this library
 	capability := mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SECURE_CONNECTION |
-		mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_PLUGIN_AUTH
-	// Adjust client capability flags based on server support
-	capability |= c.capability & mysql.CLIENT_LONG_FLAG
-	capability |= c.capability & mysql.CLIENT_QUERY_ATTRIBUTES
+		mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_PLUGIN_AUTH |
+		mysql.CLIENT_LONG_FLAG | mysql.CLIENT_QUERY_ATTRIBUTES | mysql.CLIENT_DEPRECATE_EOF
 	// Adjust client capability flags on specific client requests
 	// Only flags that would make any sense setting and aren't handled elsewhere
 	// in the library are supported here
@@ -275,6 +273,7 @@ func (c *Conn) writeAuthHandshake() error {
 	data := make([]byte, length+4)
 
 	// capability [32 bit]
+	c.capability &= capability
 	data[4] = byte(capability)
 	data[5] = byte(capability >> 8)
 	data[6] = byte(capability >> 16)

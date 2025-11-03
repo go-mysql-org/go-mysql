@@ -101,6 +101,18 @@ func (s *clientTestSuite) TestConn_Compress() {
 	require.NoError(s.T(), err)
 }
 
+func (s *clientTestSuite) TestConn_NoDeprecateEOF() {
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	conn, err := Connect(addr, *testUser, *testPassword, "", func(conn *Conn) error {
+		conn.UnsetCapability(mysql.CLIENT_DEPRECATE_EOF)
+		return nil
+	})
+	require.NoError(s.T(), err)
+
+	_, err = conn.Execute("SELECT VERSION()")
+	require.NoError(s.T(), err)
+}
+
 func (s *clientTestSuite) TestConn_SetCapability() {
 	caps := []uint32{
 		mysql.CLIENT_LONG_PASSWORD,
@@ -125,6 +137,7 @@ func (s *clientTestSuite) TestConn_SetCapability() {
 		mysql.CLIENT_PLUGIN_AUTH,
 		mysql.CLIENT_CONNECT_ATTRS,
 		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
+		mysql.CLIENT_DEPRECATE_EOF,
 	}
 
 	for _, capI := range caps {

@@ -275,14 +275,33 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	}
 
 	if s.params > 0 {
-		if err := s.conn.readUntilEOF(); err != nil {
-			return nil, errors.Trace(err)
+		for range s.params {
+			if _, err := s.conn.ReadPacket(); err != nil {
+				return nil, errors.Trace(err)
+			}
+		}
+		if s.conn.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
+			if packet, err := s.conn.ReadPacket(); err != nil {
+				return nil, errors.Trace(err)
+			} else if !c.isEOFPacket(packet) {
+				return nil, mysql.ErrMalformPacket
+			}
 		}
 	}
 
 	if s.columns > 0 {
-		if err := s.conn.readUntilEOF(); err != nil {
-			return nil, errors.Trace(err)
+		// TODO process when CLIENT_CACHE_METADATA enabled
+		for range s.columns {
+			if _, err := s.conn.ReadPacket(); err != nil {
+				return nil, errors.Trace(err)
+			}
+		}
+		if s.conn.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
+			if packet, err := s.conn.ReadPacket(); err != nil {
+				return nil, errors.Trace(err)
+			} else if !c.isEOFPacket(packet) {
+				return nil, mysql.ErrMalformPacket
+			}
 		}
 	}
 
