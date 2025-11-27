@@ -271,7 +271,10 @@ func (c *Conn) UseDB(dbName string) error {
 	if c.db == dbName {
 		return nil
 	}
+	return c.ForceUseDB(dbName)
+}
 
+func (c *Conn) ForceUseDB(dbName string) error {
 	if err := c.writeCommandStr(mysql.COM_INIT_DB, dbName); err != nil {
 		return errors.Trace(err)
 	}
