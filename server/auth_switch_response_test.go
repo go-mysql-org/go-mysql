@@ -30,7 +30,7 @@ func TestCheckSha2CacheCredentials_EmptyPassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Conn{
-				credential: Credential{Password: tt.serverPassword},
+				credential: Credential{Passwords: []string{tt.serverPassword}},
 			}
 			err := c.checkSha2CacheCredentials(tt.clientAuthData, c.credential)
 			if tt.wantErr == nil {
