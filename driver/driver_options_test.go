@@ -266,8 +266,8 @@ func TestDriverOptions_namedValueChecker(t *testing.T) {
 }
 
 func createMockServer(t *testing.T) *testServer {
-	inMemProvider := server.NewInMemoryProvider()
-	require.NoError(t, inMemProvider.AddUser(*testUser, *testPassword))
+	authHandler := server.NewInMemoryAuthenticationHandler()
+	require.NoError(t, authHandler.AddUser(*testUser, *testPassword))
 	defaultServer := server.NewDefaultServer()
 
 	l, err := net.Listen("tcp", "127.0.0.1:3307")
@@ -285,7 +285,7 @@ func createMockServer(t *testing.T) *testServer {
 			}
 
 			go func() {
-				co, err := s.NewCustomizedConn(conn, inMemProvider, handler)
+				co, err := s.NewCustomizedConn(conn, authHandler, handler)
 				if err != nil {
 					return
 				}
