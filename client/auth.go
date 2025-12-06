@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
@@ -219,6 +220,18 @@ func (c *Conn) writeAuthHandshake() error {
 		c.ccaps&mysql.CLIENT_PS_MULTI_RESULTS | c.ccaps&mysql.CLIENT_CONNECT_ATTRS |
 		c.ccaps&mysql.CLIENT_COMPRESS | c.ccaps&mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM |
 		c.ccaps&mysql.CLIENT_LOCAL_FILES
+
+	// Loop through the capability flags and see if there is any that was in `c.ccaps` (set by `SetCapability()` )
+	// but that is not in `capability`. This happens when a user of this library tries to set a flag
+	// that we don't support.
+	for i := 0; i < 32; i++ {
+		capabilityNumber := uint32(1 << i)
+		if capname, ok := mysql.CapNames[capabilityNumber]; ok {
+			if (c.ccaps&capabilityNumber > 0) && (capability&capabilityNumber == 0) {
+				slog.Debug("capability specified but not set", "capability", capname)
+			}
+		}
+	}
 
 	capability &^= c.clientExplicitOffCaps
 

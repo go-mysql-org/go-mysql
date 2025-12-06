@@ -581,72 +581,9 @@ func (c *Conn) CapabilityString() string {
 		field := uint32(1 << bits.TrailingZeros32(capability))
 		capability ^= field
 
-		switch field {
-		case mysql.CLIENT_LONG_PASSWORD:
-			caps = append(caps, "CLIENT_LONG_PASSWORD")
-		case mysql.CLIENT_FOUND_ROWS:
-			caps = append(caps, "CLIENT_FOUND_ROWS")
-		case mysql.CLIENT_LONG_FLAG:
-			caps = append(caps, "CLIENT_LONG_FLAG")
-		case mysql.CLIENT_CONNECT_WITH_DB:
-			caps = append(caps, "CLIENT_CONNECT_WITH_DB")
-		case mysql.CLIENT_NO_SCHEMA:
-			caps = append(caps, "CLIENT_NO_SCHEMA")
-		case mysql.CLIENT_COMPRESS:
-			caps = append(caps, "CLIENT_COMPRESS")
-		case mysql.CLIENT_ODBC:
-			caps = append(caps, "CLIENT_ODBC")
-		case mysql.CLIENT_LOCAL_FILES:
-			caps = append(caps, "CLIENT_LOCAL_FILES")
-		case mysql.CLIENT_IGNORE_SPACE:
-			caps = append(caps, "CLIENT_IGNORE_SPACE")
-		case mysql.CLIENT_PROTOCOL_41:
-			caps = append(caps, "CLIENT_PROTOCOL_41")
-		case mysql.CLIENT_INTERACTIVE:
-			caps = append(caps, "CLIENT_INTERACTIVE")
-		case mysql.CLIENT_SSL:
-			caps = append(caps, "CLIENT_SSL")
-		case mysql.CLIENT_IGNORE_SIGPIPE:
-			caps = append(caps, "CLIENT_IGNORE_SIGPIPE")
-		case mysql.CLIENT_TRANSACTIONS:
-			caps = append(caps, "CLIENT_TRANSACTIONS")
-		case mysql.CLIENT_RESERVED:
-			caps = append(caps, "CLIENT_RESERVED")
-		case mysql.CLIENT_SECURE_CONNECTION:
-			caps = append(caps, "CLIENT_SECURE_CONNECTION")
-		case mysql.CLIENT_MULTI_STATEMENTS:
-			caps = append(caps, "CLIENT_MULTI_STATEMENTS")
-		case mysql.CLIENT_MULTI_RESULTS:
-			caps = append(caps, "CLIENT_MULTI_RESULTS")
-		case mysql.CLIENT_PS_MULTI_RESULTS:
-			caps = append(caps, "CLIENT_PS_MULTI_RESULTS")
-		case mysql.CLIENT_PLUGIN_AUTH:
-			caps = append(caps, "CLIENT_PLUGIN_AUTH")
-		case mysql.CLIENT_CONNECT_ATTRS:
-			caps = append(caps, "CLIENT_CONNECT_ATTRS")
-		case mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA:
-			caps = append(caps, "CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA")
-		case mysql.CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS:
-			caps = append(caps, "CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS")
-		case mysql.CLIENT_SESSION_TRACK:
-			caps = append(caps, "CLIENT_SESSION_TRACK")
-		case mysql.CLIENT_DEPRECATE_EOF:
-			caps = append(caps, "CLIENT_DEPRECATE_EOF")
-		case mysql.CLIENT_OPTIONAL_RESULTSET_METADATA:
-			caps = append(caps, "CLIENT_OPTIONAL_RESULTSET_METADATA")
-		case mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM:
-			caps = append(caps, "CLIENT_ZSTD_COMPRESSION_ALGORITHM")
-		case mysql.CLIENT_QUERY_ATTRIBUTES:
-			caps = append(caps, "CLIENT_QUERY_ATTRIBUTES")
-		case mysql.MULTI_FACTOR_AUTHENTICATION:
-			caps = append(caps, "MULTI_FACTOR_AUTHENTICATION")
-		case mysql.CLIENT_CAPABILITY_EXTENSION:
-			caps = append(caps, "CLIENT_CAPABILITY_EXTENSION")
-		case mysql.CLIENT_SSL_VERIFY_SERVER_CERT:
-			caps = append(caps, "CLIENT_SSL_VERIFY_SERVER_CERT")
-		case mysql.CLIENT_REMEMBER_OPTIONS:
-			caps = append(caps, "CLIENT_REMEMBER_OPTIONS")
-		default:
+		if capname, ok := mysql.CapNames[field]; ok {
+			caps = append(caps, capname)
+		} else {
 			caps = append(caps, fmt.Sprintf("(%d)", field))
 		}
 	}

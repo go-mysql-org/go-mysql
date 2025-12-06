@@ -237,3 +237,10 @@ func (s *connTestSuite) TestUseDB() {
 	err = s.c.UseDB("test")
 	require.NoError(s.T(), err)
 }
+
+func TestCapabilityString(t *testing.T) {
+	conn := Conn{
+		capability: mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_DEPRECATE_EOF,
+	}
+	require.Equal(t, "CLIENT_PROTOCOL_41|CLIENT_DEPRECATE_EOF", conn.CapabilityString())
+}
