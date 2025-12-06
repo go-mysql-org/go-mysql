@@ -210,3 +210,30 @@ func (s *connTestSuite) TestSetQueryAttributes() {
 	}
 	require.Equal(s.T(), expected, s.c.queryAttributes)
 }
+
+func (s *connTestSuite) TestUseDB() {
+	_, err := s.c.Execute("create database if not exists proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("proxier")
+	require.NoError(s.T(), err)
+	result, err := s.c.Execute("select database();")
+	require.NoError(s.T(), err)
+	value, err := result.GetString(0, 0)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), "proxier", value)
+	_, err = s.c.Execute("drop database proxier;")
+	require.NoError(s.T(), err)
+	_, err = s.c.Execute("create database proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("proxier")
+	require.NoError(s.T(), err)
+	result, err = s.c.Execute("select database();")
+	require.NoError(s.T(), err)
+	value, err = result.GetString(0, 0)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), "proxier", value)
+	_, err = s.c.Execute("drop database proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("test")
+	require.NoError(s.T(), err)
+}
