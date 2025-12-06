@@ -21,8 +21,8 @@ type Stmt struct {
 	warnings int
 
 	// Field definitions from the PREPARE response (for proxy passthrough)
-	ParamFields  []*mysql.Field
-	ColumnFields []*mysql.Field
+	paramFields  []*mysql.Field
+	columnFields []*mysql.Field
 }
 
 func (s *Stmt) ParamNum() int {
@@ -40,13 +40,13 @@ func (s *Stmt) WarningsNum() int {
 // GetParamFields returns the parameter field definitions from the PREPARE response.
 // Implements server.StmtFieldsProvider for proxy passthrough.
 func (s *Stmt) GetParamFields() []*mysql.Field {
-	return s.ParamFields
+	return s.paramFields
 }
 
 // GetColumnFields returns the column field definitions from the PREPARE response.
 // Implements server.StmtFieldsProvider for proxy passthrough.
 func (s *Stmt) GetColumnFields() []*mysql.Field {
-	return s.ColumnFields
+	return s.columnFields
 }
 
 func (s *Stmt) Execute(args ...interface{}) (*mysql.Result, error) {
@@ -291,14 +291,14 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	}
 
 	if s.params > 0 {
-		s.ParamFields = make([]*mysql.Field, s.params)
+		s.paramFields = make([]*mysql.Field, s.params)
 		for i := range s.params {
 			data, err := s.conn.ReadPacket()
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-			s.ParamFields[i] = &mysql.Field{}
-			if err := s.ParamFields[i].Parse(data); err != nil {
+			s.paramFields[i] = &mysql.Field{}
+			if err := s.paramFields[i].Parse(data); err != nil {
 				return nil, errors.Trace(err)
 			}
 		}
@@ -312,14 +312,14 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	}
 
 	if s.columns > 0 {
-		s.ColumnFields = make([]*mysql.Field, s.columns)
+		s.columnFields = make([]*mysql.Field, s.columns)
 		for i := range s.columns {
 			data, err := s.conn.ReadPacket()
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-			s.ColumnFields[i] = &mysql.Field{}
-			if err := s.ColumnFields[i].Parse(data); err != nil {
+			s.columnFields[i] = &mysql.Field{}
+			if err := s.columnFields[i].Parse(data); err != nil {
 				return nil, errors.Trace(err)
 			}
 		}
