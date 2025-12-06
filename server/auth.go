@@ -152,9 +152,8 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 			return c.writeAuthMoreDataFastAuth()
 		}
 
-		return errAccessDenied(c.credential)
 	}
-	// cache miss, do full auth
+	// cache miss or validation failed, do full auth
 	if err := c.writeAuthMoreDataFullAuth(); err != nil {
 		return err
 	}
