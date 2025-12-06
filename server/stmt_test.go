@@ -3,6 +3,7 @@ package server
 import (
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,4 +46,53 @@ func TestHandleStmtExecute(t *testing.T) {
 			require.ErrorContains(t, err, tc.errtext)
 		}
 	}
+}
+
+type mockPrepareHandler struct {
+	EmptyHandler
+	context                 any
+	paramCount, columnCount int
+}
+
+func (h *mockPrepareHandler) HandleStmtPrepare(query string) (int, int, any, error) {
+	return h.paramCount, h.columnCount, h.context, nil
+}
+
+func TestStmtPrepareWithoutFieldsProvider(t *testing.T) {
+	c := &Conn{
+		h:     &mockPrepareHandler{context: "plain string", paramCount: 1, columnCount: 1},
+		stmts: make(map[uint32]*Stmt),
+	}
+
+	result := c.dispatch(append([]byte{mysql.COM_STMT_PREPARE}, "SELECT * FROM t"...))
+
+	stmt := result.(*Stmt)
+	require.Nil(t, stmt.ParamFields)
+	require.Nil(t, stmt.ColumnFields)
+}
+
+type mockFieldsProvider struct {
+	paramFields, columnFields []*mysql.Field
+}
+
+func (m *mockFieldsProvider) GetParamFields() []*mysql.Field  { return m.paramFields }
+func (m *mockFieldsProvider) GetColumnFields() []*mysql.Field { return m.columnFields }
+
+func TestStmtPrepareWithFieldsProvider(t *testing.T) {
+	provider := &mockFieldsProvider{
+		paramFields:  []*mysql.Field{{Name: []byte("?"), Type: mysql.MYSQL_TYPE_LONG}},
+		columnFields: []*mysql.Field{{Name: []byte("id"), Type: mysql.MYSQL_TYPE_LONGLONG}},
+	}
+	c := &Conn{
+		h:     &mockPrepareHandler{context: provider, paramCount: 1, columnCount: 1},
+		stmts: make(map[uint32]*Stmt),
+	}
+
+	result := c.dispatch(append([]byte{mysql.COM_STMT_PREPARE}, "SELECT id FROM t WHERE id = ?"...))
+
+	stmt := result.(*Stmt)
+	require.NotNil(t, stmt.ParamFields)
+	require.NotNil(t, stmt.ColumnFields)
+	require.Equal(t, mysql.MYSQL_TYPE_LONG, stmt.ParamFields[0].Type)
+	require.Equal(t, mysql.MYSQL_TYPE_LONGLONG, stmt.ColumnFields[0].Type)
 }
