@@ -25,6 +25,10 @@ type Stmt struct {
 	Args []interface{}
 
 	Context interface{}
+
+	// Field definitions for proxy passthrough (optional, uses dummy fields if nil)
+	ParamFields  []*mysql.Field
+	ColumnFields []*mysql.Field
 }
 
 func (s *Stmt) Rest(params int, columns int, context interface{}) {
@@ -61,7 +65,11 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	if s.Params > 0 {
 		for i := 0; i < s.Params; i++ {
 			data = data[0:4]
-			data = append(data, paramFieldData...)
+			if s.ParamFields != nil && i < len(s.ParamFields) {
+				data = append(data, s.ParamFields[i].Dump()...)
+			} else {
+				data = append(data, paramFieldData...)
+			}
 
 			if err := c.WritePacket(data); err != nil {
 				return errors.Trace(err)
@@ -76,7 +84,11 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	if s.Columns > 0 {
 		for i := 0; i < s.Columns; i++ {
 			data = data[0:4]
-			data = append(data, columnFieldData...)
+			if s.ColumnFields != nil && i < len(s.ColumnFields) {
+				data = append(data, s.ColumnFields[i].Dump()...)
+			} else {
+				data = append(data, columnFieldData...)
+			}
 
 			if err := c.WritePacket(data); err != nil {
 				return errors.Trace(err)
