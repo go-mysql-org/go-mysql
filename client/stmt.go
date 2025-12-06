@@ -39,12 +39,14 @@ func (s *Stmt) WarningsNum() int {
 
 // GetParamFields returns the parameter field definitions from the PREPARE response.
 // Implements server.StmtFieldsProvider for proxy passthrough.
+// The caller should not modify the returned slice.
 func (s *Stmt) GetParamFields() []*mysql.Field {
 	return s.paramFields
 }
 
 // GetColumnFields returns the column field definitions from the PREPARE response.
 // Implements server.StmtFieldsProvider for proxy passthrough.
+// The caller should not modify the returned slice.
 func (s *Stmt) GetColumnFields() []*mysql.Field {
 	return s.columnFields
 }
