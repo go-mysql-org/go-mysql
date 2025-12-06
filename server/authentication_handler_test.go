@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -64,7 +64,7 @@ func TestOnAuthSuccessCalled(t *testing.T) {
 func TestOnAuthSuccessCanReject(t *testing.T) {
 	handler := &hookTrackingAuthenticationHandler{
 		InMemoryAuthenticationHandler: NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD),
-		rejectOnSuccess:     true,
+		rejectOnSuccess:               true,
 	}
 	require.NoError(t, handler.AddUser("testuser", "testpass"))
 
