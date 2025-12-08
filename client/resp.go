@@ -55,7 +55,7 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 		statusMessageLength := int(data[pos])
 		pos++
 		if statusMessageLength > 0 {
-			r.StatusMessage = utils.ByteSliceToString(data[pos : pos+int(statusMessageLength)])
+			r.StatusMessage = utils.ByteSliceToString(data[pos : pos+statusMessageLength])
 			pos += statusMessageLength
 		}
 
@@ -63,7 +63,7 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 		pos++
 		dataLength := len(data[pos:])
 		if dataLength != sessionTrackingChangeLength {
-			return nil, fmt.Errorf("incorrect data length for session tracking data: expected %d but got %d\n",
+			return nil, fmt.Errorf("incorrect data length for session tracking data: expected %d but got %d",
 				sessionTrackingChangeLength, dataLength)
 		}
 		r.SessionTracking, err = decodeSessionTracking(data[pos:])
