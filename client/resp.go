@@ -39,17 +39,100 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 
 		//todo:strict_mode, check warnings as error
 		r.Warnings = binary.LittleEndian.Uint16(data[pos:])
-		// pos += 2
+		pos += 2
 	} else if c.capability&mysql.CLIENT_TRANSACTIONS > 0 {
 		r.Status = binary.LittleEndian.Uint16(data[pos:])
 		c.status = r.Status
-		// pos += 2
+		pos += 2
 	}
 
-	// new ok package will check CLIENT_SESSION_TRACK too, but I don't support it now.
+	if (c.capability&mysql.CLIENT_SESSION_TRACK > 0) &&
+		(c.status&mysql.SERVER_SESSION_STATE_CHANGED > 0) {
+		var err error
+
+		// Example status message:
+		// "Records: 3  Duplicates: 0  Warnings: 0"
+		statusMessageLength := int(data[pos])
+		pos++
+		if statusMessageLength > 0 {
+			r.StatusMessage = utils.ByteSliceToString(data[pos : pos+int(statusMessageLength)])
+			pos += statusMessageLength
+		}
+
+		sessionTrackingChangeLength := int(data[pos])
+		pos++
+		dataLength := len(data[pos:])
+		if dataLength != sessionTrackingChangeLength {
+			return nil, fmt.Errorf("incorrect data length for session tracking data: expected %d but got %d\n",
+				sessionTrackingChangeLength, dataLength)
+		}
+		r.SessionTracking, err = decodeSessionTracking(data[pos:])
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// skip info
 	return r, nil
+}
+
+func decodeSessionTracking(data []byte) (s *mysql.SessionTrackingInfo, err error) {
+	s = &mysql.SessionTrackingInfo{}
+	pos := 0
+	for pos < len(data) {
+		sessionTrackingChangeType := data[pos]
+		pos++ // session tracking type
+		pos++ // length of session tracking data, unused
+
+		switch sessionTrackingChangeType {
+		case mysql.SESSION_TRACK_SYSTEM_VARIABLES:
+			if s.Variables == nil {
+				s.Variables = make(map[string]string, 1)
+			}
+			varNameLength := data[pos]
+			pos++
+			varName := utils.ByteSliceToString(data[pos : pos+int(varNameLength)])
+			pos += int(varNameLength)
+			varValueLength := data[pos]
+			pos++
+			s.Variables[varName] = utils.ByteSliceToString(data[pos : pos+int(varValueLength)])
+			pos += int(varValueLength)
+		case mysql.SESSION_TRACK_SCHEMA:
+			schemaInfoLength := data[pos]
+			pos++
+			s.Schema = utils.ByteSliceToString(data[pos : pos+int(schemaInfoLength)])
+			pos += int(schemaInfoLength)
+		case mysql.SESSION_TRACK_STATE_CHANGE:
+			s.State = string(data[pos])
+			pos++
+		case mysql.SESSION_TRACK_GTIDS:
+			gtidFormat := data[pos]
+			if gtidFormat != 0 {
+				return nil, fmt.Errorf("unexpected GTID format %d", gtidFormat)
+			}
+			pos++
+			gtidLength := data[pos]
+			pos++
+			s.GTID = utils.ByteSliceToString(data[pos : pos+int(gtidLength)])
+			pos += int(gtidLength)
+		case mysql.SESSION_TRACK_TRANSACTION_CHARACTERISTICS:
+			characteristicsLength := data[pos]
+			pos++
+			if characteristicsLength > 0 {
+				s.Characteristics = utils.ByteSliceToString(data[pos : pos+int(characteristicsLength)])
+				pos += int(characteristicsLength)
+			}
+		case mysql.SESSION_TRACK_TRANSACTION_STATE:
+			transactionStateLength := data[pos]
+			pos++
+			s.TransactionState = utils.ByteSliceToString(data[pos : pos+int(transactionStateLength)])
+			pos += int(transactionStateLength)
+		default:
+			return nil, fmt.Errorf("got unknown change type %v", sessionTrackingChangeType)
+		}
+	}
+
+	return s, nil
 }
 
 func (c *Conn) handleErrorPacket(data []byte) error {
