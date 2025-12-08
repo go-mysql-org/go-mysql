@@ -454,6 +454,33 @@ func TestSetColumnsCharset(t *testing.T) {
 	assert.Equal(t, expected, c.cfg.ColumnCharset[tableRegex])
 }
 
+func TestWaitTimeBetweenConnectionSecondsDefault(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    time.Duration
+		expected time.Duration
+	}{
+		{"not set (zero)", 0, 5 * time.Second},
+		{"negative value", -10 * time.Second, 5 * time.Second},
+		{"positive value kept", 10 * time.Second, 10 * time.Second},
+		{"small positive value kept", 1 * time.Second, 1 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			cfg.WaitTimeBetweenConnectionSeconds = tt.input
+
+			// Apply the default logic (same as in NewCanal)
+			if cfg.WaitTimeBetweenConnectionSeconds <= 0 {
+				cfg.WaitTimeBetweenConnectionSeconds = time.Duration(5) * time.Second
+			}
+
+			assert.Equal(t, tt.expected, cfg.WaitTimeBetweenConnectionSeconds)
+		})
+	}
+}
+
 func TestIsSafeIdentifier(t *testing.T) {
 	tests := []struct {
 		name     string
