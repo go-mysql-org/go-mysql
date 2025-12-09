@@ -71,7 +71,7 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	if cfg.WaitTimeBetweenConnectionSeconds > 0 {
+	if cfg.WaitTimeBetweenConnectionSeconds <= 0 {
 		cfg.WaitTimeBetweenConnectionSeconds = time.Duration(5) * time.Second
 	}
 
