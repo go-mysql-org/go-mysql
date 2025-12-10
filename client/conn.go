@@ -268,16 +268,23 @@ func (c *Conn) SetTLSConfig(config *tls.Config) {
 }
 
 func (c *Conn) UseDB(dbName string) error {
+	_, err := c.UseDBWithResult(dbName)
+	return err
+}
+
+func (c *Conn) UseDBWithResult(dbName string) (*mysql.Result, error) {
 	if err := c.writeCommandStr(mysql.COM_INIT_DB, dbName); err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
-	if _, err := c.readOK(); err != nil {
-		return errors.Trace(err)
+	var r *mysql.Result
+	var err error
+	if r, err = c.readOK(); err != nil {
+		return r, errors.Trace(err)
 	}
 
 	c.db = dbName
-	return nil
+	return r, nil
 }
 
 func (c *Conn) GetDB() string {

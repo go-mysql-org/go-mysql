@@ -9,7 +9,19 @@ type Result struct {
 	InsertId     uint64
 	AffectedRows uint64
 
+	StatusMessage   string
+	SessionTracking *SessionTrackingInfo
+
 	*Resultset
+}
+
+type SessionTrackingInfo struct {
+	GTID             string
+	TransactionState string
+	Variables        map[string]string
+	Schema           string
+	State            string
+	Characteristics  string
 }
 
 func NewResult(resultset *Resultset) *Result {
