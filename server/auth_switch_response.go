@@ -75,7 +75,7 @@ func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Crede
 	if match && err == nil {
 		return nil
 	}
-	return errAccessDenied(credential)
+	return ErrAccessDenied
 }
 
 func (c *Conn) writeCachingSha2Cache(authData []byte) {
