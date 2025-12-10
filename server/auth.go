@@ -90,7 +90,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 		if credential.Password == "" {
 			return nil
 		}
-		return ErrAccessDenied
+		return ErrAccessDeniedNoPassword
 	}
 	if tlsConn, ok := c.Conn.Conn.(*tls.Conn); ok {
 		if !tlsConn.ConnectionState().HandshakeComplete {
@@ -129,7 +129,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 		if c.credential.Password == "" {
 			return nil
 		}
-		return ErrAccessDenied
+		return ErrAccessDeniedNoPassword
 	}
 	// the caching of 'caching_sha2_password' in MySQL, see: https://dev.mysql.com/worklog/task/?id=9591
 	// check if we have a cached value
