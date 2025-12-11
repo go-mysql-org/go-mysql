@@ -9,6 +9,7 @@ import (
 	"net"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -238,9 +239,13 @@ func (c *Conn) Ping() error {
 }
 
 // SetCapability marks the specified flag as explicitly enabled by the client.
-func (c *Conn) SetCapability(cap uint32) {
+func (c *Conn) SetCapability(cap uint32) error {
+	if !slices.Contains(optionalCapabilities, cap) {
+		return errors.New("unsupported or unknown capability")
+	}
 	c.ccaps |= cap
 	c.clientExplicitOffCaps &^= cap
+	return nil
 }
 
 // UnsetCapability marks the specified flag as explicitly disabled by the client.

@@ -14,6 +14,19 @@ import (
 
 const defaultAuthPluginName = mysql.AUTH_NATIVE_PASSWORD
 
+var optionalCapabilities = []uint32{
+	mysql.CLIENT_FOUND_ROWS,
+	mysql.CLIENT_IGNORE_SPACE,
+	mysql.CLIENT_MULTI_STATEMENTS,
+	mysql.CLIENT_MULTI_RESULTS,
+	mysql.CLIENT_PS_MULTI_RESULTS,
+	mysql.CLIENT_CONNECT_ATTRS,
+	mysql.CLIENT_COMPRESS,
+	mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM,
+	mysql.CLIENT_LOCAL_FILES,
+	mysql.CLIENT_SESSION_TRACK,
+}
+
 // defines the supported auth plugins
 var supportedAuthPlugins = []string{mysql.AUTH_NATIVE_PASSWORD, mysql.AUTH_SHA256_PASSWORD, mysql.AUTH_CACHING_SHA2_PASSWORD, mysql.AUTH_MARIADB_ED25519}
 
@@ -214,11 +227,9 @@ func (c *Conn) writeAuthHandshake() error {
 	// Adjust client capability flags on specific client requests
 	// Only flags that would make any sense setting and aren't handled elsewhere
 	// in the library are supported here
-	capability |= c.ccaps&mysql.CLIENT_FOUND_ROWS | c.ccaps&mysql.CLIENT_IGNORE_SPACE |
-		c.ccaps&mysql.CLIENT_MULTI_STATEMENTS | c.ccaps&mysql.CLIENT_MULTI_RESULTS |
-		c.ccaps&mysql.CLIENT_PS_MULTI_RESULTS | c.ccaps&mysql.CLIENT_CONNECT_ATTRS |
-		c.ccaps&mysql.CLIENT_COMPRESS | c.ccaps&mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM |
-		c.ccaps&mysql.CLIENT_LOCAL_FILES | c.ccaps&mysql.CLIENT_SESSION_TRACK
+	for _, optionalCap := range optionalCapabilities {
+		capability |= c.ccaps & optionalCap
+	}
 
 	capability &^= c.clientExplicitOffCaps
 
