@@ -9,6 +9,7 @@ import (
 	"net"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -238,9 +239,13 @@ func (c *Conn) Ping() error {
 }
 
 // SetCapability marks the specified flag as explicitly enabled by the client.
-func (c *Conn) SetCapability(cap uint32) {
+func (c *Conn) SetCapability(cap uint32) error {
+	if !slices.Contains(optionalCapabilities, cap) {
+		return errors.New("unsupported or unknown capability")
+	}
 	c.ccaps |= cap
 	c.clientExplicitOffCaps &^= cap
+	return nil
 }
 
 // UnsetCapability marks the specified flag as explicitly disabled by the client.
@@ -268,16 +273,23 @@ func (c *Conn) SetTLSConfig(config *tls.Config) {
 }
 
 func (c *Conn) UseDB(dbName string) error {
+	_, err := c.UseDBWithResult(dbName)
+	return err
+}
+
+func (c *Conn) UseDBWithResult(dbName string) (*mysql.Result, error) {
 	if err := c.writeCommandStr(mysql.COM_INIT_DB, dbName); err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
-	if _, err := c.readOK(); err != nil {
-		return errors.Trace(err)
+	var r *mysql.Result
+	var err error
+	if r, err = c.readOK(); err != nil {
+		return r, errors.Trace(err)
 	}
 
 	c.db = dbName
-	return nil
+	return r, nil
 }
 
 func (c *Conn) GetDB() string {
