@@ -72,14 +72,14 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 
 func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Credential) error {
 	if len(clientAuthData) == 0 {
-		if credential.HasEmptyPassword() {
+		if credential.hasEmptyPassword() {
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
 	}
 
 	for _, password := range credential.Passwords {
-		hash, err := credential.HashPassword(password)
+		hash, err := credential.hashPassword(password)
 		if err != nil {
 			continue
 		}

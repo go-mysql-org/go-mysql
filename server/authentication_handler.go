@@ -16,7 +16,8 @@ import (
 // if the password in a third-party auth handler could be updated at runtime, we have to invalidate the caching
 // for 'caching_sha2_password' by calling 'func (s *Server)InvalidateCache(string, string)'.
 type AuthenticationHandler interface {
-	// get user credential (supports multiple valid passwords per user)
+	// GetCredential returns the user credential (supports multiple valid passwords per user).
+	// Implementations must be safe for concurrent use.
 	GetCredential(username string) (credential Credential, found bool, err error)
 
 	// OnAuthSuccess is called after successful authentication, before the OK packet.
@@ -45,8 +46,8 @@ type Credential struct {
 	AuthPluginName string
 }
 
-// HashPassword computes the password hash for a given password using the credential's auth plugin.
-func (c Credential) HashPassword(password string) (string, error) {
+// hashPassword computes the password hash for a given password using the credential's auth plugin.
+func (c Credential) hashPassword(password string) (string, error) {
 	if password == "" {
 		return "", nil
 	}
@@ -69,8 +70,8 @@ func (c Credential) HashPassword(password string) (string, error) {
 	}
 }
 
-// HasEmptyPassword returns true if any password in the credential is empty.
-func (c Credential) HasEmptyPassword() bool {
+// hasEmptyPassword returns true if any password in the credential is empty.
+func (c Credential) hasEmptyPassword() bool {
 	return slices.Contains(c.Passwords, "")
 }
 

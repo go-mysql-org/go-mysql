@@ -67,14 +67,14 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential Credential) error {
 	if len(clientAuthData) == 0 {
-		if credential.HasEmptyPassword() {
+		if credential.hasEmptyPassword() {
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
 	}
 
 	for _, password := range credential.Passwords {
-		hash, err := credential.HashPassword(password)
+		hash, err := credential.hashPassword(password)
 		if err != nil {
 			continue
 		}
@@ -92,7 +92,7 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential C
 func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential Credential) error {
 	// Empty passwords are not hashed, but sent as empty string
 	if len(clientAuthData) == 0 {
-		if credential.HasEmptyPassword() {
+		if credential.hasEmptyPassword() {
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
@@ -119,7 +119,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 		}
 	}
 	for _, password := range credential.Passwords {
-		hash, err := credential.HashPassword(password)
+		hash, err := credential.hashPassword(password)
 		if err != nil {
 			continue
 		}
@@ -137,7 +137,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 	// Empty passwords are not hashed, but sent as empty string
 	if len(clientAuthData) == 0 {
-		if c.credential.HasEmptyPassword() {
+		if c.credential.hasEmptyPassword() {
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
