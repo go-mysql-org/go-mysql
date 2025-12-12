@@ -45,14 +45,6 @@ func (c *Conn) acquirePassword() error {
 	return nil
 }
 
-func errAccessDenied(credential Credential) error {
-	if credential.Password == "" {
-		return ErrAccessDeniedNoPassword
-	}
-
-	return ErrAccessDenied
-}
-
 func scrambleValidation(cached, nonce, scramble []byte) bool {
 	// SHA256(SHA256(SHA256(STORED_PASSWORD)), NONCE)
 	crypt := sha256.New()
@@ -74,14 +66,21 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 }
 
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential Credential) error {
+	if len(clientAuthData) == 0 {
+		if credential.Password == "" {
+			return nil
+		}
+		return ErrAccessDeniedNoPassword
+	}
+
 	password, err := mysql.DecodePasswordHex(c.credential.Password)
 	if err != nil {
-		return errAccessDenied(credential)
+		return ErrAccessDenied
 	}
 	if mysql.CompareNativePassword(clientAuthData, password, c.salt) {
 		return nil
 	}
-	return errAccessDenied(credential)
+	return ErrAccessDenied
 }
 
 func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential Credential) error {
@@ -90,7 +89,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 		if credential.Password == "" {
 			return nil
 		}
-		return ErrAccessDenied
+		return ErrAccessDeniedNoPassword
 	}
 	if tlsConn, ok := c.Conn.Conn.(*tls.Conn); ok {
 		if !tlsConn.ConnectionState().HandshakeComplete {
@@ -129,7 +128,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 		if c.credential.Password == "" {
 			return nil
 		}
-		return ErrAccessDenied
+		return ErrAccessDeniedNoPassword
 	}
 	// the caching of 'caching_sha2_password' in MySQL, see: https://dev.mysql.com/worklog/task/?id=9591
 	// check if we have a cached value
@@ -141,7 +140,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 			return c.writeAuthMoreDataFastAuth()
 		}
 
-		return errAccessDenied(c.credential)
+		return ErrAccessDenied
 	}
 	// cache miss, do full auth
 	if err := c.writeAuthMoreDataFullAuth(); err != nil {
