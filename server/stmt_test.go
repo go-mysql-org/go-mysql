@@ -90,6 +90,10 @@ func TestStmtPrepareWithPreparedStmt(t *testing.T) {
 	st := result.(*Stmt)
 	require.NotNil(t, st.RawParamFields)
 	require.NotNil(t, st.RawColumnFields)
-	require.Equal(t, mysql.MYSQL_TYPE_LONG, st.GetParamFields()[0].Type)
-	require.Equal(t, mysql.MYSQL_TYPE_LONGLONG, st.GetColumnFields()[0].Type)
+	paramFields, err := st.GetParamFields()
+	require.NoError(t, err)
+	require.Equal(t, mysql.MYSQL_TYPE_LONG, paramFields[0].Type)
+	columnFields, err := st.GetColumnFields()
+	require.NoError(t, err)
+	require.Equal(t, mysql.MYSQL_TYPE_LONGLONG, columnFields[0].Type)
 }

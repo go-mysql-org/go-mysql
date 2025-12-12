@@ -14,30 +14,38 @@ type PreparedStmt struct {
 	columnFields []*mysql.Field
 }
 
-func (s *PreparedStmt) GetParamFields() []*mysql.Field {
+func (s *PreparedStmt) GetParamFields() ([]*mysql.Field, error) {
 	if s.RawParamFields == nil {
-		return nil
+		return nil, nil
 	}
 	if s.paramFields == nil {
-		s.paramFields = make([]*mysql.Field, len(s.RawParamFields))
+		fields := make([]*mysql.Field, len(s.RawParamFields))
 		for i, raw := range s.RawParamFields {
-			s.paramFields[i] = &mysql.Field{}
-			_ = s.paramFields[i].Parse(raw)
+			field := &mysql.Field{}
+			if err := field.Parse(raw); err != nil {
+				return nil, err
+			}
+			fields[i] = field
 		}
+		s.paramFields = fields
 	}
-	return s.paramFields
+	return s.paramFields, nil
 }
 
-func (s *PreparedStmt) GetColumnFields() []*mysql.Field {
+func (s *PreparedStmt) GetColumnFields() ([]*mysql.Field, error) {
 	if s.RawColumnFields == nil {
-		return nil
+		return nil, nil
 	}
 	if s.columnFields == nil {
-		s.columnFields = make([]*mysql.Field, len(s.RawColumnFields))
+		fields := make([]*mysql.Field, len(s.RawColumnFields))
 		for i, raw := range s.RawColumnFields {
-			s.columnFields[i] = &mysql.Field{}
-			_ = s.columnFields[i].Parse(raw)
+			field := &mysql.Field{}
+			if err := field.Parse(raw); err != nil {
+				return nil, err
+			}
+			fields[i] = field
 		}
+		s.columnFields = fields
 	}
-	return s.columnFields
+	return s.columnFields, nil
 }
