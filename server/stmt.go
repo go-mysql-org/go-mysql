@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/stmt"
 	"github.com/pingcap/errors"
 )
 
@@ -16,19 +17,13 @@ var (
 )
 
 type Stmt struct {
-	ID    uint32
 	Query string
-
-	Params  int
-	Columns int
-
-	Args []interface{}
+	Args  []interface{}
 
 	Context interface{}
 
-	// Field definitions for proxy passthrough (optional, uses dummy fields if nil)
-	ParamFields  []*mysql.Field
-	ColumnFields []*mysql.Field
+	// PreparedStmt contains common fields shared with client.Stmt for proxy passthrough
+	stmt.PreparedStmt
 }
 
 func (s *Stmt) Rest(params int, columns int, context interface{}) {
@@ -65,8 +60,8 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	if s.Params > 0 {
 		for i := 0; i < s.Params; i++ {
 			data = data[0:4]
-			if s.ParamFields != nil && i < len(s.ParamFields) {
-				data = append(data, s.ParamFields[i].Dump()...)
+			if s.RawParamFields != nil && i < len(s.RawParamFields) {
+				data = append(data, s.RawParamFields[i]...)
 			} else {
 				data = append(data, paramFieldData...)
 			}
@@ -84,8 +79,8 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	if s.Columns > 0 {
 		for i := 0; i < s.Columns; i++ {
 			data = data[0:4]
-			if s.ColumnFields != nil && i < len(s.ColumnFields) {
-				data = append(data, s.ColumnFields[i].Dump()...)
+			if s.RawColumnFields != nil && i < len(s.RawColumnFields) {
+				data = append(data, s.RawColumnFields[i]...)
 			} else {
 				data = append(data, columnFieldData...)
 			}

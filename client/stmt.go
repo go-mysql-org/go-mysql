@@ -8,47 +8,29 @@ import (
 	"runtime"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/stmt"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
 
 type Stmt struct {
-	conn *Conn
-	id   uint32
-
-	params   int
-	columns  int
+	conn     *Conn
 	warnings int
 
-	// Field definitions from the PREPARE response (for proxy passthrough)
-	paramFields  []*mysql.Field
-	columnFields []*mysql.Field
+	// PreparedStmt contains common fields shared with server.Stmt for proxy passthrough
+	stmt.PreparedStmt
 }
 
 func (s *Stmt) ParamNum() int {
-	return s.params
+	return s.Params
 }
 
 func (s *Stmt) ColumnNum() int {
-	return s.columns
+	return s.Columns
 }
 
 func (s *Stmt) WarningsNum() int {
 	return s.warnings
-}
-
-// GetParamFields returns the parameter field definitions from the PREPARE response.
-// Implements server.StmtFieldsProvider for proxy passthrough.
-// The caller should not modify the returned slice.
-func (s *Stmt) GetParamFields() []*mysql.Field {
-	return s.paramFields
-}
-
-// GetColumnFields returns the column field definitions from the PREPARE response.
-// Implements server.StmtFieldsProvider for proxy passthrough.
-// The caller should not modify the returned slice.
-func (s *Stmt) GetColumnFields() []*mysql.Field {
-	return s.columnFields
 }
 
 func (s *Stmt) Execute(args ...interface{}) (*mysql.Result, error) {
@@ -68,7 +50,7 @@ func (s *Stmt) ExecuteSelectStreaming(result *mysql.Result, perRowCb SelectPerRo
 }
 
 func (s *Stmt) Close() error {
-	if err := s.conn.writeCommandUint32(mysql.COM_STMT_CLOSE, s.id); err != nil {
+	if err := s.conn.writeCommandUint32(mysql.COM_STMT_CLOSE, s.ID); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -78,10 +60,10 @@ func (s *Stmt) Close() error {
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html
 func (s *Stmt) write(args ...interface{}) error {
 	defer clear(s.conn.queryAttributes)
-	paramsNum := s.params
+	paramsNum := s.Params
 
 	if len(args) != paramsNum {
-		return fmt.Errorf("argument mismatch, need %d but got %d", s.params, len(args))
+		return fmt.Errorf("argument mismatch, need %d but got %d", s.Params, len(args))
 	}
 
 	if (s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0) && (s.conn.includeLine >= 0) {
@@ -205,7 +187,7 @@ func (s *Stmt) write(args ...interface{}) error {
 
 	data.Write([]byte{0, 0, 0, 0})
 	data.WriteByte(mysql.COM_STMT_EXECUTE)
-	data.Write([]byte{byte(s.id), byte(s.id >> 8), byte(s.id >> 16), byte(s.id >> 24)})
+	data.Write([]byte{byte(s.ID), byte(s.ID >> 8), byte(s.ID >> 16), byte(s.ID >> 24)})
 
 	flags := mysql.CURSOR_TYPE_NO_CURSOR
 	if paramsNum > 0 {
@@ -272,15 +254,15 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	pos := 1
 
 	// for statement id
-	s.id = binary.LittleEndian.Uint32(data[pos:])
+	s.ID = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
 	// number columns
-	s.columns = int(binary.LittleEndian.Uint16(data[pos:]))
+	s.Columns = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
 	// number params
-	s.params = int(binary.LittleEndian.Uint16(data[pos:]))
+	s.Params = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
 	// reserved
@@ -292,17 +274,14 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 		// pos += 2
 	}
 
-	if s.params > 0 {
-		s.paramFields = make([]*mysql.Field, s.params)
-		for i := range s.params {
+	if s.Params > 0 {
+		s.RawParamFields = make([][]byte, s.Params)
+		for i := range s.Params {
 			data, err := s.conn.ReadPacket()
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-			s.paramFields[i] = &mysql.Field{}
-			if err := s.paramFields[i].Parse(data); err != nil {
-				return nil, errors.Trace(err)
-			}
+			s.RawParamFields[i] = data
 		}
 		if s.conn.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
 			if packet, err := s.conn.ReadPacket(); err != nil {
@@ -313,17 +292,14 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 		}
 	}
 
-	if s.columns > 0 {
-		s.columnFields = make([]*mysql.Field, s.columns)
-		for i := range s.columns {
+	if s.Columns > 0 {
+		s.RawColumnFields = make([][]byte, s.Columns)
+		for i := range s.Columns {
 			data, err := s.conn.ReadPacket()
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-			s.columnFields[i] = &mysql.Field{}
-			if err := s.columnFields[i].Parse(data); err != nil {
-				return nil, errors.Trace(err)
-			}
+			s.RawColumnFields[i] = data
 		}
 		if s.conn.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
 			if packet, err := s.conn.ReadPacket(); err != nil {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/stmt"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,7 +59,7 @@ func (h *mockPrepareHandler) HandleStmtPrepare(query string) (int, int, any, err
 	return h.paramCount, h.columnCount, h.context, nil
 }
 
-func TestStmtPrepareWithoutFieldsProvider(t *testing.T) {
+func TestStmtPrepareWithoutPreparedStmt(t *testing.T) {
 	c := &Conn{
 		h:     &mockPrepareHandler{context: "plain string", paramCount: 1, columnCount: 1},
 		stmts: make(map[uint32]*Stmt),
@@ -66,22 +67,18 @@ func TestStmtPrepareWithoutFieldsProvider(t *testing.T) {
 
 	result := c.dispatch(append([]byte{mysql.COM_STMT_PREPARE}, "SELECT * FROM t"...))
 
-	stmt := result.(*Stmt)
-	require.Nil(t, stmt.ParamFields)
-	require.Nil(t, stmt.ColumnFields)
+	st := result.(*Stmt)
+	require.Nil(t, st.RawParamFields)
+	require.Nil(t, st.RawColumnFields)
 }
 
-type mockFieldsProvider struct {
-	paramFields, columnFields []*mysql.Field
-}
+func TestStmtPrepareWithPreparedStmt(t *testing.T) {
+	paramField := &mysql.Field{Name: []byte("?"), Type: mysql.MYSQL_TYPE_LONG}
+	columnField := &mysql.Field{Name: []byte("id"), Type: mysql.MYSQL_TYPE_LONGLONG}
 
-func (m *mockFieldsProvider) GetParamFields() []*mysql.Field  { return m.paramFields }
-func (m *mockFieldsProvider) GetColumnFields() []*mysql.Field { return m.columnFields }
-
-func TestStmtPrepareWithFieldsProvider(t *testing.T) {
-	provider := &mockFieldsProvider{
-		paramFields:  []*mysql.Field{{Name: []byte("?"), Type: mysql.MYSQL_TYPE_LONG}},
-		columnFields: []*mysql.Field{{Name: []byte("id"), Type: mysql.MYSQL_TYPE_LONGLONG}},
+	provider := &stmt.PreparedStmt{
+		RawParamFields:  [][]byte{paramField.Dump()},
+		RawColumnFields: [][]byte{columnField.Dump()},
 	}
 	c := &Conn{
 		h:     &mockPrepareHandler{context: provider, paramCount: 1, columnCount: 1},
@@ -90,9 +87,9 @@ func TestStmtPrepareWithFieldsProvider(t *testing.T) {
 
 	result := c.dispatch(append([]byte{mysql.COM_STMT_PREPARE}, "SELECT id FROM t WHERE id = ?"...))
 
-	stmt := result.(*Stmt)
-	require.NotNil(t, stmt.ParamFields)
-	require.NotNil(t, stmt.ColumnFields)
-	require.Equal(t, mysql.MYSQL_TYPE_LONG, stmt.ParamFields[0].Type)
-	require.Equal(t, mysql.MYSQL_TYPE_LONGLONG, stmt.ColumnFields[0].Type)
+	st := result.(*Stmt)
+	require.NotNil(t, st.RawParamFields)
+	require.NotNil(t, st.RawColumnFields)
+	require.Equal(t, mysql.MYSQL_TYPE_LONG, st.GetParamFields()[0].Type)
+	require.Equal(t, mysql.MYSQL_TYPE_LONGLONG, st.GetColumnFields()[0].Type)
 }

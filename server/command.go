@@ -7,15 +7,9 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/stmt"
 	"github.com/go-mysql-org/go-mysql/utils"
 )
-
-// StmtFieldsProvider is an optional interface that prepared statement contexts can implement
-// to provide field definitions for proxy passthrough scenarios.
-type StmtFieldsProvider interface {
-	GetParamFields() []*mysql.Field
-	GetColumnFields() []*mysql.Field
-}
 
 // Handler is what a server needs to implement the client-server protocol
 type Handler interface {
@@ -119,11 +113,9 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		if st.Params, st.Columns, st.Context, err = c.h.HandleStmtPrepare(st.Query); err != nil {
 			return err
 		} else {
-			// If context provides field definitions (e.g., from a backend prepared statement),
-			// use them for accurate metadata passthrough in proxy scenarios.
-			if provider, ok := st.Context.(StmtFieldsProvider); ok {
-				st.ParamFields = provider.GetParamFields()
-				st.ColumnFields = provider.GetColumnFields()
+			if provider, ok := st.Context.(*stmt.PreparedStmt); ok {
+				st.RawParamFields = provider.RawParamFields
+				st.RawColumnFields = provider.RawColumnFields
 			}
 			st.ResetParams()
 			c.stmts[c.stmtID] = st
