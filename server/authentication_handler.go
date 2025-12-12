@@ -1,6 +1,7 @@
 package server
 
 import (
+	"slices"
 	"sync"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -70,12 +71,7 @@ func (c Credential) HashPassword(password string) (string, error) {
 
 // HasEmptyPassword returns true if any password in the credential is empty.
 func (c Credential) HasEmptyPassword() bool {
-	for _, p := range c.Passwords {
-		if p == "" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.Passwords, "")
 }
 
 // InMemoryAuthenticationHandler implements AuthenticationHandler with in-memory credential storage.
