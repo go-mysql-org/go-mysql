@@ -38,9 +38,9 @@ func WriteTimeoutOption(c *client.Conn, value string) error {
 func CompressOption(c *client.Conn, value string) error {
 	switch value {
 	case "zlib":
-		c.SetCapability(mysql.CLIENT_COMPRESS)
+		_ = c.SetCapability(mysql.CLIENT_COMPRESS)
 	case "zstd":
-		c.SetCapability(mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM)
+		_ = c.SetCapability(mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM)
 	case "uncompressed":
 		c.UnsetCapability(mysql.CLIENT_COMPRESS)
 		c.UnsetCapability(mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM)

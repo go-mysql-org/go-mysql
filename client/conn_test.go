@@ -30,9 +30,9 @@ func (s *connTestSuite) SetupSuite() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	s.c, err = Connect(addr, *testUser, *testPassword, "", func(c *Conn) error {
 		// required for the ExecuteMultiple test
-		c.SetCapability(mysql.CLIENT_MULTI_STATEMENTS)
+		err = c.SetCapability(mysql.CLIENT_MULTI_STATEMENTS)
 		c.SetAttributes(map[string]string{"attrtest": "attrvalue"})
-		return nil
+		return err
 	})
 	require.NoError(s.T(), err)
 
@@ -209,4 +209,38 @@ func (s *connTestSuite) TestSetQueryAttributes() {
 		},
 	}
 	require.Equal(s.T(), expected, s.c.queryAttributes)
+}
+
+func (s *connTestSuite) TestUseDB() {
+	_, err := s.c.Execute("create database if not exists proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("proxier")
+	require.NoError(s.T(), err)
+	result, err := s.c.Execute("select database();")
+	require.NoError(s.T(), err)
+	value, err := result.GetString(0, 0)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), "proxier", value)
+	_, err = s.c.Execute("drop database proxier;")
+	require.NoError(s.T(), err)
+	_, err = s.c.Execute("create database proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("proxier")
+	require.NoError(s.T(), err)
+	result, err = s.c.Execute("select database();")
+	require.NoError(s.T(), err)
+	value, err = result.GetString(0, 0)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), "proxier", value)
+	_, err = s.c.Execute("drop database proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("test")
+	require.NoError(s.T(), err)
+}
+
+func TestCapabilityString(t *testing.T) {
+	conn := Conn{
+		capability: mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_DEPRECATE_EOF,
+	}
+	require.Equal(t, "CLIENT_PROTOCOL_41|CLIENT_DEPRECATE_EOF", conn.CapabilityString())
 }

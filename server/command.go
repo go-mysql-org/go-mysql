@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/stmt"
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
@@ -112,6 +113,10 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		if st.Params, st.Columns, st.Context, err = c.h.HandleStmtPrepare(st.Query); err != nil {
 			return err
 		} else {
+			if provider, ok := st.Context.(*stmt.PreparedStmt); ok {
+				st.RawParamFields = provider.RawParamFields
+				st.RawColumnFields = provider.RawColumnFields
+			}
 			st.ResetParams()
 			c.stmts[c.stmtID] = st
 			return st

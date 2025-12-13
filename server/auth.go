@@ -27,36 +27,7 @@ func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) err
 		return c.handleAuthSwitchResponse()
 	}
 
-	switch authPluginName {
-	case mysql.AUTH_NATIVE_PASSWORD:
-		return c.compareNativePasswordAuthData(clientAuthData, c.credential)
-
-	case mysql.AUTH_CACHING_SHA2_PASSWORD:
-		if !c.cachingSha2FullAuth {
-			if err := c.compareCacheSha2PasswordAuthData(clientAuthData); err != nil {
-				return err
-			}
-			if c.cachingSha2FullAuth {
-				return c.handleAuthSwitchResponse()
-			}
-			return nil
-		}
-		// AuthMoreData packet already sent, do full auth
-		return c.handleCachingSha2PasswordFullAuth(clientAuthData)
-
-	case mysql.AUTH_SHA256_PASSWORD:
-		cont, err := c.handlePublicKeyRetrieval(clientAuthData)
-		if err != nil {
-			return err
-		}
-		if !cont {
-			return nil
-		}
-		return c.compareSha256PasswordAuthData(clientAuthData, c.credential)
-
-	default:
-		return errors.Errorf("unknown authentication plugin name '%s'", authPluginName)
-	}
+	return c.serverConf.authProvider.Authenticate(c, authPluginName, clientAuthData)
 }
 
 func (c *Conn) acquirePassword() error {
@@ -72,14 +43,6 @@ func (c *Conn) acquirePassword() error {
 	}
 	c.credential = credential
 	return nil
-}
-
-func errAccessDenied(credential Credential) error {
-	if credential.Password == "" {
-		return ErrAccessDeniedNoPassword
-	}
-
-	return ErrAccessDenied
 }
 
 func scrambleValidation(cached, nonce, scramble []byte) bool {
@@ -103,14 +66,21 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 }
 
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential Credential) error {
+	if len(clientAuthData) == 0 {
+		if credential.Password == "" {
+			return nil
+		}
+		return ErrAccessDeniedNoPassword
+	}
+
 	password, err := mysql.DecodePasswordHex(c.credential.Password)
 	if err != nil {
-		return errAccessDenied(credential)
+		return ErrAccessDenied
 	}
 	if mysql.CompareNativePassword(clientAuthData, password, c.salt) {
 		return nil
 	}
-	return errAccessDenied(credential)
+	return ErrAccessDenied
 }
 
 func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential Credential) error {
@@ -119,7 +89,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 		if credential.Password == "" {
 			return nil
 		}
-		return ErrAccessDenied
+		return ErrAccessDeniedNoPassword
 	}
 	if tlsConn, ok := c.Conn.Conn.(*tls.Conn); ok {
 		if !tlsConn.ConnectionState().HandshakeComplete {
@@ -158,7 +128,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 		if c.credential.Password == "" {
 			return nil
 		}
-		return ErrAccessDenied
+		return ErrAccessDeniedNoPassword
 	}
 	// the caching of 'caching_sha2_password' in MySQL, see: https://dev.mysql.com/worklog/task/?id=9591
 	// check if we have a cached value
@@ -170,7 +140,7 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 			return c.writeAuthMoreDataFastAuth()
 		}
 
-		return errAccessDenied(c.credential)
+		return ErrAccessDenied
 	}
 	// cache miss, do full auth
 	if err := c.writeAuthMoreDataFullAuth(); err != nil {
