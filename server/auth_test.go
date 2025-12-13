@@ -37,7 +37,7 @@ func TestCompareNativePasswordAuthData_EmptyPassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Conn{
-				credential: Credential{Password: tt.serverPassword},
+				credential: Credential{Passwords: []string{tt.serverPassword}},
 			}
 			err := c.compareNativePasswordAuthData(tt.clientAuthData, c.credential)
 			if tt.wantErr == nil {
@@ -73,7 +73,7 @@ func TestCompareSha256PasswordAuthData_EmptyPassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Conn{
-				credential: Credential{Password: tt.serverPassword},
+				credential: Credential{Passwords: []string{tt.serverPassword}},
 			}
 			err := c.compareSha256PasswordAuthData(tt.clientAuthData, c.credential)
 			if tt.wantErr == nil {
@@ -109,7 +109,7 @@ func TestCompareCacheSha2PasswordAuthData_EmptyPassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Conn{
-				credential: Credential{Password: tt.serverPassword},
+				credential: Credential{Passwords: []string{tt.serverPassword}},
 			}
 			err := c.compareCacheSha2PasswordAuthData(tt.clientAuthData)
 			if tt.wantErr == nil {
