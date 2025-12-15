@@ -14,6 +14,19 @@ import (
 
 const defaultAuthPluginName = mysql.AUTH_NATIVE_PASSWORD
 
+var optionalCapabilities = []uint32{
+	mysql.CLIENT_FOUND_ROWS,
+	mysql.CLIENT_IGNORE_SPACE,
+	mysql.CLIENT_MULTI_STATEMENTS,
+	mysql.CLIENT_MULTI_RESULTS,
+	mysql.CLIENT_PS_MULTI_RESULTS,
+	mysql.CLIENT_CONNECT_ATTRS,
+	mysql.CLIENT_COMPRESS,
+	mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM,
+	mysql.CLIENT_LOCAL_FILES,
+	mysql.CLIENT_SESSION_TRACK,
+}
+
 // defines the supported auth plugins
 var supportedAuthPlugins = []string{mysql.AUTH_NATIVE_PASSWORD, mysql.AUTH_SHA256_PASSWORD, mysql.AUTH_CACHING_SHA2_PASSWORD, mysql.AUTH_MARIADB_ED25519}
 
@@ -92,7 +105,7 @@ func (c *Conn) readInitialHandshake() error {
 		pos += 2
 
 		// The upper 2 bytes of the Capabilities Flags
-		c.capability = uint32(binary.LittleEndian.Uint16(data[pos:pos+2]))<<16 | c.capability
+		c.capability |= uint32(binary.LittleEndian.Uint16(data[pos:pos+2])) << 16
 		pos += 2
 
 		// length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
@@ -154,9 +167,9 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 	// password hashing
 	switch c.authPluginName {
 	case mysql.AUTH_NATIVE_PASSWORD:
-		return mysql.CalcPassword(authData[:20], []byte(c.password)), false, nil
+		return mysql.CalcNativePassword(authData[:20], []byte(c.password)), false, nil
 	case mysql.AUTH_CACHING_SHA2_PASSWORD:
-		return mysql.CalcCachingSha2Password(authData, c.password), false, nil
+		return mysql.CalcCachingSha2Password(authData, []byte(c.password)), false, nil
 	case mysql.AUTH_CLEAR_PASSWORD:
 		return []byte(c.password), true, nil
 	case mysql.AUTH_SHA256_PASSWORD:
@@ -209,18 +222,16 @@ func (c *Conn) writeAuthHandshake() error {
 
 	// Set default client capabilities that reflect the abilities of this library
 	capability := mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SECURE_CONNECTION |
-		mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_PLUGIN_AUTH
-	// Adjust client capability flags based on server support
-	capability |= c.capability & mysql.CLIENT_LONG_FLAG
-	capability |= c.capability & mysql.CLIENT_QUERY_ATTRIBUTES
+		mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_PLUGIN_AUTH |
+		mysql.CLIENT_LONG_FLAG | mysql.CLIENT_QUERY_ATTRIBUTES | mysql.CLIENT_DEPRECATE_EOF
 	// Adjust client capability flags on specific client requests
 	// Only flags that would make any sense setting and aren't handled elsewhere
 	// in the library are supported here
-	capability |= c.ccaps&mysql.CLIENT_FOUND_ROWS | c.ccaps&mysql.CLIENT_IGNORE_SPACE |
-		c.ccaps&mysql.CLIENT_MULTI_STATEMENTS | c.ccaps&mysql.CLIENT_MULTI_RESULTS |
-		c.ccaps&mysql.CLIENT_PS_MULTI_RESULTS | c.ccaps&mysql.CLIENT_CONNECT_ATTRS |
-		c.ccaps&mysql.CLIENT_COMPRESS | c.ccaps&mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM |
-		c.ccaps&mysql.CLIENT_LOCAL_FILES
+	for _, optionalCap := range optionalCapabilities {
+		capability |= c.ccaps & optionalCap
+	}
+
+	capability &^= c.clientExplicitOffCaps
 
 	// To enable TLS / SSL
 	if c.tlsConfig != nil {
@@ -273,6 +284,7 @@ func (c *Conn) writeAuthHandshake() error {
 	data := make([]byte, length+4)
 
 	// capability [32 bit]
+	c.capability &= capability
 	data[4] = byte(capability)
 	data[5] = byte(capability >> 8)
 	data[6] = byte(capability >> 16)

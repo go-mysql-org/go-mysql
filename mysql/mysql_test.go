@@ -426,3 +426,12 @@ func TestParseMysqlGTIDSet(t *testing.T) {
 		t.Errorf("String() = %v, want %v", got.String(), input)
 	}
 }
+
+func TestMysqlGTIDSetIsEmpty(t *testing.T) {
+	emptyGTIDSet := new(MysqlGTIDSet)
+	emptyGTIDSet.Sets = make(map[string]*UUIDSet)
+	require.True(t, emptyGTIDSet.IsEmpty())
+
+	nonEmptyGTIDSet := mysqlGTIDfromString(t, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
+	require.False(t, nonEmptyGTIDSet.IsEmpty())
+}

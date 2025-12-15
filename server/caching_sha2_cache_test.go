@@ -6,31 +6,28 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/test_util"
 	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
-	"github.com/go-mysql-org/go-mysql/utils"
 )
-
-var delay = 50
 
 // test caching for 'caching_sha2_password'
 // NOTE the idea here is to plugin a throttled credential provider so that the first connection (cache miss) will take longer time
 // than the second connection (cache hit). Remember to set the password for MySQL user otherwise it won't cache empty password.
 func TestCachingSha2Cache(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
-	remoteProvider.AddUser(*testUser, *testPassword)
+	remoteProvider := &RemoteThrottleProvider{
+		InMemoryProvider: NewInMemoryProvider(),
+	}
+	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// no TLS
@@ -42,10 +39,10 @@ func TestCachingSha2Cache(t *testing.T) {
 }
 
 func TestCachingSha2CacheTLS(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-
-	remoteProvider := &RemoteThrottleProvider{NewInMemoryProvider(), delay + 50}
-	remoteProvider.AddUser(*testUser, *testPassword)
+	remoteProvider := &RemoteThrottleProvider{
+		InMemoryProvider: NewInMemoryProvider(),
+	}
+	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
 	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
 
 	// TLS
@@ -58,11 +55,11 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 
 type RemoteThrottleProvider struct {
 	*InMemoryProvider
-	delay int // in milliseconds
+	getCredCallCount atomic.Int64
 }
 
-func (m *RemoteThrottleProvider) GetCredential(username string) (password string, found bool, err error) {
-	time.Sleep(time.Millisecond * time.Duration(m.delay))
+func (m *RemoteThrottleProvider) GetCredential(username string) (credential Credential, found bool, err error) {
+	m.getCredCallCount.Add(1)
 	return m.InMemoryProvider.GetCredential(username)
 }
 
@@ -110,7 +107,7 @@ func (s *cacheTestSuite) onAccept() {
 
 func (s *cacheTestSuite) onConn(conn net.Conn) {
 	// co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
-	co, err := NewCustomizedConn(conn, s.server, s.credProvider, &testCacheHandler{s})
+	co, err := s.server.NewCustomizedConn(conn, s.credProvider, &testCacheHandler{s})
 	require.NoError(s.T(), err)
 	for {
 		err = co.HandleCommand()
@@ -132,35 +129,26 @@ func (s *cacheTestSuite) runSelect() {
 
 func (s *cacheTestSuite) TestCache() {
 	// first connection
-	t1 := utils.Now()
 	var err error
 	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, s.serverAddr, *testDB, s.tlsPara))
 	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
-	t2 := utils.Now()
-
-	d1 := int(t2.Sub(t1).Nanoseconds() / 1e6)
-	// log.Debugf("first connection took %d milliseconds", d1)
-
-	require.GreaterOrEqual(s.T(), d1, delay)
+	got := s.credProvider.(*RemoteThrottleProvider).getCredCallCount.Load()
+	require.Equal(s.T(), int64(1), got)
 
 	if s.db != nil {
 		s.db.Close()
 	}
 
 	// second connection
-	t3 := utils.Now()
 	s.db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=%s", *testUser, *testPassword, s.serverAddr, *testDB, s.tlsPara))
 	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
-	t4 := utils.Now()
+	got = s.credProvider.(*RemoteThrottleProvider).getCredCallCount.Load()
+	require.Equal(s.T(), int64(2), got)
 
-	d2 := int(t4.Sub(t3).Nanoseconds() / 1e6)
-	// log.Debugf("second connection took %d milliseconds", d2)
-
-	require.Less(s.T(), d2, delay)
 	if s.db != nil {
 		s.db.Close()
 	}

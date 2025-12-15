@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"regexp"
@@ -21,7 +22,6 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/parser"
-	"github.com/siddontang/go-log/log"
 )
 
 // Canal can sync your MySQL data into everywhere, like Elasticsearch, Redis, etc...
@@ -51,7 +51,7 @@ type Canal struct {
 	includeTableRegex []*regexp.Regexp
 	excludeTableRegex []*regexp.Regexp
 
-	delay *uint32
+	delay atomic.Uint32
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -66,8 +66,7 @@ var (
 func NewCanal(cfg *Config) (*Canal, error) {
 	c := new(Canal)
 	if cfg.Logger == nil {
-		streamHandler, _ := log.NewStreamHandler(os.Stdout)
-		cfg.Logger = log.NewDefault(streamHandler)
+		cfg.Logger = slog.Default()
 	}
 	if cfg.Dialer == nil {
 		dialer := &net.Dialer{}
@@ -85,8 +84,6 @@ func NewCanal(cfg *Config) (*Canal, error) {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
 	c.master = &masterInfo{logger: c.cfg.Logger}
-
-	c.delay = new(uint32)
 
 	var err error
 
@@ -196,7 +193,7 @@ func (c *Canal) prepareDumper() error {
 }
 
 func (c *Canal) GetDelay() uint32 {
-	return atomic.LoadUint32(c.delay)
+	return c.delay.Load()
 }
 
 // Run will first try to dump all data from MySQL master `mysqldump`,
@@ -243,14 +240,14 @@ func (c *Canal) run() error {
 		close(c.dumpDoneCh)
 
 		if err != nil {
-			c.cfg.Logger.Errorf("canal dump mysql err: %v", err)
+			c.cfg.Logger.Error("canal dump mysql err", slog.Any("error", err))
 			return errors.Trace(err)
 		}
 	}
 
 	if err := c.runSyncBinlog(); err != nil {
 		if errors.Cause(err) != context.Canceled {
-			c.cfg.Logger.Errorf("canal start sync binlog err: %v", err)
+			c.cfg.Logger.Error("canal start sync binlog err", slog.Any("error", err))
 			return errors.Trace(err)
 		}
 	}
@@ -259,7 +256,7 @@ func (c *Canal) run() error {
 }
 
 func (c *Canal) Close() {
-	c.cfg.Logger.Infof("closing canal")
+	c.cfg.Logger.Info("closing canal")
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -379,7 +376,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 			c.errorTablesGetTime[key] = utils.Now()
 			c.tableLock.Unlock()
 			// log error and return ErrMissingTableMeta
-			c.cfg.Logger.Errorf("canal get table meta err: %v", errors.Trace(err))
+			c.cfg.Logger.Error("canal get table meta err", slog.Any("error", errors.Trace(err)))
 			return nil, schema.ErrMissingTableMeta
 		}
 		return nil, err
@@ -469,6 +466,8 @@ func (c *Canal) prepareSyncer() error {
 		Dialer:                  c.cfg.Dialer,
 		Localhost:               c.cfg.Localhost,
 		EventCacheCount:         c.cfg.EventCacheCount,
+		FillZeroLogPos:          c.cfg.FillZeroLogPos,
+
 		RowsEventDecodeFunc: func(event *replication.RowsEvent, data []byte) error {
 			pos, err := event.DecodeHeader(data)
 			if err != nil {

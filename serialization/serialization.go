@@ -58,7 +58,7 @@ func (f *Format) stringParts() (parts []string) {
 			parts = append(parts, fmt.Sprintf("  Value: %s", f.Type.String()))
 		}
 	}
-	return
+	return parts
 }
 
 // Field represents a `message_field`

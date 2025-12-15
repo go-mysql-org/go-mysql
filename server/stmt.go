@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/stmt"
 	"github.com/pingcap/errors"
 )
 
@@ -16,15 +17,13 @@ var (
 )
 
 type Stmt struct {
-	ID    uint32
 	Query string
-
-	Params  int
-	Columns int
-
-	Args []interface{}
+	Args  []interface{}
 
 	Context interface{}
+
+	// PreparedStmt contains common fields shared with client.Stmt for proxy passthrough
+	stmt.PreparedStmt
 }
 
 func (s *Stmt) Rest(params int, columns int, context interface{}) {
@@ -61,7 +60,11 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	if s.Params > 0 {
 		for i := 0; i < s.Params; i++ {
 			data = data[0:4]
-			data = append(data, paramFieldData...)
+			if s.RawParamFields != nil && i < len(s.RawParamFields) {
+				data = append(data, s.RawParamFields[i]...)
+			} else {
+				data = append(data, paramFieldData...)
+			}
 
 			if err := c.WritePacket(data); err != nil {
 				return errors.Trace(err)
@@ -76,7 +79,11 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	if s.Columns > 0 {
 		for i := 0; i < s.Columns; i++ {
 			data = data[0:4]
-			data = append(data, columnFieldData...)
+			if s.RawColumnFields != nil && i < len(s.RawColumnFields) {
+				data = append(data, s.RawColumnFields[i]...)
+			} else {
+				data = append(data, columnFieldData...)
+			}
 
 			if err := c.WritePacket(data); err != nil {
 				return errors.Trace(err)
@@ -276,10 +283,10 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			pos += 8
 			continue
 
-		case mysql.MYSQL_TYPE_DECIMAL, mysql.MYSQL_TYPE_NEWDECIMAL, mysql.MYSQL_TYPE_VARCHAR,
-			mysql.MYSQL_TYPE_BIT, mysql.MYSQL_TYPE_ENUM, mysql.MYSQL_TYPE_SET, mysql.MYSQL_TYPE_TINY_BLOB,
-			mysql.MYSQL_TYPE_MEDIUM_BLOB, mysql.MYSQL_TYPE_LONG_BLOB, mysql.MYSQL_TYPE_BLOB,
-			mysql.MYSQL_TYPE_VAR_STRING, mysql.MYSQL_TYPE_STRING, mysql.MYSQL_TYPE_GEOMETRY,
+		case mysql.MYSQL_TYPE_DECIMAL, mysql.MYSQL_TYPE_NEWDECIMAL, mysql.MYSQL_TYPE_VARCHAR, mysql.MYSQL_TYPE_BIT,
+			mysql.MYSQL_TYPE_ENUM, mysql.MYSQL_TYPE_SET, mysql.MYSQL_TYPE_TINY_BLOB, mysql.MYSQL_TYPE_MEDIUM_BLOB,
+			mysql.MYSQL_TYPE_LONG_BLOB, mysql.MYSQL_TYPE_BLOB, mysql.MYSQL_TYPE_VAR_STRING, mysql.MYSQL_TYPE_STRING,
+			mysql.MYSQL_TYPE_GEOMETRY, mysql.MYSQL_TYPE_VECTOR,
 			mysql.MYSQL_TYPE_DATE, mysql.MYSQL_TYPE_NEWDATE,
 			mysql.MYSQL_TYPE_TIMESTAMP, mysql.MYSQL_TYPE_DATETIME, mysql.MYSQL_TYPE_TIME:
 			if len(paramValues) < (pos + 1) {

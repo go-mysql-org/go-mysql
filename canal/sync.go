@@ -1,7 +1,7 @@
 package canal
 
 import (
-	"sync/atomic"
+	"log/slog"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -20,7 +20,7 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
 		}
-		c.cfg.Logger.Infof("start sync binlog at binlog file %v", pos)
+		c.cfg.Logger.Info("start sync binlog at binlog file", slog.Any("pos", pos))
 		return s, nil
 	} else {
 		gsetClone := gset.Clone()
@@ -28,7 +28,7 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		if err != nil {
 			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
 		}
-		c.cfg.Logger.Infof("start sync binlog at GTID set %v", gsetClone)
+		c.cfg.Logger.Info("start sync binlog at GTID set", slog.Any("gset", gsetClone))
 		return s, nil
 	}
 }
@@ -57,7 +57,7 @@ func (c *Canal) runSyncBinlog() error {
 			// and https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
 			if ev.Header.Timestamp == 0 {
 				fakeRotateLogName := string(e.NextLogName)
-				c.cfg.Logger.Infof("received fake rotate event, next log name is %s", e.NextLogName)
+				c.cfg.Logger.Info("received fake rotate event", slog.String("nextLogName", string(e.NextLogName)))
 
 				if fakeRotateLogName != c.master.Position().Name {
 					c.cfg.Logger.Info("log name changed, the fake rotate event will be handled as a real rotate event")
@@ -93,7 +93,7 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 	case *replication.RotateEvent:
 		pos.Name = string(e.NextLogName)
 		pos.Pos = uint32(e.Position)
-		c.cfg.Logger.Infof("rotate binlog to %s", pos)
+		c.cfg.Logger.Info("rotate binlog", slog.Any("pos", pos))
 		savePos = true
 		force = true
 		if err = c.eventHandler.OnRotate(ev.Header, e); err != nil {
@@ -101,9 +101,8 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		}
 	case *replication.RowsEvent:
 		// we only focus row based event
-		err = c.handleRowsEvent(ev)
-		if err != nil {
-			c.cfg.Logger.Errorf("handle rows event at (%s, %d) error %v", pos.Name, curPos, err)
+		if err := c.handleRowsEvent(ev); err != nil {
+			c.cfg.Logger.Error("handle rows event", slog.String("file", pos.Name), slog.Uint64("position", uint64(curPos)), slog.Any("error", err))
 			return errors.Trace(err)
 		}
 		return nil
@@ -113,7 +112,7 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		for _, subEvent := range ev.Events {
 			err = c.handleEvent(subEvent)
 			if err != nil {
-				c.cfg.Logger.Errorf("handle transaction payload subevent at (%s, %d) error %v", pos.Name, curPos, err)
+				c.cfg.Logger.Error("handle transaction payload subevent", slog.String("file", pos.Name), slog.Uint64("position", uint64(curPos)), slog.Any("error", err))
 				return errors.Trace(err)
 			}
 		}
@@ -144,7 +143,7 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		if err != nil {
 			// The parser does not understand all syntax.
 			// For example, it won't parse [CREATE|DROP] TRIGGER statements.
-			c.cfg.Logger.Errorf("parse query(%s) err %v, will skip this event", e.Query, err)
+			c.cfg.Logger.Error("error parsing query, will skip this event", slog.String("query", string(e.Query)), slog.Any("error", err))
 			return nil
 		}
 		if len(stmts) > 0 {
@@ -246,11 +245,11 @@ func parseStmt(stmt ast.StmtNode) (ns []*node) {
 
 func (c *Canal) updateTable(header *replication.EventHeader, db, table string) (err error) {
 	c.ClearTableCache([]byte(db), []byte(table))
-	c.cfg.Logger.Infof("table structure changed, clear table cache: %s.%s\n", db, table)
+	c.cfg.Logger.Info("table structure changed, clear table cache", slog.String("database", db), slog.String("table", table))
 	if err = c.eventHandler.OnTableChanged(header, db, table); err != nil && errors.Cause(err) != schema.ErrTableNotExist {
 		return errors.Trace(err)
 	}
-	return
+	return err
 }
 
 func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
@@ -259,7 +258,7 @@ func (c *Canal) updateReplicationDelay(ev *replication.BinlogEvent) {
 	if now >= ev.Header.Timestamp {
 		newDelay = now - ev.Header.Timestamp
 	}
-	atomic.StoreUint32(c.delay, newDelay)
+	c.delay.Store(newDelay)
 }
 
 func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
@@ -316,20 +315,42 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 			if curPos.Compare(pos) >= 0 {
 				return nil
 			} else {
-				c.cfg.Logger.Debugf("master pos is %v, wait catching %v", curPos, pos)
+				c.cfg.Logger.Debug("master pos is behind, wait to catch up", slog.String("master file", curPos.Name), slog.Uint64("master position", uint64(curPos.Pos)),
+					slog.String("target file", pos.Name), slog.Uint64("target position", uint64(curPos.Pos)))
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}
 }
 
-func (c *Canal) GetMasterPos() (mysql.Position, error) {
-	showBinlogStatus := "SHOW BINARY LOG STATUS"
-	if eq, err := c.conn.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
-		showBinlogStatus = "SHOW MASTER STATUS"
+// getShowBinaryLogQuery returns the correct SQL statement to query binlog status
+// for the given database flavor and server version.
+//
+// Sources:
+//
+//	MySQL:   https://dev.mysql.com/doc/relnotes/mysql/8.4/en/news-8-4-0.html
+//	MariaDB: https://mariadb.com/kb/en/show-binlog-status
+func getShowBinaryLogQuery(flavor, serverVersion string) string {
+	switch flavor {
+	case mysql.MariaDBFlavor:
+		eq, err := mysql.CompareServerVersions(serverVersion, "10.5.2")
+		if (err == nil) && (eq >= 0) {
+			return "SHOW BINLOG STATUS"
+		}
+	case mysql.MySQLFlavor:
+		eq, err := mysql.CompareServerVersions(serverVersion, "8.4.0")
+		if (err == nil) && (eq >= 0) {
+			return "SHOW BINARY LOG STATUS"
+		}
 	}
 
-	rr, err := c.Execute(showBinlogStatus)
+	return "SHOW MASTER STATUS"
+}
+
+func (c *Canal) GetMasterPos() (mysql.Position, error) {
+	query := getShowBinaryLogQuery(c.cfg.Flavor, c.conn.GetServerVersion())
+
+	rr, err := c.Execute(query)
 	if err != nil {
 		return mysql.Position{}, errors.Trace(err)
 	}

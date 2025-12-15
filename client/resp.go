@@ -14,24 +14,11 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
-func (c *Conn) readUntilEOF() (err error) {
-	var data []byte
-
-	for {
-		data, err = c.ReadPacket()
-		if err != nil {
-			return
-		}
-
-		// EOF Packet
-		if c.isEOFPacket(data) {
-			return
-		}
-	}
-}
-
 func (c *Conn) isEOFPacket(data []byte) bool {
-	return data[0] == mysql.EOF_HEADER && len(data) <= 5
+	// 0xffffff due to https://dev.mysql.com/worklog/task/?id=7766
+	// "Server will never send OK packet longer than 16777216 bytes thus limiting
+	// size of OK packet to be 16777215 bytes"
+	return data[0] == mysql.EOF_HEADER && len(data) <= 0xffffff
 }
 
 func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
@@ -52,17 +39,100 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 
 		//todo:strict_mode, check warnings as error
 		r.Warnings = binary.LittleEndian.Uint16(data[pos:])
-		// pos += 2
+		pos += 2
 	} else if c.capability&mysql.CLIENT_TRANSACTIONS > 0 {
 		r.Status = binary.LittleEndian.Uint16(data[pos:])
 		c.status = r.Status
-		// pos += 2
+		pos += 2
 	}
 
-	// new ok package will check CLIENT_SESSION_TRACK too, but I don't support it now.
+	if (c.capability&mysql.CLIENT_SESSION_TRACK > 0) &&
+		(c.status&mysql.SERVER_SESSION_STATE_CHANGED > 0) {
+		var err error
+
+		// Example status message:
+		// "Records: 3  Duplicates: 0  Warnings: 0"
+		statusMessageLength := int(data[pos])
+		pos++
+		if statusMessageLength > 0 {
+			r.StatusMessage = utils.ByteSliceToString(data[pos : pos+statusMessageLength])
+			pos += statusMessageLength
+		}
+
+		sessionTrackingChangeLength := int(data[pos])
+		pos++
+		dataLength := len(data[pos:])
+		if dataLength != sessionTrackingChangeLength {
+			return nil, fmt.Errorf("incorrect data length for session tracking data: expected %d but got %d",
+				sessionTrackingChangeLength, dataLength)
+		}
+		r.SessionTracking, err = decodeSessionTracking(data[pos:])
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// skip info
 	return r, nil
+}
+
+func decodeSessionTracking(data []byte) (s *mysql.SessionTrackingInfo, err error) {
+	s = &mysql.SessionTrackingInfo{}
+	pos := 0
+	for pos < len(data) {
+		sessionTrackingChangeType := data[pos]
+		pos++ // session tracking type
+		pos++ // length of session tracking data, unused
+
+		switch sessionTrackingChangeType {
+		case mysql.SESSION_TRACK_SYSTEM_VARIABLES:
+			if s.Variables == nil {
+				s.Variables = make(map[string]string, 1)
+			}
+			varNameLength := data[pos]
+			pos++
+			varName := utils.ByteSliceToString(data[pos : pos+int(varNameLength)])
+			pos += int(varNameLength)
+			varValueLength := data[pos]
+			pos++
+			s.Variables[varName] = utils.ByteSliceToString(data[pos : pos+int(varValueLength)])
+			pos += int(varValueLength)
+		case mysql.SESSION_TRACK_SCHEMA:
+			schemaInfoLength := data[pos]
+			pos++
+			s.Schema = utils.ByteSliceToString(data[pos : pos+int(schemaInfoLength)])
+			pos += int(schemaInfoLength)
+		case mysql.SESSION_TRACK_STATE_CHANGE:
+			s.State = string(data[pos])
+			pos++
+		case mysql.SESSION_TRACK_GTIDS:
+			gtidFormat := data[pos]
+			if gtidFormat != 0 {
+				return nil, fmt.Errorf("unexpected GTID format %d", gtidFormat)
+			}
+			pos++
+			gtidLength := data[pos]
+			pos++
+			s.GTID = utils.ByteSliceToString(data[pos : pos+int(gtidLength)])
+			pos += int(gtidLength)
+		case mysql.SESSION_TRACK_TRANSACTION_CHARACTERISTICS:
+			characteristicsLength := data[pos]
+			pos++
+			if characteristicsLength > 0 {
+				s.Characteristics = utils.ByteSliceToString(data[pos : pos+int(characteristicsLength)])
+				pos += int(characteristicsLength)
+			}
+		case mysql.SESSION_TRACK_TRANSACTION_STATE:
+			transactionStateLength := data[pos]
+			pos++
+			s.TransactionState = utils.ByteSliceToString(data[pos : pos+int(transactionStateLength)])
+			pos += int(transactionStateLength)
+		default:
+			return nil, fmt.Errorf("got unknown change type %v", sessionTrackingChangeType)
+		}
+	}
+
+	return s, nil
 }
 
 func (c *Conn) handleErrorPacket(data []byte) error {
@@ -121,14 +191,16 @@ func (c *Conn) handleAuthResult() error {
 	}
 
 	// handle caching_sha2_password
-	if c.authPluginName == mysql.AUTH_CACHING_SHA2_PASSWORD {
+	switch c.authPluginName {
+	case mysql.AUTH_CACHING_SHA2_PASSWORD:
 		if data == nil {
 			return nil // auth already succeeded
 		}
-		if data[0] == mysql.CACHE_SHA2_FAST_AUTH {
+		switch data[0] {
+		case mysql.CACHE_SHA2_FAST_AUTH:
 			_, err = c.readOK()
 			return err
-		} else if data[0] == mysql.CACHE_SHA2_FULL_AUTH {
+		case mysql.CACHE_SHA2_FULL_AUTH:
 			// need full authentication
 			if c.tlsConfig != nil || c.proto == "unix" {
 				if err = c.WriteClearAuthPacket(c.password); err != nil {
@@ -141,10 +213,10 @@ func (c *Conn) handleAuthResult() error {
 			}
 			_, err = c.readOK()
 			return err
-		} else {
+		default:
 			return errors.Errorf("invalid packet %x", data[0])
 		}
-	} else if c.authPluginName == mysql.AUTH_SHA256_PASSWORD {
+	case mysql.AUTH_SHA256_PASSWORD:
 		if len(data) == 0 {
 			return nil // auth already succeeded
 		}
@@ -205,11 +277,12 @@ func (c *Conn) readOK() (*mysql.Result, error) {
 		return nil, errors.Trace(err)
 	}
 
-	if data[0] == mysql.OK_HEADER {
+	switch data[0] {
+	case mysql.OK_HEADER:
 		return c.handleOKPacket(data)
-	} else if data[0] == mysql.ERR_HEADER {
+	case mysql.ERR_HEADER:
 		return nil, c.handleErrorPacket(data)
-	} else {
+	default:
 		return nil, errors.New("invalid ok packet")
 	}
 }
@@ -310,7 +383,7 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *mysql.Re
 	}
 
 	// this is a streaming resultset
-	result.Resultset.Streaming = mysql.StreamingSelect
+	result.Streaming = mysql.StreamingSelect
 
 	if err := c.readResultColumns(result); err != nil {
 		return errors.Trace(err)
@@ -327,38 +400,21 @@ func (c *Conn) readResultsetStreaming(data []byte, binary bool, result *mysql.Re
 	}
 
 	// this resultset is done streaming
-	result.Resultset.StreamingDone = true
+	result.StreamingDone = true
 
 	return nil
 }
 
 func (c *Conn) readResultColumns(result *mysql.Result) (err error) {
-	i := 0
 	var data []byte
 
-	for {
+	for i := range result.Fields {
 		rawPkgLen := len(result.RawPkg)
 		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
 		if err != nil {
 			return err
 		}
 		data = result.RawPkg[rawPkgLen:]
-
-		// EOF Packet
-		if c.isEOFPacket(data) {
-			if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
-				result.Warnings = binary.LittleEndian.Uint16(data[1:])
-				// todo add strict_mode, warning will be treat as error
-				result.Status = binary.LittleEndian.Uint16(data[3:])
-				c.status = result.Status
-			}
-
-			if i != len(result.Fields) {
-				err = mysql.ErrMalformPacket
-			}
-
-			return err
-		}
 
 		if result.Fields[i] == nil {
 			result.Fields[i] = &mysql.Field{}
@@ -369,8 +425,30 @@ func (c *Conn) readResultColumns(result *mysql.Result) (err error) {
 		}
 
 		result.FieldNames[utils.ByteSliceToString(result.Fields[i].Name)] = i
+	}
 
-		i++
+	if c.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
+		// EOF Packet
+		rawPkgLen := len(result.RawPkg)
+		result.RawPkg, err = c.ReadPacketReuseMem(result.RawPkg)
+		if err != nil {
+			return err
+		}
+		data = result.RawPkg[rawPkgLen:]
+
+		if c.isEOFPacket(data) {
+			if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
+				result.Warnings = binary.LittleEndian.Uint16(data[1:])
+				// todo add strict_mode, warning will be treat as error
+				result.Status = binary.LittleEndian.Uint16(data[3:])
+				c.status = result.Status
+			}
+			return nil
+		} else {
+			return mysql.ErrMalformPacket
+		}
+	} else {
+		return nil
 	}
 }
 
@@ -385,15 +463,21 @@ func (c *Conn) readResultRows(result *mysql.Result, isBinary bool) (err error) {
 		}
 		data = result.RawPkg[rawPkgLen:]
 
-		// EOF Packet
 		if c.isEOFPacket(data) {
-			if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
+			if c.capability&mysql.CLIENT_DEPRECATE_EOF != 0 {
+				// Treat like OK
+				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
+				insertId, _, m := mysql.LengthEncodedInt(data[1+n:])
+				result.Status = binary.LittleEndian.Uint16(data[1+n+m:])
+				result.AffectedRows = affectedRows
+				result.InsertId = insertId
+				c.status = result.Status
+			} else if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				// todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])
 				c.status = result.Status
 			}
-
 			break
 		}
 
@@ -432,9 +516,16 @@ func (c *Conn) readResultRowsStreaming(result *mysql.Result, isBinary bool, perR
 			return err
 		}
 
-		// EOF Packet
 		if c.isEOFPacket(data) {
-			if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
+			if c.capability&mysql.CLIENT_DEPRECATE_EOF != 0 {
+				// Treat like OK
+				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
+				insertId, _, m := mysql.LengthEncodedInt(data[1+n:])
+				result.Status = binary.LittleEndian.Uint16(data[1+n+m:])
+				result.AffectedRows = affectedRows
+				result.InsertId = insertId
+				c.status = result.Status
+			} else if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 				result.Warnings = binary.LittleEndian.Uint16(data[1:])
 				// todo add strict_mode, warning will be treat as error
 				result.Status = binary.LittleEndian.Uint16(data[3:])

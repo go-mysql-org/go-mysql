@@ -254,10 +254,10 @@ func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
 		masked := make([]byte, 8)
 		copy(masked, data[1:7])
 		sidnr = binary.LittleEndian.Uint64(masked)
-		return
+		return format, sidnr
 	}
 	sidnr = binary.LittleEndian.Uint64(data[:8])
-	return
+	return format, sidnr
 }
 
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
@@ -427,12 +427,12 @@ type GTIDEvent struct {
 	SequenceNumber int64
 
 	// ImmediateCommitTimestamp/OriginalCommitTimestamp are introduced in MySQL-8.0.1, see:
-	// https://mysqlhighavailability.com/replication-features-in-mysql-8-0-1/
+	// https://dev.mysql.com/blog-archive/new-monitoring-replication-features-and-more
 	ImmediateCommitTimestamp uint64
 	OriginalCommitTimestamp  uint64
 
 	// Total transaction length (including this GTIDEvent), introduced in MySQL-8.0.2, see:
-	// https://mysqlhighavailability.com/taking-advantage-of-new-transaction-length-metadata/
+	// https://dev.mysql.com/blog-archive/taking-advantage-of-new-transaction-length-metadata
 	TransactionLength uint64
 
 	// ImmediateServerVersion/OriginalServerVersion are introduced in MySQL-8.0.14, see

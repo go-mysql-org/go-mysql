@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -12,11 +13,9 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/go-log/loggers"
 )
 
-// Unlick mysqldump, Dumper is designed for parsing and syning data easily.
+// Unlike mysqldump, Dumper is designed for parsing and syning data easily.
 type Dumper struct {
 	// mysqldump execution path, like mysqldump or /usr/bin/mysqldump, etc...
 	ExecutionPath string
@@ -51,7 +50,7 @@ type Dumper struct {
 	mysqldumpVersion    string
 	sourceDataSupported bool
 
-	Logger loggers.Advanced
+	Logger *slog.Logger
 }
 
 func NewDumper(executionPath string, addr string, user string, password string) (*Dumper, error) {
@@ -96,8 +95,7 @@ func NewDumper(executionPath string, addr string, user string, password string) 
 
 	d.ErrOut = os.Stderr
 
-	streamHandler, _ := log.NewStreamHandler(os.Stdout)
-	d.Logger = log.NewDefault(streamHandler)
+	d.Logger = slog.Default()
 
 	return d, nil
 }
@@ -305,14 +303,14 @@ func (d *Dumper) Dump(w io.Writer) error {
 		// If we only dump some tables, the dump data will not have database name
 		// which makes us hard to parse, so here we add it manually.
 
-		_, err := w.Write([]byte(fmt.Sprintf("USE `%s`;\n", d.TableDB)))
+		_, err := fmt.Fprintf(w, "USE `%s`;\n", d.TableDB)
 		if err != nil {
 			return fmt.Errorf(`could not write USE command: %w`, err)
 		}
 	}
 
 	args[passwordArgIndex] = "--password=******"
-	d.Logger.Infof("exec mysqldump with %v", args)
+	d.Logger.Info("exec mysqldump with", slog.Any("args", args))
 	args[passwordArgIndex] = passwordArg
 	cmd := exec.Command(d.ExecutionPath, args...)
 

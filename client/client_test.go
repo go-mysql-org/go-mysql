@@ -92,7 +92,18 @@ func (s *clientTestSuite) TestConn_Ping() {
 func (s *clientTestSuite) TestConn_Compress() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	conn, err := Connect(addr, *testUser, *testPassword, "", func(conn *Conn) error {
-		conn.SetCapability(mysql.CLIENT_COMPRESS)
+		return conn.SetCapability(mysql.CLIENT_COMPRESS)
+	})
+	require.NoError(s.T(), err)
+
+	_, err = conn.Execute("SELECT VERSION()")
+	require.NoError(s.T(), err)
+}
+
+func (s *clientTestSuite) TestConn_NoDeprecateEOF() {
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	conn, err := Connect(addr, *testUser, *testPassword, "", func(conn *Conn) error {
+		conn.UnsetCapability(mysql.CLIENT_DEPRECATE_EOF)
 		return nil
 	})
 	require.NoError(s.T(), err)
@@ -103,37 +114,28 @@ func (s *clientTestSuite) TestConn_Compress() {
 
 func (s *clientTestSuite) TestConn_SetCapability() {
 	caps := []uint32{
-		mysql.CLIENT_LONG_PASSWORD,
 		mysql.CLIENT_FOUND_ROWS,
-		mysql.CLIENT_LONG_FLAG,
-		mysql.CLIENT_CONNECT_WITH_DB,
-		mysql.CLIENT_NO_SCHEMA,
-		mysql.CLIENT_COMPRESS,
-		mysql.CLIENT_ODBC,
-		mysql.CLIENT_LOCAL_FILES,
 		mysql.CLIENT_IGNORE_SPACE,
-		mysql.CLIENT_PROTOCOL_41,
-		mysql.CLIENT_INTERACTIVE,
-		mysql.CLIENT_SSL,
-		mysql.CLIENT_IGNORE_SIGPIPE,
-		mysql.CLIENT_TRANSACTIONS,
-		mysql.CLIENT_RESERVED,
-		mysql.CLIENT_SECURE_CONNECTION,
 		mysql.CLIENT_MULTI_STATEMENTS,
 		mysql.CLIENT_MULTI_RESULTS,
 		mysql.CLIENT_PS_MULTI_RESULTS,
-		mysql.CLIENT_PLUGIN_AUTH,
 		mysql.CLIENT_CONNECT_ATTRS,
-		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA,
+		mysql.CLIENT_COMPRESS,
+		mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM,
+		mysql.CLIENT_LOCAL_FILES,
 	}
 
 	for _, capI := range caps {
 		require.False(s.T(), s.c.ccaps&capI > 0)
-		s.c.SetCapability(capI)
+		err := s.c.SetCapability(capI)
+		require.NoError(s.T(), err, "capability: %d", capI)
 		require.True(s.T(), s.c.ccaps&capI > 0)
 		s.c.UnsetCapability(capI)
 		require.False(s.T(), s.c.ccaps&capI > 0)
 	}
+
+	err := s.c.SetCapability(mysql.CLIENT_REMEMBER_OPTIONS + 10)
+	require.Error(s.T(), err)
 }
 
 // NOTE for MySQL 5.5 and 5.6, server side has to config SSL to pass the TLS test, otherwise, it will throw error that
@@ -269,6 +271,7 @@ func (s *clientTestSuite) testStmt_DropTable() {
 
 	stmt, err := s.c.Prepare(str)
 	require.NoError(s.T(), err)
+	require.Zero(s.T(), stmt.WarningsNum())
 
 	defer stmt.Close()
 

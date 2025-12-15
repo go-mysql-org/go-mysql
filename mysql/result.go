@@ -9,7 +9,19 @@ type Result struct {
 	InsertId     uint64
 	AffectedRows uint64
 
+	StatusMessage   string
+	SessionTracking *SessionTrackingInfo
+
 	*Resultset
+}
+
+type SessionTrackingInfo struct {
+	GTID             string
+	TransactionState string
+	Variables        map[string]string
+	Schema           string
+	State            string
+	Characteristics  string
 }
 
 func NewResult(resultset *Resultset) *Result {
@@ -30,13 +42,16 @@ type Executer interface {
 
 func (r *Result) Close() {
 	if r.Resultset != nil {
-		r.Resultset.returnToPool()
+		r.returnToPool()
 		r.Resultset = nil
 	}
 }
 
 func (r *Result) HasResultset() bool {
-	if r.Resultset != nil && len(r.Resultset.Fields) > 0 {
+	if r == nil {
+		return false
+	}
+	if r.Resultset != nil && len(r.Fields) > 0 {
 		return true
 	}
 	return false

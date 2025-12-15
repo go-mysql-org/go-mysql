@@ -30,9 +30,9 @@ func (s *connTestSuite) SetupSuite() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	s.c, err = Connect(addr, *testUser, *testPassword, "", func(c *Conn) error {
 		// required for the ExecuteMultiple test
-		c.SetCapability(mysql.CLIENT_MULTI_STATEMENTS)
+		err = c.SetCapability(mysql.CLIENT_MULTI_STATEMENTS)
 		c.SetAttributes(map[string]string{"attrtest": "attrvalue"})
-		return nil
+		return err
 	})
 	require.NoError(s.T(), err)
 
@@ -119,14 +119,14 @@ func (s *connTestSuite) TestExecuteMultiple() {
 			// also, since this is not the last query, the SERVER_MORE_RESULTS_EXISTS
 			// flag should be set
 			require.True(s.T(), result.Status&mysql.SERVER_MORE_RESULTS_EXISTS > 0)
-			require.Equal(s.T(), 0, result.Resultset.RowNumber())
+			require.Equal(s.T(), 0, result.RowNumber())
 			require.Equal(s.T(), uint64(1), result.AffectedRows)
 			require.NoError(s.T(), err)
 		case 1:
 			// the SELECT query should have an resultset
 			// still not the last query, flag should be set
 			require.True(s.T(), result.Status&mysql.SERVER_MORE_RESULTS_EXISTS > 0)
-			require.Greater(s.T(), result.Resultset.RowNumber(), 0)
+			require.Greater(s.T(), result.RowNumber(), 0)
 			require.NoError(s.T(), err)
 		case 3:
 			// this query is obviously bogus so the error should be non-nil
@@ -175,7 +175,7 @@ func (s *connTestSuite) TestExecuteSelectStreaming() {
 			// result.Resultset must be defined at this point
 			require.NotNil(s.T(), result.Resultset)
 			// Check number of columns
-			require.Len(s.T(), result.Resultset.Fields, colsInResult)
+			require.Len(s.T(), result.Fields, colsInResult)
 
 			perResultCallbackCalledTimes++
 			return nil
@@ -209,4 +209,38 @@ func (s *connTestSuite) TestSetQueryAttributes() {
 		},
 	}
 	require.Equal(s.T(), expected, s.c.queryAttributes)
+}
+
+func (s *connTestSuite) TestUseDB() {
+	_, err := s.c.Execute("create database if not exists proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("proxier")
+	require.NoError(s.T(), err)
+	result, err := s.c.Execute("select database();")
+	require.NoError(s.T(), err)
+	value, err := result.GetString(0, 0)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), "proxier", value)
+	_, err = s.c.Execute("drop database proxier;")
+	require.NoError(s.T(), err)
+	_, err = s.c.Execute("create database proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("proxier")
+	require.NoError(s.T(), err)
+	result, err = s.c.Execute("select database();")
+	require.NoError(s.T(), err)
+	value, err = result.GetString(0, 0)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), "proxier", value)
+	_, err = s.c.Execute("drop database proxier;")
+	require.NoError(s.T(), err)
+	err = s.c.UseDB("test")
+	require.NoError(s.T(), err)
+}
+
+func TestCapabilityString(t *testing.T) {
+	conn := Conn{
+		capability: mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_DEPRECATE_EOF,
+	}
+	require.Equal(t, "CLIENT_PROTOCOL_41|CLIENT_DEPRECATE_EOF", conn.CapabilityString())
 }

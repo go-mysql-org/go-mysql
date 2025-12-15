@@ -243,3 +243,13 @@ func TestMariaDBGTIDSetSortedString(t *testing.T) {
 		require.Equal(t, strs[1], gtidSet.String())
 	}
 }
+
+func TestMariadbGTIDSetIsEmpty(t *testing.T) {
+	emptyGTIDSet := new(MariadbGTIDSet)
+	emptyGTIDSet.Sets = make(map[uint32]map[uint32]*MariadbGTID)
+	require.True(t, emptyGTIDSet.IsEmpty())
+
+	nonEmptyGTIDSet, err := ParseMariadbGTIDSet("0-1-2")
+	require.NoError(t, err)
+	require.False(t, nonEmptyGTIDSet.IsEmpty())
+}

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-log/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -40,8 +39,7 @@ type mockHandler struct {
 }
 
 func TestDriverOptions_SetRetriesOn(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-	srv := CreateMockServer(t)
+	srv := createMockServer(t)
 	defer srv.Stop()
 	var wg sync.WaitGroup
 	srv.handler.modifier = &wg
@@ -66,8 +64,7 @@ func TestDriverOptions_SetRetriesOn(t *testing.T) {
 }
 
 func TestDriverOptions_SetRetriesOff(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-	srv := CreateMockServer(t)
+	srv := createMockServer(t)
 	defer srv.Stop()
 	var wg sync.WaitGroup
 	srv.handler.modifier = &wg
@@ -117,8 +114,7 @@ func TestDriverOptions_SetCompression(t *testing.T) {
 }
 
 func TestDriverOptions_ConnectTimeout(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-	srv := CreateMockServer(t)
+	srv := createMockServer(t)
 	defer srv.Stop()
 
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?timeout=1s")
@@ -135,8 +131,7 @@ func TestDriverOptions_ConnectTimeout(t *testing.T) {
 }
 
 func TestDriverOptions_BufferSize(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-	srv := CreateMockServer(t)
+	srv := createMockServer(t)
 	defer srv.Stop()
 
 	SetDSNOptions(map[string]DriverOption{
@@ -161,8 +156,7 @@ func TestDriverOptions_BufferSize(t *testing.T) {
 }
 
 func TestDriverOptions_ReadTimeout(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-	srv := CreateMockServer(t)
+	srv := createMockServer(t)
 	defer srv.Stop()
 
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?readTimeout=100ms")
@@ -183,8 +177,7 @@ func TestDriverOptions_ReadTimeout(t *testing.T) {
 }
 
 func TestDriverOptions_writeTimeout(t *testing.T) {
-	log.SetLevel(log.LevelDebug)
-	srv := CreateMockServer(t)
+	srv := createMockServer(t)
 	defer srv.Stop()
 
 	// use a writeTimeout that will fail parsing by ParseDuration resulting
@@ -231,8 +224,7 @@ func TestDriverOptions_namedValueChecker(t *testing.T) {
 		return nil
 	})
 
-	log.SetLevel(log.LevelDebug)
-	srv := CreateMockServer(t)
+	srv := createMockServer(t)
 	defer srv.Stop()
 	conn, err := sql.Open("mysql", "root@127.0.0.1:3307/test?writeTimeout=1s")
 	defer func() {
@@ -273,15 +265,17 @@ func TestDriverOptions_namedValueChecker(t *testing.T) {
 	require.True(t, math.MaxUint64 == a)
 }
 
-func CreateMockServer(t *testing.T) *testServer {
+func createMockServer(t *testing.T) *testServer {
 	inMemProvider := server.NewInMemoryProvider()
-	inMemProvider.AddUser(*testUser, *testPassword)
+	require.NoError(t, inMemProvider.AddUser(*testUser, *testPassword))
 	defaultServer := server.NewDefaultServer()
 
 	l, err := net.Listen("tcp", "127.0.0.1:3307")
 	require.NoError(t, err)
 
 	handler := &mockHandler{}
+
+	s := server.NewDefaultServer()
 
 	go func() {
 		for {
@@ -291,7 +285,7 @@ func CreateMockServer(t *testing.T) *testServer {
 			}
 
 			go func() {
-				co, err := server.NewCustomizedConn(conn, defaultServer, inMemProvider, handler)
+				co, err := s.NewCustomizedConn(conn, inMemProvider, handler)
 				if err != nil {
 					return
 				}
