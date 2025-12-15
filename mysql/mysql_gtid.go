@@ -210,58 +210,58 @@ type UUIDSet struct {
 // ParseUUIDSet parses a GTID set string into a map of UUIDSet structs keyed by their SID.
 // Supports multi-UUID sets like "uuid1:1-10,uuid2:5-15".
 func ParseUUIDSet(s string) (map[string]*UUIDSet, error) {
-    if s == "" {
-        return nil, nil
-    }
+	if s == "" {
+		return nil, nil
+	}
 
-    uuidSets := strings.Split(strings.TrimSpace(s), ",")
-    if len(uuidSets) == 0 {
-        return nil, fmt.Errorf("empty UUID set")
-    }
+	uuidSets := strings.Split(strings.TrimSpace(s), ",")
+	if len(uuidSets) == 0 {
+		return nil, fmt.Errorf("empty UUID set")
+	}
 
-    result := make(map[string]*UUIDSet)
-    for _, set := range uuidSets {
-        set = strings.TrimSpace(set)
-        if set == "" {
-            continue
-        }
+	result := make(map[string]*UUIDSet)
+	for _, set := range uuidSets {
+		set = strings.TrimSpace(set)
+		if set == "" {
+			continue
+		}
 
-        parts := strings.SplitN(set, ":", 2)
-        if len(parts) != 2 {
-            return nil, fmt.Errorf("invalid UUID set format: %s", set)
-        }
+		parts := strings.SplitN(set, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid UUID set format: %s", set)
+		}
 
-        sid, err := uuid.Parse(parts[0])
-        if err != nil {
-            return nil, fmt.Errorf("invalid UUID: %s", parts[0])
-        }
+		sid, err := uuid.Parse(parts[0])
+		if err != nil {
+			return nil, fmt.Errorf("invalid UUID: %s", parts[0])
+		}
 
-        // Check if this SID already exists in the map
-        uuidSet, exists := result[sid.String()]
-        if !exists {
-            uuidSet = &UUIDSet{SID: sid}
-            result[sid.String()] = uuidSet
-        }
+		// Check if this SID already exists in the map
+		uuidSet, exists := result[sid.String()]
+		if !exists {
+			uuidSet = &UUIDSet{SID: sid}
+			result[sid.String()] = uuidSet
+		}
 
-        intervals := strings.Split(parts[1], ":")
-        for _, intervalStr := range intervals {
-            interval, err := parseInterval(intervalStr)
-            if err != nil {
-                return nil, fmt.Errorf("invalid interval in UUID set %s: %v", set, err)
-            }
-            uuidSet.Intervals = append(uuidSet.Intervals, interval)
-        }
+		intervals := strings.Split(parts[1], ":")
+		for _, intervalStr := range intervals {
+			interval, err := parseInterval(intervalStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid interval in UUID set %s: %v", set, err)
+			}
+			uuidSet.Intervals = append(uuidSet.Intervals, interval)
+		}
 
-        if len(uuidSet.Intervals) == 0 {
-            return nil, fmt.Errorf("no valid intervals in UUID set: %s", set)
-        }
-        uuidSet.Intervals = uuidSet.Intervals.Normalize() // Normalize intervals after adding
-    }
+		if len(uuidSet.Intervals) == 0 {
+			return nil, fmt.Errorf("no valid intervals in UUID set: %s", set)
+		}
+		uuidSet.Intervals = uuidSet.Intervals.Normalize() // Normalize intervals after adding
+	}
 
-    if len(result) == 0 {
-        return nil, fmt.Errorf("no valid UUID sets parsed from: %s", s)
-    }
-    return result, nil
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no valid UUID sets parsed from: %s", s)
+	}
+	return result, nil
 }
 
 func NewUUIDSet(sid uuid.UUID, in ...Interval) *UUIDSet {
@@ -428,20 +428,20 @@ type MysqlGTIDSet struct {
 var _ GTIDSet = &MysqlGTIDSet{}
 
 func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
-    s := new(MysqlGTIDSet)
-    s.Sets = make(map[string]*UUIDSet)
-    if str == "" {
-        return s, nil
-    }
+	s := new(MysqlGTIDSet)
+	s.Sets = make(map[string]*UUIDSet)
+	if str == "" {
+		return s, nil
+	}
 
-    sets, err := ParseUUIDSet(str) // Use the updated ParseUUIDSet
-    if err != nil {
-        return nil, errors.Trace(err)
-    }
-    for sid, set := range sets {
-        s.Sets[sid] = set
-    }
-    return s, nil
+	sets, err := ParseUUIDSet(str) // Use the updated ParseUUIDSet
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	for sid, set := range sets {
+		s.Sets[sid] = set
+	}
+	return s, nil
 }
 
 func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
