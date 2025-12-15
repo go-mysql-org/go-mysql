@@ -193,31 +193,61 @@ type UUIDSet struct {
 	Intervals IntervalSlice
 }
 
-func ParseUUIDSet(str string) (*UUIDSet, error) {
-	str = strings.TrimSpace(str)
-	sep := strings.Split(str, ":")
-	if len(sep) < 2 {
-		return nil, errors.Errorf("invalid GTID format, must UUID:interval[:interval]")
+// ParseUUIDSet parses a GTID set string into a map of UUIDSet structs keyed by their SID.
+// Supports multi-UUID sets like "uuid1:1-10,uuid2:5-15".
+func ParseUUIDSet(s string) (map[string]*UUIDSet, error) {
+	if s == "" {
+		return nil, nil
 	}
 
-	var err error
-	s := new(UUIDSet)
-	if s.SID, err = uuid.Parse(sep[0]); err != nil {
-		return nil, errors.Trace(err)
+	uuidSets := strings.Split(strings.TrimSpace(s), ",")
+	if len(uuidSets) == 0 {
+		return nil, fmt.Errorf("empty UUID set")
 	}
 
-	// Handle interval
-	for i := 1; i < len(sep); i++ {
-		if in, err := parseInterval(sep[i]); err != nil {
-			return nil, errors.Trace(err)
-		} else {
-			s.Intervals = append(s.Intervals, in)
+	result := make(map[string]*UUIDSet)
+	for _, set := range uuidSets {
+		set = strings.TrimSpace(set)
+		if set == "" {
+			continue
 		}
+
+		parts := strings.SplitN(set, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid UUID set format: %s", set)
+		}
+
+		sid, err := uuid.Parse(parts[0])
+		if err != nil {
+			return nil, fmt.Errorf("invalid UUID: %s", parts[0])
+		}
+
+		// Check if this SID already exists in the map
+		uuidSet, exists := result[sid.String()]
+		if !exists {
+			uuidSet = &UUIDSet{SID: sid}
+			result[sid.String()] = uuidSet
+		}
+
+		intervals := strings.Split(parts[1], ":")
+		for _, intervalStr := range intervals {
+			interval, err := parseInterval(intervalStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid interval in UUID set %s: %v", set, err)
+			}
+			uuidSet.Intervals = append(uuidSet.Intervals, interval)
+		}
+
+		if len(uuidSet.Intervals) == 0 {
+			return nil, fmt.Errorf("no valid intervals in UUID set: %s", set)
+		}
+		uuidSet.Intervals = uuidSet.Intervals.Normalize() // Normalize intervals after adding
 	}
 
-	s.Intervals = s.Intervals.Normalize()
-
-	return s, nil
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no valid UUID sets parsed from: %s", s)
+	}
+	return result, nil
 }
 
 func NewUUIDSet(sid uuid.UUID, in ...Interval) *UUIDSet {
@@ -390,15 +420,12 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 		return s, nil
 	}
 
-	sp := strings.Split(str, ",")
-
-	// todo, handle redundant same uuid
-	for i := 0; i < len(sp); i++ {
-		if set, err := ParseUUIDSet(sp[i]); err != nil {
-			return nil, errors.Trace(err)
-		} else {
-			s.AddSet(set)
-		}
+	sets, err := ParseUUIDSet(str) // Use the updated ParseUUIDSet
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	for sid, set := range sets {
+		s.Sets[sid] = set
 	}
 	return s, nil
 }

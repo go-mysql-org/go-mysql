@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -102,7 +103,6 @@ func TestMysqlGTIDInsertInterval(t *testing.T) {
 func TestMysqlGTIDCodec(t *testing.T) {
 	us, err := ParseUUIDSet("de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
 	require.NoError(t, err)
-
 	require.Equal(t, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2", us.String())
 
 	buf := us.Encode()
@@ -124,29 +124,28 @@ func TestMysqlUpdate(t *testing.T) {
 
 	err = g1.Update("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58")
 	require.NoError(t, err)
-
 	require.Equal(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:21-58", strings.ToUpper(g1.String()))
 
 	g1, err = ParseMysqlGTIDSet(`
-		519CE70F-A893-11E9-A95A-B32DC65A7026:1-1154661,
-		5C9CA52B-9F11-11E9-8EAF-3381EC1CC790:1-244,
-		802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1-1221371,
-		F2B50559-A891-11E9-B646-884FF0CA2043:1-479261
-	`)
+        519CE70F-A893-11E9-A95A-B32DC65A7026:1-1154661,
+        5C9CA52B-9F11-11E9-8EAF-3381EC1CC790:1-244,
+        802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1-1221371,
+        F2B50559-A891-11E9-B646-884FF0CA2043:1-479261
+    `)
 	require.NoError(t, err)
 
 	err = g1.Update(`
-		802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1221110-1221371,
-		F2B50559-A891-11E9-B646-884FF0CA2043:478509-479266
-	`)
+        802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1221110-1221371,
+        F2B50559-A891-11E9-B646-884FF0CA2043:478509-479266
+    `)
 	require.NoError(t, err)
 
 	g2, err := ParseMysqlGTIDSet(`
-		519CE70F-A893-11E9-A95A-B32DC65A7026:1-1154661,
-		5C9CA52B-9F11-11E9-8EAF-3381EC1CC790:1-244,
-		802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1-1221371,
-		F2B50559-A891-11E9-B646-884FF0CA2043:1-479266
-	`)
+        519CE70F-A893-11E9-A95A-B32DC65A7026:1-1154661,
+        5C9CA52B-9F11-11E9-8EAF-3381EC1CC790:1-244,
+        802D69FD-A3B6-11E9-B1EA-50BAB55BA838:1-1221371,
+        F2B50559-A891-11E9-B646-884FF0CA2043:1-479266
+    `)
 	require.NoError(t, err)
 	require.True(t, g1.Equal(g2))
 }
@@ -173,8 +172,8 @@ func TestMysqlAddGTID(t *testing.T) {
 	require.NoError(t, err)
 	g1.AddGTID(u2, 58)
 	g2, err := ParseMysqlGTIDSet(`
-	3E11FA47-71CA-11E1-9E33-C80AA9429562:21-60,
-	519CE70F-A893-11E9-A95A-B32DC65A7026:58
+    3E11FA47-71CA-11E1-9E33-C80AA9429562:21-60,
+    519CE70F-A893-11E9-A95A-B32DC65A7026:58
 `)
 	require.NoError(t, err)
 	require.True(t, g2.Equal(g1))
@@ -195,11 +194,8 @@ func TestMysqlGTIDAdd(t *testing.T) {
 	testCases := []struct {
 		left, right, expected string
 	}{
-		// simple cases works:
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23:28-57"},
-		// summ is associative operation
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23:28-57"},
-		// merge intervals:
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23-27", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23-57"},
 	}
 
@@ -218,12 +214,10 @@ func TestMysqlGTIDMinus(t *testing.T) {
 	testCases := []struct {
 		left, right, expected string
 	}{
-		// Minuses that doesn't affect original value:
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23"},
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57"},
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-22:24-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23"},
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "ABCDEF12-1234-5678-9012-345678901234:1-1000", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23"},
-		// Minuses that change original value:
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:20-57:60-90", "3E11FA47-71CA-11E1-9E33-C80AA9429562:23", "3E11FA47-71CA-11E1-9E33-C80AA9429562:20-22:24-57:60-90"},
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:20-57:60-90", "3E11FA47-71CA-11E1-9E33-C80AA9429562:22-70", "3E11FA47-71CA-11E1-9E33-C80AA9429562:20-21:71-90"},
 		{"3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", "3E11FA47-71CA-11E1-9E33-C80AA9429562:28-57", ""},
@@ -311,7 +305,6 @@ func TestErrorCode(t *testing.T) {
 
 func TestMysqlNullDecode(t *testing.T) {
 	_, isNull, n := LengthEncodedInt([]byte{0xfb})
-
 	require.True(t, isNull)
 	require.Equal(t, 1, n)
 }
@@ -334,7 +327,6 @@ func TestMysqlEmptyDecode(t *testing.T) {
 func mysqlGTIDfromString(t *testing.T, gtidStr string) MysqlGTIDSet {
 	gtid, err := ParseMysqlGTIDSet(gtidStr)
 	require.NoError(t, err)
-
 	return *gtid.(*MysqlGTIDSet)
 }
 
@@ -350,14 +342,88 @@ func TestValidateFlavor(t *testing.T) {
 		{"msql", false},
 		{"mArIAdb", true},
 	}
-
 	for _, f := range tbls {
 		err := ValidateFlavor(f.flavor)
-		if f.valid == true {
+		if f.valid {
 			require.NoError(t, err)
 		} else {
 			require.Error(t, err)
 		}
+	}
+}
+
+func TestParseUUIDSet(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected *UUIDSet
+		wantErr  bool
+	}{
+		{
+			input: "0b8beec9-911e-11e9-9f7b-8a057645f3f6:1-1175877800",
+			expected: &UUIDSet{
+				SID:       uuid.Must(uuid.Parse("0b8beec9-911e-11e9-9f7b-8a057645f3f6")),
+				Intervals: []Interval{{Start: 1, Stop: 1175877801}},
+			},
+			wantErr: false,
+		},
+		{
+			input: "246e88bd-0288-11e8-9cee-230cd2fc765b:1-592884032",
+			expected: &UUIDSet{
+				SID:       uuid.Must(uuid.Parse("246e88bd-0288-11e8-9cee-230cd2fc765b")),
+				Intervals: []Interval{{Start: 1, Stop: 592884033}},
+			},
+			wantErr: false,
+		},
+		{
+			input:   "invalid",
+			wantErr: true,
+		},
+		{
+			input:    "",
+			expected: nil,
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseUUIDSet(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseUUIDSet() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("ParseUUIDSet() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseMysqlGTIDSet(t *testing.T) {
+	input := "0b8beec9-911e-11e9-9f7b-8a057645f3f6:1-1175877800,246e88bd-0288-11e8-9cee-230cd2fc765b:1-592884032"
+	expected := &MysqlGTIDSet{
+		Sets: map[string]*UUIDSet{
+			"0b8beec9-911e-11e9-9f7b-8a057645f3f6": {
+				SID:       uuid.Must(uuid.Parse("0b8beec9-911e-11e9-9f7b-8a057645f3f6")),
+				Intervals: []Interval{{Start: 1, Stop: 1175877801}},
+			},
+			"246e88bd-0288-11e8-9cee-230cd2fc765b": {
+				SID:       uuid.Must(uuid.Parse("246e88bd-0288-11e8-9cee-230cd2fc765b")),
+				Intervals: []Interval{{Start: 1, Stop: 592884033}},
+			},
+		},
+	}
+
+	got, err := ParseMysqlGTIDSet(input)
+	if err != nil {
+		t.Fatalf("ParseMysqlGTIDSet() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("ParseMysqlGTIDSet() = %v, want %v", got, expected)
+	}
+
+	if got.String() != input {
+		t.Errorf("String() = %v, want %v", got.String(), input)
 	}
 }
 
