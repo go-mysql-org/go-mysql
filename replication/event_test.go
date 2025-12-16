@@ -194,3 +194,56 @@ func TestPreviousGTIDEvent(t *testing.T) {
 		require.Equal(t, tc.GTIDSets, e.GTIDSets)
 	}
 }
+
+func TestHeartbeatEvent(t *testing.T) {
+	testcases := []struct {
+		err     bool
+		version int
+		input   []byte // make sure to strip the 4 byte checksum
+		hbEvent HeartbeatEvent
+	}{
+		{
+			false,
+			2,
+			[]byte{0x1, 0xd, 0x62, 0x69, 0x6e, 0x6c, 0x6f, 0x67, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31, 0x2, 0x1, 0x9e, 0x0},
+			HeartbeatEvent{Version: 2, Filename: "binlog.000001", Offset: 158},
+		},
+		{
+			true,
+			2,
+			// 0x3 is not a valid field type
+			[]byte{0x3, 0xd, 0x62, 0x69, 0x6e, 0x6c, 0x6f, 0x67, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31, 0x2, 0x1, 0x9e, 0x0},
+			HeartbeatEvent{},
+		},
+		{
+			true,
+			2,
+			// 0x2, 0x9e is not a valid length encoded integer
+			[]byte{0x1, 0xd, 0x62, 0x69, 0x6e, 0x6c, 0x6f, 0x67, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31, 0x2, 0x2, 0x9e, 0x0},
+			HeartbeatEvent{Version: 2, Filename: "binlog.000001", Offset: 158},
+		},
+		{
+			false,
+			1,
+			[]byte{0x62, 0x69, 0x6e, 0x6c, 0x6f, 0x67, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31},
+			HeartbeatEvent{Version: 1, Filename: "binlog.000001"},
+		},
+		{
+			true,
+			3, // invalid heartbeat version
+			[]byte{},
+			HeartbeatEvent{},
+		},
+	}
+
+	for _, tc := range testcases {
+		e := HeartbeatEvent{Version: tc.version}
+		err := e.Decode(tc.input)
+		if tc.err {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, tc.hbEvent, e)
+		}
+	}
+}
