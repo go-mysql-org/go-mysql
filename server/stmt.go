@@ -300,7 +300,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			}
 
 			if !isNull {
-				args[i] = v
+				args[i] = mysql.TypedBytes{Type: tp, Bytes: v}
 				continue
 			} else {
 				args[i] = nil

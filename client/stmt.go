@@ -156,6 +156,9 @@ func (s *Stmt) write(args ...interface{}) error {
 		case []byte:
 			paramTypes[i] = []byte{mysql.MYSQL_TYPE_STRING}
 			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v))), v...)
+		case mysql.TypedBytes:
+			paramTypes[i] = []byte{v.Type}
+			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v.Bytes))), v.Bytes...)
 		case json.RawMessage:
 			paramTypes[i] = []byte{mysql.MYSQL_TYPE_STRING}
 			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v))), v...)
