@@ -41,8 +41,12 @@ func NewInMemoryAuthenticationHandler(defaultAuthMethod ...string) *InMemoryAuth
 	}
 }
 
+// Credential holds authentication settings for a user.
+// Passwords contains all valid raw passwords for the user. They are hashed on demand during comparison.
+// If empty password authentication is allowed, Passwords must contain an empty string (e.g., []string{""})
+// rather than being a zero-length slice. A zero-length slice means no valid passwords are configured.
 type Credential struct {
-	Passwords      []string // raw passwords, hashed on demand during comparison
+	Passwords      []string
 	AuthPluginName string
 }
 
