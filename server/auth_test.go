@@ -32,6 +32,18 @@ func TestCompareNativePasswordAuthData_EmptyPassword(t *testing.T) {
 			serverPassword: "secret",
 			wantErr:        ErrAccessDeniedNoPassword,
 		},
+		{
+			name:           "null byte client auth, empty server password",
+			clientAuthData: []byte{0x00},
+			serverPassword: "",
+			wantErr:        nil,
+		},
+		{
+			name:           "null byte client auth, non-empty server password",
+			clientAuthData: []byte{0x00},
+			serverPassword: "secret",
+			wantErr:        ErrAccessDeniedNoPassword,
+		},
 	}
 
 	for _, tt := range tests {
@@ -68,6 +80,18 @@ func TestCompareSha256PasswordAuthData_EmptyPassword(t *testing.T) {
 			serverPassword: "secret",
 			wantErr:        ErrAccessDeniedNoPassword,
 		},
+		{
+			name:           "null byte client auth, empty server password",
+			clientAuthData: []byte{0x00},
+			serverPassword: "",
+			wantErr:        nil,
+		},
+		{
+			name:           "null byte client auth, non-empty server password",
+			clientAuthData: []byte{0x00},
+			serverPassword: "secret",
+			wantErr:        ErrAccessDeniedNoPassword,
+		},
 	}
 
 	for _, tt := range tests {
@@ -101,6 +125,18 @@ func TestCompareCacheSha2PasswordAuthData_EmptyPassword(t *testing.T) {
 		{
 			name:           "empty client auth, non-empty server password",
 			clientAuthData: []byte{},
+			serverPassword: "secret",
+			wantErr:        ErrAccessDeniedNoPassword,
+		},
+		{
+			name:           "null byte client auth, empty server password",
+			clientAuthData: []byte{0x00},
+			serverPassword: "",
+			wantErr:        nil,
+		},
+		{
+			name:           "null byte client auth, non-empty server password",
+			clientAuthData: []byte{0x00},
 			serverPassword: "secret",
 			wantErr:        ErrAccessDeniedNoPassword,
 		},
