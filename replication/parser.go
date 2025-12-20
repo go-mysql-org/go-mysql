@@ -320,6 +320,10 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = &IntVarEvent{}
 			case TRANSACTION_PAYLOAD_EVENT:
 				e = p.newTransactionPayloadEvent()
+			case HEARTBEAT_EVENT:
+				e = &HeartbeatEvent{Version: 1}
+			case HEARTBEAT_LOG_EVENT_V2:
+				e = &HeartbeatEvent{Version: 2}
 			default:
 				e = &GenericEvent{}
 			}

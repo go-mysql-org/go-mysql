@@ -261,3 +261,19 @@ const (
 	ENUM_EXTRA_ROW_INFO_TYPECODE_NDB byte = iota
 	ENUM_EXTRA_ROW_INFO_TYPECODE_PARTITION
 )
+
+// Binlog flags, from include/mysql.h
+const (
+	USE_HEARTBEAT_EVENT_V2      = 1 << 1
+	MYSQL_RPL_SKIP_TAGGED_GTIDS = 1 << 2
+	MYSQL_RPL_GTID              = 1 << 16
+	MYSQL_RPL_SKIP_HEARTBEAT    = 1 << 17
+)
+
+// On-The-Wire HeartBeat fields
+// See enum mysql::binlog::event::codecs::binary::Heartbeat::fields in MySQL
+const (
+	OTW_HB_HEADER_END_MARK = iota
+	OTW_HB_LOG_FILENAME_FIELD
+	OTW_HB_LOG_POSITION_FIELD
+)

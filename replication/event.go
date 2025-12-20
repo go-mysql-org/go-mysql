@@ -945,3 +945,67 @@ func (i *IntVarEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Type: %d\n", i.Type)
 	fmt.Fprintf(w, "Value: %d\n", i.Value)
 }
+
+// HeartbeatEvent is a HEARTBEAT_EVENT or HEARTBEAT_LOG_EVENT_V2
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication_binlog_event.html#sect_protocol_replication_event_heartbeat
+type HeartbeatEvent struct {
+	// Event version, either 1 for HEARTBEAT_EVENT or 2 for HEARTBEAT_LOG_EVENT_V2
+	Version int
+
+	// Filename of the binary log
+	Filename string
+
+	// Offset is the offset in the binlog file
+	Offset uint64
+}
+
+// Decode is decoding a heartbeat event payload (excluding event header and checksum)
+func (h *HeartbeatEvent) Decode(data []byte) error {
+	switch h.Version {
+	case 1:
+		// Also known as HEARTBEAT_EVENT
+		h.Filename = string(data)
+	case 2:
+		// Also known as HEARTBEAT_LOG_EVENT_V2
+		//
+		// The server sends this in the binlog stream if the following is set:
+		// DumpCommandFlag: replication.USE_HEARTBEAT_EVENT_V2
+		pos := 0
+		for pos < len(data) {
+			switch data[pos] {
+			case OTW_HB_LOG_FILENAME_FIELD:
+				pos++
+				nameLength := int(data[pos])
+				pos++
+				h.Filename = string(data[pos : pos+nameLength])
+				pos += nameLength
+			case OTW_HB_LOG_POSITION_FIELD:
+				pos++
+				offsetLength := int(data[pos])
+				pos++
+				var n int
+				h.Offset, _, n = mysql.LengthEncodedInt(data[pos : pos+offsetLength])
+				if n != offsetLength {
+					return errors.New("failed to read binary log offset")
+				}
+				pos += offsetLength
+			case OTW_HB_HEADER_END_MARK:
+				pos++
+			default:
+				return errors.New("unknown heartbeatv2 field")
+			}
+		}
+	default:
+		return errors.New("unknown heartbeat version")
+	}
+
+	return nil
+}
+
+func (h *HeartbeatEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w,
+		"Heartbeat Event Version: %d\nBinlog File Name: %s\nBinlog Offset: %d\n",
+		h.Version, h.Filename, h.Offset,
+	)
+	fmt.Fprintln(w)
+}
