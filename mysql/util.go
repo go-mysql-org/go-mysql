@@ -56,13 +56,13 @@ func CalcNativePassword(scramble, password []byte) []byte {
 	return Xor(scrambleHash, stage1)
 }
 
-// Xor modifies hash1 in-place with XOR against hash2
+// Xor returns a new slice with hash1 XOR hash2, wrapping hash2 if hash1 is longer.
 func Xor(hash1 []byte, hash2 []byte) []byte {
-	l := min(len(hash1), len(hash2))
-	for i := range l {
-		hash1[i] ^= hash2[i]
+	result := make([]byte, len(hash1))
+	for i := range hash1 {
+		result[i] = hash1[i] ^ hash2[i%len(hash2)]
 	}
-	return hash1
+	return result
 }
 
 // hash_stage1 = xor(reply, sha1(public_seed, hash_stage2))

@@ -30,15 +30,15 @@ func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) err
 	return c.serverConf.authProvider.Authenticate(c, authPluginName, clientAuthData)
 }
 
-func (c *Conn) acquirePassword() error {
-	if c.credential.Password != "" {
+func (c *Conn) acquireCredential() error {
+	if len(c.credential.Passwords) > 0 {
 		return nil
 	}
-	credential, found, err := c.credentialProvider.GetCredential(c.user)
+	credential, found, err := c.authHandler.GetCredential(c.user)
 	if err != nil {
 		return err
 	}
-	if !found {
+	if !found || len(credential.Passwords) == 0 {
 		return mysql.NewDefaultError(mysql.ER_NO_SUCH_USER, c.user, c.RemoteAddr().String())
 	}
 	c.credential = credential
@@ -67,18 +67,24 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential Credential) error {
 	if len(clientAuthData) == 0 {
-		if credential.Password == "" {
+		if credential.hasEmptyPassword() {
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
 	}
 
-	password, err := mysql.DecodePasswordHex(c.credential.Password)
-	if err != nil {
-		return ErrAccessDenied
-	}
-	if mysql.CompareNativePassword(clientAuthData, password, c.salt) {
-		return nil
+	for _, password := range credential.Passwords {
+		hash, err := credential.hashPassword(password)
+		if err != nil {
+			continue
+		}
+		decoded, err := mysql.DecodePasswordHex(hash)
+		if err != nil {
+			continue
+		}
+		if mysql.CompareNativePassword(clientAuthData, decoded, c.salt) {
+			return nil
+		}
 	}
 	return ErrAccessDenied
 }
@@ -86,7 +92,7 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential C
 func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential Credential) error {
 	// Empty passwords are not hashed, but sent as empty string
 	if len(clientAuthData) == 0 {
-		if credential.Password == "" {
+		if credential.hasEmptyPassword() {
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
@@ -112,12 +118,18 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 			clientAuthData = clientAuthData[:l-1]
 		}
 	}
-	check, err := mysql.Check256HashingPassword([]byte(credential.Password), string(clientAuthData))
-	if err != nil {
-		return err
-	}
-	if check {
-		return nil
+	for _, password := range credential.Passwords {
+		hash, err := credential.hashPassword(password)
+		if err != nil {
+			continue
+		}
+		check, err := mysql.Check256HashingPassword([]byte(hash), string(clientAuthData))
+		if err != nil {
+			continue
+		}
+		if check {
+			return nil
+		}
 	}
 	return ErrAccessDenied
 }
@@ -125,7 +137,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 	// Empty passwords are not hashed, but sent as empty string
 	if len(clientAuthData) == 0 {
-		if c.credential.Password == "" {
+		if c.credential.hasEmptyPassword() {
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
@@ -139,10 +151,8 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 			// 'fast' auth: write "More data" packet (first byte == 0x01) with the second byte = 0x03
 			return c.writeAuthMoreDataFastAuth()
 		}
-
-		return ErrAccessDenied
 	}
-	// cache miss, do full auth
+	// cache miss or validation failed, do full auth
 	if err := c.writeAuthMoreDataFullAuth(); err != nil {
 		return err
 	}
