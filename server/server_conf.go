@@ -103,7 +103,7 @@ func NewServerWithAuth(serverVersion string, collationId uint8, defaultAuthMetho
 }
 
 func isAuthMethodSupported(authMethod string) bool {
-	return authMethod == mysql.AUTH_NATIVE_PASSWORD || authMethod == mysql.AUTH_CACHING_SHA2_PASSWORD || authMethod == mysql.AUTH_SHA256_PASSWORD
+	return authMethod == mysql.AUTH_NATIVE_PASSWORD || authMethod == mysql.AUTH_CACHING_SHA2_PASSWORD || authMethod == mysql.AUTH_SHA256_PASSWORD || authMethod == mysql.AUTH_CLEAR_PASSWORD
 }
 
 func (s *Server) InvalidateCache(username string, host string) {
