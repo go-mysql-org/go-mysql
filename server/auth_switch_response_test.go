@@ -25,6 +25,18 @@ func TestCheckSha2CacheCredentials_EmptyPassword(t *testing.T) {
 			serverPassword: "secret",
 			wantErr:        ErrAccessDeniedNoPassword,
 		},
+		{
+			name:           "null byte client auth, empty server password",
+			clientAuthData: []byte{0x00},
+			serverPassword: "",
+			wantErr:        nil,
+		},
+		{
+			name:           "null byte client auth, non-empty server password",
+			clientAuthData: []byte{0x00},
+			serverPassword: "secret",
+			wantErr:        ErrAccessDeniedNoPassword,
+		},
 	}
 
 	for _, tt := range tests {

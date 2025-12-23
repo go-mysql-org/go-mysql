@@ -71,7 +71,7 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 }
 
 func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Credential) error {
-	if len(clientAuthData) == 0 {
+	if isEmptyPassword(clientAuthData) {
 		if credential.hasEmptyPassword() {
 			return nil
 		}

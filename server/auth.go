@@ -18,6 +18,16 @@ var (
 	ErrAccessDeniedNoPassword = fmt.Errorf("%w without password", ErrAccessDenied)
 )
 
+// isEmptyPassword returns true if the auth data represents an empty password.
+// Some clients send an empty packet (len == 0), while others (e.g. MySQL's libmysql)
+// send a single null byte. This matches MySQL server's own handling:
+// if (!pkt_len || (pkt_len == 1 && *pkt == 0))
+// https://github.com/mysql/mysql-server/blob/8.0/sql/auth/sha2_password.cc
+// https://github.com/mysql/mysql-server/blob/8.0/sql/auth/sql_authentication.cc
+func isEmptyPassword(authData []byte) bool {
+	return len(authData) == 0 || (len(authData) == 1 && authData[0] == 0)
+}
+
 func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) error {
 	if authPluginName != c.credential.AuthPluginName {
 		err := c.writeAuthSwitchRequest(c.credential.AuthPluginName)
@@ -66,7 +76,7 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 }
 
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential Credential) error {
-	if len(clientAuthData) == 0 {
+	if isEmptyPassword(clientAuthData) {
 		if credential.hasEmptyPassword() {
 			return nil
 		}
@@ -90,8 +100,7 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential C
 }
 
 func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential Credential) error {
-	// Empty passwords are not hashed, but sent as empty string
-	if len(clientAuthData) == 0 {
+	if isEmptyPassword(clientAuthData) {
 		if credential.hasEmptyPassword() {
 			return nil
 		}
@@ -135,8 +144,7 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 }
 
 func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
-	// Empty passwords are not hashed, but sent as empty string
-	if len(clientAuthData) == 0 {
+	if isEmptyPassword(clientAuthData) {
 		if c.credential.hasEmptyPassword() {
 			return nil
 		}
