@@ -163,6 +163,48 @@ func (c *Conn) writeResultset(r *mysql.Resultset) error {
 	return nil
 }
 
+func (c *Conn) writeStreamResultset(sr *mysql.StreamResult) error {
+	// Ensure the stream is closed when we're done, whether successful or not.
+	// This prevents producer goroutines from blocking indefinitely if an error
+	// occurs during row processing.
+	defer sr.Close()
+
+	columnLen := mysql.PutLengthEncodedInt(uint64(len(sr.Fields)))
+	data := make([]byte, 4, 1024)
+	data = append(data, columnLen...)
+	if err := c.WritePacket(data); err != nil {
+		return err
+	}
+
+	if err := c.writeFieldList(sr.Fields, data); err != nil {
+		return err
+	}
+
+	for row := range sr.RowsChan() {
+		data = data[0:4]
+		for _, v := range row {
+			if v == nil {
+				data = append(data, 0xfb) // NULL
+			} else {
+				tv, err := mysql.FormatTextValue(v)
+				if err != nil {
+					return err
+				}
+				data = append(data, mysql.PutLengthEncodedString(tv)...)
+			}
+		}
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+
+	if err := sr.Err(); err != nil {
+		return err
+	}
+
+	return c.writeEOF()
+}
+
 func (c *Conn) writeFieldList(fs []*mysql.Field, data []byte) error {
 	if data == nil {
 		data = make([]byte, 4, 1024)
@@ -233,7 +275,9 @@ func (c *Conn) WriteValue(value interface{}) error {
 	case nil:
 		return c.writeOK(nil)
 	case *mysql.Result:
-		if v != nil && v.HasResultset() {
+		if v != nil && v.IsStreaming() {
+			return c.writeStreamResultset(v.StreamResult)
+		} else if v != nil && v.HasResultset() {
 			return c.writeResultset(v.Resultset)
 		} else {
 			return c.writeOK(v)
