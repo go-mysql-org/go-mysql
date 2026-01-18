@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -260,4 +261,186 @@ func TestWriteValue(t *testing.T) {
 	require.NoError(t, err)
 	expected = []byte{1, 0, 0, 5, mysql.MORE_DATE_HEADER}
 	require.Equal(t, expected, clientConn.WriteBuffered[:5])
+}
+
+// makeFields creates Field slice from column names for testing
+func makeFields(names ...string) []*mysql.Field {
+	fields := make([]*mysql.Field, len(names))
+	for i, name := range names {
+		fields[i] = &mysql.Field{
+			Name: []byte(name),
+			Type: mysql.MYSQL_TYPE_VAR_STRING,
+		}
+	}
+	return fields
+}
+
+func TestStreamResultBasic(t *testing.T) {
+	// test NewStreamResult with fields and buffer size
+	sr := mysql.NewStreamResult(makeFields("col1", "col2"), 100)
+	require.NotNil(t, sr)
+	require.Len(t, sr.Fields, 2)
+	require.Equal(t, []byte("col1"), sr.Fields[0].Name)
+	require.Equal(t, []byte("col2"), sr.Fields[1].Name)
+	require.False(t, sr.IsClosed())
+
+	// test NewStreamResult with custom buffer size
+	sr2 := mysql.NewStreamResult(makeFields("a"), 50)
+	require.NotNil(t, sr2)
+	require.Len(t, sr2.Fields, 1)
+
+	// test AsResult
+	result := sr.AsResult()
+	require.NotNil(t, result)
+	require.True(t, result.IsStreaming())
+	require.Equal(t, sr, result.StreamResult)
+}
+
+func TestStreamResultWriteAndRead(t *testing.T) {
+	sr := mysql.NewStreamResult(makeFields("id", "name"), 10)
+	ctx := context.Background()
+
+	// write rows in a goroutine
+	go func() {
+		defer sr.Close()
+		ok := sr.WriteRow(ctx, []any{1, "alice"})
+		require.True(t, ok)
+		ok = sr.WriteRow(ctx, []any{2, "bob"})
+		require.True(t, ok)
+		ok = sr.WriteRow(ctx, []any{nil, "charlie"})
+		require.True(t, ok)
+	}()
+
+	// read rows from channel
+	var rows [][]any
+	for row := range sr.RowsChan() {
+		rows = append(rows, row)
+	}
+
+	require.Len(t, rows, 3)
+	require.Equal(t, []any{1, "alice"}, rows[0])
+	require.Equal(t, []any{2, "bob"}, rows[1])
+	require.Equal(t, []any{nil, "charlie"}, rows[2])
+	require.True(t, sr.IsClosed())
+}
+
+func TestStreamResultClose(t *testing.T) {
+	sr := mysql.NewStreamResult(makeFields("a"), 5)
+
+	// close should be idempotent
+	require.False(t, sr.IsClosed())
+	sr.Close()
+	require.True(t, sr.IsClosed())
+
+	// calling Close again should not panic
+	sr.Close()
+	require.True(t, sr.IsClosed())
+
+	// WriteRow should return false after close
+	ok := sr.WriteRow(context.Background(), []any{"test"})
+	require.False(t, ok)
+}
+
+func TestStreamResultError(t *testing.T) {
+	sr := mysql.NewStreamResult(makeFields("a"), 100)
+
+	// initially no error
+	require.NoError(t, sr.Err())
+
+	// set an error
+	testErr := errors.New("test error")
+	sr.SetError(testErr)
+	require.Equal(t, testErr, sr.Err())
+
+	// error persists
+	require.Equal(t, testErr, sr.Err())
+}
+
+func TestConnWriteStreamResultset(t *testing.T) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+
+	sr := mysql.NewStreamResult(makeFields("col1"), 10)
+
+	// write rows and close in a goroutine
+	go func() {
+		sr.WriteRow(context.Background(), []any{"value1"})
+		sr.WriteRow(context.Background(), []any{"value2"})
+		sr.Close()
+	}()
+
+	// write stream resultset
+	err := conn.WriteValue(sr.AsResult())
+	require.NoError(t, err)
+
+	// verify the output contains expected data
+	// column count (1)
+	require.Equal(t, byte(1), clientConn.WriteBuffered[4])
+	// last bytes should be EOF
+	require.Equal(t, mysql.EOF_HEADER, clientConn.WriteBuffered[len(clientConn.WriteBuffered)-1])
+}
+
+func TestConnWriteStreamResultsetWithError(t *testing.T) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+
+	sr := mysql.NewStreamResult(makeFields("col1"), 10)
+	testErr := errors.New("stream error")
+
+	// write rows, set error, and close in a goroutine
+	go func() {
+		sr.WriteRow(context.Background(), []any{"value1"})
+		sr.SetError(testErr)
+		sr.Close()
+	}()
+
+	// write stream resultset should return the error
+	err := conn.WriteValue(sr.AsResult())
+	require.Error(t, err)
+	require.Equal(t, testErr, err)
+}
+
+func TestConnWriteStreamResultsetWithNullValue(t *testing.T) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+
+	sr := mysql.NewStreamResult(makeFields("col1", "col2"), 10)
+
+	// write rows with NULL values
+	go func() {
+		sr.WriteRow(context.Background(), []any{nil, "value"})
+		sr.WriteRow(context.Background(), []any{"data", nil})
+		sr.Close()
+	}()
+
+	err := conn.WriteValue(sr.AsResult())
+	require.NoError(t, err)
+
+	// verify output contains NULL marker (0xfb)
+	found := false
+	for _, b := range clientConn.WriteBuffered {
+		if b == 0xfb {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "NULL marker (0xfb) should be present in output")
+}
+
+func TestStreamResultEmptyResult(t *testing.T) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+
+	sr := mysql.NewStreamResult(makeFields("col1"), 10)
+
+	// close immediately without writing any rows
+	go func() {
+		sr.Close()
+	}()
+
+	err := conn.WriteValue(sr.AsResult())
+	require.NoError(t, err)
+
+	// should still have valid output with column info and EOF
+	require.True(t, len(clientConn.WriteBuffered) > 0)
 }
