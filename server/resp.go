@@ -180,6 +180,15 @@ func (c *Conn) writeStreamResultset(sr *mysql.StreamResult) error {
 		return err
 	}
 
+	if sr.Binary {
+		return c.writeStreamBinaryRows(sr)
+	}
+	return c.writeStreamTextRows(sr)
+}
+
+// writeStreamTextRows writes rows using text protocol.
+func (c *Conn) writeStreamTextRows(sr *mysql.StreamResult) error {
+	data := make([]byte, 4, 1024)
 	for row := range sr.RowsChan() {
 		data = data[0:4]
 		for _, v := range row {
@@ -193,6 +202,56 @@ func (c *Conn) writeStreamResultset(sr *mysql.StreamResult) error {
 				data = append(data, mysql.PutLengthEncodedString(tv)...)
 			}
 		}
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+
+	if err := sr.Err(); err != nil {
+		return err
+	}
+
+	return c.writeEOF()
+}
+
+// writeStreamBinaryRows writes rows using binary protocol.
+func (c *Conn) writeStreamBinaryRows(sr *mysql.StreamResult) error {
+	data := make([]byte, 4, 1024)
+	columnCount := len(sr.Fields)
+	bitmapLen := (columnCount + 7 + 2) >> 3
+
+	for row := range sr.RowsChan() {
+		data = data[0:4]
+		nullBitmap := make([]byte, bitmapLen)
+
+		// Binary row header: 0x00
+		data = append(data, 0x00)
+		// Placeholder for null bitmap
+		data = append(data, nullBitmap...)
+
+		for j, v := range row {
+			if v == nil {
+				// Set null bit: bit position = (column index + 2)
+				nullBitmap[(j+2)/8] |= 1 << (uint(j+2) % 8)
+				continue
+			}
+
+			b, err := mysql.FormatBinaryValue(v)
+			if err != nil {
+				return err
+			}
+
+			// For VAR_STRING type, use length-encoded string
+			if sr.Fields[j].Type == mysql.MYSQL_TYPE_VAR_STRING {
+				data = append(data, mysql.PutLengthEncodedString(b)...)
+			} else {
+				data = append(data, b...)
+			}
+		}
+
+		// Copy null bitmap to the correct position
+		copy(data[5:], nullBitmap)
+
 		if err := c.WritePacket(data); err != nil {
 			return err
 		}

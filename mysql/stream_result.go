@@ -15,6 +15,8 @@ import (
 type StreamResult struct {
 	// Fields contains the column metadata for the result set.
 	Fields []*Field
+	// Binary indicates whether to use binary protocol (true) or text protocol (false).
+	Binary bool
 	// rowsChan is the internal channel for streaming rows.
 	rowsChan chan []any
 	// done is used to signal that the stream has been closed.
@@ -29,11 +31,12 @@ type StreamResult struct {
 // NewStreamResult creates a new StreamResult with the specified fields and buffer size.
 // The bufSize parameter controls the channel buffer size. A bufSize of 0 creates an
 // unbuffered channel for synchronous communication.
-func NewStreamResult(fields []*Field, bufSize int) *StreamResult {
+func NewStreamResult(fields []*Field, bufSize int, binary bool) *StreamResult {
 	return &StreamResult{
 		Fields:   fields,
 		rowsChan: make(chan []any, bufSize),
 		done:     make(chan struct{}),
+		Binary:   binary,
 	}
 }
 
@@ -48,12 +51,6 @@ func (sr *StreamResult) RowsChan() <-chan []any {
 // written, or false if the stream has been closed or context is canceled.
 // This method is safe for concurrent use and will block if the channel buffer is full.
 func (sr *StreamResult) WriteRow(ctx context.Context, row []any) (ok bool) {
-	defer func() {
-		if recover() != nil {
-			ok = false
-		}
-	}()
-
 	select {
 	case <-ctx.Done():
 		return false

@@ -17,7 +17,6 @@ import (
 // StreamResultHandler implements the server.Handler interface
 // and demonstrates streaming query results.
 type StreamResultHandler struct {
-	server.EmptyHandler
 	conn *server.Conn
 }
 
@@ -47,7 +46,7 @@ func (h *StreamResultHandler) handleStreamingQuery() (*mysql.Result, error) {
 	}
 
 	// Create a StreamResult with buffer size of 10
-	sr := mysql.NewStreamResult(fields, 10)
+	sr := mysql.NewStreamResult(fields, 10, true)
 
 	// Start a goroutine to produce rows
 	go func() {
@@ -99,6 +98,9 @@ func (h *StreamResultHandler) HandleOtherCommand(cmd byte, data []byte) error {
 }
 
 func main() {
+	// Create a MySQL server with default settings
+	srv := server.NewDefaultServer()
+
 	// Listen on TCP port 4000
 	listener, err := net.Listen("tcp", "127.0.0.1:4000")
 	if err != nil {
@@ -117,17 +119,17 @@ func main() {
 			continue
 		}
 
-		go handleConnection(conn)
+		go handleConnection(srv, conn)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(srv *server.Server, conn net.Conn) {
 	defer conn.Close()
 
 	handler := &StreamResultHandler{}
 
-	// Create a new MySQL server connection
-	mysqlConn, err := server.NewConn(conn, "root", "", handler)
+	// Create a new MySQL connection using the server instance
+	mysqlConn, err := srv.NewConn(conn, "root", "", handler)
 	if err != nil {
 		log.Printf("Failed to create MySQL connection: %v", err)
 		return

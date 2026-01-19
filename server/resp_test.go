@@ -277,7 +277,7 @@ func makeFields(names ...string) []*mysql.Field {
 
 func TestStreamResultBasic(t *testing.T) {
 	// test NewStreamResult with fields and buffer size
-	sr := mysql.NewStreamResult(makeFields("col1", "col2"), 100)
+	sr := mysql.NewStreamResult(makeFields("col1", "col2"), 100, false)
 	require.NotNil(t, sr)
 	require.Len(t, sr.Fields, 2)
 	require.Equal(t, []byte("col1"), sr.Fields[0].Name)
@@ -285,7 +285,7 @@ func TestStreamResultBasic(t *testing.T) {
 	require.False(t, sr.IsClosed())
 
 	// test NewStreamResult with custom buffer size
-	sr2 := mysql.NewStreamResult(makeFields("a"), 50)
+	sr2 := mysql.NewStreamResult(makeFields("a"), 50, false)
 	require.NotNil(t, sr2)
 	require.Len(t, sr2.Fields, 1)
 
@@ -297,7 +297,7 @@ func TestStreamResultBasic(t *testing.T) {
 }
 
 func TestStreamResultWriteAndRead(t *testing.T) {
-	sr := mysql.NewStreamResult(makeFields("id", "name"), 10)
+	sr := mysql.NewStreamResult(makeFields("id", "name"), 10, false)
 	ctx := context.Background()
 
 	// write rows in a goroutine
@@ -325,7 +325,7 @@ func TestStreamResultWriteAndRead(t *testing.T) {
 }
 
 func TestStreamResultClose(t *testing.T) {
-	sr := mysql.NewStreamResult(makeFields("a"), 5)
+	sr := mysql.NewStreamResult(makeFields("a"), 5, false)
 
 	// close should be idempotent
 	require.False(t, sr.IsClosed())
@@ -342,7 +342,7 @@ func TestStreamResultClose(t *testing.T) {
 }
 
 func TestStreamResultError(t *testing.T) {
-	sr := mysql.NewStreamResult(makeFields("a"), 100)
+	sr := mysql.NewStreamResult(makeFields("a"), 100, false)
 
 	// initially no error
 	require.NoError(t, sr.Err())
@@ -360,7 +360,7 @@ func TestConnWriteStreamResultset(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	sr := mysql.NewStreamResult(makeFields("col1"), 10)
+	sr := mysql.NewStreamResult(makeFields("col1"), 10, false)
 
 	// write rows and close in a goroutine
 	go func() {
@@ -384,7 +384,7 @@ func TestConnWriteStreamResultsetWithError(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	sr := mysql.NewStreamResult(makeFields("col1"), 10)
+	sr := mysql.NewStreamResult(makeFields("col1"), 10, false)
 	testErr := errors.New("stream error")
 
 	// write rows, set error, and close in a goroutine
@@ -404,7 +404,7 @@ func TestConnWriteStreamResultsetWithNullValue(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	sr := mysql.NewStreamResult(makeFields("col1", "col2"), 10)
+	sr := mysql.NewStreamResult(makeFields("col1", "col2"), 10, false)
 
 	// write rows with NULL values
 	go func() {
@@ -431,7 +431,7 @@ func TestStreamResultEmptyResult(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	sr := mysql.NewStreamResult(makeFields("col1"), 10)
+	sr := mysql.NewStreamResult(makeFields("col1"), 10, false)
 
 	// close immediately without writing any rows
 	go func() {
@@ -443,4 +443,123 @@ func TestStreamResultEmptyResult(t *testing.T) {
 
 	// should still have valid output with column info and EOF
 	require.True(t, len(clientConn.WriteBuffered) > 0)
+}
+
+// TestConnWriteStreamResultsetBinary tests binary protocol streaming with data parsing.
+func TestConnWriteStreamResultsetBinary(t *testing.T) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+
+	// Create fields with proper types for binary protocol
+	fields := []*mysql.Field{
+		{Name: []byte("id"), Type: mysql.MYSQL_TYPE_LONGLONG},
+		{Name: []byte("name"), Type: mysql.MYSQL_TYPE_VAR_STRING},
+	}
+	sr := mysql.NewStreamResult(fields, 10, true)
+
+	go func() {
+		defer sr.Close()
+		ctx := context.Background()
+		sr.WriteRow(ctx, []any{int64(1), "alice"})
+		sr.WriteRow(ctx, []any{int64(2), "bob"})
+	}()
+
+	err := conn.WriteValue(sr.AsResult())
+	require.NoError(t, err)
+
+	// Parse packets from the buffer
+	data := clientConn.WriteBuffered
+	var rowPackets [][]byte
+	pos := 0
+	for pos < len(data) {
+		if pos+4 > len(data) {
+			break
+		}
+		// Packet header: 3 bytes length + 1 byte sequence
+		pktLen := int(uint32(data[pos]) | uint32(data[pos+1])<<8 | uint32(data[pos+2])<<16)
+		pos += 4
+		if pos+pktLen > len(data) {
+			break
+		}
+		pktData := data[pos : pos+pktLen]
+		pos += pktLen
+
+		// Binary row packets start with 0x00 header
+		if len(pktData) > 0 && pktData[0] == 0x00 {
+			rowPackets = append(rowPackets, pktData)
+		}
+	}
+
+	require.Len(t, rowPackets, 2, "Should have 2 binary row packets")
+
+	// Parse first row
+	row1, err := mysql.RowData(rowPackets[0]).ParseBinary(fields, nil)
+	require.NoError(t, err)
+	require.Len(t, row1, 2)
+	require.Equal(t, int64(1), row1[0].AsInt64())
+	require.Equal(t, "alice", string(row1[1].AsString()))
+
+	// Parse second row
+	row2, err := mysql.RowData(rowPackets[1]).ParseBinary(fields, nil)
+	require.NoError(t, err)
+	require.Len(t, row2, 2)
+	require.Equal(t, int64(2), row2[0].AsInt64())
+	require.Equal(t, "bob", string(row2[1].AsString()))
+}
+
+// TestConnWriteStreamResultsetBinaryWithNull tests binary protocol with NULL values and parsing.
+func TestConnWriteStreamResultsetBinaryWithNull(t *testing.T) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+
+	fields := []*mysql.Field{
+		{Name: []byte("col1"), Type: mysql.MYSQL_TYPE_VAR_STRING},
+		{Name: []byte("col2"), Type: mysql.MYSQL_TYPE_VAR_STRING},
+	}
+	sr := mysql.NewStreamResult(fields, 10, true)
+
+	go func() {
+		defer sr.Close()
+		ctx := context.Background()
+		sr.WriteRow(ctx, []any{nil, "value"})
+		sr.WriteRow(ctx, []any{"data", nil})
+	}()
+
+	err := conn.WriteValue(sr.AsResult())
+	require.NoError(t, err)
+
+	// Parse packets
+	data := clientConn.WriteBuffered
+	var rowPackets [][]byte
+	pos := 0
+	for pos < len(data) {
+		if pos+4 > len(data) {
+			break
+		}
+		pktLen := int(uint32(data[pos]) | uint32(data[pos+1])<<8 | uint32(data[pos+2])<<16)
+		pos += 4
+		if pos+pktLen > len(data) {
+			break
+		}
+		pktData := data[pos : pos+pktLen]
+		pos += pktLen
+
+		if len(pktData) > 0 && pktData[0] == 0x00 {
+			rowPackets = append(rowPackets, pktData)
+		}
+	}
+
+	require.Len(t, rowPackets, 2)
+
+	// Parse first row: NULL, "value"
+	row1, err := mysql.RowData(rowPackets[0]).ParseBinary(fields, nil)
+	require.NoError(t, err)
+	require.Nil(t, row1[0].Value()) // NULL
+	require.Equal(t, "value", string(row1[1].AsString()))
+
+	// Parse second row: "data", NULL
+	row2, err := mysql.RowData(rowPackets[1]).ParseBinary(fields, nil)
+	require.NoError(t, err)
+	require.Equal(t, "data", string(row2[0].AsString()))
+	require.Nil(t, row2[1].Value()) // NULL
 }
