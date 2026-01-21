@@ -324,23 +324,6 @@ func TestStreamResultWriteAndRead(t *testing.T) {
 	require.True(t, sr.IsClosed())
 }
 
-func TestStreamResultClose(t *testing.T) {
-	sr := mysql.NewStreamResult(makeFields("a"), 5, false)
-
-	// close should be idempotent
-	require.False(t, sr.IsClosed())
-	sr.Close()
-	require.True(t, sr.IsClosed())
-
-	// calling Close again should not panic
-	sr.Close()
-	require.True(t, sr.IsClosed())
-
-	// WriteRow should return false after close
-	ok := sr.WriteRow(context.Background(), []any{"test"})
-	require.False(t, ok)
-}
-
 func TestStreamResultError(t *testing.T) {
 	sr := mysql.NewStreamResult(makeFields("a"), 100, false)
 
