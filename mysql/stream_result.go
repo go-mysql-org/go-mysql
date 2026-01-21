@@ -9,9 +9,26 @@ import (
 // It is designed for scenarios where the result set is too large to fit in memory
 // or when results need to be sent incrementally as they are generated.
 //
-// StreamResult is safe for concurrent use. The producer writes rows via WriteRow()
-// and signals completion by calling Close(). The consumer reads rows from the
-// channel returned by RowsChan().
+// StreamResult is safe for concurrent use between one producer and one consumer.
+// The producer writes rows via WriteRow() and signals completion by calling Close().
+// The consumer reads rows from the channel returned by RowsChan().
+//
+// Usage pattern:
+//
+//	sr := mysql.NewStreamResult(fields, bufSize, binary)
+//	go func() {
+//	    defer sr.Close()  // Always close when done
+//	    for row := range rows {
+//	        if !sr.WriteRow(ctx, row) {
+//	            return  // Context canceled or stream closed by consumer
+//	        }
+//	    }
+//	}()
+//	err := conn.WriteValue(sr.AsResult())
+//
+// IMPORTANT: The producer MUST NOT call WriteRow() after Close() has been called.
+// Doing so will result in a panic (send on closed channel). Use "defer sr.Close()"
+// to ensure Close() is called after all WriteRow() calls complete.
 type StreamResult struct {
 	// Fields contains the column metadata for the result set.
 	Fields []*Field
@@ -48,8 +65,12 @@ func (sr *StreamResult) RowsChan() <-chan []any {
 }
 
 // WriteRow sends a row to the stream. It returns true if the row was successfully
-// written, or false if the stream has been closed or context is canceled.
-// This method is safe for concurrent use and will block if the channel buffer is full.
+// written, or false if the context is canceled or the done channel is closed.
+// This method will block if the channel buffer is full.
+//
+// IMPORTANT: WriteRow MUST NOT be called after Close() has been called on the same
+// StreamResult. Doing so will cause a panic. The recommended pattern is to use
+// "defer sr.Close()" in the producer goroutine to ensure proper ordering.
 func (sr *StreamResult) WriteRow(ctx context.Context, row []any) (ok bool) {
 	select {
 	case <-ctx.Done():
@@ -81,7 +102,14 @@ func (sr *StreamResult) Err() error {
 
 // Close closes the stream and signals to consumers that no more rows will be sent.
 // This method is idempotent and safe to call multiple times.
-// After Close() is called, WriteRow() will return false.
+//
+// IMPORTANT: Close MUST only be called after all WriteRow() calls have completed.
+// Calling WriteRow() after Close() will cause a panic. The recommended pattern is:
+//
+//	go func() {
+//	    defer sr.Close()
+//	    // ... all WriteRow calls here ...
+//	}()
 func (sr *StreamResult) Close() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
