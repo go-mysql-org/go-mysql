@@ -18,7 +18,7 @@ fields := []*mysql.Field{
     {Name: []byte("id"), Type: mysql.MYSQL_TYPE_LONG},
     {Name: []byte("name"), Type: mysql.MYSQL_TYPE_VAR_STRING},
 }
-sr := mysql.NewStreamResult(fields, 10)  // buffer size = 10
+sr := mysql.NewStreamResult(fields, 10, false)  // buffer=10, text protocol
 
 // 2. Write rows in goroutine
 go func() {

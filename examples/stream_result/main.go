@@ -16,9 +16,7 @@ import (
 
 // StreamResultHandler implements the server.Handler interface
 // and demonstrates streaming query results.
-type StreamResultHandler struct {
-	conn *server.Conn
-}
+type StreamResultHandler struct{}
 
 func (h *StreamResultHandler) UseDB(dbName string) error {
 	log.Printf("USE %s", dbName)
@@ -134,8 +132,6 @@ func handleConnection(srv *server.Server, conn net.Conn) {
 		log.Printf("Failed to create MySQL connection: %v", err)
 		return
 	}
-	handler.conn = mysqlConn
-
 	log.Printf("Client connected: %s", conn.RemoteAddr())
 
 	// Handle commands in a loop
