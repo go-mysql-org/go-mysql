@@ -8,11 +8,6 @@ import (
 // StreamResult provides a streaming interface for sending query results row by row.
 // It is designed for scenarios where the result set is too large to fit in memory
 // or when results need to be sent incrementally as they are generated.
-//
-// StreamResult is safe for concurrent use between one producer and one consumer.
-// The producer writes rows via WriteRow() and signals completion by calling Close().
-// The consumer reads rows from the channel returned by RowsChan().
-//
 // Usage pattern:
 //
 //	sr := mysql.NewStreamResult(fields, bufSize, binary)
@@ -20,7 +15,7 @@ import (
 //	    defer sr.Close()  // Always close when done
 //	    for row := range rows {
 //	        if !sr.WriteRow(ctx, row) {
-//	            return  // Context canceled or stream closed by consumer
+//	            return  // Context canceled, exit early
 //	        }
 //	    }
 //	}()
@@ -65,12 +60,11 @@ func (sr *StreamResult) RowsChan() <-chan []any {
 }
 
 // WriteRow sends a row to the stream. It returns true if the row was successfully
-// written, or false if the context is canceled or the done channel is closed.
+// written, or false if the context is canceled.
 // This method will block if the channel buffer is full.
 //
 // IMPORTANT: WriteRow MUST NOT be called after Close() has been called on the same
-// StreamResult. Doing so will cause a panic. The recommended pattern is to use
-// "defer sr.Close()" in the producer goroutine to ensure proper ordering.
+// StreamResult. Doing so will cause a panic.
 func (sr *StreamResult) WriteRow(ctx context.Context, row []any) (ok bool) {
 	select {
 	case <-ctx.Done():
@@ -114,11 +108,8 @@ func (sr *StreamResult) Close() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 
-	// Check if already closed by testing the done channel
-	select {
-	case <-sr.done:
-		return // already closed
-	default:
+	if sr.IsClosed() {
+		return
 	}
 
 	close(sr.done)
