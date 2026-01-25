@@ -13,6 +13,8 @@ type Result struct {
 	SessionTracking *SessionTrackingInfo
 
 	*Resultset
+
+	StreamResult *StreamResult
 }
 
 type SessionTrackingInfo struct {
@@ -45,6 +47,10 @@ func (r *Result) Close() {
 		r.returnToPool()
 		r.Resultset = nil
 	}
+	if r.StreamResult != nil {
+		r.StreamResult.Close()
+		r.StreamResult = nil
+	}
 }
 
 func (r *Result) HasResultset() bool {
@@ -55,4 +61,8 @@ func (r *Result) HasResultset() bool {
 		return true
 	}
 	return false
+}
+
+func (r *Result) IsStreaming() bool {
+	return r != nil && r.StreamResult != nil
 }
