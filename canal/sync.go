@@ -166,9 +166,16 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 					return errors.Trace(err)
 				}
 			}
+			if err = c.eventHandler.OnQueryEvent(ev.Header, e, len(nodes) > 0); err != nil {
+				return errors.Trace(err)
+			}
 		}
 		if savePos && e.GSet != nil {
 			c.master.UpdateGTIDSet(e.GSet)
+		}
+	case *replication.UserVarEvent:
+		if err := c.eventHandler.OnUserVar(e); err != nil {
+			return errors.Trace(err)
 		}
 	default:
 		return nil

@@ -324,6 +324,8 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = &HeartbeatEvent{Version: 1}
 			case HEARTBEAT_LOG_EVENT_V2:
 				e = &HeartbeatEvent{Version: 2}
+			case USER_VAR_EVENT:
+				e = &UserVarEvent{}
 			default:
 				e = &GenericEvent{}
 			}
