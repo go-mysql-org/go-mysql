@@ -62,6 +62,7 @@ type Index struct {
 	Columns     []string
 	Cardinality []uint64
 	NoneUnique  uint64
+	Visible     bool
 }
 
 type Table struct {
@@ -222,7 +223,7 @@ func (ta *Table) AddIndex(name string) (index *Index) {
 }
 
 func NewIndex(name string) *Index {
-	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8), 0}
+	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8), 0, true}
 }
 
 func (idx *Index) AddColumn(name string, cardinality uint64) {
@@ -332,6 +333,30 @@ func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
 	return r.Err()
 }
 
+// hasInvisibleIndexSupportFromResult checks if the result from SHOW INDEX has Visible column
+func hasInvisibleIndexSupportFromResult(r *mysql.Result) bool {
+	for name := range r.FieldNames {
+		if strings.EqualFold(name, "Visible") {
+			return true
+		}
+	}
+	return false
+}
+
+// hasInvisibleIndexSupportFromColumns checks if the columns from SHOW INDEX include Visible column
+func hasInvisibleIndexSupportFromColumns(cols []string) bool {
+	for _, col := range cols {
+		if strings.EqualFold(col, "Visible") {
+			return true
+		}
+	}
+	return false
+}
+
+func isIndexInvisible(value string) bool {
+	return strings.EqualFold(value, "NO")
+}
+
 func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	r, err := conn.Execute(fmt.Sprintf("show index from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
@@ -339,6 +364,8 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	}
 	var currentIndex *Index
 	currentName := ""
+
+	hasInvisibleIndex := hasInvisibleIndexSupportFromResult(r)
 
 	for i := 0; i < r.RowNumber(); i++ {
 		indexName, _ := r.GetString(i, 2)
@@ -350,6 +377,10 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 		colName, _ := r.GetString(i, 4)
 		currentIndex.AddColumn(colName, cardinality)
 		currentIndex.NoneUnique, _ = r.GetUint(i, 1)
+		if hasInvisibleIndex {
+			visible, _ := r.GetString(i, 13)
+			currentIndex.Visible = !isIndexInvisible(visible)
+		}
 	}
 
 	return ta.fetchPrimaryKeyColumns()
@@ -373,10 +404,12 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 		var colName sql.NullString
 		var noneUnique uint64
 		var cardinality interface{}
+		var visible sql.NullString
 		cols, err := r.Columns()
 		if err != nil {
 			return errors.Trace(err)
 		}
+		hasInvisibleIndex := hasInvisibleIndexSupportFromColumns(cols)
 		values := make([]interface{}, len(cols))
 		for i := 0; i < len(cols); i++ {
 			switch i {
@@ -388,6 +421,10 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 				values[i] = &colName
 			case 6:
 				values[i] = &cardinality
+			case 13:
+				if hasInvisibleIndex {
+					values[i] = &visible
+				}
 			default:
 				values[i] = &unusedVal
 			}
@@ -410,6 +447,10 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 			currentIndex.AddColumn("", c)
 		}
 		currentIndex.NoneUnique = noneUnique
+
+		if hasInvisibleIndex && visible.Valid {
+			currentIndex.Visible = !isIndexInvisible(visible.String)
+		}
 	}
 
 	return ta.fetchPrimaryKeyColumns()

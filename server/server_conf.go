@@ -32,6 +32,7 @@ type Server struct {
 	pubKey            []byte
 	tlsConfig         *tls.Config
 	cacheShaPassword  *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
+	authProvider      AuthenticationProvider
 }
 
 // NewDefaultServer: New mysql server with default settings.
@@ -56,6 +57,7 @@ func NewDefaultServer() *Server {
 		pubKey:            getPublicKeyFromCert(certPem),
 		tlsConfig:         tlsConf,
 		cacheShaPassword:  new(sync.Map),
+		authProvider:      &DefaultAuthenticationProvider{},
 	}
 }
 
@@ -69,7 +71,12 @@ func NewDefaultServer() *Server {
 // And for TLS support, you can specify self-signed or CA-signed certificates and decide whether the client needs to provide
 // a signed or unsigned certificate to provide different level of security.
 func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string, pubKey []byte, tlsConfig *tls.Config) *Server {
-	if !isAuthMethodSupported(defaultAuthMethod) {
+	authProvider := &DefaultAuthenticationProvider{}
+	return NewServerWithAuth(serverVersion, collationId, defaultAuthMethod, pubKey, tlsConfig, authProvider)
+}
+
+func NewServerWithAuth(serverVersion string, collationId uint8, defaultAuthMethod string, pubKey []byte, tlsConfig *tls.Config, authProvider AuthenticationProvider) *Server {
+	if authProvider == nil || !authProvider.Validate(defaultAuthMethod) {
 		panic(fmt.Sprintf("server authentication method '%s' is not supported", defaultAuthMethod))
 	}
 
@@ -91,11 +98,12 @@ func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string
 		pubKey:            pubKey,
 		tlsConfig:         tlsConfig,
 		cacheShaPassword:  new(sync.Map),
+		authProvider:      authProvider,
 	}
 }
 
 func isAuthMethodSupported(authMethod string) bool {
-	return authMethod == mysql.AUTH_NATIVE_PASSWORD || authMethod == mysql.AUTH_CACHING_SHA2_PASSWORD || authMethod == mysql.AUTH_SHA256_PASSWORD
+	return authMethod == mysql.AUTH_NATIVE_PASSWORD || authMethod == mysql.AUTH_CACHING_SHA2_PASSWORD || authMethod == mysql.AUTH_SHA256_PASSWORD || authMethod == mysql.AUTH_CLEAR_PASSWORD
 }
 
 func (s *Server) InvalidateCache(username string, host string) {

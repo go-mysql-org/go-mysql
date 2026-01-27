@@ -2,22 +2,25 @@ package mysql
 
 import (
 	"bytes"
+	"cmp"
 	"compress/zlib"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	mrand "math/rand"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"filippo.io/edwards25519"
-	"github.com/Masterminds/semver"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
@@ -28,7 +31,7 @@ func Pstack() string {
 	return string(buf[0:n])
 }
 
-func CalcPassword(scramble, password []byte) []byte {
+func CalcNativePassword(scramble, password []byte) []byte {
 	if len(password) == 0 {
 		return nil
 	}
@@ -38,27 +41,92 @@ func CalcPassword(scramble, password []byte) []byte {
 	crypt.Write(password)
 	stage1 := crypt.Sum(nil)
 
-	// scrambleHash = SHA1(scramble + SHA1(stage1Hash))
-	// inner Hash
+	// stage2Hash = SHA1(stage1Hash)
 	crypt.Reset()
 	crypt.Write(stage1)
-	hash := crypt.Sum(nil)
+	stage2 := crypt.Sum(nil)
 
-	// outer Hash
+	// scrambleHash = SHA1(scramble + stage2Hash)
 	crypt.Reset()
 	crypt.Write(scramble)
-	crypt.Write(hash)
-	scramble = crypt.Sum(nil)
+	crypt.Write(stage2)
+	scrambleHash := crypt.Sum(nil)
 
 	// token = scrambleHash XOR stage1Hash
-	for i := range scramble {
-		scramble[i] ^= stage1[i]
+	return Xor(scrambleHash, stage1)
+}
+
+// Xor returns a new slice with hash1 XOR hash2, wrapping hash2 if hash1 is longer.
+func Xor(hash1 []byte, hash2 []byte) []byte {
+	result := make([]byte, len(hash1))
+	for i := range hash1 {
+		result[i] = hash1[i] ^ hash2[i%len(hash2)]
 	}
-	return scramble
+	return result
+}
+
+// hash_stage1 = xor(reply, sha1(public_seed, hash_stage2))
+func stage1FromReply(scramble []byte, seed []byte, stage2 []byte) []byte {
+	crypt := sha1.New()
+	crypt.Write(seed)
+	crypt.Write(stage2)
+	seededHash := crypt.Sum(nil)
+
+	return Xor(scramble, seededHash)
+}
+
+// DecodePasswordHex decodes the standard format used by MySQL
+// Password hashes in the 4.1 format always begin with a * character
+// see https://dev.mysql.com/doc/mysql-security-excerpt/5.7/en/password-hashing.html
+// ref vitess.io/vitess/go/mysql/auth_server.go
+func DecodePasswordHex(hexEncodedPassword string) ([]byte, error) {
+	if hexEncodedPassword[0] == '*' {
+		hexEncodedPassword = hexEncodedPassword[1:]
+	}
+	return hex.DecodeString(hexEncodedPassword)
+}
+
+// EncodePasswordHex encodes to the standard format used by MySQL
+// adds the optionally leading * to the hashed password
+func EncodePasswordHex(passwordHash []byte) string {
+	hexstr := strings.ToUpper(hex.EncodeToString(passwordHash))
+	return "*" + hexstr
+}
+
+// NativePasswordHash = sha1(sha1(password))
+func NativePasswordHash(password []byte) []byte {
+	if len(password) == 0 {
+		return nil
+	}
+
+	// stage1Hash = SHA1(password)
+	crypt := sha1.New()
+	crypt.Write(password)
+	stage1 := crypt.Sum(nil)
+
+	// stage2Hash = SHA1(stage1Hash)
+	crypt.Reset()
+	crypt.Write(stage1)
+	return crypt.Sum(stage1[:0])
+}
+
+func CompareNativePassword(reply []byte, stored []byte, seed []byte) bool {
+	if len(stored) == 0 {
+		return false
+	}
+
+	// hash_stage1 = xor(reply, sha1(public_seed, hash_stage2))
+	stage1 := stage1FromReply(reply, seed, stored)
+	// andidate_hash2 = sha1(hash_stage1)
+	stage2 := sha1.Sum(stage1)
+
+	// check(candidate_hash2 == hash_stage2)
+	// use ConstantTimeCompare to mitigate timing based attacks
+	return subtle.ConstantTimeCompare(stage2[:], stored) == 1
 }
 
 // CalcCachingSha2Password: Hash password using MySQL 8+ method (SHA256)
-func CalcCachingSha2Password(scramble []byte, password string) []byte {
+func CalcCachingSha2Password(scramble []byte, password []byte) []byte {
 	if len(password) == 0 {
 		return nil
 	}
@@ -66,7 +134,7 @@ func CalcCachingSha2Password(scramble []byte, password string) []byte {
 	// XOR(SHA256(password), SHA256(SHA256(SHA256(password)), scramble))
 
 	crypt := sha256.New()
-	crypt.Write([]byte(password))
+	crypt.Write(password)
 	message1 := crypt.Sum(nil)
 
 	crypt.Reset()
@@ -78,11 +146,7 @@ func CalcCachingSha2Password(scramble []byte, password string) []byte {
 	crypt.Write(scramble)
 	message2 := crypt.Sum(nil)
 
-	for i := range message1 {
-		message1[i] ^= message2[i]
-	}
-
-	return message1
+	return Xor(message1, message2)
 }
 
 // Taken from https://github.com/go-sql-driver/mysql/pull/1518
@@ -132,6 +196,89 @@ func EncryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, 
 	}
 	sha1v := sha1.New()
 	return rsa.EncryptOAEP(sha1v, rand.Reader, pub, plain, nil)
+}
+
+const (
+	SALT_LENGTH                = 16
+	ITERATION_MULTIPLIER       = 1000
+	SHA256_PASSWORD_ITERATIONS = 5
+)
+
+// generateUserSalt generate salt of given length for sha256_password hash
+func generateUserSalt(length int) ([]byte, error) {
+	// Generate a random salt of the given length
+	// Implement this function for your project
+	salt := make([]byte, length)
+	_, err := rand.Read(salt)
+	if err != nil {
+		return []byte(""), err
+	}
+
+	// Restrict to 7-bit to avoid multi-byte UTF-8
+	for i := range salt {
+		salt[i] = salt[i] &^ 128
+		for salt[i] == 36 || salt[i] == 0 { // '$' or NUL
+			newval := make([]byte, 1)
+			_, err := rand.Read(newval)
+			if err != nil {
+				return []byte(""), err
+			}
+			salt[i] = newval[0] &^ 128
+		}
+	}
+	return salt, nil
+}
+
+// hashCrypt256 salt and hash a password the given number of iterations
+func hashCrypt256(source, salt string, iterations uint64) (string, error) {
+	actualIterations := iterations * ITERATION_MULTIPLIER
+	hashInput := []byte(source + salt)
+	var hash [32]byte
+	for i := uint64(0); i < actualIterations; i++ {
+		hash = sha256.Sum256(hashInput)
+		hashInput = hash[:]
+	}
+
+	hashHex := hex.EncodeToString(hash[:])
+	digest := fmt.Sprintf("$%d$%s$%s", iterations, salt, hashHex)
+	return digest, nil
+}
+
+// Check256HashingPassword compares a password to a hash for sha256_password
+// rather than trying to recreate just the hash we recreate the full hash
+// and use that for comparison
+func Check256HashingPassword(pwhash []byte, password string) (bool, error) {
+	pwHashParts := bytes.Split(pwhash, []byte("$"))
+	if len(pwHashParts) != 4 {
+		return false, errors.New("failed to decode hash parts")
+	}
+
+	iterationsPart := pwHashParts[1]
+	if len(iterationsPart) == 0 {
+		return false, errors.New("iterations part is empty")
+	}
+
+	iterations, err := strconv.ParseUint(string(iterationsPart), 10, 64)
+	if err != nil {
+		return false, errors.New("failed to decode iterations")
+	}
+	salt := pwHashParts[2][:SALT_LENGTH]
+
+	newHash, err := hashCrypt256(password, string(salt), iterations)
+	if err != nil {
+		return false, err
+	}
+
+	return subtle.ConstantTimeCompare(pwhash, []byte(newHash)) == 1, nil
+}
+
+// NewSha256PasswordHash creates a new password hash for sha256_password
+func NewSha256PasswordHash(pwd string) (string, error) {
+	salt, err := generateUserSalt(SALT_LENGTH)
+	if err != nil {
+		return "", err
+	}
+	return hashCrypt256(pwd, string(salt), SHA256_PASSWORD_ITERATIONS)
 }
 
 func DecompressMariadbData(data []byte) ([]byte, error) {
@@ -452,21 +599,46 @@ func ErrorEqual(err1, err2 error) bool {
 	return e1.Error() == e2.Error()
 }
 
+func compareSubVersion(typ, a, b, aFull, bFull string) (int, error) {
+	if a == "" || b == "" {
+		return 0, nil
+	}
+
+	var aNum, bNum int
+	var err error
+
+	if aNum, err = strconv.Atoi(a); err != nil {
+		return 0, fmt.Errorf("cannot parse %s version %s of %s", typ, a, aFull)
+	}
+	if bNum, err = strconv.Atoi(b); err != nil {
+		return 0, fmt.Errorf("cannot parse %s version %s of %s", typ, b, bFull)
+	}
+
+	return cmp.Compare(aNum, bNum), nil
+}
+
+// Compares version triplet strings, ignoring anything past `-` in version.
+// A version string like 8.0 will compare as if third triplet were a wildcard.
+// A version string like 8 will compare as if second & third triplets were wildcards.
 func CompareServerVersions(a, b string) (int, error) {
-	var (
-		aVer, bVer *semver.Version
-		err        error
-	)
+	aNumbers, _, _ := strings.Cut(a, "-")
+	bNumbers, _, _ := strings.Cut(b, "-")
 
-	if aVer, err = semver.NewVersion(a); err != nil {
-		return 0, fmt.Errorf("cannot parse %q as semver: %w", a, err)
+	aMajor, aRest, _ := strings.Cut(aNumbers, ".")
+	bMajor, bRest, _ := strings.Cut(bNumbers, ".")
+
+	if majorCompare, err := compareSubVersion("major", aMajor, bMajor, a, b); err != nil || majorCompare != 0 {
+		return majorCompare, err
 	}
 
-	if bVer, err = semver.NewVersion(b); err != nil {
-		return 0, fmt.Errorf("cannot parse %q as semver: %w", b, err)
+	aMinor, aPatch, _ := strings.Cut(aRest, ".")
+	bMinor, bPatch, _ := strings.Cut(bRest, ".")
+
+	if minorCompare, err := compareSubVersion("minor", aMinor, bMinor, a, b); err != nil || minorCompare != 0 {
+		return minorCompare, err
 	}
 
-	return aVer.Compare(bVer), nil
+	return compareSubVersion("patch", aPatch, bPatch, a, b)
 }
 
 var encodeRef = map[byte]byte{

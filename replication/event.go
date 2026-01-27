@@ -254,10 +254,10 @@ func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
 		masked := make([]byte, 8)
 		copy(masked, data[1:7])
 		sidnr = binary.LittleEndian.Uint64(masked)
-		return
+		return format, sidnr
 	}
 	sidnr = binary.LittleEndian.Uint64(data[:8])
-	return
+	return format, sidnr
 }
 
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
@@ -427,12 +427,12 @@ type GTIDEvent struct {
 	SequenceNumber int64
 
 	// ImmediateCommitTimestamp/OriginalCommitTimestamp are introduced in MySQL-8.0.1, see:
-	// https://mysqlhighavailability.com/replication-features-in-mysql-8-0-1/
+	// https://dev.mysql.com/blog-archive/new-monitoring-replication-features-and-more
 	ImmediateCommitTimestamp uint64
 	OriginalCommitTimestamp  uint64
 
 	// Total transaction length (including this GTIDEvent), introduced in MySQL-8.0.2, see:
-	// https://mysqlhighavailability.com/taking-advantage-of-new-transaction-length-metadata/
+	// https://dev.mysql.com/blog-archive/taking-advantage-of-new-transaction-length-metadata
 	TransactionLength uint64
 
 	// ImmediateServerVersion/OriginalServerVersion are introduced in MySQL-8.0.14, see
@@ -944,4 +944,68 @@ func (i *IntVarEvent) Decode(data []byte) error {
 func (i *IntVarEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Type: %d\n", i.Type)
 	fmt.Fprintf(w, "Value: %d\n", i.Value)
+}
+
+// HeartbeatEvent is a HEARTBEAT_EVENT or HEARTBEAT_LOG_EVENT_V2
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication_binlog_event.html#sect_protocol_replication_event_heartbeat
+type HeartbeatEvent struct {
+	// Event version, either 1 for HEARTBEAT_EVENT or 2 for HEARTBEAT_LOG_EVENT_V2
+	Version int
+
+	// Filename of the binary log
+	Filename string
+
+	// Offset is the offset in the binlog file
+	Offset uint64
+}
+
+// Decode is decoding a heartbeat event payload (excluding event header and checksum)
+func (h *HeartbeatEvent) Decode(data []byte) error {
+	switch h.Version {
+	case 1:
+		// Also known as HEARTBEAT_EVENT
+		h.Filename = string(data)
+	case 2:
+		// Also known as HEARTBEAT_LOG_EVENT_V2
+		//
+		// The server sends this in the binlog stream if the following is set:
+		// DumpCommandFlag: replication.USE_HEARTBEAT_EVENT_V2
+		pos := 0
+		for pos < len(data) {
+			switch data[pos] {
+			case OTW_HB_LOG_FILENAME_FIELD:
+				pos++
+				nameLength := int(data[pos])
+				pos++
+				h.Filename = string(data[pos : pos+nameLength])
+				pos += nameLength
+			case OTW_HB_LOG_POSITION_FIELD:
+				pos++
+				offsetLength := int(data[pos])
+				pos++
+				var n int
+				h.Offset, _, n = mysql.LengthEncodedInt(data[pos : pos+offsetLength])
+				if n != offsetLength {
+					return errors.New("failed to read binary log offset")
+				}
+				pos += offsetLength
+			case OTW_HB_HEADER_END_MARK:
+				pos++
+			default:
+				return errors.New("unknown heartbeatv2 field")
+			}
+		}
+	default:
+		return errors.New("unknown heartbeat version")
+	}
+
+	return nil
+}
+
+func (h *HeartbeatEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w,
+		"Heartbeat Event Version: %d\nBinlog File Name: %s\nBinlog Offset: %d\n",
+		h.Version, h.Filename, h.Offset,
+	)
+	fmt.Fprintln(w)
 }

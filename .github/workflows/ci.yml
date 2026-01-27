@@ -10,8 +10,8 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ "1.24", "1.23", "1.22" ]
-        os: [ ubuntu-24.04, ubuntu-22.04 ]
+        go: [ "1.24", "1.23" ]
+        os: [ ubuntu-latest, ubuntu-24.04, ubuntu-22.04 ]
     name: Tests Go ${{ matrix.go }} on ${{ matrix.os }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}
 
@@ -56,8 +56,9 @@ jobs:
     strategy:
       matrix:
         mysql_version:
-          - 8.0.40
-          - 8.4.3
+          - 8.0.42
+          - 8.4.5
+          - 9.3.0
     name: Tests with MySQL ${{ matrix.mysql_version }}
     runs-on: ubuntu-latest
     services:
@@ -100,7 +101,7 @@ jobs:
         with:
           go-version: stable
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
           args: --timeout=3m

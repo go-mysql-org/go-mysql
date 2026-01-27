@@ -1,11 +1,11 @@
 package server
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"fmt"
 
@@ -18,59 +18,41 @@ var (
 	ErrAccessDeniedNoPassword = fmt.Errorf("%w without password", ErrAccessDenied)
 )
 
+// isEmptyPassword returns true if the auth data represents an empty password.
+// Some clients send an empty packet (len == 0), while others (e.g. MySQL's libmysql)
+// send a single null byte. This matches MySQL server's own handling:
+// if (!pkt_len || (pkt_len == 1 && *pkt == 0))
+// https://github.com/mysql/mysql-server/blob/8.0/sql/auth/sha2_password.cc
+// https://github.com/mysql/mysql-server/blob/8.0/sql/auth/sql_authentication.cc
+func isEmptyPassword(authData []byte) bool {
+	return len(authData) == 0 || (len(authData) == 1 && authData[0] == 0)
+}
+
 func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) error {
-	switch authPluginName {
-	case mysql.AUTH_NATIVE_PASSWORD:
-		if err := c.acquirePassword(); err != nil {
-			return err
-		}
-		return c.compareNativePasswordAuthData(clientAuthData, c.password)
-
-	case mysql.AUTH_CACHING_SHA2_PASSWORD:
-		if err := c.compareCacheSha2PasswordAuthData(clientAuthData); err != nil {
-			return err
-		}
-		if c.cachingSha2FullAuth {
-			return c.handleAuthSwitchResponse()
-		}
-		return nil
-
-	case mysql.AUTH_SHA256_PASSWORD:
-		if err := c.acquirePassword(); err != nil {
-			return err
-		}
-		cont, err := c.handlePublicKeyRetrieval(clientAuthData)
+	if authPluginName != c.credential.AuthPluginName {
+		err := c.writeAuthSwitchRequest(c.credential.AuthPluginName)
 		if err != nil {
 			return err
 		}
-		if !cont {
-			return nil
-		}
-		return c.compareSha256PasswordAuthData(clientAuthData, c.password)
-
-	default:
-		return errors.Errorf("unknown authentication plugin name '%s'", authPluginName)
+		return c.handleAuthSwitchResponse()
 	}
+
+	return c.serverConf.authProvider.Authenticate(c, authPluginName, clientAuthData)
 }
 
-func (c *Conn) acquirePassword() error {
-	password, found, err := c.credentialProvider.GetCredential(c.user)
+func (c *Conn) acquireCredential() error {
+	if len(c.credential.Passwords) > 0 {
+		return nil
+	}
+	credential, found, err := c.authHandler.GetCredential(c.user)
 	if err != nil {
 		return err
 	}
-	if !found {
+	if !found || len(credential.Passwords) == 0 {
 		return mysql.NewDefaultError(mysql.ER_NO_SUCH_USER, c.user, c.RemoteAddr().String())
 	}
-	c.password = password
+	c.credential = credential
 	return nil
-}
-
-func errAccessDenied(password string) error {
-	if password == "" {
-		return ErrAccessDeniedNoPassword
-	}
-
-	return ErrAccessDenied
 }
 
 func scrambleValidation(cached, nonce, scramble []byte) bool {
@@ -90,23 +72,39 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 	crypt.Reset()
 	crypt.Write(message2)
 	m := crypt.Sum(nil)
-	return bytes.Equal(m, cached)
+	return subtle.ConstantTimeCompare(m, cached) == 1
 }
 
-func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, password string) error {
-	if bytes.Equal(mysql.CalcPassword(c.salt, []byte(password)), clientAuthData) {
-		return nil
-	}
-	return errAccessDenied(password)
-}
-
-func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password string) error {
-	// Empty passwords are not hashed, but sent as empty string
-	if len(clientAuthData) == 0 {
-		if password == "" {
+func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential Credential) error {
+	if isEmptyPassword(clientAuthData) {
+		if credential.hasEmptyPassword() {
 			return nil
 		}
-		return ErrAccessDenied
+		return ErrAccessDeniedNoPassword
+	}
+
+	for _, password := range credential.Passwords {
+		hash, err := credential.hashPassword(password)
+		if err != nil {
+			continue
+		}
+		decoded, err := mysql.DecodePasswordHex(hash)
+		if err != nil {
+			continue
+		}
+		if mysql.CompareNativePassword(clientAuthData, decoded, c.salt) {
+			return nil
+		}
+	}
+	return ErrAccessDenied
+}
+
+func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential Credential) error {
+	if isEmptyPassword(clientAuthData) {
+		if credential.hasEmptyPassword() {
+			return nil
+		}
+		return ErrAccessDeniedNoPassword
 	}
 	if tlsConn, ok := c.Conn.Conn.(*tls.Conn); ok {
 		if !tlsConn.ConnectionState().HandshakeComplete {
@@ -117,10 +115,6 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 		if l := len(clientAuthData); l != 0 && clientAuthData[l-1] == 0x00 {
 			clientAuthData = clientAuthData[:l-1]
 		}
-		if bytes.Equal(clientAuthData, []byte(password)) {
-			return nil
-		}
-		return errAccessDenied(password)
 	} else {
 		// client should send encrypted password
 		// decrypt
@@ -128,46 +122,36 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, password str
 		if err != nil {
 			return err
 		}
-		plain := make([]byte, len(password)+1)
-		copy(plain, password)
-		for i := range plain {
-			j := i % len(c.salt)
-			plain[i] ^= c.salt[j]
+		clientAuthData = mysql.Xor(dbytes, c.salt)
+		if l := len(clientAuthData); l != 0 && clientAuthData[l-1] == 0x00 {
+			clientAuthData = clientAuthData[:l-1]
 		}
-		if bytes.Equal(plain, dbytes) {
+	}
+	for _, password := range credential.Passwords {
+		hash, err := credential.hashPassword(password)
+		if err != nil {
+			continue
+		}
+		check, err := mysql.Check256HashingPassword([]byte(hash), string(clientAuthData))
+		if err != nil {
+			continue
+		}
+		if check {
 			return nil
 		}
-		return errAccessDenied(password)
 	}
+	return ErrAccessDenied
 }
 
 func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
-	// Empty passwords are not hashed, but sent as empty string
-	if len(clientAuthData) == 0 {
-		if err := c.acquirePassword(); err != nil {
-			return err
-		}
-		if c.password == "" {
+	if isEmptyPassword(clientAuthData) {
+		if c.credential.hasEmptyPassword() {
 			return nil
 		}
-		return ErrAccessDenied
+		return ErrAccessDeniedNoPassword
 	}
 	// the caching of 'caching_sha2_password' in MySQL, see: https://dev.mysql.com/worklog/task/?id=9591
-	if _, ok := c.credentialProvider.(*InMemoryProvider); ok {
-		// since we have already kept the password in memory and calculate the scramble is not that high of cost, we eliminate
-		// the caching part. So our server will never ask the client to do a full authentication via RSA key exchange and it appears
-		// like the auth will always hit the cache.
-		if err := c.acquirePassword(); err != nil {
-			return err
-		}
-		if bytes.Equal(mysql.CalcCachingSha2Password(c.salt, c.password), clientAuthData) {
-			// 'fast' auth: write "More data" packet (first byte == 0x01) with the second byte = 0x03
-			return c.writeAuthMoreDataFastAuth()
-		}
-
-		return errAccessDenied(c.password)
-	}
-	// other type of credential provider, we use the cache
+	// check if we have a cached value
 	cached, ok := c.serverConf.cacheShaPassword.Load(fmt.Sprintf("%s@%s", c.user, c.LocalAddr()))
 	if ok {
 		// Scramble validation
@@ -175,10 +159,8 @@ func (c *Conn) compareCacheSha2PasswordAuthData(clientAuthData []byte) error {
 			// 'fast' auth: write "More data" packet (first byte == 0x01) with the second byte = 0x03
 			return c.writeAuthMoreDataFastAuth()
 		}
-
-		return errAccessDenied(c.password)
 	}
-	// cache miss, do full auth
+	// cache miss or validation failed, do full auth
 	if err := c.writeAuthMoreDataFullAuth(); err != nil {
 		return err
 	}

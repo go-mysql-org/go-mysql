@@ -66,6 +66,7 @@ func (c *Conn) writeEOF() error {
 
 // see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_auth_switch_request.html
 func (c *Conn) writeAuthSwitchRequest(newAuthPluginName string) error {
+	c.authPluginName = newAuthPluginName
 	data := make([]byte, 4)
 	data = append(data, mysql.EOF_HEADER)
 	data = append(data, []byte(newAuthPluginName)...)
@@ -162,6 +163,107 @@ func (c *Conn) writeResultset(r *mysql.Resultset) error {
 	return nil
 }
 
+func (c *Conn) writeStreamResultset(sr *mysql.StreamResult) error {
+	// Ensure the stream is closed when we're done, whether successful or not.
+	// This prevents producer goroutines from blocking indefinitely if an error
+	// occurs during row processing.
+	defer sr.Close()
+
+	columnLen := mysql.PutLengthEncodedInt(uint64(len(sr.Fields)))
+	data := make([]byte, 4, 1024)
+	data = append(data, columnLen...)
+	if err := c.WritePacket(data); err != nil {
+		return err
+	}
+
+	if err := c.writeFieldList(sr.Fields, data); err != nil {
+		return err
+	}
+
+	if sr.Binary {
+		return c.writeStreamBinaryRows(sr)
+	}
+	return c.writeStreamTextRows(sr)
+}
+
+// writeStreamTextRows writes rows using text protocol.
+func (c *Conn) writeStreamTextRows(sr *mysql.StreamResult) error {
+	data := make([]byte, 4, 1024)
+	for row := range sr.RowsChan() {
+		data = data[0:4]
+		for _, v := range row {
+			if v == nil {
+				data = append(data, 0xfb) // NULL
+			} else {
+				tv, err := mysql.FormatTextValue(v)
+				if err != nil {
+					return err
+				}
+				data = append(data, mysql.PutLengthEncodedString(tv)...)
+			}
+		}
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+
+	if err := sr.Err(); err != nil {
+		return err
+	}
+
+	return c.writeEOF()
+}
+
+// writeStreamBinaryRows writes rows using binary protocol.
+func (c *Conn) writeStreamBinaryRows(sr *mysql.StreamResult) error {
+	data := make([]byte, 4, 1024)
+	columnCount := len(sr.Fields)
+	bitmapLen := (columnCount + 7 + 2) >> 3
+
+	for row := range sr.RowsChan() {
+		data = data[0:4]
+		nullBitmap := make([]byte, bitmapLen)
+
+		// Binary row header: 0x00
+		data = append(data, 0x00)
+		// Placeholder for null bitmap
+		data = append(data, nullBitmap...)
+
+		for j, v := range row {
+			if v == nil {
+				// Set null bit: bit position = (column index + 2)
+				nullBitmap[(j+2)/8] |= 1 << (uint(j+2) % 8)
+				continue
+			}
+
+			b, err := mysql.FormatBinaryValue(v)
+			if err != nil {
+				return err
+			}
+
+			// For VAR_STRING type, use length-encoded string
+			if sr.Fields[j].Type == mysql.MYSQL_TYPE_VAR_STRING {
+				data = append(data, mysql.PutLengthEncodedString(b)...)
+			} else {
+				data = append(data, b...)
+			}
+		}
+
+		// Copy null bitmap to the correct position
+		copy(data[5:], nullBitmap)
+
+		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+	}
+
+	if err := sr.Err(); err != nil {
+		return err
+	}
+
+	return c.writeEOF()
+}
+
 func (c *Conn) writeFieldList(fs []*mysql.Field, data []byte) error {
 	if data == nil {
 		data = make([]byte, 4, 1024)
@@ -232,7 +334,9 @@ func (c *Conn) WriteValue(value interface{}) error {
 	case nil:
 		return c.writeOK(nil)
 	case *mysql.Result:
-		if v != nil && v.HasResultset() {
+		if v != nil && v.IsStreaming() {
+			return c.writeStreamResultset(v.StreamResult)
+		} else if v != nil && v.HasResultset() {
 			return c.writeResultset(v.Resultset)
 		} else {
 			return c.writeOK(v)

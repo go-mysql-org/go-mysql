@@ -9,6 +9,7 @@ import (
 	"net"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,6 +46,9 @@ type Conn struct {
 	capability uint32
 	// client-set capabilities only
 	ccaps uint32
+	// Capability flags explicitly disabled by the client via UnsetCapability()
+	// These flags are removed from the final advertised capability set during handshake.
+	clientExplicitOffCaps uint32
 
 	attributes map[string]string
 
@@ -234,19 +238,26 @@ func (c *Conn) Ping() error {
 	return nil
 }
 
-// SetCapability enables the use of a specific capability
-func (c *Conn) SetCapability(cap uint32) {
+// SetCapability marks the specified flag as explicitly enabled by the client.
+func (c *Conn) SetCapability(cap uint32) error {
+	if !slices.Contains(optionalCapabilities, cap) {
+		return errors.New("unsupported or unknown capability")
+	}
 	c.ccaps |= cap
+	c.clientExplicitOffCaps &^= cap
+	return nil
 }
 
-// UnsetCapability disables the use of a specific capability
+// UnsetCapability marks the specified flag as explicitly disabled by the client.
+// This disables the flag even if the server supports it.
 func (c *Conn) UnsetCapability(cap uint32) {
-	c.ccaps &= ^cap
+	c.ccaps &^= cap
+	c.clientExplicitOffCaps |= cap
 }
 
 // HasCapability returns true if the connection has the specific capability
 func (c *Conn) HasCapability(cap uint32) bool {
-	return c.ccaps&cap > 0
+	return c.ccaps&cap != 0
 }
 
 // UseSSL: use default SSL
@@ -262,20 +273,23 @@ func (c *Conn) SetTLSConfig(config *tls.Config) {
 }
 
 func (c *Conn) UseDB(dbName string) error {
-	if c.db == dbName {
-		return nil
-	}
+	_, err := c.UseDBWithResult(dbName)
+	return err
+}
 
+func (c *Conn) UseDBWithResult(dbName string) (*mysql.Result, error) {
 	if err := c.writeCommandStr(mysql.COM_INIT_DB, dbName); err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
-	if _, err := c.readOK(); err != nil {
-		return errors.Trace(err)
+	var r *mysql.Result
+	var err error
+	if r, err = c.readOK(); err != nil {
+		return r, errors.Trace(err)
 	}
 
 	c.db = dbName
-	return nil
+	return r, nil
 }
 
 func (c *Conn) GetDB() string {
@@ -579,72 +593,9 @@ func (c *Conn) CapabilityString() string {
 		field := uint32(1 << bits.TrailingZeros32(capability))
 		capability ^= field
 
-		switch field {
-		case mysql.CLIENT_LONG_PASSWORD:
-			caps = append(caps, "CLIENT_LONG_PASSWORD")
-		case mysql.CLIENT_FOUND_ROWS:
-			caps = append(caps, "CLIENT_FOUND_ROWS")
-		case mysql.CLIENT_LONG_FLAG:
-			caps = append(caps, "CLIENT_LONG_FLAG")
-		case mysql.CLIENT_CONNECT_WITH_DB:
-			caps = append(caps, "CLIENT_CONNECT_WITH_DB")
-		case mysql.CLIENT_NO_SCHEMA:
-			caps = append(caps, "CLIENT_NO_SCHEMA")
-		case mysql.CLIENT_COMPRESS:
-			caps = append(caps, "CLIENT_COMPRESS")
-		case mysql.CLIENT_ODBC:
-			caps = append(caps, "CLIENT_ODBC")
-		case mysql.CLIENT_LOCAL_FILES:
-			caps = append(caps, "CLIENT_LOCAL_FILES")
-		case mysql.CLIENT_IGNORE_SPACE:
-			caps = append(caps, "CLIENT_IGNORE_SPACE")
-		case mysql.CLIENT_PROTOCOL_41:
-			caps = append(caps, "CLIENT_PROTOCOL_41")
-		case mysql.CLIENT_INTERACTIVE:
-			caps = append(caps, "CLIENT_INTERACTIVE")
-		case mysql.CLIENT_SSL:
-			caps = append(caps, "CLIENT_SSL")
-		case mysql.CLIENT_IGNORE_SIGPIPE:
-			caps = append(caps, "CLIENT_IGNORE_SIGPIPE")
-		case mysql.CLIENT_TRANSACTIONS:
-			caps = append(caps, "CLIENT_TRANSACTIONS")
-		case mysql.CLIENT_RESERVED:
-			caps = append(caps, "CLIENT_RESERVED")
-		case mysql.CLIENT_SECURE_CONNECTION:
-			caps = append(caps, "CLIENT_SECURE_CONNECTION")
-		case mysql.CLIENT_MULTI_STATEMENTS:
-			caps = append(caps, "CLIENT_MULTI_STATEMENTS")
-		case mysql.CLIENT_MULTI_RESULTS:
-			caps = append(caps, "CLIENT_MULTI_RESULTS")
-		case mysql.CLIENT_PS_MULTI_RESULTS:
-			caps = append(caps, "CLIENT_PS_MULTI_RESULTS")
-		case mysql.CLIENT_PLUGIN_AUTH:
-			caps = append(caps, "CLIENT_PLUGIN_AUTH")
-		case mysql.CLIENT_CONNECT_ATTRS:
-			caps = append(caps, "CLIENT_CONNECT_ATTRS")
-		case mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA:
-			caps = append(caps, "CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA")
-		case mysql.CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS:
-			caps = append(caps, "CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS")
-		case mysql.CLIENT_SESSION_TRACK:
-			caps = append(caps, "CLIENT_SESSION_TRACK")
-		case mysql.CLIENT_DEPRECATE_EOF:
-			caps = append(caps, "CLIENT_DEPRECATE_EOF")
-		case mysql.CLIENT_OPTIONAL_RESULTSET_METADATA:
-			caps = append(caps, "CLIENT_OPTIONAL_RESULTSET_METADATA")
-		case mysql.CLIENT_ZSTD_COMPRESSION_ALGORITHM:
-			caps = append(caps, "CLIENT_ZSTD_COMPRESSION_ALGORITHM")
-		case mysql.CLIENT_QUERY_ATTRIBUTES:
-			caps = append(caps, "CLIENT_QUERY_ATTRIBUTES")
-		case mysql.MULTI_FACTOR_AUTHENTICATION:
-			caps = append(caps, "MULTI_FACTOR_AUTHENTICATION")
-		case mysql.CLIENT_CAPABILITY_EXTENSION:
-			caps = append(caps, "CLIENT_CAPABILITY_EXTENSION")
-		case mysql.CLIENT_SSL_VERIFY_SERVER_CERT:
-			caps = append(caps, "CLIENT_SSL_VERIFY_SERVER_CERT")
-		case mysql.CLIENT_REMEMBER_OPTIONS:
-			caps = append(caps, "CLIENT_REMEMBER_OPTIONS")
-		default:
+		if capname, ok := mysql.CapNames[field]; ok {
+			caps = append(caps, capname)
+		} else {
 			caps = append(caps, fmt.Sprintf("(%d)", field))
 		}
 	}

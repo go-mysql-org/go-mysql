@@ -24,9 +24,9 @@ type Conn struct {
 	warnings       uint16
 	salt           []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
 
-	credentialProvider  CredentialProvider
+	authHandler         AuthenticationHandler
 	user                string
-	password            string
+	credential          Credential
 	cachingSha2FullAuth bool
 
 	h Handler
@@ -54,20 +54,21 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 // NewCustomizedConn: create connection with customized server settings
 //
 // Deprecated: Use [Server.NewCustomizedConn] instead.
-func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
-	return serverConf.NewCustomizedConn(conn, p, h)
+func NewCustomizedConn(conn net.Conn, serverConf *Server, authHandler AuthenticationHandler, h Handler) (*Conn, error) {
+	return serverConf.NewCustomizedConn(conn, authHandler, h)
 }
 
 // NewConn: create connection with default server settings
 func (s *Server) NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
-	p := NewInMemoryProvider()
-	p.AddUser(user, password)
+	authHandler := NewInMemoryAuthenticationHandler()
+	if err := authHandler.AddUser(user, password); err != nil {
+		return nil, err
+	}
 
-	return s.NewCustomizedConn(conn, p, h)
+	return s.NewCustomizedConn(conn, authHandler, h)
 }
 
-// NewCustomizedConn: create connection with customized server settings
-func (s *Server) NewCustomizedConn(conn net.Conn, p CredentialProvider, h Handler) (*Conn, error) {
+func (s *Server) NewCustomizedConn(conn net.Conn, authHandler AuthenticationHandler, h Handler) (*Conn, error) {
 	var packetConn *packet.Conn
 	if s.tlsConfig != nil {
 		packetConn = packet.NewTLSConn(conn)
@@ -76,13 +77,13 @@ func (s *Server) NewCustomizedConn(conn net.Conn, p CredentialProvider, h Handle
 	}
 
 	c := &Conn{
-		Conn:               packetConn,
-		serverConf:         s,
-		credentialProvider: p,
-		h:                  h,
-		connectionID:       atomic.AddUint32(&baseConnID, 1),
-		stmts:              make(map[uint32]*Stmt),
-		salt:               mysql.RandomBuf(20),
+		Conn:         packetConn,
+		serverConf:   s,
+		authHandler:  authHandler,
+		h:            h,
+		connectionID: atomic.AddUint32(&baseConnID, 1),
+		stmts:        make(map[uint32]*Stmt),
+		salt:         mysql.RandomBuf(20),
 	}
 	c.closed.Store(false)
 
@@ -108,6 +109,12 @@ func (c *Conn) handshake() error {
 			err = mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.user,
 				c.RemoteAddr().String(), mysql.MySQLErrName[usingPasswd])
 		}
+		c.authHandler.OnAuthFailure(c, err)
+		_ = c.writeError(err)
+		return err
+	}
+
+	if err := c.authHandler.OnAuthSuccess(c); err != nil {
 		_ = c.writeError(err)
 		return err
 	}

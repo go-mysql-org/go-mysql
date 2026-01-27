@@ -89,7 +89,8 @@ func toBinaryDateTime(t time.Time) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func formatBinaryValue(value interface{}) ([]byte, error) {
+// FormatBinaryValue formats a value for binary protocol.
+func FormatBinaryValue(value interface{}) ([]byte, error) {
 	switch v := value.(type) {
 	case int8:
 		return Uint64ToBytes(uint64(v)), nil
@@ -143,7 +144,7 @@ func fieldType(value interface{}) (typ uint8, err error) {
 	default:
 		err = errors.Errorf("unsupport type %T for resultset", value)
 	}
-	return
+	return typ, err
 }
 
 func formatField(field *Field, value interface{}) error {
@@ -267,7 +268,7 @@ func BuildSimpleBinaryResultset(names []string, values [][]interface{}) (*Result
 				continue
 			}
 
-			b, err = formatBinaryValue(value)
+			b, err = FormatBinaryValue(value)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}

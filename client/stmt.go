@@ -8,25 +8,25 @@ import (
 	"runtime"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/stmt"
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 )
 
 type Stmt struct {
-	conn *Conn
-	id   uint32
-
-	params   int
-	columns  int
+	conn     *Conn
 	warnings int
+
+	// PreparedStmt contains common fields shared with server.Stmt for proxy passthrough
+	stmt.PreparedStmt
 }
 
 func (s *Stmt) ParamNum() int {
-	return s.params
+	return s.Params
 }
 
 func (s *Stmt) ColumnNum() int {
-	return s.columns
+	return s.Columns
 }
 
 func (s *Stmt) WarningsNum() int {
@@ -50,7 +50,7 @@ func (s *Stmt) ExecuteSelectStreaming(result *mysql.Result, perRowCb SelectPerRo
 }
 
 func (s *Stmt) Close() error {
-	if err := s.conn.writeCommandUint32(mysql.COM_STMT_CLOSE, s.id); err != nil {
+	if err := s.conn.writeCommandUint32(mysql.COM_STMT_CLOSE, s.ID); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -60,10 +60,10 @@ func (s *Stmt) Close() error {
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html
 func (s *Stmt) write(args ...interface{}) error {
 	defer clear(s.conn.queryAttributes)
-	paramsNum := s.params
+	paramsNum := s.Params
 
 	if len(args) != paramsNum {
-		return fmt.Errorf("argument mismatch, need %d but got %d", s.params, len(args))
+		return fmt.Errorf("argument mismatch, need %d but got %d", s.Params, len(args))
 	}
 
 	if (s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0) && (s.conn.includeLine >= 0) {
@@ -156,6 +156,9 @@ func (s *Stmt) write(args ...interface{}) error {
 		case []byte:
 			paramTypes[i] = []byte{mysql.MYSQL_TYPE_STRING}
 			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v))), v...)
+		case mysql.TypedBytes:
+			paramTypes[i] = []byte{v.Type}
+			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v.Bytes))), v.Bytes...)
 		case json.RawMessage:
 			paramTypes[i] = []byte{mysql.MYSQL_TYPE_STRING}
 			paramValues[i] = append(mysql.PutLengthEncodedInt(uint64(len(v))), v...)
@@ -187,7 +190,7 @@ func (s *Stmt) write(args ...interface{}) error {
 
 	data.Write([]byte{0, 0, 0, 0})
 	data.WriteByte(mysql.COM_STMT_EXECUTE)
-	data.Write([]byte{byte(s.id), byte(s.id >> 8), byte(s.id >> 16), byte(s.id >> 24)})
+	data.Write([]byte{byte(s.ID), byte(s.ID >> 8), byte(s.ID >> 16), byte(s.ID >> 24)})
 
 	flags := mysql.CURSOR_TYPE_NO_CURSOR
 	if paramsNum > 0 {
@@ -254,30 +257,59 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	pos := 1
 
 	// for statement id
-	s.id = binary.LittleEndian.Uint32(data[pos:])
+	s.ID = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 
 	// number columns
-	s.columns = int(binary.LittleEndian.Uint16(data[pos:]))
+	s.Columns = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
 	// number params
-	s.params = int(binary.LittleEndian.Uint16(data[pos:]))
+	s.Params = int(binary.LittleEndian.Uint16(data[pos:]))
 	pos += 2
 
-	// warnings
-	s.warnings = int(binary.LittleEndian.Uint16(data[pos:]))
-	// pos += 2
+	// reserved
+	pos += 1
 
-	if s.params > 0 {
-		if err := s.conn.readUntilEOF(); err != nil {
-			return nil, errors.Trace(err)
+	if len(data) >= 12 {
+		// warnings
+		s.warnings = int(binary.LittleEndian.Uint16(data[pos:]))
+		// pos += 2
+	}
+
+	if s.Params > 0 {
+		s.RawParamFields = make([][]byte, s.Params)
+		for i := range s.Params {
+			data, err := s.conn.ReadPacket()
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			s.RawParamFields[i] = data
+		}
+		if s.conn.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
+			if packet, err := s.conn.ReadPacket(); err != nil {
+				return nil, errors.Trace(err)
+			} else if !c.isEOFPacket(packet) {
+				return nil, mysql.ErrMalformPacket
+			}
 		}
 	}
 
-	if s.columns > 0 {
-		if err := s.conn.readUntilEOF(); err != nil {
-			return nil, errors.Trace(err)
+	if s.Columns > 0 {
+		s.RawColumnFields = make([][]byte, s.Columns)
+		for i := range s.Columns {
+			data, err := s.conn.ReadPacket()
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			s.RawColumnFields[i] = data
+		}
+		if s.conn.capability&mysql.CLIENT_DEPRECATE_EOF == 0 {
+			if packet, err := s.conn.ReadPacket(); err != nil {
+				return nil, errors.Trace(err)
+			} else if !c.isEOFPacket(packet) {
+				return nil, mysql.ErrMalformPacket
+			}
 		}
 	}
 
