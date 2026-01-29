@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -94,9 +95,12 @@ func (c *Conn) readAuthSwitchRequestResponse() ([]byte, error) {
 }
 
 func (c *Conn) writeAuthMoreDataPubkey() error {
+	if len(c.serverConf.rsaPublicKeyBytes) == 0 {
+		return errors.New("RSA key not configured; non-TLS connections are not supported for this authentication method")
+	}
 	data := make([]byte, 4)
 	data = append(data, mysql.MORE_DATE_HEADER)
-	data = append(data, c.serverConf.pubKey...)
+	data = append(data, c.serverConf.rsaPublicKeyBytes...)
 	return c.WritePacket(data)
 }
 

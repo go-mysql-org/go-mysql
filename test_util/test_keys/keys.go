@@ -1,5 +1,11 @@
 package test_keys
 
+import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+)
+
 // here we put the testing encryption keys here
 // NOTE THIS IS FOR TESTING ONLY, DO NOT USE THEM IN PRODUCTION!
 
@@ -83,3 +89,16 @@ cAQGzzYpbUCIv7ciSB93cKkU73fQLZVy5ZBy1+oAa1V9U4cb4G/20/PDmT+G3Gxz
 pEjeDKtz8XINoWgA2cSdfAhNZt5vqJaCIZ8qN0z6C7SUKwUBderERUMLUXdhUldC
 KTVHyEPvd0aULd5S5vEpKCnHcQmFcLdoN8t9k9pR9ZgwqXbyJHlxWFo=
 -----END CERTIFICATE-----`)
+
+// RSAKey returns the parsed RSA private key from KeyPem
+func RSAKey() *rsa.PrivateKey {
+	block, _ := pem.Decode(KeyPem)
+	if block == nil {
+		panic("failed to decode KeyPem")
+	}
+	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		panic(err)
+	}
+	return key
+}
