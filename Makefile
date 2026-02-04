@@ -5,6 +5,7 @@ MYSQL_VERSION ?= 8.0
 GO ?= go
 
 build:
+	${GO} build -o bin/go-binlogwriter cmd/go-binlogwriter/main.go
 	${GO} build -o bin/go-mysqlbinlog cmd/go-mysqlbinlog/main.go
 	${GO} build -o bin/go-mysqldump cmd/go-mysqldump/main.go
 	${GO} build -o bin/go-canal cmd/go-canal/main.go

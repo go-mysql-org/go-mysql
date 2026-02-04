@@ -860,6 +860,27 @@ func (e *TableMapEvent) JsonColumnCount() uint64 {
 	return count
 }
 
+func (e *TableMapEvent) Encode(w io.Writer) {
+	tableIDTemp := make([]byte, 8)
+	binary.LittleEndian.PutUint64(tableIDTemp, e.TableID)
+	w.Write(tableIDTemp[:6])
+	binary.Write(w, binary.LittleEndian, e.Flags)
+
+	w.Write([]byte{byte(len(e.Schema))})
+	w.Write(e.Schema)
+	w.Write([]byte{0x0})
+
+	w.Write([]byte{byte(len(e.Table))})
+	w.Write(e.Table)
+	w.Write([]byte{0x0})
+
+	w.Write(mysql.PutLengthEncodedInt(e.ColumnCount))
+	w.Write(e.ColumnType)
+
+	w.Write(mysql.PutLengthEncodedInt(0)) // metadata_length
+	w.Write(e.NullBitmap)
+}
+
 // RowsEventStmtEndFlag is set in the end of the statement.
 const RowsEventStmtEndFlag = 0x01
 
@@ -1883,6 +1904,24 @@ func (e *RowsEvent) Dump(w io.Writer) {
 		}
 	}
 	fmt.Fprintln(w)
+}
+
+func (e *RowsEvent) Encode(w io.Writer) {
+	if e.Version != 2 {
+		panic("encoding RowsEvent is only supported for v2")
+	}
+
+	// Header
+	tableIDTemp := make([]byte, 8)
+	binary.LittleEndian.PutUint64(tableIDTemp, e.TableID)
+	w.Write(tableIDTemp[:6])
+	binary.Write(w, binary.LittleEndian, e.Flags)
+	binary.Write(w, binary.LittleEndian, uint16(2)) // extra_data_len (including itself, 0 bytes following)
+	w.Write(mysql.PutLengthEncodedInt(e.ColumnCount))
+	w.Write(e.ColumnBitmap1)
+
+	// Data
+	w.Write([]byte{0x0, 0xa, 0x0, 0x0, 0x0}) // TODO: actual data
 }
 
 type RowsQueryEvent struct {
