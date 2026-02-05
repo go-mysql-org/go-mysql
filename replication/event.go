@@ -103,43 +103,40 @@ func (h *EventHeader) Decode(data []byte) error {
 
 // headerFlagsString is returning a pipe separated string with flag names
 func headerFlagsString(flags uint16) string {
-	var fstr string
+	var flagstr []string
 
 	if (flags & LOG_EVENT_BINLOG_IN_USE_F) != 0 {
-		fstr += "|IN_USE"
+		flagstr = append(flagstr, "IN_USE")
 	}
 	if (flags & LOG_EVENT_FORCED_ROTATE_F) != 0 {
-		fstr += "|ROTATE"
+		flagstr = append(flagstr, "ROTATE")
 	}
 	if (flags & LOG_EVENT_THREAD_SPECIFIC_F) != 0 {
-		fstr += "|THREAD_SPECIFIC"
+		flagstr = append(flagstr, "THREAD_SPECIFIC")
 	}
 	if (flags & LOG_EVENT_SUPPRESS_USE_F) != 0 {
-		fstr += "|SUPPRESS_USE"
+		flagstr = append(flagstr, "SUPPRESS_USE")
 	}
 	if (flags & LOG_EVENT_UPDATE_TABLE_MAP_VERSION_F) != 0 {
-		fstr += "|UPDATE_TABLE_MAP_VERSION"
+		flagstr = append(flagstr, "UPDATE_TABLE_MAP_VERSION")
 	}
 	if (flags & LOG_EVENT_ARTIFICIAL_F) != 0 {
-		fstr += "|ARTIFICIAL"
+		flagstr = append(flagstr, "ARTIFICIAL")
 	}
 	if (flags & LOG_EVENT_RELAY_LOG_F) != 0 {
-		fstr += "|RELAY_LOG"
+		flagstr = append(flagstr, "RELAY_LOG")
 	}
 	if (flags & LOG_EVENT_IGNORABLE_F) != 0 {
-		fstr += "|IGNORABLE"
+		flagstr = append(flagstr, "IGNORABLE")
 	}
 	if (flags & LOG_EVENT_NO_FILTER_F) != 0 {
-		fstr += "|NO_FILTER"
+		flagstr = append(flagstr, "NO_FILTER")
 	}
 	if (flags & LOG_EVENT_MTS_ISOLATE_F) != 0 {
-		fstr += "|MTS_ISOLATE"
+		flagstr = append(flagstr, "MTS_ISOLATE")
 	}
 
-	if len(fstr) < 1 {
-		return ""
-	}
-	return fstr[1:] // Remove initial '|'
+	return strings.Join(flagstr, "|")
 }
 
 func (h *EventHeader) Dump(w io.Writer) {
