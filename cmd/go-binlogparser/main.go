@@ -27,5 +27,6 @@ func main() {
 	err := p.ParseFile(*name, *offset, f)
 	if err != nil {
 		println(err.Error())
+		os.Exit(1)
 	}
 }
