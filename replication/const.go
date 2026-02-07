@@ -224,14 +224,27 @@ func (e EventType) String() string {
 	}
 }
 
+type BinlogChecksum byte
+
 const (
-	BINLOG_CHECKSUM_ALG_OFF byte = 0 // Events are without checksum though its generator
+	BINLOG_CHECKSUM_ALG_OFF BinlogChecksum = 0 // Events are without checksum though its generator
 	// is checksum-capable New Master (NM).
-	BINLOG_CHECKSUM_ALG_CRC32 byte = 1 // CRC32 of zlib algorithm.
+	BINLOG_CHECKSUM_ALG_CRC32 BinlogChecksum = 1 // CRC32 of zlib algorithm.
 	//  BINLOG_CHECKSUM_ALG_ENUM_END,  // the cut line: valid alg range is [1, 0x7f].
-	BINLOG_CHECKSUM_ALG_UNDEF byte = 255 // special value to tag undetermined yet checksum
+	BINLOG_CHECKSUM_ALG_UNDEF BinlogChecksum = 255 // special value to tag undetermined yet checksum
 	// or events from checksum-unaware servers
 )
+
+func (e BinlogChecksum) String() string {
+	switch e {
+	case BINLOG_CHECKSUM_ALG_OFF:
+		return "CHECKSUM_OFF"
+	case BINLOG_CHECKSUM_ALG_CRC32:
+		return "CHECKSUM_CRC32"
+	default:
+		return "CHECKSUM_UNDEF"
+	}
+}
 
 // These are TABLE_MAP_EVENT's optional metadata field type, from: libbinlogevents/include/rows_event.h
 const (
