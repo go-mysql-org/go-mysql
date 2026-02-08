@@ -118,7 +118,10 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 	} else {
 		// client should send encrypted password
 		// decrypt
-		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, (c.serverConf.tlsConfig.Certificates[0].PrivateKey).(*rsa.PrivateKey), clientAuthData, nil)
+		if c.serverConf.rsaPrivateKey == nil {
+			return errors.New("RSA key not configured; non-TLS connections are not supported for this authentication method")
+		}
+		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, c.serverConf.rsaPrivateKey, clientAuthData, nil)
 		if err != nil {
 			return err
 		}
