@@ -192,7 +192,7 @@ type FormatDescriptionEvent struct {
 	EventTypeHeaderLengths []byte
 
 	// 0 is off, 1 is for CRC32, 255 is undefined
-	ChecksumAlgorithm byte
+	ChecksumAlgorithm BinlogChecksum
 }
 
 func (e *FormatDescriptionEvent) Decode(data []byte) error {
@@ -227,7 +227,7 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 
 	if calcVersionProduct(e.ServerVersion) >= checksumProduct {
 		// here, the last 5 bytes is 1 byte check sum alg type and 4 byte checksum if exists
-		e.ChecksumAlgorithm = data[len(data)-5]
+		e.ChecksumAlgorithm = BinlogChecksum(data[len(data)-5])
 		e.EventTypeHeaderLengths = data[pos : len(data)-5]
 	} else {
 		e.ChecksumAlgorithm = BINLOG_CHECKSUM_ALG_UNDEF
@@ -241,7 +241,7 @@ func (e *FormatDescriptionEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Version: %d\n", e.Version)
 	fmt.Fprintf(w, "Server version: %s\n", e.ServerVersion)
 	// fmt.Fprintf(w, "Create date: %s\n", time.Unix(int64(e.CreateTimestamp), 0).Format(TimeFormat))
-	fmt.Fprintf(w, "Checksum algorithm: %d\n", e.ChecksumAlgorithm)
+	fmt.Fprintf(w, "Checksum algorithm: %s\n", e.ChecksumAlgorithm)
 	// fmt.Fprintf(w, "Event header lengths: \n%s", hex.Dump(e.EventTypeHeaderLengths))
 	fmt.Fprintln(w)
 }
