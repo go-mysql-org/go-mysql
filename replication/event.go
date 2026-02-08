@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"strconv"
 	"strings"
@@ -39,11 +40,48 @@ func (e *BinlogEvent) Dump(w io.Writer) {
 	e.Event.Dump(w)
 }
 
+func (e *BinlogEvent) Write(w io.Writer, startpos uint32) {
+	if ew, ok := e.Event.(EncodableEvent); ok {
+		var ebuf, hbuf bytes.Buffer
+		ew.Encode(&ebuf)             // Encode Event
+		e.Header.EventSize = uint32( // Update EventSize
+			len(ebuf.Bytes()) +
+				int(EventHeaderSize) +
+				BinlogChecksumLength)
+		e.Header.LogPos = startpos + e.Header.EventSize
+		e.Header.Write(&hbuf) // Encode Header
+		w.Write(hbuf.Bytes()) // Write Header to binlog
+		w.Write(ebuf.Bytes()) // Write Event payload to binlog
+
+		// Calculate and write CRC32 checksum, write the the last 4 bytes of the event
+		checksum := crc32.NewIEEE()
+		checksum.Write(hbuf.Bytes())
+		checksum.Write(ebuf.Bytes())
+		binary.Write(w, binary.LittleEndian, checksum.Sum32())
+	} else {
+		panic("trying to write an event that isn't encodable")
+	}
+}
+
+func NewBinlogEvent() *BinlogEvent {
+	return &BinlogEvent{
+		Header: &EventHeader{
+			Timestamp: 0,
+		},
+		Event: &FormatDescriptionEvent{},
+	}
+}
+
 type Event interface {
 	// Dump Event, format like python-mysql-replication
 	Dump(w io.Writer)
 
 	Decode(data []byte) error
+}
+
+type EncodableEvent interface {
+	Event
+	Encode(w io.Writer)
 }
 
 type EventError struct {
@@ -147,6 +185,15 @@ func (h *EventHeader) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Header Flags: %s\n", headerFlagsString(h.Flags))
 }
 
+func (h *EventHeader) Write(w io.Writer) {
+	binary.Write(w, binary.LittleEndian, h.Timestamp)
+	w.Write([]byte{byte(h.EventType)})
+	binary.Write(w, binary.LittleEndian, h.ServerID)
+	binary.Write(w, binary.LittleEndian, h.EventSize)
+	binary.Write(w, binary.LittleEndian, h.LogPos)
+	binary.Write(w, binary.LittleEndian, h.Flags)
+}
+
 var (
 	checksumVersionSplitMysql   = []int{5, 6, 1}
 	checksumVersionProductMysql = (checksumVersionSplitMysql[0]*256+checksumVersionSplitMysql[1])*256 + checksumVersionSplitMysql[2]
@@ -237,6 +284,19 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 	return nil
 }
 
+func (e *FormatDescriptionEvent) Encode(w io.Writer) {
+	binary.Write(w, binary.LittleEndian, e.Version)
+
+	var serverVersionRaw [50]byte
+	copy(serverVersionRaw[:], []byte(e.ServerVersion))
+	w.Write(serverVersionRaw[:])
+
+	binary.Write(w, binary.LittleEndian, e.CreateTimestamp)
+	w.Write([]byte{byte(e.EventHeaderLength)})
+	w.Write(e.EventTypeHeaderLengths)
+	w.Write([]byte{byte(BINLOG_CHECKSUM_ALG_CRC32)})
+}
+
 func (e *FormatDescriptionEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Version: %d\n", e.Version)
 	fmt.Fprintf(w, "Server version: %s\n", e.ServerVersion)
@@ -279,7 +339,7 @@ const (
 // tagged GTIDs or classic (non-tagged) GTIDs.
 //
 // Note that each gtid tag increases the sidno here, so a single UUID
-// might turn up multiple times if there are multipl tags.
+// might turn up multiple times if there are multiple tags.
 //
 // see also:
 // decode_nsids_format in mysql/mysql-server
@@ -315,7 +375,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 		var tag string
 		if format == GtidFormatTagged {
 			tagLength := int(data[pos]) / 2
-			pos += 1
+			pos++
 			if tagLength > 0 { // 0 == no tag, >0 == tag
 				tag = string(data[pos : pos+tagLength])
 				pos += tagLength
@@ -330,7 +390,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 				buf.WriteString(",")
 			}
 			buf.WriteString(uuid)
-			currentSetnr += 1
+			currentSetnr++
 		}
 
 		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
@@ -349,7 +409,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 			}
 		}
 		if len(tag) == 0 {
-			currentSetnr += 1
+			currentSetnr++
 		}
 	}
 	e.GTIDSets = buf.String()
@@ -359,6 +419,54 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 func (e *PreviousGTIDsEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Previous GTID Event: %s\n", e.GTIDSets)
 	fmt.Fprintln(w)
+}
+
+func (e *PreviousGTIDsEvent) Encode(w io.Writer) {
+	// TODO: Add suport for Tagged GTIDs
+
+	gtids := strings.Split(e.GTIDSets, ",")
+	binary.Write(w, binary.LittleEndian, uint64(len(gtids)))
+
+	for _, gtid := range gtids {
+		parts := strings.SplitN(gtid, ":", 2)
+		for _, uuidPart := range strings.Split(parts[0], "-") {
+			binPart, err := hex.DecodeString(uuidPart)
+			if err != nil {
+				panic("failed to convert uuid to binary")
+			}
+			w.Write(binPart)
+		}
+
+		sliceParts := strings.Split(parts[1], ":")
+		binary.Write(w, binary.LittleEndian, uint64(len(sliceParts)))
+
+		for _, slicePart := range sliceParts {
+			var start, end uint64
+			var err error
+			p := strings.Split(slicePart, "-")
+			if len(p) == 1 {
+				start, err = strconv.ParseUint(slicePart, 10, 64)
+				if err != nil {
+					panic("failed to convert uuid interval")
+				}
+				end = start + 1
+			} else if len(p) == 2 {
+				start, err = strconv.ParseUint(p[0], 10, 64)
+				if err != nil {
+					panic("failed to convert uuid interval")
+				}
+				end, err = strconv.ParseUint(p[1], 10, 64)
+				if err != nil {
+					panic("failed to convert uuid interval")
+				}
+				end++
+			} else {
+				panic("failed to convert uuid interval, too many parts")
+			}
+			binary.Write(w, binary.LittleEndian, start)
+			binary.Write(w, binary.LittleEndian, end)
+		}
+	}
 }
 
 func (e *PreviousGTIDsEvent) decodeUuid(data []byte) string {
@@ -390,8 +498,12 @@ func (e *XIDEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
+func (e *XIDEvent) Encode(w io.Writer) {
+	binary.Write(w, binary.LittleEndian, e.XID)
+}
+
 type QueryEvent struct {
-	SlaveProxyID  uint32
+	SlaveProxyID  uint32 // thread_id in mysqlbinlog output
 	ExecutionTime uint32
 	ErrorCode     uint16
 	StatusVars    []byte
@@ -448,13 +560,24 @@ func (e *QueryEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Slave proxy ID: %d\n", e.SlaveProxyID)
 	fmt.Fprintf(w, "Execution time: %d\n", e.ExecutionTime)
 	fmt.Fprintf(w, "Error code: %d\n", e.ErrorCode)
-	// fmt.Fprintf(w, "Status vars: \n%s", hex.Dump(e.StatusVars))
+	// fmt.Fprintf(w, "Status vars: %X\n", e.StatusVars)
 	fmt.Fprintf(w, "Schema: %s\n", e.Schema)
 	fmt.Fprintf(w, "Query: %s\n", e.Query)
 	if e.GSet != nil {
 		fmt.Fprintf(w, "GTIDSet: %s\n", e.GSet.String())
 	}
 	fmt.Fprintln(w)
+}
+
+func (e *QueryEvent) Encode(w io.Writer) {
+	binary.Write(w, binary.LittleEndian, e.SlaveProxyID)
+	binary.Write(w, binary.LittleEndian, e.ExecutionTime)
+	w.Write([]byte{byte(len(e.Schema))})
+	binary.Write(w, binary.LittleEndian, e.ErrorCode)
+	w.Write([]byte{0x0, 0x0}) // stats_vars_len
+	w.Write(e.Schema)
+	w.Write([]byte{0x0})
+	w.Write(e.Query)
 }
 
 type GTIDEvent struct {
@@ -566,6 +689,22 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Immediate server version: %d\n", e.ImmediateServerVersion)
 	fmt.Fprintf(w, "Orignal server version: %d\n", e.OriginalServerVersion)
 	fmt.Fprintln(w)
+}
+
+func (e *GTIDEvent) Encode(w io.Writer) {
+	w.Write([]byte{byte(e.CommitFlag)})
+	w.Write(e.SID)
+	binary.Write(w, binary.LittleEndian, uint64(e.GNO))
+
+	// TODO:
+	// - Add e.Tag
+	// - Add e.LastCommited
+	// - Add e.SequenceNumber
+	// - Add e.ImmediateCommitTimestamp
+	// - Add e.OriginalCommitTimestamp
+	// - Add e.ImmediateServerVersion
+	// - Add e.OriginalServerVersion
+	// - Set the EventTypeHeaderLengths for this event in the FDE back to 0x2a (now 0x19)
 }
 
 func (e *GTIDEvent) GTIDNext() (mysql.GTIDSet, error) {
