@@ -290,3 +290,13 @@ const (
 	OTW_HB_LOG_FILENAME_FIELD
 	OTW_HB_LOG_POSITION_FIELD
 )
+
+// Constants for binlog event flags
+// Source: https://github.com/mysql/mysql-server/blob/447eb26e094b444a88c532028647e48228c3c04f/libs/mysql/binlog/event/rows_event.h#L891-L910
+const (
+	STMT_END_F = 1 << iota
+	NO_FOREIGN_KEY_CHECKS_F
+	RELAXED_UNIQUE_CHECKS_F
+	COMPLETE_ROWS_F
+	USE_SQL_FOREIGN_KEY_F
+)
