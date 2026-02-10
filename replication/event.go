@@ -591,7 +591,7 @@ func (e *QueryEvent) GetStatusVars() *QueryStatusVars {
 			pos += 1
 
 			vars.DefaultTableEncryption = e.StatusVars[pos]
-			pos += 1
+			pos += 2
 		case 0x80:
 			pos += 1
 
