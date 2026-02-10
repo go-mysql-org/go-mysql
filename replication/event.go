@@ -586,7 +586,7 @@ func (e *QueryEvent) GetStatusVars() *QueryStatusVars {
 			pos += 1
 
 			vars.SQLRequirePrimaryKey = e.StatusVars[pos]
-			pos += 1
+			pos += 2
 		case 0x14:
 			pos += 1
 
