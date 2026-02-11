@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"errors"
 	"testing"
 
@@ -111,17 +113,23 @@ func TestConnReadAuthSwitchRequestResponse(t *testing.T) {
 
 func TestConnWriteAuthMoreDataPubkey(t *testing.T) {
 	clientConn := &mockconn.MockConn{}
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
 	conn := &Conn{
 		Conn: packet.NewConn(clientConn),
 		serverConf: &Server{
-			pubKey: []byte{1, 2, 3, 4},
+			rsaPrivateKey:     rsaKey,
+			rsaPublicKeyBytes: rsaPublicKeyBytes(rsaKey),
 		},
 	}
 
-	err := conn.writeAuthMoreDataPubkey()
+	err = conn.writeAuthMoreDataPubkey()
 	require.NoError(t, err)
-	expected := []byte{5, 0, 0, 0, mysql.MORE_DATE_HEADER, 1, 2, 3, 4}
-	require.Equal(t, expected, clientConn.WriteBuffered)
+	// Check that the packet starts with the expected header
+	require.Equal(t, mysql.MORE_DATE_HEADER, clientConn.WriteBuffered[4])
+	// Check that the public key PEM is included (starts after the 5-byte header)
+	require.Contains(t, string(clientConn.WriteBuffered[5:]), "BEGIN PUBLIC KEY")
 }
 
 func TestConnWriteAuthMoreDataFullAuth(t *testing.T) {

@@ -51,7 +51,10 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 		}
 		// the encrypted password
 		// decrypt
-		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, (c.serverConf.tlsConfig.Certificates[0].PrivateKey).(*rsa.PrivateKey), authData, nil)
+		if c.serverConf.rsaPrivateKey == nil {
+			return errors.New("RSA key not configured; non-TLS connections are not supported for this authentication method")
+		}
+		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, c.serverConf.rsaPrivateKey, authData, nil)
 		if err != nil {
 			return err
 		}

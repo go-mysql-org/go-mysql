@@ -28,7 +28,7 @@ func TestCachingSha2Cache(t *testing.T) {
 		InMemoryAuthenticationHandler: NewInMemoryAuthenticationHandler(),
 	}
 	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), tlsConf)
 
 	// no TLS
 	suite.Run(t, &cacheTestSuite{
@@ -43,7 +43,7 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 		InMemoryAuthenticationHandler: NewInMemoryAuthenticationHandler(),
 	}
 	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), tlsConf)
 
 	// TLS
 	suite.Run(t, &cacheTestSuite{
