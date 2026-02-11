@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -394,7 +395,7 @@ type QueryEvent struct {
 	SlaveProxyID  uint32
 	ExecutionTime uint32
 	ErrorCode     uint16
-	StatusVars    []byte
+	StatusVars    []QueryEventStatusVar
 	Schema        []byte
 	Query         []byte
 
@@ -423,7 +424,7 @@ func (e *QueryEvent) Decode(data []byte) error {
 	statusVarsLength := binary.LittleEndian.Uint16(data[pos:])
 	pos += 2
 
-	e.StatusVars = data[pos : pos+int(statusVarsLength)]
+	e.decodeStatusVars(data[pos : pos+int(statusVarsLength)])
 	pos += int(statusVarsLength)
 
 	e.Schema = data[pos : pos+int(schemaLength)]
@@ -444,11 +445,373 @@ func (e *QueryEvent) Decode(data []byte) error {
 	return nil
 }
 
+// See also
+//   - Query_event_status_vars in
+//     https://github.com/mysql/mysql-server/blob/trunk/libs/mysql/binlog/event/statement_events.h
+//   - https://dev.mysql.com/doc/dev/mysql-server/latest/classmysql_1_1binlog_1_1event_1_1Query__event.html#details
+//   - https://mariadb.com/docs/server/reference/clientserver-protocol/replication-protocol/query_event
+type QueryEventStatusVar struct {
+	VarType  int
+	VarValue any
+}
+
+func (sv QueryEventStatusVar) String() string {
+	retval := ""
+	switch sv.VarType {
+	case Q_FLAGS2_CODE:
+		retval += "FLAGS2"
+	case Q_SQL_MODE_CODE:
+		retval += "SQL_MODE"
+	case Q_CATALOG_CODE:
+		retval += "CATALOG"
+	case Q_AUTO_INCREMENT:
+		retval += "AUTO_INCREMENT"
+	case Q_CHARSET_CODE:
+		retval += "CHARSET"
+	case Q_TIME_ZONE_CODE:
+		retval += "TIME_ZONE"
+	case Q_CATALOG_NZ_CODE:
+		retval += "CATALOG_NZ"
+	case Q_LC_TIME_NAMES_CODE:
+		retval += "LC_TIME_NAMES"
+	case Q_CHARSET_DATABASE_CODE:
+		retval += "CHARSET_DATABASE"
+	case Q_TABLE_MAP_FOR_UPDATE_CODE:
+		retval += "TABLE_MAP_FOR_UPDATE"
+	case Q_MASTER_DATA_WRITTEN_CODE:
+		retval += "MASTER_DATA_WRITTEN"
+	case Q_INVOKE:
+		retval += "INVOKE"
+	case Q_UPDATED_DB_NAMES:
+		retval += "UPDATED_DB_NAMES"
+	case Q_MICROSECONDS:
+		retval += "MICROSECONDS"
+	case Q_COMMIT_TS:
+		retval += "COMMIT_TS"
+	case Q_COMMIT_TS2:
+		retval += "COMMIT_TS2"
+	case Q_EXPLICIT_DEFAULTS_FOR_TIMESTAMP:
+		retval += "EXPLICIT_DEFAULTS_FOR_TIMESTAMP"
+	case Q_DDL_LOGGED_WITH_XID:
+		retval += "DDL_LOGGED_WITH_XID"
+	case Q_DEFAULT_COLLATION_FOR_UTF8MB4:
+		retval += "DEFAULT_COLLATION_FOR_UTF8MB4"
+	case Q_SQL_REQUIRE_PRIMARY_KEY:
+		retval += "SQL_REQUIRE_PRIMARY_KEY"
+	case Q_DEFAULT_TABLE_ENCRYPTION:
+		retval += "DEFAULT_TABLE_ENCRYPTION"
+	case Q_HRNOW:
+		retval += "HRNOW"
+	case Q_XID:
+		retval += "XID"
+	}
+	retval += fmt.Sprintf(" = %v", sv.VarValue)
+	return retval
+}
+
+type QFlags uint32
+
+func (f QFlags) String() string {
+	var flags []string
+
+	if (uint32(f) & OPTION_AUTO_IS_NULL) != 0 {
+		flags = append(flags, "AUTO_IS_NULL")
+	}
+
+	if (uint32(f) & OPTION_NOT_AUTOCOMMIT) != 0 {
+		flags = append(flags, "NOT_AUTOCOMMIT")
+	}
+
+	if (uint32(f) & OPTION_NO_FOREIGN_KEY_CHECKS) != 0 {
+		flags = append(flags, "NO_FOREIGN_KEY_CHECKS")
+	}
+
+	if (uint32(f) & OPTION_RELAXED_UNIQUE_CHECKS) != 0 {
+		flags = append(flags, "RELAXED_UNIQUE_CHECKS")
+	}
+
+	return strings.Join(flags, ",")
+}
+
+type SQLMode uint64
+
+func (m SQLMode) String() string {
+	var modes []string
+
+	if uint64(m)&MODE_REAL_AS_FLOAT != 0 {
+		modes = append(modes, "REAL_AS_FLOAT")
+	}
+	if uint64(m)&MODE_PIPES_AS_CONCAT != 0 {
+		modes = append(modes, "PIPES_AS_CONCAT")
+	}
+	if uint64(m)&MODE_ANSI_QUOTES != 0 {
+		modes = append(modes, "ANSI_QUOTES")
+	}
+	if uint64(m)&MODE_IGNORE_SPACE != 0 {
+		modes = append(modes, "IGNORE_SPACE")
+	}
+	if uint64(m)&MODE_NOT_USED != 0 {
+		modes = append(modes, "NOT_USED")
+	}
+	if uint64(m)&MODE_ONLY_FULL_GROUP_BY != 0 {
+		modes = append(modes, "ONLY_FULL_GROUP_BY")
+	}
+	if uint64(m)&MODE_NO_UNSIGNED_SUBTRACTION != 0 {
+		modes = append(modes, "NO_UNSIGNED_SUBTRACTION")
+	}
+	if uint64(m)&MODE_NO_DIR_IN_CREATE != 0 {
+		modes = append(modes, "NO_DIR_IN_CREATE")
+	}
+	if uint64(m)&MODE_ANSI != 0 {
+		modes = append(modes, "ANSI")
+	}
+	if uint64(m)&MODE_NO_AUTO_VALUE_ON_ZERO != 0 {
+		modes = append(modes, "NO_AUTO_VALUE_ON_ZERO")
+	}
+	if uint64(m)&MODE_NO_BACKSLASH_ESCAPES != 0 {
+		modes = append(modes, "NO_BACKSLASH_ESCAPES")
+	}
+	if uint64(m)&MODE_STRICT_TRANS_TABLES != 0 {
+		modes = append(modes, "STRICT_TRANS_TABLES")
+	}
+	if uint64(m)&MODE_STRICT_ALL_TABLES != 0 {
+		modes = append(modes, "STRICT_ALL_TABLES")
+	}
+	if uint64(m)&MODE_NO_ZERO_IN_DATE != 0 {
+		modes = append(modes, "NO_ZERO_IN_DATE")
+	}
+	if uint64(m)&MODE_NO_ZERO_DATE != 0 {
+		modes = append(modes, "NO_ZERO_DATE")
+	}
+	if uint64(m)&MODE_INVALID_DATES != 0 {
+		modes = append(modes, "INVALID_DATES")
+	}
+	if uint64(m)&MODE_ERROR_FOR_DIVISION_BY_ZERO != 0 {
+		modes = append(modes, "ERROR_FOR_DIVISION_BY_ZERO")
+	}
+	if uint64(m)&MODE_TRADITIONAL != 0 {
+		modes = append(modes, "TRADITIONAL")
+	}
+	if uint64(m)&MODE_HIGH_NOT_PRECEDENCE != 0 {
+		modes = append(modes, "HIGH_NOT_PRECEDENCE")
+	}
+	if uint64(m)&MODE_PAD_CHAR_TO_FULL_LENGTH != 0 {
+		modes = append(modes, "PAD_CHAR_TO_FULL_LENGTH")
+	}
+	if uint64(m)&MODE_TIME_TRUNCATE_FRACTIONAL != 0 {
+		modes = append(modes, "TIME_TRUNCATE_FRACTIONAL")
+	}
+	if uint64(m)&MODE_INTERPRET_UTF8_AS_UTF8MB4 != 0 {
+		modes = append(modes, "INTERPRET_UTF8_AS_UTF8MB4")
+	}
+
+	return strings.Join(modes, ",")
+}
+
+func (e *QueryEvent) decodeStatusVars(data []byte) {
+	pos := 0
+
+LOOP1:
+	for pos < len(data) {
+		switch data[pos] {
+		case Q_FLAGS2_CODE:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_FLAGS2_CODE,
+				VarValue: QFlags(binary.LittleEndian.Uint32(data[pos:])),
+			})
+			pos += 4
+		case Q_SQL_MODE_CODE:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_SQL_MODE_CODE,
+				VarValue: SQLMode(binary.LittleEndian.Uint64(data[pos:])),
+			})
+			pos += 8
+		case Q_CATALOG_CODE: // MySQL 5.0.0-5.0.3 catalog with trailing zero, replaced by Q_CATALOG_NZ_CODE
+			pos++
+			catlen := int(data[pos])
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_CATALOG_CODE,
+				VarValue: string(data[pos : pos+catlen]),
+			})
+			pos += catlen
+		case Q_AUTO_INCREMENT:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_AUTO_INCREMENT,
+				VarValue: data[pos : pos+4],
+			})
+			pos += 4
+		case Q_CHARSET_CODE:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType: Q_CHARSET_CODE,
+				VarValue: [3]uint16{
+					binary.LittleEndian.Uint16(data[pos:]),
+					binary.LittleEndian.Uint16(data[pos+2:]),
+					binary.LittleEndian.Uint16(data[pos+4:]),
+				},
+			})
+			pos += 6
+		case Q_TIME_ZONE_CODE:
+			pos++
+			tzlen := int(data[pos])
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_TIME_ZONE_CODE,
+				VarValue: data[pos : pos+tzlen],
+			})
+			pos += tzlen
+		case Q_CATALOG_NZ_CODE:
+			pos++
+			catlen := int(data[pos])
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_CATALOG_NZ_CODE,
+				VarValue: string(data[pos : pos+catlen]),
+			})
+			pos += catlen
+		case Q_LC_TIME_NAMES_CODE:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_LC_TIME_NAMES_CODE,
+				VarValue: data[pos : pos+2],
+			})
+			pos += 2
+		case Q_CHARSET_DATABASE_CODE:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_CHARSET_DATABASE_CODE,
+				VarValue: data[pos : pos+2],
+			})
+			pos += 2
+		case Q_TABLE_MAP_FOR_UPDATE_CODE:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_TABLE_MAP_FOR_UPDATE_CODE,
+				VarValue: binary.LittleEndian.Uint64(data[pos:]),
+			})
+			pos += 8
+		case Q_MASTER_DATA_WRITTEN_CODE:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_TABLE_MAP_FOR_UPDATE_CODE,
+				VarValue: data[pos : pos+4],
+			})
+			pos += 4
+		case Q_INVOKE:
+			// <len><user><len><host>
+			pos++
+			userLen := int(data[pos])
+			hostLen := int(data[pos+1+userLen])
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_INVOKE,
+				VarValue: data[pos : pos+1+userLen+1+hostLen],
+			})
+			pos += 1 + userLen + 1 + hostLen
+		case Q_UPDATED_DB_NAMES:
+			// 1 byte count of values
+			// followed by null terminated values
+			pos++
+			namecnt := int(data[pos])
+			pos++
+			var names []string
+			for range namecnt {
+				namelen := bytes.Index(data[pos:], []byte{0x0})
+				names = append(names, string(data[pos:pos+namelen]))
+				pos += namelen
+			}
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_UPDATED_DB_NAMES,
+				VarValue: names,
+			})
+			pos++
+		case Q_MICROSECONDS:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_MICROSECONDS,
+				VarValue: data[pos : pos+3],
+			})
+			pos += 3
+		case Q_COMMIT_TS:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_COMMIT_TS,
+				VarValue: data[pos : pos+8],
+			})
+			pos += 8
+		case Q_COMMIT_TS2:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_COMMIT_TS2,
+				VarValue: data[pos : pos+8],
+			})
+			pos += 8
+		case Q_EXPLICIT_DEFAULTS_FOR_TIMESTAMP:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_EXPLICIT_DEFAULTS_FOR_TIMESTAMP,
+				VarValue: data[pos : pos+1],
+			})
+			pos++
+		case Q_DDL_LOGGED_WITH_XID:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_DDL_LOGGED_WITH_XID,
+				VarValue: binary.LittleEndian.Uint64(data[pos:]),
+			})
+			pos += 8
+		case Q_DEFAULT_COLLATION_FOR_UTF8MB4:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_DEFAULT_COLLATION_FOR_UTF8MB4,
+				VarValue: binary.LittleEndian.Uint16(data[pos:]),
+			})
+			pos += 2
+		case Q_SQL_REQUIRE_PRIMARY_KEY:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_SQL_REQUIRE_PRIMARY_KEY,
+				VarValue: bool(data[pos] == 0x1), // second byte is the type
+			})
+			pos += 2
+		case Q_DEFAULT_TABLE_ENCRYPTION:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_DEFAULT_TABLE_ENCRYPTION,
+				VarValue: bool(data[pos] == 0x1), // second byte is the type
+			})
+			pos += 2
+		case Q_HRNOW:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_HRNOW,
+				VarValue: data[pos : pos+3],
+			})
+			pos += 3
+		case Q_XID:
+			pos++
+			e.StatusVars = append(e.StatusVars, QueryEventStatusVar{
+				VarType:  Q_XID,
+				VarValue: binary.LittleEndian.Uint64(data[pos:]),
+			})
+			pos += 8
+		default:
+			slog.Warn("failed to decode query event variable", "type", data[pos])
+			break LOOP1
+		}
+	}
+}
+
 func (e *QueryEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Slave proxy ID: %d\n", e.SlaveProxyID)
 	fmt.Fprintf(w, "Execution time: %d\n", e.ExecutionTime)
 	fmt.Fprintf(w, "Error code: %d\n", e.ErrorCode)
-	// fmt.Fprintf(w, "Status vars: \n%s", hex.Dump(e.StatusVars))
+	for _, sv := range e.StatusVars {
+		fmt.Fprintf(w, "Query Status var: %s\n", sv)
+	}
 	fmt.Fprintf(w, "Schema: %s\n", e.Schema)
 	fmt.Fprintf(w, "Query: %s\n", e.Query)
 	if e.GSet != nil {
