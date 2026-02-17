@@ -24,7 +24,7 @@ func (e *MyError) Error() string {
 }
 
 // NewDefaultError: default mysql error, must adapt errname message format
-func NewDefaultError(errCode uint16, args ...interface{}) *MyError {
+func NewDefaultError(errCode uint16, args ...any) *MyError {
 	e := new(MyError)
 	e.Code = errCode
 

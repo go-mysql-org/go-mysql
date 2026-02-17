@@ -235,11 +235,11 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 		var err error
 		// for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
-			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]any{
 				{mysql.MaxPayloadLen},
 			}, binary)
 		} else {
-			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]any{
 				{1, "hello world"},
 			}, binary)
 		}
@@ -270,7 +270,7 @@ func (h *testHandler) HandleFieldList(table string, fieldWildcard string) ([]*my
 	return nil, nil
 }
 
-func (h *testHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx interface{}, err error) {
+func (h *testHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx any, err error) {
 	ss := strings.Split(sql, " ")
 	switch strings.ToLower(ss[0]) {
 	case "select":
@@ -294,11 +294,11 @@ func (h *testHandler) HandleStmtPrepare(sql string) (params int, columns int, ct
 	return params, columns, nil, err
 }
 
-func (h *testHandler) HandleStmtClose(context interface{}) error {
+func (h *testHandler) HandleStmtClose(context any) error {
 	return nil
 }
 
-func (h *testHandler) HandleStmtExecute(ctx interface{}, query string, args []interface{}) (*mysql.Result, error) {
+func (h *testHandler) HandleStmtExecute(ctx any, query string, args []any) (*mysql.Result, error) {
 	return h.handleQuery(query, true)
 }
 

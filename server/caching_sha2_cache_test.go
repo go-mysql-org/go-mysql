@@ -172,11 +172,11 @@ func (h *testCacheHandler) handleQuery(query string, binary bool) (*mysql.Result
 		var err error
 		// for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
-			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]any{
 				{mysql.MaxPayloadLen},
 			}, binary)
 		} else {
-			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]any{
 				{1, "hello world"},
 			}, binary)
 		}
@@ -221,15 +221,15 @@ func (h *testCacheHandler) HandleFieldList(table string, fieldWildcard string) (
 	return nil, nil
 }
 
-func (h *testCacheHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx interface{}, err error) {
+func (h *testCacheHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx any, err error) {
 	return 0, 0, nil, nil
 }
 
-func (h *testCacheHandler) HandleStmtClose(context interface{}) error {
+func (h *testCacheHandler) HandleStmtClose(context any) error {
 	return nil
 }
 
-func (h *testCacheHandler) HandleStmtExecute(ctx interface{}, query string, args []interface{}) (*mysql.Result, error) {
+func (h *testCacheHandler) HandleStmtExecute(ctx any, query string, args []any) (*mysql.Result, error) {
 	return h.handleQuery(query, true)
 }
 

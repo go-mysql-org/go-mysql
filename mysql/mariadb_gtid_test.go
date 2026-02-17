@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -123,11 +124,8 @@ func TestParseMariaDBGTIDSet(t *testing.T) {
 			// check String() function
 			inExpectedResult := false
 			actualStr := mariadbGTIDSet.String()
-			for _, str := range cs.expectedStr {
-				if str == actualStr {
-					inExpectedResult = true
-					break
-				}
+			if slices.Contains(cs.expectedStr, actualStr) {
+				inExpectedResult = true
 			}
 			require.True(t, inExpectedResult)
 		}

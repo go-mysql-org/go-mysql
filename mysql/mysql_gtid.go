@@ -100,10 +100,7 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 			n = append(n, s[i])
 			continue
 		} else {
-			stop := s[i].Stop
-			if last.Stop > stop {
-				stop = last.Stop
-			}
+			stop := max(last.Stop, s[i].Stop)
 			n[len(n)-1] = Interval{last.Start, stop}
 		}
 	}
@@ -142,7 +139,7 @@ func (s *IntervalSlice) InsertInterval(interval Interval) {
 // Contain returns true if sub in s
 func (s IntervalSlice) Contain(sub IntervalSlice) bool {
 	j := 0
-	for i := 0; i < len(sub); i++ {
+	for i := range sub {
 		for ; j < len(s); j++ {
 			if sub[i].Start > s[j].Stop {
 				continue
@@ -167,7 +164,7 @@ func (s IntervalSlice) Equal(o IntervalSlice) bool {
 		return false
 	}
 
-	for i := 0; i < len(s); i++ {
+	for i := range s {
 		if s[i].Start != o[i].Start || s[i].Stop != o[i].Stop {
 			return false
 		}
@@ -350,7 +347,7 @@ func (s *UUIDSet) decode(data []byte) (int, error) {
 	s.Intervals = make([]Interval, 0, n)
 
 	var in Interval
-	for i := int64(0); i < n; i++ {
+	for range n {
 		in.Start = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
 		pos += 8
 		in.Stop = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
@@ -393,7 +390,7 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 	sp := strings.Split(str, ",")
 
 	// todo, handle redundant same uuid
-	for i := 0; i < len(sp); i++ {
+	for i := range sp {
 		if set, err := ParseUUIDSet(sp[i]); err != nil {
 			return nil, errors.Trace(err)
 		} else {
@@ -415,7 +412,7 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 
 	pos := 8
 
-	for i := 0; i < n; i++ {
+	for range n {
 		set := new(UUIDSet)
 		if n, err := set.decode(data[pos:]); err != nil {
 			return nil, errors.Trace(err)

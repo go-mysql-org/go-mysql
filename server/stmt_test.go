@@ -132,7 +132,7 @@ func TestBindStmtArgsTypedBytes(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := &Conn{}
-			s := &Stmt{Args: make([]interface{}, 1)}
+			s := &Stmt{Args: make([]any, 1)}
 			s.Params = 1
 
 			nullBitmap := []byte{0x00}

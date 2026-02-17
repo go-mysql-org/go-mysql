@@ -193,7 +193,7 @@ func (s *clientTestSuite) TestConn_Insert() {
 func (s *clientTestSuite) TestConn_Insert2() {
 	str := `insert into mixer_test_conn (id, j) values(?, ?)`
 	j := json.RawMessage(`[]`)
-	pkg, err := s.c.Execute(str, []interface{}{2, j}...)
+	pkg, err := s.c.Execute(str, []any{2, j}...)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), uint64(1), pkg.AffectedRows)
 }

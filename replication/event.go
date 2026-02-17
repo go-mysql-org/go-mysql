@@ -952,7 +952,7 @@ func (e *MariadbGTIDListEvent) Decode(data []byte) error {
 
 	e.GTIDs = make([]mysql.MariadbGTID, count)
 
-	for i := uint32(0); i < count; i++ {
+	for i := range count {
 		e.GTIDs[i].DomainID = binary.LittleEndian.Uint32(data[pos:])
 		pos += 4
 		e.GTIDs[i].ServerID = binary.LittleEndian.Uint32(data[pos:])

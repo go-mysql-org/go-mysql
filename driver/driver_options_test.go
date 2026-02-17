@@ -314,7 +314,7 @@ func (h *mockHandler) UseDB(dbName string) error {
 	return nil
 }
 
-func (h *mockHandler) handleQuery(query string, binary bool, args []interface{}) (*mysql.Result, error) {
+func (h *mockHandler) handleQuery(query string, binary bool, args []any) (*mysql.Result, error) {
 	defer func() {
 		if h.modifier != nil {
 			h.modifier.Done()
@@ -329,12 +329,12 @@ func (h *mockHandler) handleQuery(query string, binary bool, args []interface{})
 		var err error
 		// for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
-			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]any{
 				{mysql.MaxPayloadLen},
 			}, binary)
 		} else {
 			if ss[1] == "?" {
-				r, err = mysql.BuildSimpleResultset([]string{"a"}, [][]interface{}{
+				r, err = mysql.BuildSimpleResultset([]string{"a"}, [][]any{
 					{args[0].(int64)},
 				}, binary)
 			} else {
@@ -347,7 +347,7 @@ func (h *mockHandler) handleQuery(query string, binary bool, args []interface{})
 					aValue = math.MaxUint64
 				}
 
-				r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]interface{}{
+				r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]any{
 					{aValue, "hello world"},
 				}, binary)
 			}
@@ -385,13 +385,13 @@ func (h *mockHandler) HandleFieldList(table string, fieldWildcard string) ([]*my
 	return nil, nil
 }
 
-func (h *mockHandler) HandleStmtPrepare(query string) (params int, columns int, context interface{}, err error) {
+func (h *mockHandler) HandleStmtPrepare(query string) (params int, columns int, context any, err error) {
 	params = 1
 	columns = 2
 	return params, columns, nil, nil
 }
 
-func (h *mockHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error) {
+func (h *mockHandler) HandleStmtExecute(context any, query string, args []any) (*mysql.Result, error) {
 	if strings.HasPrefix(strings.ToLower(query), "select") {
 		return h.handleQuery(query, true, args)
 	}
@@ -405,7 +405,7 @@ func (h *mockHandler) HandleStmtExecute(context interface{}, query string, args 
 	}, nil
 }
 
-func (h *mockHandler) HandleStmtClose(context interface{}) error {
+func (h *mockHandler) HandleStmtClose(context any) error {
 	return nil
 }
 

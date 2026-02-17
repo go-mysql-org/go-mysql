@@ -25,7 +25,7 @@ func TestMariadbGTIDListEvent(t *testing.T) {
 	err = ev.Decode(data)
 	require.NoError(t, err)
 	require.Len(t, ev.GTIDs, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		require.Equal(t, uint32(1+3*i), ev.GTIDs[i].DomainID)
 		require.Equal(t, uint32(2+3*i), ev.GTIDs[i].ServerID)
 		require.Equal(t, uint64(3+3*i), ev.GTIDs[i].SequenceNumber)

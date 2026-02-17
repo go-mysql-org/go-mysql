@@ -54,7 +54,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		return errors.Trace(err)
 	}
 
-	vs := make([]interface{}, len(values))
+	vs := make([]any, len(values))
 
 	for i, v := range values {
 		if v == "NULL" {
@@ -63,7 +63,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 			vs[i] = []byte{}
 		} else if v[0] != '\'' {
 			if tableInfo.Columns[i].Type == schema.TYPE_NUMBER || tableInfo.Columns[i].Type == schema.TYPE_MEDIUM_INT {
-				var n interface{}
+				var n any
 				var err error
 
 				if tableInfo.Columns[i].IsUnsigned {
@@ -111,7 +111,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		}
 	}
 
-	events := newRowsEvent(tableInfo, InsertAction, [][]interface{}{vs}, nil)
+	events := newRowsEvent(tableInfo, InsertAction, [][]any{vs}, nil)
 	return h.c.eventHandler.OnRow(events)
 }
 
