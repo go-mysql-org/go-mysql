@@ -147,7 +147,7 @@ func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 	sp := strings.Split(GTIDStr, ",")
 	// todo, handle redundant same uuid
-	for i := 0; i < len(sp); i++ {
+	for i := range sp {
 		gtid, err := ParseMariadbGTID(sp[i])
 		if err != nil {
 			return errors.Trace(err)

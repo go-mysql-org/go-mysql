@@ -136,7 +136,7 @@ func (f FieldIntVar) String() string {
 }
 
 func (f *FieldIntVar) decode(data []byte, pos uint64) (uint64, error) {
-	var val interface{}
+	var val any
 	val, pos, err := decodeVar(data, pos, false)
 	if err != nil {
 		return pos, err
@@ -160,7 +160,7 @@ func (f FieldUintVar) String() string {
 }
 
 func (f *FieldUintVar) decode(data []byte, pos uint64) (uint64, error) {
-	var val interface{}
+	var val any
 	val, pos, err := decodeVar(data, pos, true)
 	if err != nil {
 		return pos, err
@@ -195,7 +195,7 @@ func (f FieldString) String() string {
 	return f.Value
 }
 
-func Unmarshal(data []byte, v interface{}) error {
+func Unmarshal(data []byte, v any) error {
 	switch m := v.(type) {
 	case *Message:
 		m.Version = data[0] >> 1
@@ -239,7 +239,7 @@ func Unmarshal(data []byte, v interface{}) error {
 	return nil
 }
 
-func decodeVar(data []byte, pos uint64, unsigned bool) (interface{}, uint64, error) {
+func decodeVar(data []byte, pos uint64, unsigned bool) (any, uint64, error) {
 	if len(data) < int(pos)+1 {
 		return 0, pos, errors.New("data truncated")
 	}

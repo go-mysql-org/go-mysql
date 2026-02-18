@@ -327,7 +327,7 @@ type (
 	eofResponse struct{}
 )
 
-func (c *Conn) WriteValue(value interface{}) error {
+func (c *Conn) WriteValue(value any) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil

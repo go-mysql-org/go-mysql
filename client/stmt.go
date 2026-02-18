@@ -33,7 +33,7 @@ func (s *Stmt) WarningsNum() int {
 	return s.warnings
 }
 
-func (s *Stmt) Execute(args ...interface{}) (*mysql.Result, error) {
+func (s *Stmt) Execute(args ...any) (*mysql.Result, error) {
 	if err := s.write(args...); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -41,7 +41,7 @@ func (s *Stmt) Execute(args ...interface{}) (*mysql.Result, error) {
 	return s.conn.readResult(true)
 }
 
-func (s *Stmt) ExecuteSelectStreaming(result *mysql.Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback, args ...interface{}) error {
+func (s *Stmt) ExecuteSelectStreaming(result *mysql.Result, perRowCb SelectPerRowCallback, perResCb SelectPerResultCallback, args ...any) error {
 	if err := s.write(args...); err != nil {
 		return errors.Trace(err)
 	}
@@ -58,7 +58,7 @@ func (s *Stmt) Close() error {
 }
 
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html
-func (s *Stmt) write(args ...interface{}) error {
+func (s *Stmt) write(args ...any) error {
 	defer clear(s.conn.queryAttributes)
 	paramsNum := s.Params
 

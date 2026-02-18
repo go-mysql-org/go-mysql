@@ -207,7 +207,7 @@ func (fv *FieldValue) AsString() []byte {
 	return fv.str
 }
 
-func (fv *FieldValue) Value() interface{} {
+func (fv *FieldValue) Value() any {
 	switch fv.Type {
 	case FieldValueTypeUnsigned:
 		return fv.AsUint64()

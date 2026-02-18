@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -170,7 +171,7 @@ func TestConnWriteResultset(t *testing.T) {
 
 	// reset write buffer and fill up the resultset with (little) data
 	clientConn.WriteBuffered = []byte{}
-	r, err = mysql.BuildSimpleTextResultset([]string{"a"}, [][]interface{}{{"b"}})
+	r, err = mysql.BuildSimpleTextResultset([]string{"a"}, [][]any{{"b"}})
 	require.NoError(t, err)
 	err = conn.writeResultset(r)
 	require.NoError(t, err)
@@ -188,7 +189,7 @@ func TestConnWriteFieldList(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]interface{}{{"d"}})
+	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]any{{"d"}})
 	require.NoError(t, err)
 	err = conn.writeFieldList(r.Fields, nil)
 	require.NoError(t, err)
@@ -202,7 +203,7 @@ func TestConnWriteFieldValues(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]interface{}{
+	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]any{
 		{"d"},
 		{nil},
 	})
@@ -408,13 +409,7 @@ func TestConnWriteStreamResultsetWithNullValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify output contains NULL marker (0xfb)
-	found := false
-	for _, b := range clientConn.WriteBuffered {
-		if b == 0xfb {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(clientConn.WriteBuffered, 0xfb)
 	require.True(t, found, "NULL marker (0xfb) should be present in output")
 }
 

@@ -18,15 +18,15 @@ var (
 
 type Stmt struct {
 	Query string
-	Args  []interface{}
+	Args  []any
 
-	Context interface{}
+	Context any
 
 	// PreparedStmt contains common fields shared with client.Stmt for proxy passthrough
 	stmt.PreparedStmt
 }
 
-func (s *Stmt) Rest(params int, columns int, context interface{}) {
+func (s *Stmt) Rest(params int, columns int, context any) {
 	s.Params = params
 	s.Columns = columns
 	s.Context = context
@@ -34,7 +34,7 @@ func (s *Stmt) Rest(params int, columns int, context interface{}) {
 }
 
 func (s *Stmt) ResetParams() {
-	s.Args = make([]interface{}, s.Params)
+	s.Args = make([]any, s.Params)
 }
 
 func (c *Conn) writePrepare(s *Stmt) error {

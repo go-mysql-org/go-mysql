@@ -79,15 +79,15 @@ func (h *StreamResultHandler) HandleFieldList(table string, fieldWildcard string
 	return nil, nil
 }
 
-func (h *StreamResultHandler) HandleStmtPrepare(query string) (params int, columns int, ctx interface{}, err error) {
+func (h *StreamResultHandler) HandleStmtPrepare(query string) (params int, columns int, ctx any, err error) {
 	return 0, 0, nil, nil
 }
 
-func (h *StreamResultHandler) HandleStmtExecute(ctx interface{}, query string, args []interface{}) (*mysql.Result, error) {
+func (h *StreamResultHandler) HandleStmtExecute(ctx any, query string, args []any) (*mysql.Result, error) {
 	return nil, nil
 }
 
-func (h *StreamResultHandler) HandleStmtClose(ctx interface{}) error {
+func (h *StreamResultHandler) HandleStmtClose(ctx any) error {
 	return nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"maps"
 	"math/bits"
 	"net"
 	"runtime"
@@ -309,7 +310,7 @@ func (c *Conn) CompareServerVersion(v string) (int, error) {
 	return mysql.CompareServerVersions(c.serverVersion, v)
 }
 
-func (c *Conn) Execute(command string, args ...interface{}) (*mysql.Result, error) {
+func (c *Conn) Execute(command string, args ...any) (*mysql.Result, error) {
 	if len(args) == 0 {
 		return c.exec(command)
 	} else {
@@ -423,9 +424,7 @@ func (c *Conn) Rollback() error {
 
 // SetAttributes sets connection attributes
 func (c *Conn) SetAttributes(attributes map[string]string) {
-	for k, v := range attributes {
-		c.attributes[k] = v
-	}
+	maps.Copy(c.attributes, attributes)
 }
 
 func (c *Conn) SetCharset(charset string) error {

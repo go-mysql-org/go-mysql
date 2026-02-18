@@ -38,7 +38,7 @@ type Resultset struct {
 }
 
 var resultsetPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &Resultset{}
 	},
 }
@@ -87,7 +87,7 @@ func (r *Resultset) ColumnNumber() int {
 	return len(r.Fields)
 }
 
-func (r *Resultset) GetValue(row, column int) (interface{}, error) {
+func (r *Resultset) GetValue(row, column int) (any, error) {
 	if row >= len(r.Values) || row < 0 {
 		return nil, errors.Errorf("invalid row index %d", row)
 	}
@@ -107,7 +107,7 @@ func (r *Resultset) NameIndex(name string) (int, error) {
 	}
 }
 
-func (r *Resultset) GetValueByName(row int, name string) (interface{}, error) {
+func (r *Resultset) GetValueByName(row int, name string) (any, error) {
 	if column, err := r.NameIndex(name); err != nil {
 		return nil, errors.Trace(err)
 	} else {

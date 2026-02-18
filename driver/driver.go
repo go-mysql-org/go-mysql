@@ -10,6 +10,7 @@ import (
 	goErrors "errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"regexp"
 	"strings"
@@ -343,8 +344,8 @@ func (c *conn) BeginTx(ctx context.Context, opts sqldriver.TxOptions) (sqldriver
 	return &tx{c.Conn}, nil
 }
 
-func buildArgs(args []sqldriver.Value) []interface{} {
-	a := make([]interface{}, len(args))
+func buildArgs(args []sqldriver.Value) []any {
+	a := make([]any, len(args))
 
 	for i, arg := range args {
 		a[i] = arg
@@ -353,8 +354,8 @@ func buildArgs(args []sqldriver.Value) []interface{} {
 	return a
 }
 
-func buildNamedArgs(args []sqldriver.NamedValue) []interface{} {
-	a := make([]interface{}, len(args))
+func buildNamedArgs(args []sqldriver.NamedValue) []any {
+	a := make([]any, len(args))
 
 	for i, arg := range args {
 		a[i] = arg.Value
@@ -594,9 +595,7 @@ func SetCustomTLSConfig(dsn string, caPem []byte, certPem []byte, keyPem []byte,
 //			},
 //		})
 func SetDSNOptions(customOptions map[string]DriverOption) {
-	for o, f := range customOptions {
-		options[o] = f
-	}
+	maps.Copy(options, customOptions)
 }
 
 // AddNamedValueChecker sets a custom NamedValueChecker for the driver connection which

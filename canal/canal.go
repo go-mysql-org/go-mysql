@@ -513,7 +513,7 @@ func (c *Canal) connect(options ...client.Option) (*client.Conn, error) {
 }
 
 // Execute a SQL
-func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err error) {
+func (c *Canal) Execute(cmd string, args ...any) (rr *mysql.Result, err error) {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
 	argF := make([]client.Option, 0)
@@ -525,7 +525,7 @@ func (c *Canal) Execute(cmd string, args ...interface{}) (rr *mysql.Result, err 
 	}
 
 	retryNum := 3
-	for i := 0; i < retryNum; i++ {
+	for range retryNum {
 		if c.conn == nil {
 			c.conn, err = c.connect(argF...)
 			if err != nil {
