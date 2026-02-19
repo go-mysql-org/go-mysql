@@ -39,6 +39,11 @@ func (e *BinlogEvent) Dump(w io.Writer) {
 	e.Event.Dump(w)
 }
 
+// ByteLen returns the total size of the raw event data in bytes.
+func (e *BinlogEvent) ByteLen() int {
+	return len(e.RawData)
+}
+
 type Event interface {
 	// Dump Event, format like python-mysql-replication
 	Dump(w io.Writer)
