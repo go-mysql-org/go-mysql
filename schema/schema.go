@@ -42,18 +42,20 @@ const (
 )
 
 type TableColumn struct {
-	Name       string
-	Type       int
-	Collation  string
-	RawType    string
-	IsAuto     bool
-	IsUnsigned bool
-	IsVirtual  bool
-	IsStored   bool
-	EnumValues []string
-	SetValues  []string
-	FixedSize  uint
-	MaxSize    uint
+	Name           string
+	Type           int
+	Collation      string
+	RawType        string
+	IsAuto         bool
+	IsUnsigned     bool
+	IsVirtual      bool
+	IsStored       bool
+	IsDefaultExpr  bool
+	IsAutoUpdating bool
+	EnumValues     []string
+	SetValues      []string
+	FixedSize      uint
+	MaxSize        uint
 }
 
 type Index struct {
@@ -155,6 +157,16 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.Columns[index].IsVirtual = true
 	case "STORED GENERATED":
 		ta.Columns[index].IsStored = true
+	}
+
+	if strings.Contains(extra, "DEFAULT_GENERATED") {
+		ta.Columns[index].IsDefaultExpr = true
+	}
+	if ta.Columns[index].Type == TYPE_DATETIME ||
+		ta.Columns[index].Type == TYPE_TIMESTAMP {
+		if strings.Contains(extra, "on update CURRENT_TIMESTAMP") {
+			ta.Columns[index].IsAutoUpdating = true
+		}
 	}
 }
 
