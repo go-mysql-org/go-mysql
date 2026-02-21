@@ -19,6 +19,13 @@ func UseSslOption(c *client.Conn) error {
 	return nil
 }
 
+// UseSslSkipVerifyOption sets the connection to use a tls.Config with InsecureSkipVerify set to true.
+// Currently the same as `SetTLSConfig`.
+func UseSslSkipVerifyOption(c *client.Conn) error {
+	c.UseSSL(true)
+	return nil
+}
+
 func CollationOption(c *client.Conn, value string) error {
 	return c.SetCollation(value)
 }
