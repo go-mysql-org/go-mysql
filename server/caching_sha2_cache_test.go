@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-mysql-org/go-mysql/driver"
 	"github.com/pingcap/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"

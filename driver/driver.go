@@ -69,6 +69,8 @@ type connInfo struct {
 	params      url.Values
 }
 
+var compatDSNre = regexp.MustCompile(`(tcp\((.*)\))`)
+
 // ParseDSN takes a DSN string and splits it up into struct containing addr,
 // user, password and db.
 // It returns an error if unable to parse.
@@ -92,11 +94,20 @@ func parseDSN(dsn string) (connInfo, error) {
 		ci.standardDSN = strings.Contains(dsn, "/")
 	}
 
-	// Add a prefix so we can parse with url.Parse
-	dsn = "mysql://" + dsn
+	// Add a URL scheme if it isn't there so we can parse with url.Parse
+	if !strings.HasPrefix(dsn, "mysql://") {
+		dsn = "mysql://" + dsn
+	}
+
 	parsedDSN, parseErr := url.Parse(dsn)
 	if parseErr != nil {
-		return ci, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
+		// If parsing fails, try to rewrite `tcp(127.0.0.1:3306)` to `127.0.0.1:3306` and try again.
+		// This is for compatibility with go-sql-driver/mysql.
+		dsn = compatDSNre.ReplaceAllString(dsn, "$2")
+		parsedDSN, parseErr = url.Parse(dsn)
+		if parseErr != nil {
+			return ci, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
+		}
 	}
 
 	ci.addr = parsedDSN.Host
@@ -137,7 +148,7 @@ func (ci connInfo) Connect(ctx context.Context) (sqldriver.Conn, error) {
 		var timeout time.Duration
 		configuredOptions := make([]client.Option, 0, len(ci.params))
 		for key, value := range ci.params {
-			if key == "ssl" && len(value) > 0 {
+			if (key == "ssl" || key == "tls") && len(value) > 0 {
 				tlsConfigName := value[0]
 				switch tlsConfigName {
 				case "true":
@@ -155,8 +166,13 @@ func (ci connInfo) Connect(ctx context.Context) (sqldriver.Conn, error) {
 						c.SetTLSConfig(customTLSConfigMap[ci.addr])
 						return nil
 					})
+				case "false":
+					// No options to enable
+				case "skip-verify":
+					// See description for "true".
+					configuredOptions = append(configuredOptions, UseSslSkipVerifyOption)
 				default:
-					return nil, errors.Errorf("Supported options are ssl=true or ssl=custom")
+					return nil, errors.Errorf("Supported options for %s are true,false,custom or skip-verify", key)
 				}
 			} else if key == "timeout" && len(value) > 0 {
 				if timeout, err = time.ParseDuration(value[0]); err != nil {
