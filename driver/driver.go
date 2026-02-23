@@ -69,7 +69,17 @@ type connInfo struct {
 	params      url.Values
 }
 
-var compatDSNre = regexp.MustCompile(`(tcp\((.*)\))`)
+// compatDSNre rewrites go-sql-driver/mysql style addresses like:
+//
+//	mysql://user:pass@tcp(127.0.0.1:3306)/db?param=value
+//
+// into a standard URL form that net/url can parse:
+//
+//	mysql://user:pass@127.0.0.1:3306/db?param=value
+//
+// The regexp is anchored to the start of the DSN and only targets the host
+// portion, so it won't accidentally modify credentials or query parameters.
+var compatDSNre = regexp.MustCompile(`^(mysql://(?:[^@/]*@)?)tcp\(([^)]+)\)`)
 
 // ParseDSN takes a DSN string and splits it up into struct containing addr,
 // user, password and db.
@@ -103,7 +113,7 @@ func parseDSN(dsn string) (connInfo, error) {
 	if parseErr != nil {
 		// If parsing fails, try to rewrite `tcp(127.0.0.1:3306)` to `127.0.0.1:3306` and try again.
 		// This is for compatibility with go-sql-driver/mysql.
-		dsn = compatDSNre.ReplaceAllString(dsn, "$2")
+		dsn = compatDSNre.ReplaceAllString(dsn, "${1}${2}")
 		parsedDSN, parseErr = url.Parse(dsn)
 		if parseErr != nil {
 			return ci, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
