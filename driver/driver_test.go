@@ -102,6 +102,7 @@ func TestParseDSN(t *testing.T) {
 		"user:password@127.0.0.1/db":                    {standardDSN: true, addr: "127.0.0.1", user: "user", password: "password", db: "db", params: url.Values{}},
 		"user:password@127.0.0.1:3308/db":               {standardDSN: true, addr: "127.0.0.1:3308", user: "user", password: "password", db: "db", params: url.Values{}},
 		"user:password@tcp(127.0.0.1:3309)/db":          {standardDSN: true, addr: "127.0.0.1:3309", user: "user", password: "password", db: "db", params: url.Values{}},
+		"mysql://127.0.0.1:3306":                        {standardDSN: true, addr: "127.0.0.1:3306", user: "", password: "", db: "", params: url.Values{}},
 
 		// per the documentation in the README, the 'user:password@' is optional as are the '/db?param=X' portions of the DSN
 		"6.domain.com":                  {standardDSN: false, addr: "6.domain.com", user: "", password: "", db: "", params: url.Values{}},
