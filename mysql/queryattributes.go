@@ -16,7 +16,7 @@ import (
 // - https://archive.fosdem.org/2021/schedule/event/mysql_protocl/
 type QueryAttribute struct {
 	Name  string
-	Value interface{}
+	Value any
 }
 
 // TypeAndFlag returns the type MySQL field type of the value and the field flag.

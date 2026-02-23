@@ -683,7 +683,7 @@ func (b *BinlogSyncer) retrySync() error {
 	b.prevMySQLGTIDEvent = nil
 
 	if b.prevGset != nil {
-		extra := []interface{}{slog.String("GTID Set", b.prevGset.String())}
+		extra := []any{slog.String("GTID Set", b.prevGset.String())}
 		if b.currGset != nil {
 			extra = append(extra, slog.String("last read GTID", b.currGset.String()))
 		}

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-mysql-org/go-mysql/driver"
 	"github.com/pingcap/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -28,7 +28,7 @@ func TestCachingSha2Cache(t *testing.T) {
 		InMemoryAuthenticationHandler: NewInMemoryAuthenticationHandler(),
 	}
 	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), tlsConf)
 
 	// no TLS
 	suite.Run(t, &cacheTestSuite{
@@ -43,7 +43,7 @@ func TestCachingSha2CacheTLS(t *testing.T) {
 		InMemoryAuthenticationHandler: NewInMemoryAuthenticationHandler(),
 	}
 	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), tlsConf)
 
 	// TLS
 	suite.Run(t, &cacheTestSuite{
@@ -172,11 +172,11 @@ func (h *testCacheHandler) handleQuery(query string, binary bool) (*mysql.Result
 		var err error
 		// for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
-			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]any{
 				{mysql.MaxPayloadLen},
 			}, binary)
 		} else {
-			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]any{
 				{1, "hello world"},
 			}, binary)
 		}
@@ -221,15 +221,15 @@ func (h *testCacheHandler) HandleFieldList(table string, fieldWildcard string) (
 	return nil, nil
 }
 
-func (h *testCacheHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx interface{}, err error) {
+func (h *testCacheHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx any, err error) {
 	return 0, 0, nil, nil
 }
 
-func (h *testCacheHandler) HandleStmtClose(context interface{}) error {
+func (h *testCacheHandler) HandleStmtClose(context any) error {
 	return nil
 }
 
-func (h *testCacheHandler) HandleStmtExecute(ctx interface{}, query string, args []interface{}) (*mysql.Result, error) {
+func (h *testCacheHandler) HandleStmtExecute(ctx any, query string, args []any) (*mysql.Result, error) {
 	return h.handleQuery(query, true)
 }
 

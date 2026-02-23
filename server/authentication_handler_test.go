@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/go-mysql-org/go-mysql/driver"
 	"github.com/go-mysql-org/go-mysql/mysql"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/stretchr/testify/require"
 )

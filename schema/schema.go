@@ -7,6 +7,7 @@ package schema
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -208,12 +209,7 @@ func (ta *Table) GetPKColumn(index int) *TableColumn {
 }
 
 func (ta *Table) IsPrimaryKey(colIndex int) bool {
-	for _, i := range ta.PKColumns {
-		if i == colIndex {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ta.PKColumns, colIndex)
 }
 
 func (ta *Table) AddIndex(name string) (index *Index) {
@@ -317,7 +313,7 @@ func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
 
 	defer r.Close()
 
-	var unusedVal interface{}
+	var unusedVal any
 	unused := &unusedVal
 
 	for r.Next() {
@@ -397,21 +393,21 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 	var currentIndex *Index
 	currentName := ""
 
-	var unusedVal interface{}
+	var unusedVal any
 
 	for r.Next() {
 		var indexName string
 		var colName sql.NullString
 		var noneUnique uint64
-		var cardinality interface{}
+		var cardinality any
 		var visible sql.NullString
 		cols, err := r.Columns()
 		if err != nil {
 			return errors.Trace(err)
 		}
 		hasInvisibleIndex := hasInvisibleIndexSupportFromColumns(cols)
-		values := make([]interface{}, len(cols))
-		for i := 0; i < len(cols); i++ {
+		values := make([]any, len(cols))
+		for i := range cols {
 			switch i {
 			case 1:
 				values[i] = &noneUnique
@@ -456,7 +452,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 	return ta.fetchPrimaryKeyColumns()
 }
 
-func toUint64(i interface{}) uint64 {
+func toUint64(i any) uint64 {
 	switch i := i.(type) {
 	case int:
 		return uint64(i)
@@ -503,7 +499,7 @@ func (ta *Table) fetchPrimaryKeyColumns() error {
 }
 
 // GetPKValues gets primary keys in one row for a table, a table may use multi fields as the PK
-func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
+func (ta *Table) GetPKValues(row []any) ([]any, error) {
 	indexes := ta.PKColumns
 	if len(indexes) == 0 {
 		return nil, errors.Errorf("table %s has no PK", ta)
@@ -512,7 +508,7 @@ func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 			len(ta.Columns), row, len(row))
 	}
 
-	values := make([]interface{}, 0, len(indexes))
+	values := make([]any, 0, len(indexes))
 
 	for _, index := range indexes {
 		values = append(values, row[index])
@@ -522,7 +518,7 @@ func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 }
 
 // GetColumnValue gets term column's value
-func (ta *Table) GetColumnValue(column string, row []interface{}) (interface{}, error) {
+func (ta *Table) GetColumnValue(column string, row []any) (any, error) {
 	index := ta.FindColumn(column)
 	if index == -1 {
 		return nil, errors.Errorf("table %s has no column name %s", ta, column)

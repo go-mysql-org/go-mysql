@@ -942,7 +942,7 @@ type RowsEvent struct {
 	ColumnBitmap2 []byte
 
 	// rows: all return types from RowsEvent.decodeValue()
-	Rows           [][]interface{}
+	Rows           [][]any
 	SkippedColumns [][]int
 
 	parseTime                bool
@@ -1106,7 +1106,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 		rowsLen++
 	}
 	e.SkippedColumns = make([][]int, 0, rowsLen)
-	e.Rows = make([][]interface{}, 0, rowsLen)
+	e.Rows = make([][]any, 0, rowsLen)
 
 	var rowImageType EnumRowImageType
 	switch e.eventType {
@@ -1187,7 +1187,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 		}
 	}
 
-	row := make([]interface{}, e.ColumnCount)
+	row := make([]any, e.ColumnCount)
 
 	// refer: https://github.com/alibaba/canal/blob/c3e38e50e269adafdd38a48c63a1740cde304c67/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogBuffer.java#L63
 	count := 0
@@ -1242,7 +1242,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 	return pos, nil
 }
 
-func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
+func (e *RowsEvent) parseFracTime(t any) any {
 	v, ok := t.(fracTime)
 	if !ok {
 		return t
@@ -1258,7 +1258,7 @@ func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
 }
 
 // see mysql sql/log_event.cc log_event_print_value
-func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool) (v interface{}, n int, err error) {
+func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool) (v any, n int, err error) {
 	length := 0
 
 	if tp == mysql.MYSQL_TYPE_STRING {
@@ -1506,7 +1506,7 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 
 var zeros = [digitsPerInteger]byte{48, 48, 48, 48, 48, 48, 48, 48, 48}
 
-func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (interface{}, int, error) {
+func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (any, int, error) {
 	// see python mysql replication and https://github.com/jeremycole/mysql_binlog
 	integral := precision - decimals
 	uncompIntegral := integral / digitsPerInteger
@@ -1546,7 +1546,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 		res.WriteString(strconv.FormatUint(uint64(value), 10))
 	}
 
-	for i := 0; i < uncompIntegral; i++ {
+	for range uncompIntegral {
 		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 		pos += 4
 		if zeroLeading {
@@ -1568,7 +1568,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 	if pos < len(data) {
 		res.WriteString(".")
 
-		for i := 0; i < uncompFractional; i++ {
+		for range uncompFractional {
 			value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 			pos += 4
 			toWrite := strconv.FormatUint(uint64(value), 10)
@@ -1659,7 +1659,7 @@ func littleDecodeBit(data []byte, nbits int, length int) (value int64, err error
 	return value, err
 }
 
-func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Location) (interface{}, int, error) {
+func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Location) (any, int, error) {
 	// get timestamp binary length
 	n := int(4 + (dec+1)/2)
 	sec := int64(binary.BigEndian.Uint32(data[0:4]))
@@ -1686,7 +1686,7 @@ func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Loc
 
 const DATETIMEF_INT_OFS int64 = 0x8000000000
 
-func decodeDatetime2(data []byte, dec uint16, parseTime bool) (interface{}, int, error) {
+func decodeDatetime2(data []byte, dec uint16, parseTime bool) (any, int, error) {
 	// get datetime binary length
 	n := int(5 + (dec+1)/2)
 

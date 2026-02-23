@@ -22,13 +22,13 @@ type Handler interface {
 	HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error)
 	// handle COM_STMT_PREPARE, params is the param number for this statement, columns is the column number
 	// context will be used later for statement execute
-	HandleStmtPrepare(query string) (params int, columns int, context interface{}, err error)
+	HandleStmtPrepare(query string) (params int, columns int, context any, err error)
 	// handle COM_STMT_EXECUTE, context is the previous one set in prepare
 	// query is the statement prepare query, and args is the params for this statement
-	HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error)
+	HandleStmtExecute(context any, query string, args []any) (*mysql.Result, error)
 	// handle COM_STMT_CLOSE, context is the previous one set in prepare
 	// this handler has no response
-	HandleStmtClose(context interface{}) error
+	HandleStmtClose(context any) error
 	// handle any other command that is not currently handled by the library,
 	// default implementation for this method will return an ER_UNKNOWN_ERROR
 	HandleOtherCommand(cmd byte, data []byte) error
@@ -71,7 +71,7 @@ func (c *Conn) HandleCommand() error {
 	return err
 }
 
-func (c *Conn) dispatch(data []byte) interface{} {
+func (c *Conn) dispatch(data []byte) any {
 	cmd := data[0]
 	data = data[1:]
 
@@ -95,9 +95,9 @@ func (c *Conn) dispatch(data []byte) interface{} {
 			return nil
 		}
 	case mysql.COM_FIELD_LIST:
-		index := bytes.IndexByte(data, 0x00)
-		table := utils.ByteSliceToString(data[0:index])
-		wildcard := utils.ByteSliceToString(data[index+1:])
+		before, after, _ := bytes.Cut(data, []byte{0x00})
+		table := utils.ByteSliceToString(before)
+		wildcard := utils.ByteSliceToString(after)
 
 		if fs, err := c.h.HandleFieldList(table, wildcard); err != nil {
 			return err
@@ -211,7 +211,7 @@ func (h EmptyHandler) HandleQuery(query string) (*mysql.Result, error) {
 		return nil, nil
 	}
 	if query == `select concat(@@version, ' ', @@version_comment)` {
-		r, err := mysql.BuildSimpleResultset([]string{"concat(@@version, ' ', @@version_comment)"}, [][]interface{}{
+		r, err := mysql.BuildSimpleResultset([]string{"concat(@@version, ' ', @@version_comment)"}, [][]any{
 			{"8.0.11"},
 		}, false)
 		if err != nil {
@@ -232,7 +232,7 @@ func (h EmptyHandler) HandleFieldList(table string, fieldWildcard string) ([]*my
 }
 
 // HandleStmtPrepare is called for COM_STMT_PREPARE
-func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, error) {
+func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, any, error) {
 	log.Printf("Received: StmtPrepare: %s", query)
 	return 0, 0, nil, fmt.Errorf("not supported now")
 }
@@ -242,13 +242,13 @@ func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, er
 //revive:disable:unused-parameter
 
 // HandleStmtExecute is called for COM_STMT_EXECUTE
-func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error) {
+func (h EmptyHandler) HandleStmtExecute(context any, query string, args []any) (*mysql.Result, error) {
 	log.Printf("Received: StmtExecute: %s (args: %v)", query, args)
 	return nil, fmt.Errorf("not supported now")
 }
 
 // HandleStmtClose is called for COM_STMT_CLOSE
-func (h EmptyHandler) HandleStmtClose(context interface{}) error {
+func (h EmptyHandler) HandleStmtClose(context any) error {
 	log.Println("Received: StmtClose")
 	return nil
 }

@@ -350,6 +350,37 @@ func main() {
 }
 ```
 
+### Structured Connector
+
+If you prefer a structured configuration over a DSN string, you can use
+`database/sql.OpenDB` with `driver.Connector`:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"net/url"
+
+	"github.com/go-mysql-org/go-mysql/driver"
+)
+
+func main() {
+	connector := driver.Connector{
+		Addr: "127.0.0.1:3306",
+		User: "root",
+		DB:   "test",
+		Params: url.Values{
+			// same option keys as the standard DSN form
+			"timeout": []string{"10s"},
+		},
+	}
+
+	db := sql.OpenDB(connector)
+	db.Close()
+}
+```
+
 ### Driver Options
 
 Configuration options can be provided by the standard DSN (Data Source Name).
@@ -385,10 +416,10 @@ golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
 | --------- | --------- | ------------------------------------------- |
 | duration  | 0         | user:pass@localhost/mydb?readTimeout=10s    |
 
-#### `ssl`
+#### `ssl` or `tls`
 
-Enable TLS between client and server. Valid values are `true` or `custom`. When using `custom`,
-the connection will use the TLS configuration set by SetCustomTLSConfig matching the host.
+Enable TLS between client and server. Valid values are `true`,`false`,`skip-verify` or `custom`. When using `custom`,
+the connection will use the TLS configuration set by `SetCustomTLSConfig` matching the host.
 
 | Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |

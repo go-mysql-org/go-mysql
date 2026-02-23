@@ -12,12 +12,12 @@ const DefaultCompressionLevel = 6
 
 var (
 	zlibReaderPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return nil
 		},
 	}
 	zlibWriterPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			w, err := zlib.NewWriterLevel(new(bytes.Buffer), DefaultCompressionLevel)
 			if err != nil {
 				panic(err)

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"slices"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
@@ -32,12 +33,7 @@ var supportedAuthPlugins = []string{mysql.AUTH_NATIVE_PASSWORD, mysql.AUTH_SHA25
 
 // helper function to determine what auth methods are allowed by this client
 func authPluginAllowed(pluginName string) bool {
-	for _, p := range supportedAuthPlugins {
-		if pluginName == p {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(supportedAuthPlugins, pluginName)
 }
 
 // See:
@@ -127,10 +123,7 @@ func (c *Conn) readInitialHandshake() error {
 			// https://github.com/mysql/mysql-server/blob/1bfe02bdad6604d54913c62614bde57a055c8332/sql/auth/sql_authentication.cc#L1641-L1642
 			// the first packet *must* have at least 20 bytes of a scramble.
 			// if a plugin provided less, we pad it to 20 with zeros
-			rest := int(authPluginDataLen) - 8
-			if rest < 13 {
-				rest = 13
-			}
+			rest := max(int(authPluginDataLen)-8, 13)
 
 			authPluginDataPart2 := data[pos : pos+rest-1]
 			pos += rest

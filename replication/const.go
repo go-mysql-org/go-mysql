@@ -224,14 +224,27 @@ func (e EventType) String() string {
 	}
 }
 
+type BinlogChecksum byte
+
 const (
-	BINLOG_CHECKSUM_ALG_OFF byte = 0 // Events are without checksum though its generator
+	BINLOG_CHECKSUM_ALG_OFF BinlogChecksum = 0 // Events are without checksum though its generator
 	// is checksum-capable New Master (NM).
-	BINLOG_CHECKSUM_ALG_CRC32 byte = 1 // CRC32 of zlib algorithm.
+	BINLOG_CHECKSUM_ALG_CRC32 BinlogChecksum = 1 // CRC32 of zlib algorithm.
 	//  BINLOG_CHECKSUM_ALG_ENUM_END,  // the cut line: valid alg range is [1, 0x7f].
-	BINLOG_CHECKSUM_ALG_UNDEF byte = 255 // special value to tag undetermined yet checksum
+	BINLOG_CHECKSUM_ALG_UNDEF BinlogChecksum = 255 // special value to tag undetermined yet checksum
 	// or events from checksum-unaware servers
 )
+
+func (e BinlogChecksum) String() string {
+	switch e {
+	case BINLOG_CHECKSUM_ALG_OFF:
+		return "CHECKSUM_OFF"
+	case BINLOG_CHECKSUM_ALG_CRC32:
+		return "CHECKSUM_CRC32"
+	default:
+		return "CHECKSUM_UNDEF"
+	}
+}
 
 // These are TABLE_MAP_EVENT's optional metadata field type, from: libbinlogevents/include/rows_event.h
 const (
@@ -276,4 +289,14 @@ const (
 	OTW_HB_HEADER_END_MARK = iota
 	OTW_HB_LOG_FILENAME_FIELD
 	OTW_HB_LOG_POSITION_FIELD
+)
+
+// Constants for binlog event flags
+// Source: https://github.com/mysql/mysql-server/blob/447eb26e094b444a88c532028647e48228c3c04f/libs/mysql/binlog/event/rows_event.h#L891-L910
+const (
+	STMT_END_F = 1 << iota
+	NO_FOREIGN_KEY_CHECKS_F
+	RELAXED_UNIQUE_CHECKS_F
+	COMPLETE_ROWS_F
+	USE_SQL_FOREIGN_KEY_F
 )

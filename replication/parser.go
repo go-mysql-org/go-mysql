@@ -249,7 +249,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 		if p.format != nil && p.format.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
 			err := p.verifyCrc32Checksum(rawData)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed checksum for %v, log pos %d: %v", h.EventType, h.LogPos, err)
 			}
 			data = data[0 : len(data)-BinlogChecksumLength]
 		}
@@ -338,6 +338,16 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 	} else {
 		err = e.Decode(data)
 	}
+
+	if fde, ok := e.(*FormatDescriptionEvent); ok {
+		if fde.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
+			err := p.verifyCrc32Checksum(rawData)
+			if err != nil {
+				return nil, fmt.Errorf("failed checksum for %v, log pos %d: %v", h.EventType, h.LogPos, err)
+			}
+		}
+	}
+
 	if err != nil {
 		return nil, &EventError{h, err.Error(), data}
 	}

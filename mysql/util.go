@@ -234,7 +234,7 @@ func hashCrypt256(source, salt string, iterations uint64) (string, error) {
 	actualIterations := iterations * ITERATION_MULTIPLIER
 	hashInput := []byte(source + salt)
 	var hash [32]byte
-	for i := uint64(0); i < actualIterations; i++ {
+	for range actualIterations {
 		hash = sha256.Sum256(hashInput)
 		hashInput = hash[:]
 	}
@@ -322,7 +322,7 @@ func RandomBuf(size int) []byte {
 	// calling mrand.Intn()
 	random := mrand.New(mrand.NewSource(time.Now().UTC().UnixNano()))
 	min, max := 30, 127
-	for i := 0; i < size; i++ {
+	for i := range size {
 		buf[i] = byte(min + random.Intn(max-min))
 	}
 	return buf
@@ -474,10 +474,10 @@ func FormatBinaryDate(n int, data []byte) ([]byte, error) {
 	case 0:
 		return []byte("0000-00-00"), nil
 	case 4:
-		return []byte(fmt.Sprintf("%04d-%02d-%02d",
+		return fmt.Appendf(nil, "%04d-%02d-%02d",
 			binary.LittleEndian.Uint16(data[:2]),
 			data[2],
-			data[3])), nil
+			data[3]), nil
 	default:
 		return nil, errors.Errorf("invalid date packet length %d", n)
 	}
@@ -488,21 +488,21 @@ func FormatBinaryDateTime(n int, data []byte) ([]byte, error) {
 	case 0:
 		return []byte("0000-00-00 00:00:00"), nil
 	case 4:
-		return []byte(fmt.Sprintf("%04d-%02d-%02d 00:00:00",
+		return fmt.Appendf(nil, "%04d-%02d-%02d 00:00:00",
 			binary.LittleEndian.Uint16(data[:2]),
 			data[2],
-			data[3])), nil
+			data[3]), nil
 	case 7:
-		return []byte(fmt.Sprintf(
+		return fmt.Appendf(nil,
 			"%04d-%02d-%02d %02d:%02d:%02d",
 			binary.LittleEndian.Uint16(data[:2]),
 			data[2],
 			data[3],
 			data[4],
 			data[5],
-			data[6])), nil
+			data[6]), nil
 	case 11:
-		return []byte(fmt.Sprintf(
+		return fmt.Appendf(nil,
 			"%04d-%02d-%02d %02d:%02d:%02d.%06d",
 			binary.LittleEndian.Uint16(data[:2]),
 			data[2],
@@ -510,7 +510,7 @@ func FormatBinaryDateTime(n int, data []byte) ([]byte, error) {
 			data[4],
 			data[5],
 			data[6],
-			binary.LittleEndian.Uint32(data[7:11]))), nil
+			binary.LittleEndian.Uint32(data[7:11])), nil
 	default:
 		return nil, errors.Errorf("invalid datetime packet length %d", n)
 	}
@@ -529,22 +529,22 @@ func FormatBinaryTime(n int, data []byte) ([]byte, error) {
 	var bytes []byte
 	switch n {
 	case 8:
-		bytes = []byte(fmt.Sprintf(
+		bytes = fmt.Appendf(nil,
 			"%c%02d:%02d:%02d",
 			sign,
 			uint16(data[1])*24+uint16(data[5]),
 			data[6],
 			data[7],
-		))
+		)
 	case 12:
-		bytes = []byte(fmt.Sprintf(
+		bytes = fmt.Appendf(nil,
 			"%c%02d:%02d:%02d.%06d",
 			sign,
 			uint16(data[1])*24+uint16(data[5]),
 			data[6],
 			data[7],
 			binary.LittleEndian.Uint32(data[8:12]),
-		))
+		)
 	default:
 		return nil, errors.Errorf("invalid time packet length %d", n)
 	}
