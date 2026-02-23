@@ -457,6 +457,203 @@ func (e *QueryEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
+type QueryStatusVars struct {
+	Options                      uint32
+	SQLMode                      uint64
+	AutoIncrementIncrement       uint16
+	AutoIncrementOffset          uint16
+	CharacterSetClient           uint16
+	CollationConnection          uint16
+	CollationServer              uint16
+	TimezoneCode                 []byte
+	CatalogNZCode                []byte
+	LCTimeNamesCode              uint16
+	CharsetDatabaseCode          uint16
+	TableMapForUpdateCode        uint64
+	InvokerUsername              []byte
+	InvokerHostname              []byte
+	UpdatedDBNames               [][]byte
+	Microseconds                 uint32
+	ExplicitDefaultsForTimestamp uint8
+	XID                          uint64
+	DefaultCollationForUtf8MB4   uint16
+	SQLRequirePrimaryKey         uint8
+	DefaultTableEncryption       uint8
+}
+
+func (e *QueryEvent) GetStatusVars() *QueryStatusVars {
+	if len(e.StatusVars) == 0 {
+		return nil
+	}
+
+	vars := &QueryStatusVars{}
+	pos := 0
+
+	for pos < len(e.StatusVars) {
+		switch e.StatusVars[pos] {
+		case 0x00:
+			pos += 1
+
+			vars.Options = binary.LittleEndian.Uint32(e.StatusVars[pos:])
+			pos += 4
+		case 0x01:
+			pos += 1
+
+			vars.SQLMode = binary.LittleEndian.Uint64(e.StatusVars[pos:])
+			pos += 8
+		case 0x02:
+			// Not used
+		case 0x03:
+			pos += 1
+
+			vars.AutoIncrementIncrement = binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+
+			vars.AutoIncrementOffset = binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+		case 0x04:
+			pos += 1
+
+			vars.CharacterSetClient = binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+
+			vars.CollationConnection = binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+
+			vars.CollationServer = binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+		case 0x05:
+			pos += 1
+
+			size := int(e.StatusVars[pos])
+			pos += 1
+
+			vars.TimezoneCode = make([]byte, size)
+			copy(vars.TimezoneCode, e.StatusVars[pos:])
+			pos += size
+		case 0x06:
+			pos += 1
+
+			size := int(e.StatusVars[pos])
+			pos += 1
+
+			vars.CatalogNZCode = make([]byte, size)
+			copy(vars.CatalogNZCode, e.StatusVars[pos:])
+			pos += size
+		case 0x07:
+			pos += 1
+
+			vars.LCTimeNamesCode = binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+		case 0x08:
+			pos += 1
+
+			vars.CharsetDatabaseCode = binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+		case 0x09:
+			pos += 1
+
+			vars.TableMapForUpdateCode = binary.LittleEndian.Uint64(e.StatusVars[pos:])
+			pos += 8
+		case 0x0a:
+			// Not used
+		case 0x0b:
+			pos += 1
+
+			size := int(e.StatusVars[pos])
+			pos += 1
+
+			vars.InvokerUsername = make([]byte, size)
+			copy(vars.InvokerUsername, e.StatusVars[pos:])
+			pos += size
+
+			size = int(e.StatusVars[pos])
+			pos += 1
+
+			vars.InvokerHostname = make([]byte, size)
+			copy(vars.InvokerHostname, e.StatusVars[pos:])
+			pos += size
+		case 0x0c:
+			pos += 1
+
+			c := uint8(e.StatusVars[pos])
+			pos += 1
+
+			vars.UpdatedDBNames = make([][]byte, c)
+			for c > 0 {
+				i := c - 1
+				for j, b := range e.StatusVars[pos:] {
+					if b == 0 {
+						vars.UpdatedDBNames[i] = make([]byte, j)
+						copy(vars.UpdatedDBNames[i], e.StatusVars[pos:pos+j])
+						pos += j + 1
+						break
+					}
+				}
+				c = i
+			}
+		case 0x0d:
+			pos += 1
+
+			low := binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+
+			high := uint8(e.StatusVars[pos])
+			pos += 1
+
+			vars.Microseconds = uint32(low) + (uint32(high) << 16)
+		case 0x0e:
+			// Not used
+		case 0x0f:
+			// Not used
+		case 0x10:
+			pos += 1
+
+			vars.ExplicitDefaultsForTimestamp = e.StatusVars[pos]
+			pos += 1
+		case 0x11:
+			pos += 1
+
+			vars.XID = binary.LittleEndian.Uint64(e.StatusVars[pos:])
+			pos += 8
+		case 0x12:
+			pos += 1
+
+			vars.DefaultCollationForUtf8MB4 = binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+		case 0x13:
+			pos += 1
+
+			vars.SQLRequirePrimaryKey = e.StatusVars[pos]
+			pos += 2
+		case 0x14:
+			pos += 1
+
+			vars.DefaultTableEncryption = e.StatusVars[pos]
+			pos += 2
+		case 0x80:
+			pos += 1
+
+			low := binary.LittleEndian.Uint16(e.StatusVars[pos:])
+			pos += 2
+
+			high := uint8(e.StatusVars[pos])
+			pos += 1
+
+			vars.Microseconds = uint32(low) + (uint32(high) << 16)
+		case 0x81:
+			pos += 1
+
+			vars.XID = binary.LittleEndian.Uint64(e.StatusVars[pos:])
+			pos += 8
+		default:
+			return nil
+		}
+	}
+
+	return vars
+}
+
 type GTIDEvent struct {
 	CommitFlag     uint8
 	SID            []byte
@@ -1046,5 +1243,69 @@ func (h *HeartbeatEvent) Dump(w io.Writer) {
 		"Heartbeat Event Version: %d\nBinlog File Name: %s\nBinlog Offset: %d\n",
 		h.Version, h.Filename, h.Offset,
 	)
+	fmt.Fprintln(w)
+}
+
+const (
+	UserVarTypeString  = 0
+	UserVarTypeFloat   = 1
+	UserVarTypeInt     = 2
+	UserVarTypeRow     = 3
+	UserVarTypeDecimal = 4
+)
+
+type UserVarEvent struct {
+	NameLength uint32
+	Name       []byte
+	IsNull     uint8
+
+	Type        uint8
+	Charset     uint32
+	ValueLength uint32
+	Value       []byte
+
+	Flags       uint8
+}
+
+func (e *UserVarEvent) Decode(data []byte) error {
+	pos := uint32(0)
+	e.NameLength = binary.LittleEndian.Uint32(data[pos:])
+	pos += 4
+
+	e.Name = make([]byte, e.NameLength)
+	copy(e.Name, data[pos:])
+	pos += e.NameLength
+
+	e.IsNull = data[pos]
+	pos += 1
+
+	if e.IsNull == 0 {
+		e.Type = data[pos]
+		pos += 1
+
+		e.Charset = binary.LittleEndian.Uint32(data[pos:])
+		pos += 4
+
+		e.ValueLength = binary.LittleEndian.Uint32(data[pos:])
+		pos += 4
+
+		e.Value = make([]byte, e.ValueLength)
+		copy(e.Value, data[pos:])
+		pos += e.ValueLength
+
+		// Flags is only included with integer variables to help
+		// distinguish between signed and unsigned types.
+		if e.Type == UserVarTypeInt {
+			e.Flags = data[pos]
+			pos += 1
+		}
+	}
+
+	return nil
+}
+
+func (e *UserVarEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w, "Name: %s\n", string(e.Name))
+	fmt.Fprintf(w, "Value: %s\n", string(e.Value))
 	fmt.Fprintln(w)
 }
