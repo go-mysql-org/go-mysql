@@ -102,6 +102,7 @@ func TestParseDSN(t *testing.T) {
 		"user:password@127.0.0.1/db":                    {standardDSN: true, addr: "127.0.0.1", user: "user", password: "password", db: "db", params: url.Values{}},
 		"user:password@127.0.0.1:3308/db":               {standardDSN: true, addr: "127.0.0.1:3308", user: "user", password: "password", db: "db", params: url.Values{}},
 		"user:password@tcp(127.0.0.1:3309)/db":          {standardDSN: true, addr: "127.0.0.1:3309", user: "user", password: "password", db: "db", params: url.Values{}},
+		"tcp(127.0.0.1:3310)/db":                        {standardDSN: true, addr: "127.0.0.1:3310", user: "", password: "", db: "db", params: url.Values{}},
 		"user:password@tcp(127.0.0.1:3309)/db?param=func(1)": {
 			standardDSN: true,
 			addr:        "127.0.0.1:3309",

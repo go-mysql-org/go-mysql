@@ -113,7 +113,7 @@ func parseDSN(dsn string) (connInfo, error) {
 	if parseErr != nil {
 		// If parsing fails, try to rewrite `tcp(127.0.0.1:3306)` to `127.0.0.1:3306` and try again.
 		// This is for compatibility with go-sql-driver/mysql.
-		dsn = compatDSNre.ReplaceAllString(dsn, "${1}${2}")
+		dsn = compatDSNre.ReplaceAllString(dsn, "$1$2")
 		parsedDSN, parseErr = url.Parse(dsn)
 		if parseErr != nil {
 			return ci, errors.Errorf("invalid dsn, must be user:password@addr[/db[?param=X]]")
