@@ -128,7 +128,8 @@ func ParseDSN(dsn string) (Connector, error) {
 	}
 
 	if standardDSN {
-		ci.DB = parsedDSN.Path[1:]
+		// parsedDSN.Path is either empty (no db provided) or begins with "/".
+		ci.DB = strings.TrimPrefix(parsedDSN.Path, "/")
 		ci.Params = parsedDSN.Query()
 	} else {
 		ci.DB = parsedDSN.RawQuery
