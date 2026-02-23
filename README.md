@@ -385,10 +385,10 @@ golang's [ParseDuration](https://pkg.go.dev/time#ParseDuration) format.
 | --------- | --------- | ------------------------------------------- |
 | duration  | 0         | user:pass@localhost/mydb?readTimeout=10s    |
 
-#### `ssl`
+#### `ssl` or `tls`
 
-Enable TLS between client and server. Valid values are `true` or `custom`. When using `custom`,
-the connection will use the TLS configuration set by SetCustomTLSConfig matching the host.
+Enable TLS between client and server. Valid values are `true`,`false`,`skip-verify` or `custom`. When using `custom`,
+the connection will use the TLS configuration set by `SetCustomTLSConfig` matching the host.
 
 | Type      | Default   | Example                                     |
 | --------- | --------- | ------------------------------------------- |
