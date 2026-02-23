@@ -26,7 +26,7 @@ import (
 var (
 	_ sqldriver.Driver             = &driver{}
 	_ sqldriver.DriverContext      = &driver{}
-	_ sqldriver.Connector          = &connInfo{}
+	_ sqldriver.Connector          = &Connector{}
 	_ sqldriver.NamedValueChecker  = &conn{}
 	_ sqldriver.Validator          = &conn{}
 	_ sqldriver.Conn               = &conn{}
@@ -60,13 +60,22 @@ var (
 
 type driver struct{}
 
-type connInfo struct {
-	standardDSN bool
-	addr        string
-	user        string
-	password    string
-	db          string
-	params      url.Values
+// Connector implements [database/sql/driver.Connector] so it can be used with
+// [database/sql.OpenDB] to avoid constructing a DSN string manually.
+//
+// Most configuration is provided via Params, using the same option keys as the
+// standard DSN form:
+//
+//	[user[:password]@]addr[/db[?param=X]]
+//
+// Note: the legacy DSN form is still supported when using [ParseDSN], but it
+// cannot carry URL parameters.
+type Connector struct {
+	Addr     string
+	User     string
+	Password string
+	DB       string
+	Params   url.Values
 }
 
 var compatDSNre = regexp.MustCompile(`(tcp\((.*)\))`)
@@ -74,24 +83,24 @@ var compatDSNre = regexp.MustCompile(`(tcp\((.*)\))`)
 // ParseDSN takes a DSN string and splits it up into struct containing addr,
 // user, password and db.
 // It returns an error if unable to parse.
-// The struct also contains a boolean indicating if the DSN is in legacy or
-// standard form.
 //
 // Legacy form uses a `?` is used as the path separator: user:password@addr[?db]
 // Standard form uses a `/`: user:password@addr/db?param=value
 //
-// Optional parameters are supported in the standard DSN form
-func parseDSN(dsn string) (connInfo, error) {
-	ci := connInfo{}
+// Optional URL parameters are supported in the standard DSN form. The legacy
+// form cannot carry URL parameters.
+func ParseDSN(dsn string) (Connector, error) {
+	ci := Connector{}
 
+	standardDSN := false
 	// If a "/" occurs after "@" and then no more "@" or "/" occur after that
 	if strings.Contains(dsn, "@") {
-		ci.standardDSN = dsnRegex.MatchString(dsn)
+		standardDSN = dsnRegex.MatchString(dsn)
 	} else {
 		// when the `@` char is not present in the dsn, then look for `/` as the db separator
 		// to indicate a standard DSN. The legacy form uses the `?` char as the db separator.
 		// If neither `/` or `?` are in the dsn, simply treat the dsn as the legacy form.
-		ci.standardDSN = strings.Contains(dsn, "/")
+		standardDSN = strings.Contains(dsn, "/")
 	}
 
 	// Add a URL scheme if it isn't there so we can parse with url.Parse
@@ -110,19 +119,19 @@ func parseDSN(dsn string) (connInfo, error) {
 		}
 	}
 
-	ci.addr = parsedDSN.Host
-	ci.user = parsedDSN.User.Username()
+	ci.Addr = parsedDSN.Host
+	ci.User = parsedDSN.User.Username()
 	// We ignore the second argument as that is just a flag for existence of a password
 	// If not set we get empty string anyway
-	ci.password, _ = parsedDSN.User.Password()
+	ci.Password, _ = parsedDSN.User.Password()
 
-	if ci.standardDSN {
-		ci.db = parsedDSN.Path[1:]
-		ci.params = parsedDSN.Query()
+	if standardDSN {
+		ci.DB = parsedDSN.Path[1:]
+		ci.Params = parsedDSN.Query()
 	} else {
-		ci.db = parsedDSN.RawQuery
-		// This is the equivalent to a "nil" list of parameters
-		ci.params = url.Values{}
+		ci.DB = parsedDSN.RawQuery
+		// Legacy DSNs cannot carry URL parameters; keep Params empty for safety.
+		ci.Params = url.Values{}
 	}
 
 	return ci, nil
@@ -131,79 +140,74 @@ func parseDSN(dsn string) (connInfo, error) {
 // Open takes a supplied DSN string and opens a connection
 // See ParseDSN for more information on the form of the DSN
 func (d driver) Open(dsn string) (sqldriver.Conn, error) {
-	ci, err := parseDSN(dsn)
+	ci, err := ParseDSN(dsn)
 	if err != nil {
 		return nil, err
 	}
 	return ci.Connect(context.Background())
 }
 
-func (ci connInfo) Connect(ctx context.Context) (sqldriver.Conn, error) {
+func (ci Connector) Connect(ctx context.Context) (sqldriver.Conn, error) {
 	var c *client.Conn
 	var err error
 	// by default database/sql driver retries will be enabled
 	retries := true
 
-	if ci.standardDSN {
-		var timeout time.Duration
-		configuredOptions := make([]client.Option, 0, len(ci.params))
-		for key, value := range ci.params {
-			if (key == "ssl" || key == "tls") && len(value) > 0 {
-				tlsConfigName := value[0]
-				switch tlsConfigName {
-				case "true":
-					// This actually does insecureSkipVerify
-					// But not even sure if it makes sense to handle false? According to
-					// client_test.go it doesn't - it'd result in an error
-					configuredOptions = append(configuredOptions, UseSslOption)
-				case "custom":
-					// I was too concerned about mimicking what go-sql-driver/mysql does which will
-					// allow any name for a custom tls profile and maps the query parameter value to
-					// that TLSConfig variable... there is no need to be that clever.
-					// Instead of doing that, let's store required custom TLSConfigs in a map that
-					// uses the DSN address as the key
-					configuredOptions = append(configuredOptions, func(c *client.Conn) error {
-						c.SetTLSConfig(customTLSConfigMap[ci.addr])
-						return nil
-					})
-				case "false":
-					// No options to enable
-				case "skip-verify":
-					// See description for "true".
-					configuredOptions = append(configuredOptions, UseSslSkipVerifyOption)
-				default:
-					return nil, errors.Errorf("Supported options for %s are true,false,custom or skip-verify", key)
-				}
-			} else if key == "timeout" && len(value) > 0 {
-				if timeout, err = time.ParseDuration(value[0]); err != nil {
-					return nil, errors.Wrap(err, "invalid duration value for timeout option")
-				}
-			} else if key == "retries" && len(value) > 0 {
-				// by default keep the golang database/sql retry behavior enabled unless
-				// the retries driver option is explicitly set to 'off'
-				retries = !strings.EqualFold(value[0], "off")
+	var timeout time.Duration
+	configuredOptions := make([]client.Option, 0, len(ci.Params))
+	for key, value := range ci.Params {
+		if (key == "ssl" || key == "tls") && len(value) > 0 {
+			tlsConfigName := value[0]
+			switch tlsConfigName {
+			case "true":
+				// This actually does insecureSkipVerify
+				// But not even sure if it makes sense to handle false? According to
+				// client_test.go it doesn't - it'd result in an error
+				configuredOptions = append(configuredOptions, UseSslOption)
+			case "custom":
+				// I was too concerned about mimicking what go-sql-driver/mysql does which will
+				// allow any name for a custom tls profile and maps the query parameter value to
+				// that TLSConfig variable... there is no need to be that clever.
+				// Instead of doing that, let's store required custom TLSConfigs in a map that
+				// uses the DSN address as the key
+				configuredOptions = append(configuredOptions, func(c *client.Conn) error {
+					c.SetTLSConfig(customTLSConfigMap[ci.Addr])
+					return nil
+				})
+			case "false":
+				// No options to enable
+			case "skip-verify":
+				// See description for "true".
+				configuredOptions = append(configuredOptions, UseSslSkipVerifyOption)
+			default:
+				return nil, errors.Errorf("Supported options for %s are true,false,custom or skip-verify", key)
+			}
+		} else if key == "timeout" && len(value) > 0 {
+			if timeout, err = time.ParseDuration(value[0]); err != nil {
+				return nil, errors.Wrap(err, "invalid duration value for timeout option")
+			}
+		} else if key == "retries" && len(value) > 0 {
+			// by default keep the golang database/sql retry behavior enabled unless
+			// the retries driver option is explicitly set to 'off'
+			retries = !strings.EqualFold(value[0], "off")
+		} else {
+			if option, ok := options[key]; ok {
+				opt := func(o DriverOption, v string) client.Option {
+					return func(c *client.Conn) error {
+						return o(c, v)
+					}
+				}(option, value[0])
+				configuredOptions = append(configuredOptions, opt)
 			} else {
-				if option, ok := options[key]; ok {
-					opt := func(o DriverOption, v string) client.Option {
-						return func(c *client.Conn) error {
-							return o(c, v)
-						}
-					}(option, value[0])
-					configuredOptions = append(configuredOptions, opt)
-				} else {
-					return nil, errors.Errorf("unsupported connection option: %s", key)
-				}
+				return nil, errors.Errorf("unsupported connection option: %s", key)
 			}
 		}
-
-		if timeout <= 0 {
-			timeout = 10 * time.Second
-		}
-		c, err = client.ConnectWithContext(ctx, ci.addr, ci.user, ci.password, ci.db, timeout, configuredOptions...)
-	} else {
-		// No more processing here. Let's only support url parameters with the newer style DSN
-		c, err = client.ConnectWithContext(ctx, ci.addr, ci.user, ci.password, ci.db, 10*time.Second)
 	}
+
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	c, err = client.ConnectWithContext(ctx, ci.Addr, ci.User, ci.Password, ci.DB, timeout, configuredOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -237,10 +241,10 @@ func (ci connInfo) Connect(ctx context.Context) (sqldriver.Conn, error) {
 }
 
 func (d driver) OpenConnector(name string) (sqldriver.Connector, error) {
-	return parseDSN(name)
+	return ParseDSN(name)
 }
 
-func (ci connInfo) Driver() sqldriver.Driver {
+func (ci Connector) Driver() sqldriver.Driver {
 	return driver{}
 }
 
