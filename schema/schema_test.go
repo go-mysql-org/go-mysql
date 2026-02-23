@@ -125,6 +125,51 @@ func (s *schemaTestSuite) TestSchema() {
 	require.Equal(s.T(), ta, taSqlDb)
 }
 
+func (s *schemaTestSuite) TestSchemaColumnExtraFlags() {
+	_, err := s.conn.Execute(`DROP TABLE IF EXISTS schema_column_extra_flags_test`)
+	require.NoError(s.T(), err)
+
+	// DEFAULT (expr) is supported since MySQL 8.0.13. If the server is older,
+	// fallback to a table that only validates the ON UPDATE parsing.
+	create := `
+        CREATE TABLE IF NOT EXISTS schema_column_extra_flags_test (
+            id INT PRIMARY KEY,
+            ts TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            expr INT DEFAULT (1+1)
+        ) ENGINE = INNODB;
+    `
+	_, err = s.conn.Execute(create)
+	if err != nil {
+		createFallback := `
+            CREATE TABLE IF NOT EXISTS schema_column_extra_flags_test (
+                id INT PRIMARY KEY,
+                ts TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE = INNODB;
+        `
+		_, err = s.conn.Execute(createFallback)
+		require.NoError(s.T(), err)
+	}
+
+	ta, err := NewTable(s.conn, *schema, "schema_column_extra_flags_test")
+	require.NoError(s.T(), err)
+
+	tsIdx := ta.FindColumn("ts")
+	require.GreaterOrEqual(s.T(), tsIdx, 0)
+	require.True(s.T(), ta.Columns[tsIdx].IsAutoUpdating)
+	require.False(s.T(), ta.Columns[tsIdx].IsDefaultExpr)
+
+	exprIdx := ta.FindColumn("expr")
+	if exprIdx >= 0 {
+		require.True(s.T(), ta.Columns[exprIdx].IsDefaultExpr)
+		require.False(s.T(), ta.Columns[exprIdx].IsAutoUpdating)
+	}
+
+	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_column_extra_flags_test")
+	require.NoError(s.T(), err)
+
+	require.Equal(s.T(), ta, taSqlDb)
+}
+
 func (s *schemaTestSuite) TestQuoteSchema() {
 	str := "CREATE TABLE IF NOT EXISTS `a-b_test` (`a.b` INT) ENGINE = INNODB"
 
