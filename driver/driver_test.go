@@ -83,36 +83,36 @@ func TestParseDSN(t *testing.T) {
 	// List of DSNs to test and expected results
 	// Use different numbered domains to more readily see what has failed - since we
 	// test in a loop we get the same line number on error
-	testDSNs := map[string]connInfo{
-		"user:password@localhost?db":                    {standardDSN: false, addr: "localhost", user: "user", password: "password", db: "db", params: url.Values{}},
-		"user@1.domain.com?db":                          {standardDSN: false, addr: "1.domain.com", user: "user", password: "", db: "db", params: url.Values{}},
-		"user:password@2.domain.com/db":                 {standardDSN: true, addr: "2.domain.com", user: "user", password: "password", db: "db", params: url.Values{}},
-		"user:password@3.domain.com/db?ssl=true":        {standardDSN: true, addr: "3.domain.com", user: "user", password: "password", db: "db", params: url.Values{"ssl": []string{"true"}}},
-		"user:password@3.domain.com/db?ssl=false":       {standardDSN: true, addr: "3.domain.com", user: "user", password: "password", db: "db", params: url.Values{"ssl": []string{"false"}}},
-		"user:password@3.domain.com/db?ssl=skip-verify": {standardDSN: true, addr: "3.domain.com", user: "user", password: "password", db: "db", params: url.Values{"ssl": []string{"skip-verify"}}},
-		"user:password@4.domain.com/db?ssl=custom":      {standardDSN: true, addr: "4.domain.com", user: "user", password: "password", db: "db", params: url.Values{"ssl": []string{"custom"}}},
-		"user:password@4.domain.com/db?tls=custom":      {standardDSN: true, addr: "4.domain.com", user: "user", password: "password", db: "db", params: url.Values{"tls": []string{"custom"}}},
-		"user:password@5.domain.com/db?unused=param":    {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"unused": []string{"param"}}},
-		"user:password@5.domain.com/db?timeout=1s":      {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"timeout": []string{"1s"}}},
-		"user:password@5.domain.com/db?readTimeout=1m":  {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"readTimeout": []string{"1m"}}},
-		"user:password@5.domain.com/db?writeTimeout=1m": {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"writeTimeout": []string{"1m"}}},
-		"user:password@5.domain.com/db?compress=zlib":   {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{"compress": []string{"zlib"}}},
-		"mysql://user:password@5.domain.com/db":         {standardDSN: true, addr: "5.domain.com", user: "user", password: "password", db: "db", params: url.Values{}},
-		"user:password@5.domain.com:3307/db":            {standardDSN: true, addr: "5.domain.com:3307", user: "user", password: "password", db: "db", params: url.Values{}},
-		"user:password@127.0.0.1/db":                    {standardDSN: true, addr: "127.0.0.1", user: "user", password: "password", db: "db", params: url.Values{}},
-		"user:password@127.0.0.1:3308/db":               {standardDSN: true, addr: "127.0.0.1:3308", user: "user", password: "password", db: "db", params: url.Values{}},
-		"user:password@tcp(127.0.0.1:3309)/db":          {standardDSN: true, addr: "127.0.0.1:3309", user: "user", password: "password", db: "db", params: url.Values{}},
-		"mysql://127.0.0.1:3306":                        {standardDSN: true, addr: "127.0.0.1:3306", user: "", password: "", db: "", params: url.Values{}},
+	testDSNs := map[string]Connector{
+		"user:password@localhost?db":                    {Addr: "localhost", User: "user", Password: "password", DB: "db", Params: url.Values{}},
+		"user@1.domain.com?db":                          {Addr: "1.domain.com", User: "user", Password: "", DB: "db", Params: url.Values{}},
+		"user:password@2.domain.com/db":                 {Addr: "2.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{}},
+		"user:password@3.domain.com/db?ssl=true":        {Addr: "3.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"ssl": []string{"true"}}},
+		"user:password@3.domain.com/db?ssl=false":       {Addr: "3.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"ssl": []string{"false"}}},
+		"user:password@3.domain.com/db?ssl=skip-verify": {Addr: "3.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"ssl": []string{"skip-verify"}}},
+		"user:password@4.domain.com/db?ssl=custom":      {Addr: "4.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"ssl": []string{"custom"}}},
+		"user:password@4.domain.com/db?tls=custom":      {Addr: "4.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"tls": []string{"custom"}}},
+		"user:password@5.domain.com/db?unused=param":    {Addr: "5.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"unused": []string{"param"}}},
+		"user:password@5.domain.com/db?timeout=1s":      {Addr: "5.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"timeout": []string{"1s"}}},
+		"user:password@5.domain.com/db?readTimeout=1m":  {Addr: "5.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"readTimeout": []string{"1m"}}},
+		"user:password@5.domain.com/db?writeTimeout=1m": {Addr: "5.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"writeTimeout": []string{"1m"}}},
+		"user:password@5.domain.com/db?compress=zlib":   {Addr: "5.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{"compress": []string{"zlib"}}},
+		"mysql://user:password@5.domain.com/db":         {Addr: "5.domain.com", User: "user", Password: "password", DB: "db", Params: url.Values{}},
+		"user:password@5.domain.com:3307/db":            {Addr: "5.domain.com:3307", User: "user", Password: "password", DB: "db", Params: url.Values{}},
+		"user:password@127.0.0.1/db":                    {Addr: "127.0.0.1", User: "user", Password: "password", DB: "db", Params: url.Values{}},
+		"user:password@127.0.0.1:3308/db":               {Addr: "127.0.0.1:3308", User: "user", Password: "password", DB: "db", Params: url.Values{}},
+		"user:password@tcp(127.0.0.1:3309)/db":          {Addr: "127.0.0.1:3309", User: "user", Password: "password", DB: "db", Params: url.Values{}},
+		"mysql://127.0.0.1:3306":                        {Addr: "127.0.0.1:3306", User: "", Password: "", DB: "", Params: url.Values{}},
 
 		// per the documentation in the README, the 'user:password@' is optional as are the '/db?param=X' portions of the DSN
-		"6.domain.com":                  {standardDSN: false, addr: "6.domain.com", user: "", password: "", db: "", params: url.Values{}},
-		"7.domain.com?db":               {standardDSN: false, addr: "7.domain.com", user: "", password: "", db: "db", params: url.Values{}},
-		"8.domain.com/db":               {standardDSN: true, addr: "8.domain.com", user: "", password: "", db: "db", params: url.Values{}},
-		"9.domain.com/db?compress=zlib": {standardDSN: true, addr: "9.domain.com", user: "", password: "", db: "db", params: url.Values{"compress": []string{"zlib"}}},
+		"6.domain.com":                  {Addr: "6.domain.com", User: "", Password: "", DB: "", Params: url.Values{}},
+		"7.domain.com?db":               {Addr: "7.domain.com", User: "", Password: "", DB: "db", Params: url.Values{}},
+		"8.domain.com/db":               {Addr: "8.domain.com", User: "", Password: "", DB: "db", Params: url.Values{}},
+		"9.domain.com/db?compress=zlib": {Addr: "9.domain.com", User: "", Password: "", DB: "db", Params: url.Values{"compress": []string{"zlib"}}},
 	}
 
 	for supplied, expected := range testDSNs {
-		actual, err := parseDSN(supplied)
+		actual, err := ParseDSN(supplied)
 		require.NoError(t, err)
 		// Compare that with expected
 		require.Equal(t, expected, actual)
