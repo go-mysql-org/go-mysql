@@ -10,7 +10,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ "1.24", "1.23" ]
+        go: [ "1.26", "1.25", "1.24" ]
         os: [ ubuntu-latest, ubuntu-24.04, ubuntu-22.04 ]
     name: Tests Go ${{ matrix.go }} on ${{ matrix.os }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}
@@ -41,9 +41,9 @@ jobs:
         run: |
           sudo apt-get install -y make gcc
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
       - name: Run tests
@@ -56,9 +56,9 @@ jobs:
     strategy:
       matrix:
         mysql_version:
-          - 8.0.42
-          - 8.4.5
-          - 9.3.0
+          - 8.0.45
+          - 8.4.8
+          - 9.6.0
     name: Tests with MySQL ${{ matrix.mysql_version }}
     runs-on: ubuntu-latest
     services:
@@ -80,9 +80,9 @@ jobs:
         run: |
           sudo apt-get install -y make gcc
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: stable
       - name: Run tests
@@ -96,12 +96,12 @@ jobs:
     name: golangci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: stable
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           args: --timeout=3m
@@ -121,9 +121,9 @@ jobs:
         run: |
           sudo apt-get install -y make gcc
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: stable
 
