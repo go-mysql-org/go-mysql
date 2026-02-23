@@ -84,7 +84,7 @@ var compatDSNre = regexp.MustCompile(`(tcp\((.*)\))`)
 // user, password and db.
 // It returns an error if unable to parse.
 //
-// Legacy form uses a `?` is used as the path separator: user:password@addr[?db]
+// Legacy form uses a `?` as the path separator: user:password@addr[?db]
 // Standard form uses a `/`: user:password@addr/db?param=value
 //
 // Optional URL parameters are supported in the standard DSN form. The legacy
@@ -120,10 +120,12 @@ func ParseDSN(dsn string) (Connector, error) {
 	}
 
 	ci.Addr = parsedDSN.Host
-	ci.User = parsedDSN.User.Username()
-	// We ignore the second argument as that is just a flag for existence of a password
-	// If not set we get empty string anyway
-	ci.Password, _ = parsedDSN.User.Password()
+	if parsedDSN.User != nil {
+		ci.User = parsedDSN.User.Username()
+		// We ignore the second argument as that is just a flag for existence of a password
+		// If not set we get empty string anyway
+		ci.Password, _ = parsedDSN.User.Password()
+	}
 
 	if standardDSN {
 		ci.DB = parsedDSN.Path[1:]
@@ -155,10 +157,15 @@ func (ci Connector) Connect(ctx context.Context) (sqldriver.Conn, error) {
 
 	var timeout time.Duration
 	configuredOptions := make([]client.Option, 0, len(ci.Params))
-	for key, value := range ci.Params {
-		if (key == "ssl" || key == "tls") && len(value) > 0 {
-			tlsConfigName := value[0]
-			switch tlsConfigName {
+	for key, values := range ci.Params {
+		if len(values) == 0 {
+			return nil, errors.Errorf("connection option %s requires a value", key)
+		}
+
+		value := values[0]
+		switch key {
+		case "ssl", "tls":
+			switch value {
 			case "true":
 				// This actually does insecureSkipVerify
 				// But not even sure if it makes sense to handle false? According to
@@ -170,10 +177,15 @@ func (ci Connector) Connect(ctx context.Context) (sqldriver.Conn, error) {
 				// that TLSConfig variable... there is no need to be that clever.
 				// Instead of doing that, let's store required custom TLSConfigs in a map that
 				// uses the DSN address as the key
-				configuredOptions = append(configuredOptions, func(c *client.Conn) error {
-					c.SetTLSConfig(customTLSConfigMap[ci.Addr])
-					return nil
-				})
+				customTLSMutex.Lock()
+				tlsCfg := customTLSConfigMap[ci.Addr]
+				customTLSMutex.Unlock()
+				configuredOptions = append(configuredOptions, func(tlsCfg *tls.Config) client.Option {
+					return func(c *client.Conn) error {
+						c.SetTLSConfig(tlsCfg)
+						return nil
+					}
+				}(tlsCfg))
 			case "false":
 				// No options to enable
 			case "skip-verify":
@@ -182,21 +194,21 @@ func (ci Connector) Connect(ctx context.Context) (sqldriver.Conn, error) {
 			default:
 				return nil, errors.Errorf("Supported options for %s are true,false,custom or skip-verify", key)
 			}
-		} else if key == "timeout" && len(value) > 0 {
-			if timeout, err = time.ParseDuration(value[0]); err != nil {
+		case "timeout":
+			if timeout, err = time.ParseDuration(value); err != nil {
 				return nil, errors.Wrap(err, "invalid duration value for timeout option")
 			}
-		} else if key == "retries" && len(value) > 0 {
+		case "retries":
 			// by default keep the golang database/sql retry behavior enabled unless
 			// the retries driver option is explicitly set to 'off'
-			retries = !strings.EqualFold(value[0], "off")
-		} else {
+			retries = !strings.EqualFold(value, "off")
+		default:
 			if option, ok := options[key]; ok {
 				opt := func(o DriverOption, v string) client.Option {
 					return func(c *client.Conn) error {
 						return o(c, v)
 					}
-				}(option, value[0])
+				}(option, value)
 				configuredOptions = append(configuredOptions, opt)
 			} else {
 				return nil, errors.Errorf("unsupported connection option: %s", key)
