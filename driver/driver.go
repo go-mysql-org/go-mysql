@@ -27,14 +27,14 @@ var (
 	_ sqldriver.Driver             = &driver{}
 	_ sqldriver.DriverContext      = &driver{}
 	_ sqldriver.Connector          = &Connector{}
-	_ sqldriver.NamedValueChecker  = &conn{}
-	_ sqldriver.Validator          = &conn{}
-	_ sqldriver.Conn               = &conn{}
-	_ sqldriver.Pinger             = &conn{}
-	_ sqldriver.ConnBeginTx        = &conn{}
-	_ sqldriver.ConnPrepareContext = &conn{}
-	_ sqldriver.ExecerContext      = &conn{}
-	_ sqldriver.QueryerContext     = &conn{}
+	_ sqldriver.NamedValueChecker  = &Conn{}
+	_ sqldriver.Validator          = &Conn{}
+	_ sqldriver.Conn               = &Conn{}
+	_ sqldriver.Pinger             = &Conn{}
+	_ sqldriver.ConnBeginTx        = &Conn{}
+	_ sqldriver.ConnPrepareContext = &Conn{}
+	_ sqldriver.ExecerContext      = &Conn{}
+	_ sqldriver.QueryerContext     = &Conn{}
 	_ sqldriver.Stmt               = &stmt{}
 	_ sqldriver.StmtExecContext    = &stmt{}
 	_ sqldriver.StmtQueryContext   = &stmt{}
@@ -247,7 +247,7 @@ func (ci Connector) Connect(ctx context.Context) (sqldriver.Conn, error) {
 	// the native go-mysql-org/go-mysql 'mysql.ErrBadConn' erorr which will prevent a retry.
 	// In this case the sqldriver.Validator interface is implemented and will return
 	// false for IsValid() signaling the connection is bad and should be discarded.
-	return &conn{
+	return &Conn{
 		Conn:  c,
 		state: &state{contexts: contexts, valid: true, useStdLibErrors: retries},
 	}, nil
@@ -284,16 +284,16 @@ func (s *state) Close() {
 	}
 }
 
-type conn struct {
+type Conn struct {
 	*client.Conn
 	state *state
 }
 
-func (c *conn) watchCtx(ctx context.Context) func() {
+func (c *Conn) watchCtx(ctx context.Context) func() {
 	return c.state.watchCtx(ctx)
 }
 
-func (c *conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
+func (c *Conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
 	for _, nvChecker := range namedValueCheckers {
 		err := nvChecker(nv)
 		if err == nil {
@@ -311,11 +311,11 @@ func (c *conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
 	return sqldriver.ErrSkip
 }
 
-func (c *conn) IsValid() bool {
+func (c *Conn) IsValid() bool {
 	return c.state.valid
 }
 
-func (c *conn) Ping(ctx context.Context) error {
+func (c *Conn) Ping(ctx context.Context) error {
 	defer c.watchCtx(ctx)()
 	if err := c.Conn.Ping(); err != nil {
 		if err == context.DeadlineExceeded || err == context.Canceled {
@@ -326,7 +326,7 @@ func (c *conn) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
+func (c *Conn) Prepare(query string) (sqldriver.Stmt, error) {
 	st, err := c.Conn.Prepare(query)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -335,17 +335,17 @@ func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
 	return &stmt{Stmt: st, connectionState: c.state}, nil
 }
 
-func (c *conn) PrepareContext(ctx context.Context, query string) (sqldriver.Stmt, error) {
+func (c *Conn) PrepareContext(ctx context.Context, query string) (sqldriver.Stmt, error) {
 	defer c.watchCtx(ctx)()
 	return c.Prepare(query)
 }
 
-func (c *conn) Close() error {
+func (c *Conn) Close() error {
 	c.state.Close()
 	return c.Conn.Close()
 }
 
-func (c *conn) Begin() (sqldriver.Tx, error) {
+func (c *Conn) Begin() (sqldriver.Tx, error) {
 	err := c.Conn.Begin()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -362,7 +362,7 @@ var isolationLevelTransactionIsolation = map[sql.IsolationLevel]string{
 	sql.LevelSerializable:    "SERIALIZABLE",
 }
 
-func (c *conn) BeginTx(ctx context.Context, opts sqldriver.TxOptions) (sqldriver.Tx, error) {
+func (c *Conn) BeginTx(ctx context.Context, opts sqldriver.TxOptions) (sqldriver.Tx, error) {
 	defer c.watchCtx(ctx)()
 
 	isolation := sql.IsolationLevel(opts.Isolation)
@@ -411,7 +411,7 @@ func (st *state) replyError(err error) error {
 	}
 }
 
-func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, error) {
+func (c *Conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, error) {
 	a := buildArgs(args)
 	r, err := c.Execute(query, a...)
 	if err != nil {
@@ -420,7 +420,7 @@ func (c *conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, err
 	return &result{r}, nil
 }
 
-func (c *conn) ExecContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Result, error) {
+func (c *Conn) ExecContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Result, error) {
 	defer c.watchCtx(ctx)()
 	a := buildNamedArgs(args)
 	r, err := c.Execute(query, a...)
@@ -430,7 +430,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []sqldriver.N
 	return &result{r}, nil
 }
 
-func (c *conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, error) {
+func (c *Conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, error) {
 	a := buildArgs(args)
 	r, err := c.Execute(query, a...)
 	if err != nil {
@@ -439,7 +439,7 @@ func (c *conn) Query(query string, args []sqldriver.Value) (sqldriver.Rows, erro
 	return newRows(r.Resultset)
 }
 
-func (c *conn) QueryContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Rows, error) {
+func (c *Conn) QueryContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Rows, error) {
 	defer c.watchCtx(ctx)()
 	a := buildNamedArgs(args)
 	r, err := c.Execute(query, a...)
