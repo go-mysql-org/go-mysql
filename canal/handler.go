@@ -55,6 +55,7 @@ func (h *DummyEventHandler) OnRowsQueryEvent(*replication.RowsQueryEvent) error 
 	return nil
 }
 
+// OnTableNotFound is called for row events for reference tables that are not found
 func (h *DummyEventHandler) OnTableNotFound(header *replication.EventHeader, e *replication.RowsEvent) error {
 	return schema.ErrTableNotExist
 }
