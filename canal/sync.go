@@ -270,12 +270,15 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 
 	t, err := c.GetTable(schemaName, tableName)
 	if err != nil {
-		e := errors.Cause(err)
+		cause := errors.Cause(err)
 		// ignore errors below
-		if e == ErrExcludedTable || e == schema.ErrTableNotExist || e == schema.ErrMissingTableMeta {
-			err = nil
+		if cause == ErrExcludedTable || cause == schema.ErrMissingTableMeta {
+			return nil
 		}
-
+		// Allow handler to decide what to do when table is missing.
+		if cause == schema.ErrTableNotExist {
+			return c.eventHandler.OnTableNotFound(e.Header, ev)
+		}
 		return err
 	}
 	var action string
