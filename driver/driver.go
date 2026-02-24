@@ -82,7 +82,7 @@ type Connector struct {
 //
 //	mysql://user:pass@tcp(127.0.0.1:3306)/db?param=value
 //
-// into a standard URL form that net/url can parse:
+// into a standard RFC 3986 URL form that net/url can parse:
 //
 //	mysql://user:pass@127.0.0.1:3306/db?param=value
 //
