@@ -1,3 +1,5 @@
+<img src="go-mysql-logo.png" width="150px">
+
 # go-mysql
 
 A pure Go library to handle MySQL network protocol and replication as used by MySQL and MariaDB.
