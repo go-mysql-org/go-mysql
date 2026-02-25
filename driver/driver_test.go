@@ -102,7 +102,22 @@ func TestParseDSN(t *testing.T) {
 		"user:password@127.0.0.1/db":                    {Addr: "127.0.0.1", User: "user", Password: "password", DB: "db", Params: url.Values{}},
 		"user:password@127.0.0.1:3308/db":               {Addr: "127.0.0.1:3308", User: "user", Password: "password", DB: "db", Params: url.Values{}},
 		"user:password@tcp(127.0.0.1:3309)/db":          {Addr: "127.0.0.1:3309", User: "user", Password: "password", DB: "db", Params: url.Values{}},
-		"mysql://127.0.0.1:3306":                        {Addr: "127.0.0.1:3306", User: "", Password: "", DB: "", Params: url.Values{}},
+		"tcp(127.0.0.1:3310)/db":                        {Addr: "127.0.0.1:3310", User: "", Password: "", DB: "db", Params: url.Values{}},
+		"user:password@tcp(127.0.0.1:3309)/db?param=func(1)": {
+			Addr:     "127.0.0.1:3309",
+			User:     "user",
+			Password: "password",
+			DB:       "db",
+			Params:   url.Values{"param": []string{"func(1)"}},
+		},
+		"user:my_tcp(123)pass@tcp(127.0.0.1:3309)/db": {
+			Addr:     "127.0.0.1:3309",
+			User:     "user",
+			Password: "my_tcp(123)pass",
+			DB:       "db",
+			Params:   url.Values{},
+		},
+		"mysql://127.0.0.1:3306": {Addr: "127.0.0.1:3306", User: "", Password: "", DB: "", Params: url.Values{}},
 
 		// per the documentation in the README, the 'user:password@' is optional as are the '/db?param=X' portions of the DSN
 		"6.domain.com":                  {Addr: "6.domain.com", User: "", Password: "", DB: "", Params: url.Values{}},
