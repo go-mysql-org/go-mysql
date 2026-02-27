@@ -9,7 +9,6 @@ import (
 )
 
 func TestParseBinlogDumpGTID_EmptyBinlogName(t *testing.T) {
-
 	// Create a valid MySQL GTID set in binary format
 	gtidSet, err := mysql.ParseMysqlGTIDSet("a9d88f83-c14e-11ec-be16-0242ac110002:1-10")
 	require.NoError(t, err)
