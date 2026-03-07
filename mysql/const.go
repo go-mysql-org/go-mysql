@@ -270,3 +270,10 @@ const (
 	SESSION_TRACK_TRANSACTION_CHARACTERISTICS
 	SESSION_TRACK_TRANSACTION_STATE
 )
+
+type GtidFormat int
+
+const (
+	GtidFormatClassic GtidFormat = iota
+	GtidFormatTagged
+)

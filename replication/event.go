@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -268,55 +269,43 @@ type PreviousGTIDsEvent struct {
 	GTIDSets string
 }
 
-type GtidFormat int
-
-const (
-	GtidFormatClassic = iota
-	GtidFormatTagged
-)
-
-// Decode the number of sids (source identifiers) and if it is using
-// tagged GTIDs or classic (non-tagged) GTIDs.
-//
-// Note that each gtid tag increases the sidno here, so a single UUID
-// might turn up multiple times if there are multipl tags.
-//
-// see also:
-// decode_nsids_format in mysql/mysql-server
-// https://github.com/mysql/mysql-server/blob/61a3a1d8ef15512396b4c2af46e922a19bf2b174/sql/rpl_gtid_set.cc#L1363-L1378
-func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
-	if data[7] == 1 {
-		format = GtidFormatTagged
-	}
-
-	if format == GtidFormatTagged {
-		masked := make([]byte, 8)
-		copy(masked, data[1:7])
-		sidnr = binary.LittleEndian.Uint64(masked)
-		return format, sidnr
-	}
-	sidnr = binary.LittleEndian.Uint64(data[:8])
-	return format, sidnr
-}
-
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos := 0
 
-	format, uuidCount := decodeSid(data)
-	pos += 8
+	if len(data) < 8 {
+		return errors.New("data for PreviousGTIDEvent is truncated")
+	}
 
-	previousGTIDSets := make([]string, uuidCount)
+	format, uuidCount := mysql.DecodeSid(data)
+	if uuidCount == 0 {
+		return nil
+	}
+	if uuidCount > math.MaxInt32 {
+		return errors.New("data for PreviousGTIDEvent has an invalid UUID count")
+	}
+	pos += 8
 
 	currentSetnr := 0
 	var buf strings.Builder
-	for range previousGTIDSets {
+	for range uuidCount {
+		if pos+16 > len(data) {
+			return errors.New("data for PreviousGTIDEvent is truncated: missing UUID")
+		}
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
 		var tag string
-		if format == GtidFormatTagged {
-			tagLength := int(data[pos]) / 2
+		if format == mysql.GtidFormatTagged {
+			if pos >= len(data) {
+				return errors.New("data for PreviousGTIDEvent is truncated: missing tag length")
+			}
+			tagLength := int(data[pos] >> 1)
 			pos += 1
-			if tagLength > 0 { // 0 == no tag, >0 == tag
+			if tagLength > 32 {
+				return errors.New("tag is longer than expected")
+			} else if tagLength > 0 { // 0 == no tag, >0 == tag
+				if pos+tagLength > len(data) {
+					return errors.New("data for PreviousGTIDEvent is truncated: tag extends beyond data")
+				}
 				tag = string(data[pos : pos+tagLength])
 				pos += tagLength
 			}
@@ -333,8 +322,17 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 			currentSetnr += 1
 		}
 
-		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
+		if pos+8 > len(data) {
+			return errors.New("data for PreviousGTIDEvent is truncated: missing slice count")
+		}
+		sliceCount := binary.LittleEndian.Uint64(data[pos : pos+8])
 		pos += 8
+
+		// Avoid integer overflow: divide instead of multiplying sliceCount by 16.
+		if sliceCount > uint64(len(data)-pos)/16 {
+			return errors.New("slice count is higher than expected")
+		}
+
 		for range sliceCount {
 			buf.WriteString(":")
 
@@ -460,7 +458,7 @@ func (e *QueryEvent) Dump(w io.Writer) {
 type GTIDEvent struct {
 	CommitFlag     uint8
 	SID            []byte
-	Tag            string
+	Tag            mysql.Tag
 	GNO            int64
 	LastCommitted  int64
 	SequenceNumber int64
@@ -552,12 +550,8 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	}
 
 	fmt.Fprintf(w, "Commit flag: %d\n", e.CommitFlag)
-	u, _ := uuid.FromBytes(e.SID)
-	if e.Tag != "" {
-		fmt.Fprintf(w, "GTID_NEXT: %s:%s:%d\n", u.String(), e.Tag, e.GNO)
-	} else {
-		fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
-	}
+	gn, _ := e.GTIDNext()
+	fmt.Fprintf(w, "GTID_NEXT: %s\n", gn.String())
 	fmt.Fprintf(w, "LAST_COMMITTED: %d\n", e.LastCommitted)
 	fmt.Fprintf(w, "SEQUENCE_NUMBER: %d\n", e.SequenceNumber)
 	fmt.Fprintf(w, "Immediate commmit timestamp: %d (%s)\n", e.ImmediateCommitTimestamp, fmtTime(e.ImmediateCommitTime()))
@@ -573,7 +567,27 @@ func (e *GTIDEvent) GTIDNext() (mysql.GTIDSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mysql.ParseMysqlGTIDSet(strings.Join([]string{u.String(), strconv.FormatInt(e.GNO, 10)}, ":"))
+	if e.Tag == "" {
+		return mysql.ParseMysqlGTIDSet(
+			strings.Join(
+				[]string{
+					u.String(),
+					strconv.FormatInt(e.GNO, 10),
+				},
+				":",
+			),
+		)
+	}
+	return mysql.ParseMysqlGTIDSet(
+		strings.Join(
+			[]string{
+				u.String(),
+				string(e.Tag),
+				strconv.FormatInt(e.GNO, 10),
+			},
+			":",
+		),
+	)
 }
 
 // ImmediateCommitTime returns the commit time of this trx on the immediate server
@@ -696,7 +710,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return err
 	}
 	if v, ok := f.Type.(*serialization.FieldString); ok {
-		e.Tag = v.Value
+		e.Tag = mysql.NewTag(v.Value)
 	} else {
 		return errors.New("failed to get tag field")
 	}

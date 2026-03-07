@@ -915,7 +915,26 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 			b.prevGset.(*mysql.MysqlGTIDSet).AddGTID(u, b.prevMySQLGTIDEvent.GNO)
 		}
 		b.prevMySQLGTIDEvent = event
-
+	case *GtidTaggedLogEvent:
+		if b.prevGset == nil {
+			break
+		}
+		if b.currGset == nil {
+			b.currGset = b.prevGset.Clone()
+		}
+		u, err := uuid.FromBytes(event.SID)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		b.currGset.(*mysql.MysqlGTIDSet).AddGTIDWithTag(u, event.Tag, event.GNO)
+		if b.prevMySQLGTIDEvent != nil {
+			u, err = uuid.FromBytes(b.prevMySQLGTIDEvent.SID)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			b.prevGset.(*mysql.MysqlGTIDSet).AddGTIDWithTag(u, b.prevMySQLGTIDEvent.Tag, b.prevMySQLGTIDEvent.GNO)
+		}
+		b.prevMySQLGTIDEvent = &event.GTIDEvent
 	case *MariadbGTIDEvent:
 		if b.prevGset == nil {
 			break
