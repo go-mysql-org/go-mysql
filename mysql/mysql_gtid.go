@@ -71,7 +71,7 @@ func (i Interval) String() (s string) {
 	} else {
 		s += fmt.Sprintf("%d-%d", i.Start, i.Stop-1)
 	}
-	return
+	return s
 }
 
 type IntervalSlice []Interval
@@ -294,7 +294,7 @@ func (s *UUIDSet) MinusInterval(in IntervalSlice) {
 		if j < len(in) {
 			subtrahend = in[j]
 		} else {
-			subtrahend = Interval{math.MaxInt64, math.MaxInt64, ""}
+			subtrahend = Interval{Start: math.MaxInt64, Stop: math.MaxInt64}
 		}
 
 		if minuend.Stop <= subtrahend.Start {
