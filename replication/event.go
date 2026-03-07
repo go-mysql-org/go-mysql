@@ -268,41 +268,10 @@ type PreviousGTIDsEvent struct {
 	GTIDSets string
 }
 
-type GtidFormat int
-
-const (
-	GtidFormatClassic = iota
-	GtidFormatTagged
-)
-
-// Decode the number of sids (source identifiers) and if it is using
-// tagged GTIDs or classic (non-tagged) GTIDs.
-//
-// Note that each gtid tag increases the sidno here, so a single UUID
-// might turn up multiple times if there are multipl tags.
-//
-// see also:
-// decode_nsids_format in mysql/mysql-server
-// https://github.com/mysql/mysql-server/blob/61a3a1d8ef15512396b4c2af46e922a19bf2b174/sql/rpl_gtid_set.cc#L1363-L1378
-func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
-	if data[7] == 1 {
-		format = GtidFormatTagged
-	}
-
-	if format == GtidFormatTagged {
-		masked := make([]byte, 8)
-		copy(masked, data[1:7])
-		sidnr = binary.LittleEndian.Uint64(masked)
-		return format, sidnr
-	}
-	sidnr = binary.LittleEndian.Uint64(data[:8])
-	return format, sidnr
-}
-
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos := 0
 
-	format, uuidCount := decodeSid(data)
+	format, uuidCount := mysql.DecodeSid(data)
 	pos += 8
 
 	previousGTIDSets := make([]string, uuidCount)
@@ -313,7 +282,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 		uuid := e.decodeUuid(data[pos : pos+16])
 		pos += 16
 		var tag string
-		if format == GtidFormatTagged {
+		if format == mysql.GtidFormatTagged {
 			tagLength := int(data[pos]) / 2
 			pos += 1
 			if tagLength > 0 { // 0 == no tag, >0 == tag
