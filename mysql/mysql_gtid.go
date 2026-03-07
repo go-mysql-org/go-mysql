@@ -294,7 +294,7 @@ func (s *UUIDSet) MinusInterval(in IntervalSlice) {
 		if j < len(in) {
 			subtrahend = in[j]
 		} else {
-			subtrahend = Interval{math.MaxInt64, math.MaxInt64, s.Intervals[i].Tag}
+			subtrahend = Interval{math.MaxInt64, math.MaxInt64, ""}
 		}
 
 		if minuend.Stop <= subtrahend.Start {
