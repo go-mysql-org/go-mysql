@@ -4,10 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"math"
-	"sort"
-	"strconv"
+	"slices"
 	"strings"
 
 	"github.com/go-mysql-org/go-mysql/utils"
@@ -15,374 +12,16 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// Like MySQL GTID Interval struct, [start, stop), left closed and right open
-// See MySQL rpl_gtid.h
-type Interval struct {
-	// The first GID of this interval.
-	Start int64
-	// The first GID after this interval.
-	Stop int64
-}
-
-// Interval is [start, stop), but the GTID string's format is [n] or [n1-n2], closed interval
-func parseInterval(str string) (i Interval, err error) {
-	p := strings.Split(str, "-")
-	switch len(p) {
-	case 1:
-		i.Start, err = strconv.ParseInt(p[0], 10, 64)
-		i.Stop = i.Start + 1
-	case 2:
-		i.Start, err = strconv.ParseInt(p[0], 10, 64)
-		if err == nil {
-			i.Stop, err = strconv.ParseInt(p[1], 10, 64)
-			i.Stop++
-		}
-	default:
-		err = errors.Errorf("invalid interval format, must n[-n]")
-	}
-
-	if err != nil {
-		return i, err
-	}
-
-	if i.Stop <= i.Start {
-		err = errors.Errorf("invalid interval format, must n[-n] and the end must >= start")
-	}
-
-	return i, err
-}
-
-func (i Interval) String() string {
-	if i.Stop == i.Start+1 {
-		return fmt.Sprintf("%d", i.Start)
-	} else {
-		return fmt.Sprintf("%d-%d", i.Start, i.Stop-1)
-	}
-}
-
-type IntervalSlice []Interval
-
-func (s IntervalSlice) Len() int {
-	return len(s)
-}
-
-func (s IntervalSlice) Less(i, j int) bool {
-	if s[i].Start < s[j].Start {
-		return true
-	} else if s[i].Start > s[j].Start {
-		return false
-	} else {
-		return s[i].Stop < s[j].Stop
-	}
-}
-
-func (s IntervalSlice) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-func (s IntervalSlice) Sort() {
-	sort.Sort(s)
-}
-
-func (s IntervalSlice) Normalize() IntervalSlice {
-	var n IntervalSlice
-	if len(s) == 0 {
-		return n
-	}
-
-	s.Sort()
-
-	n = append(n, s[0])
-
-	for i := 1; i < len(s); i++ {
-		last := n[len(n)-1]
-		if s[i].Start > last.Stop {
-			n = append(n, s[i])
-			continue
-		} else {
-			stop := max(last.Stop, s[i].Stop)
-			n[len(n)-1] = Interval{last.Start, stop}
-		}
-	}
-
-	return n
-}
-
-func (s *IntervalSlice) InsertInterval(interval Interval) {
-	var (
-		count int
-		i     int
-	)
-
-	*s = append(*s, interval)
-	total := len(*s)
-	for i = total - 1; i > 0; i-- {
-		if (*s)[i].Stop < (*s)[i-1].Start {
-			(*s)[i], (*s)[i-1] = (*s)[i-1], (*s)[i]
-		} else if (*s)[i].Start > (*s)[i-1].Stop {
-			break
-		} else {
-			(*s)[i-1].Start = min((*s)[i-1].Start, (*s)[i].Start)
-			(*s)[i-1].Stop = max((*s)[i-1].Stop, (*s)[i].Stop)
-			count++
-		}
-	}
-	if count > 0 {
-		i++
-		if i+count < total {
-			copy((*s)[i:], (*s)[i+count:])
-		}
-		*s = (*s)[:total-count]
-	}
-}
-
-// Contain returns true if sub in s
-func (s IntervalSlice) Contain(sub IntervalSlice) bool {
-	j := 0
-	for i := range sub {
-		for ; j < len(s); j++ {
-			if sub[i].Start > s[j].Stop {
-				continue
-			} else {
-				break
-			}
-		}
-		if j == len(s) {
-			return false
-		}
-
-		if sub[i].Start < s[j].Start || sub[i].Stop > s[j].Stop {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (s IntervalSlice) Equal(o IntervalSlice) bool {
-	if len(s) != len(o) {
-		return false
-	}
-
-	for i := range s {
-		if s[i].Start != o[i].Start || s[i].Stop != o[i].Stop {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (s IntervalSlice) Compare(o IntervalSlice) int {
-	if s.Equal(o) {
-		return 0
-	} else if s.Contain(o) {
-		return 1
-	} else {
-		return -1
-	}
-}
-
-// Refer http://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
-type UUIDSet struct {
-	SID uuid.UUID
-
-	Intervals IntervalSlice
-}
-
-func ParseUUIDSet(str string) (*UUIDSet, error) {
-	str = strings.TrimSpace(str)
-	sep := strings.Split(str, ":")
-	if len(sep) < 2 {
-		return nil, errors.Errorf("invalid GTID format, must UUID:interval[:interval]")
-	}
-
-	var err error
-	s := new(UUIDSet)
-	if s.SID, err = uuid.Parse(sep[0]); err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	// Handle interval
-	for i := 1; i < len(sep); i++ {
-		if in, err := parseInterval(sep[i]); err != nil {
-			return nil, errors.Trace(err)
-		} else {
-			s.Intervals = append(s.Intervals, in)
-		}
-	}
-
-	s.Intervals = s.Intervals.Normalize()
-
-	return s, nil
-}
-
-func NewUUIDSet(sid uuid.UUID, in ...Interval) *UUIDSet {
-	s := new(UUIDSet)
-	s.SID = sid
-
-	s.Intervals = in
-	s.Intervals = s.Intervals.Normalize()
-
-	return s
-}
-
-func (s *UUIDSet) Contain(sub *UUIDSet) bool {
-	if s.SID != sub.SID {
-		return false
-	}
-
-	return s.Intervals.Contain(sub.Intervals)
-}
-
-func (s *UUIDSet) Bytes() []byte {
-	var buf bytes.Buffer
-
-	buf.WriteString(s.SID.String())
-
-	for _, i := range s.Intervals {
-		buf.WriteString(":")
-		buf.WriteString(i.String())
-	}
-
-	return buf.Bytes()
-}
-
-func (s *UUIDSet) AddInterval(in IntervalSlice) {
-	s.Intervals = append(s.Intervals, in...)
-	s.Intervals = s.Intervals.Normalize()
-}
-
-func (s *UUIDSet) MinusInterval(in IntervalSlice) {
-	var n IntervalSlice
-	in = in.Normalize()
-
-	i, j := 0, 0
-	var minuend Interval
-	var subtrahend Interval
-	for i < len(s.Intervals) {
-		if minuend.Stop != s.Intervals[i].Stop { // `i` changed?
-			minuend = s.Intervals[i]
-		}
-		if j < len(in) {
-			subtrahend = in[j]
-		} else {
-			subtrahend = Interval{math.MaxInt64, math.MaxInt64}
-		}
-
-		if minuend.Stop <= subtrahend.Start {
-			// no overlapping
-			n = append(n, minuend)
-			i++
-		} else if minuend.Start >= subtrahend.Stop {
-			// no overlapping
-			j++
-		} else {
-			if minuend.Start < subtrahend.Start && minuend.Stop <= subtrahend.Stop {
-				n = append(n, Interval{minuend.Start, subtrahend.Start})
-				i++
-			} else if minuend.Start >= subtrahend.Start && minuend.Stop > subtrahend.Stop {
-				minuend = Interval{subtrahend.Stop, minuend.Stop}
-				j++
-			} else if minuend.Start >= subtrahend.Start && minuend.Stop <= subtrahend.Stop {
-				// minuend is completely removed
-				i++
-			} else if minuend.Start < subtrahend.Start && minuend.Stop > subtrahend.Stop {
-				n = append(n, Interval{minuend.Start, subtrahend.Start})
-				minuend = Interval{subtrahend.Stop, minuend.Stop}
-				j++
-			} else {
-				panic("should never be here")
-			}
-		}
-	}
-
-	s.Intervals = n.Normalize()
-}
-
-func (s *UUIDSet) String() string {
-	return utils.ByteSliceToString(s.Bytes())
-}
-
-func (s *UUIDSet) encode(w io.Writer) {
-	b, _ := s.SID.MarshalBinary()
-
-	_, _ = w.Write(b)
-	n := int64(len(s.Intervals))
-
-	_ = binary.Write(w, binary.LittleEndian, n)
-
-	for _, i := range s.Intervals {
-		_ = binary.Write(w, binary.LittleEndian, i.Start)
-		_ = binary.Write(w, binary.LittleEndian, i.Stop)
-	}
-}
-
-func (s *UUIDSet) Encode() []byte {
-	var buf bytes.Buffer
-
-	s.encode(&buf)
-
-	return buf.Bytes()
-}
-
-func (s *UUIDSet) decode(data []byte) (int, error) {
-	if len(data) < 24 {
-		return 0, errors.Errorf("invalid uuid set buffer, less 24")
-	}
-
-	pos := 0
-	var err error
-	if s.SID, err = uuid.FromBytes(data[0:16]); err != nil {
-		return 0, err
-	}
-	pos += 16
-
-	n := int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
-	pos += 8
-	if len(data) < int(16*n)+pos {
-		return 0, errors.Errorf("invalid uuid set buffer, must %d, but %d", pos+int(16*n), len(data))
-	}
-
-	s.Intervals = make([]Interval, 0, n)
-
-	var in Interval
-	for range n {
-		in.Start = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
-		pos += 8
-		in.Stop = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
-		pos += 8
-		s.Intervals = append(s.Intervals, in)
-	}
-
-	return pos, nil
-}
-
-func (s *UUIDSet) Decode(data []byte) error {
-	n, err := s.decode(data)
-	if n != len(data) {
-		return errors.Errorf("invalid uuid set buffer, must %d, but %d", n, len(data))
-	}
-	return err
-}
-
-func (s *UUIDSet) Clone() *UUIDSet {
-	clone := new(UUIDSet)
-	clone.SID = s.SID
-	clone.Intervals = make([]Interval, len(s.Intervals))
-	copy(clone.Intervals, s.Intervals)
-	return clone
-}
-
+// MysqlGTIDSet has a TSID (UUID+Tag) as key
 type MysqlGTIDSet struct {
-	Sets map[string]*UUIDSet
+	Sets map[TSID]*UUIDSet
 }
 
 var _ GTIDSet = &MysqlGTIDSet{}
 
 func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 	s := new(MysqlGTIDSet)
-	s.Sets = make(map[string]*UUIDSet)
+	s.Sets = make(map[TSID]*UUIDSet)
 	if str == "" {
 		return s, nil
 	}
@@ -391,10 +30,10 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 
 	// todo, handle redundant same uuid
 	for i := range sp {
-		if set, err := ParseUUIDSet(sp[i]); err != nil {
+		if sets, err := ParseUUIDSets(sp[i]); err != nil {
 			return nil, errors.Trace(err)
 		} else {
-			s.AddSet(set)
+			s.AddSets(sets)
 		}
 	}
 	return s, nil
@@ -404,17 +43,19 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 	s := new(MysqlGTIDSet)
 
 	if len(data) < 8 {
-		return nil, errors.Errorf("invalid gtid set buffer, less 4")
+		return nil, errors.Errorf("invalid gtid set buffer, expected 8 or more but got %d", len(data))
 	}
 
-	n := int(binary.LittleEndian.Uint64(data))
-	s.Sets = make(map[string]*UUIDSet, n)
-
+	format, n := DecodeSid(data)
+	s.Sets = make(map[TSID]*UUIDSet, n)
 	pos := 8
 
 	for range n {
+		if format == GtidFormatTagged && pos >= len(data) {
+			break
+		}
 		set := new(UUIDSet)
-		if n, err := set.decode(data[pos:]); err != nil {
+		if n, err := set.decode(data[pos:], format); err != nil {
 			return nil, errors.Trace(err)
 		} else {
 			pos += n
@@ -429,12 +70,25 @@ func (s *MysqlGTIDSet) AddSet(set *UUIDSet) {
 	if set == nil {
 		return
 	}
-	sid := set.SID.String()
-	o, ok := s.Sets[sid]
+	o, ok := s.Sets[set.TSID]
 	if ok {
 		o.AddInterval(set.Intervals)
 	} else {
-		s.Sets[sid] = set
+		s.Sets[set.TSID] = set
+	}
+}
+
+func (s *MysqlGTIDSet) AddSets(sets []UUIDSet) {
+	if sets == nil {
+		return
+	}
+	for _, set := range sets {
+		o, ok := s.Sets[set.TSID]
+		if ok {
+			o.AddInterval(set.Intervals)
+		} else {
+			s.Sets[set.TSID] = &set
+		}
 	}
 }
 
@@ -442,12 +96,11 @@ func (s *MysqlGTIDSet) MinusSet(set *UUIDSet) {
 	if set == nil {
 		return
 	}
-	sid := set.SID.String()
-	uuidSet, ok := s.Sets[sid]
+	uuidSet, ok := s.Sets[set.TSID]
 	if ok {
 		uuidSet.MinusInterval(set.Intervals)
 		if uuidSet.Intervals == nil {
-			delete(s.Sets, sid)
+			delete(s.Sets, set.TSID)
 		}
 	}
 }
@@ -464,12 +117,15 @@ func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 }
 
 func (s *MysqlGTIDSet) AddGTID(uuid uuid.UUID, gno int64) {
-	sid := uuid.String()
-	o, ok := s.Sets[sid]
+	s.AddGTIDWithTag(TSID{SID: uuid}, gno)
+}
+
+func (s *MysqlGTIDSet) AddGTIDWithTag(tsid TSID, gno int64) {
+	o, ok := s.Sets[tsid]
 	if ok {
 		o.Intervals.InsertInterval(Interval{gno, gno + 1})
 	} else {
-		s.Sets[sid] = &UUIDSet{uuid, IntervalSlice{Interval{gno, gno + 1}}}
+		s.Sets[tsid] = &UUIDSet{tsid, IntervalSlice{Interval{gno, gno + 1}}}
 	}
 }
 
@@ -540,30 +196,60 @@ func (s *MysqlGTIDSet) String() string {
 	}
 
 	// sort multi set
-	var buf bytes.Buffer
 	sets := make([]string, 0, len(s.Sets))
 	for _, set := range s.Sets {
 		sets = append(sets, set.String())
 	}
-	sort.Strings(sets)
+	slices.Sort(sets)
 
+	var buf bytes.Buffer
 	sep := ""
-	for _, set := range sets {
-		buf.WriteString(sep)
-		buf.WriteString(set)
-		sep = ","
+	for i, set := range sets {
+		if i > 0 && sets[i-1][1:36] == set[i:36] {
+			sep = ":"
+			buf.WriteString(sep)
+			buf.WriteString(set[37:])
+			sep = ","
+		} else {
+			buf.WriteString(sep)
+			buf.WriteString(set)
+			sep = ","
+		}
 	}
 
 	return utils.ByteSliceToString(buf.Bytes())
 }
 
+// Encode is encoding the GTID Set in the format of COM_BINLOG_DUMP_GTID
 func (s *MysqlGTIDSet) Encode() []byte {
 	var buf bytes.Buffer
 
-	_ = binary.Write(&buf, binary.LittleEndian, uint64(len(s.Sets)))
+	format := GtidFormatClassic
+	for _, set := range s.Sets {
+		if set.TSID.Tag != "" {
+			format = GtidFormatTagged
+		}
+	}
+	sidcount := uint64(len(s.Sets))
+	sid := encodeSid(format, sidcount)
+	buf.Write(sid)
 
-	for i := range s.Sets {
-		s.Sets[i].encode(&buf)
+	sets := make([]TSID, 0, len(s.Sets))
+	for k := range s.Sets {
+		sets = append(sets, k)
+	}
+	slices.SortFunc(sets, func(a, b TSID) int {
+		abin, _ := a.SID.MarshalBinary()
+		bbin, _ := b.SID.MarshalBinary()
+		bcmp := bytes.Compare(abin, bbin)
+		if bcmp == 0 {
+			return strings.Compare(a.Tag, b.Tag)
+		}
+		return bcmp
+	})
+
+	for _, tsid := range sets {
+		s.Sets[tsid].encode(format, &buf)
 	}
 
 	return buf.Bytes()
@@ -571,10 +257,10 @@ func (s *MysqlGTIDSet) Encode() []byte {
 
 func (gtid *MysqlGTIDSet) Clone() GTIDSet {
 	clone := &MysqlGTIDSet{
-		Sets: make(map[string]*UUIDSet),
+		Sets: make(map[TSID]*UUIDSet),
 	}
-	for sid, uuidSet := range gtid.Sets {
-		clone.Sets[sid] = uuidSet.Clone()
+	for tsid, uuidSet := range gtid.Sets {
+		clone.Sets[tsid] = uuidSet.Clone()
 	}
 
 	return clone
@@ -582,4 +268,55 @@ func (gtid *MysqlGTIDSet) Clone() GTIDSet {
 
 func (s *MysqlGTIDSet) IsEmpty() bool {
 	return len(s.Sets) == 0
+}
+
+// Decode the number of sids (source identifiers) and if it is using
+// tagged GTIDs or classic (non-tagged) GTIDs.
+//
+// Note that each gtid tag increases the sidno here, so a single UUID
+// might turn up multiple times if there are multipl tags.
+//
+// see also:
+// decode_nsids_format in mysql/mysql-server
+// https://github.com/mysql/mysql-server/blob/61a3a1d8ef15512396b4c2af46e922a19bf2b174/sql/rpl_gtid_set.cc#L1363-L1378
+func DecodeSid(data []byte) (format GtidFormat, sidnr uint64) {
+	if len(data) < 8 {
+		// input too short, the function signature doesn't allow us to return an error here.
+		return format, sidnr
+	}
+	if data[7] == 0x1 {
+		format = GtidFormatTagged
+	}
+
+	if format == GtidFormatTagged {
+		masked := make([]byte, 8)
+		copy(masked, data[1:7])
+		sidnr = binary.LittleEndian.Uint64(masked)
+		return format, sidnr
+	}
+	sidnr = binary.LittleEndian.Uint64(data[:8])
+	return format, sidnr
+}
+
+func encodeSid(format GtidFormat, sidnr uint64) []byte {
+	sid := make([]byte, 8)
+	if format == GtidFormatClassic {
+		_, _ = binary.Encode(sid, binary.LittleEndian, sidnr)
+		return sid
+	}
+	_, _ = binary.Encode(sid, binary.LittleEndian, sidnr<<8)
+
+	sid[0] = 0x01
+	sid[7] = 0x01 // Format marker
+	return sid
+}
+
+func (f GtidFormat) String() string {
+	switch f {
+	case GtidFormatClassic:
+		return "GtidFormatClassic"
+	case GtidFormatTagged:
+		return "GtidFormatTagged"
+	}
+	return fmt.Sprintf("GtidFormat{%d}", int(f))
 }
