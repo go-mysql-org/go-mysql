@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +16,8 @@ import (
 	"github.com/pingcap/errors"
 )
 
+var tagRegexp = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,31}$`)
+
 // Like MySQL GTID Interval struct, [start, stop), left closed and right open
 // See MySQL rpl_gtid.h
 type Interval struct {
@@ -22,14 +25,21 @@ type Interval struct {
 	Start int64
 	// The first GID after this interval.
 	Stop int64
+	// Optional Tag. Must match `[a-z_][a-z0-9_]{0,31}`
+	Tag string
 }
 
 // Interval is [start, stop), but the GTID string's format is [n] or [n1-n2], closed interval
-func parseInterval(str string) (i Interval, err error) {
+func parseInterval(tag, str string) (i Interval, err error) {
+	i.Tag = tag
 	p := strings.Split(str, "-")
+
 	switch len(p) {
 	case 1:
 		i.Start, err = strconv.ParseInt(p[0], 10, 64)
+		if err != nil {
+			return i, errors.Errorf("invalid interval format, not numeric: %v", err)
+		}
 		i.Stop = i.Start + 1
 	case 2:
 		i.Start, err = strconv.ParseInt(p[0], 10, 64)
@@ -52,12 +62,16 @@ func parseInterval(str string) (i Interval, err error) {
 	return i, err
 }
 
-func (i Interval) String() string {
-	if i.Stop == i.Start+1 {
-		return fmt.Sprintf("%d", i.Start)
-	} else {
-		return fmt.Sprintf("%d-%d", i.Start, i.Stop-1)
+func (i Interval) String() (s string) {
+	if i.Tag != "" {
+		s += fmt.Sprintf("%s:", i.Tag)
 	}
+	if i.Stop == i.Start+1 {
+		s += fmt.Sprintf("%d", i.Start)
+	} else {
+		s += fmt.Sprintf("%d-%d", i.Start, i.Stop-1)
+	}
+	return
 }
 
 type IntervalSlice []Interval
@@ -96,12 +110,15 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 
 	for i := 1; i < len(s); i++ {
 		last := n[len(n)-1]
-		if s[i].Start > last.Stop {
+		if s[i].Tag != last.Tag {
+			n = append(n, s[i])
+			continue
+		} else if s[i].Start > last.Stop {
 			n = append(n, s[i])
 			continue
 		} else {
 			stop := max(last.Stop, s[i].Stop)
-			n[len(n)-1] = Interval{last.Start, stop}
+			n[len(n)-1] = Interval{last.Start, stop, last.Tag}
 		}
 	}
 
@@ -183,10 +200,11 @@ func (s IntervalSlice) Compare(o IntervalSlice) int {
 	}
 }
 
-// Refer http://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
+// Refer:
+// - https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-concepts.html
+// - https://bugs.mysql.com/bug.php?id=116789
 type UUIDSet struct {
-	SID uuid.UUID
-
+	SID       uuid.UUID
 	Intervals IntervalSlice
 }
 
@@ -194,7 +212,7 @@ func ParseUUIDSet(str string) (*UUIDSet, error) {
 	str = strings.TrimSpace(str)
 	sep := strings.Split(str, ":")
 	if len(sep) < 2 {
-		return nil, errors.Errorf("invalid GTID format, must UUID:interval[:interval]")
+		return nil, errors.Errorf("invalid GTID format, must UUID[:tag]:interval[[:tag]:interval]")
 	}
 
 	var err error
@@ -205,10 +223,19 @@ func ParseUUIDSet(str string) (*UUIDSet, error) {
 
 	// Handle interval
 	for i := 1; i < len(sep); i++ {
-		if in, err := parseInterval(sep[i]); err != nil {
-			return nil, errors.Trace(err)
+		if tagRegexp.MatchString(sep[i]) {
+			if in, err := parseInterval(sep[i], sep[i+1]); err != nil {
+				return nil, errors.Trace(err)
+			} else {
+				s.Intervals = append(s.Intervals, in)
+				i++
+			}
 		} else {
-			s.Intervals = append(s.Intervals, in)
+			if in, err := parseInterval("", sep[i]); err != nil {
+				return nil, errors.Trace(err)
+			} else {
+				s.Intervals = append(s.Intervals, in)
+			}
 		}
 	}
 
@@ -267,7 +294,7 @@ func (s *UUIDSet) MinusInterval(in IntervalSlice) {
 		if j < len(in) {
 			subtrahend = in[j]
 		} else {
-			subtrahend = Interval{math.MaxInt64, math.MaxInt64}
+			subtrahend = Interval{math.MaxInt64, math.MaxInt64, s.Intervals[i].Tag}
 		}
 
 		if minuend.Stop <= subtrahend.Start {
@@ -279,17 +306,17 @@ func (s *UUIDSet) MinusInterval(in IntervalSlice) {
 			j++
 		} else {
 			if minuend.Start < subtrahend.Start && minuend.Stop <= subtrahend.Stop {
-				n = append(n, Interval{minuend.Start, subtrahend.Start})
+				n = append(n, Interval{minuend.Start, subtrahend.Start, s.Intervals[i].Tag})
 				i++
 			} else if minuend.Start >= subtrahend.Start && minuend.Stop > subtrahend.Stop {
-				minuend = Interval{subtrahend.Stop, minuend.Stop}
+				minuend = Interval{subtrahend.Stop, minuend.Stop, s.Intervals[i].Tag}
 				j++
 			} else if minuend.Start >= subtrahend.Start && minuend.Stop <= subtrahend.Stop {
 				// minuend is completely removed
 				i++
 			} else if minuend.Start < subtrahend.Start && minuend.Stop > subtrahend.Stop {
-				n = append(n, Interval{minuend.Start, subtrahend.Start})
-				minuend = Interval{subtrahend.Stop, minuend.Stop}
+				n = append(n, Interval{minuend.Start, subtrahend.Start, s.Intervals[i].Tag})
+				minuend = Interval{subtrahend.Stop, minuend.Stop, s.Intervals[i].Tag}
 				j++
 			} else {
 				panic("should never be here")
@@ -374,6 +401,7 @@ func (s *UUIDSet) Clone() *UUIDSet {
 	return clone
 }
 
+// MysqlGTIDSet has a SID UUID as key
 type MysqlGTIDSet struct {
 	Sets map[string]*UUIDSet
 }
@@ -464,12 +492,16 @@ func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 }
 
 func (s *MysqlGTIDSet) AddGTID(uuid uuid.UUID, gno int64) {
+	s.AddGTIDWithTag(uuid, "", gno)
+}
+
+func (s *MysqlGTIDSet) AddGTIDWithTag(uuid uuid.UUID, tag string, gno int64) {
 	sid := uuid.String()
 	o, ok := s.Sets[sid]
 	if ok {
-		o.Intervals.InsertInterval(Interval{gno, gno + 1})
+		o.Intervals.InsertInterval(Interval{gno, gno + 1, tag})
 	} else {
-		s.Sets[sid] = &UUIDSet{uuid, IntervalSlice{Interval{gno, gno + 1}}}
+		s.Sets[sid] = &UUIDSet{uuid, IntervalSlice{Interval{gno, gno + 1, tag}}}
 	}
 }
 
