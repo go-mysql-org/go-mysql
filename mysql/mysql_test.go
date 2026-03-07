@@ -12,91 +12,91 @@ import (
 )
 
 func TestMysqlGTIDInterval(t *testing.T) {
-	i, err := parseInterval("1-2")
+	i, err := parseInterval("", "1-2")
 	require.NoError(t, err)
-	require.Equal(t, Interval{1, 3}, i)
+	require.Equal(t, Interval{1, 3, ""}, i)
 
-	i, err = parseInterval("1")
+	i, err = parseInterval("", "1")
 	require.NoError(t, err)
-	require.Equal(t, Interval{1, 2}, i)
+	require.Equal(t, Interval{1, 2, ""}, i)
 
-	i, err = parseInterval("1-1")
+	i, err = parseInterval("", "1-1")
 	require.NoError(t, err)
-	require.Equal(t, Interval{1, 2}, i)
+	require.Equal(t, Interval{1, 2, ""}, i)
 }
 
 func TestMysqlGTIDIntervalSlice(t *testing.T) {
-	i := IntervalSlice{Interval{1, 2}, Interval{2, 4}, Interval{2, 3}}
+	i := IntervalSlice{Interval{1, 2, ""}, Interval{2, 4, ""}, Interval{2, 3, ""}}
 	i.Sort()
-	require.Equal(t, IntervalSlice{Interval{1, 2}, Interval{2, 3}, Interval{2, 4}}, i)
+	require.Equal(t, IntervalSlice{Interval{1, 2, ""}, Interval{2, 3, ""}, Interval{2, 4, ""}}, i)
 	n := i.Normalize()
-	require.Equal(t, IntervalSlice{Interval{1, 4}}, n)
+	require.Equal(t, IntervalSlice{Interval{1, 4, ""}}, n)
 
-	i = IntervalSlice{Interval{1, 2}, Interval{3, 5}, Interval{1, 3}}
+	i = IntervalSlice{Interval{1, 2, ""}, Interval{3, 5, ""}, Interval{1, 3, ""}}
 	i.Sort()
-	require.Equal(t, IntervalSlice{Interval{1, 2}, Interval{1, 3}, Interval{3, 5}}, i)
+	require.Equal(t, IntervalSlice{Interval{1, 2, ""}, Interval{1, 3, ""}, Interval{3, 5, ""}}, i)
 	n = i.Normalize()
-	require.Equal(t, IntervalSlice{Interval{1, 5}}, n)
+	require.Equal(t, IntervalSlice{Interval{1, 5, ""}}, n)
 
-	i = IntervalSlice{Interval{1, 2}, Interval{4, 5}, Interval{1, 3}}
+	i = IntervalSlice{Interval{1, 2, ""}, Interval{4, 5, ""}, Interval{1, 3, ""}}
 	i.Sort()
-	require.Equal(t, IntervalSlice{Interval{1, 2}, Interval{1, 3}, Interval{4, 5}}, i)
+	require.Equal(t, IntervalSlice{Interval{1, 2, ""}, Interval{1, 3, ""}, Interval{4, 5, ""}}, i)
 	n = i.Normalize()
-	require.Equal(t, IntervalSlice{Interval{1, 3}, Interval{4, 5}}, n)
+	require.Equal(t, IntervalSlice{Interval{1, 3, ""}, Interval{4, 5, ""}}, n)
 
-	i = IntervalSlice{Interval{1, 4}, Interval{2, 3}}
+	i = IntervalSlice{Interval{1, 4, ""}, Interval{2, 3, ""}}
 	i.Sort()
-	require.Equal(t, IntervalSlice{Interval{1, 4}, Interval{2, 3}}, i)
+	require.Equal(t, IntervalSlice{Interval{1, 4, ""}, Interval{2, 3, ""}}, i)
 	n = i.Normalize()
-	require.Equal(t, IntervalSlice{Interval{1, 4}}, n)
+	require.Equal(t, IntervalSlice{Interval{1, 4, ""}}, n)
 
-	n1 := IntervalSlice{Interval{1, 3}, Interval{4, 5}}
-	n2 := IntervalSlice{Interval{1, 2}}
+	n1 := IntervalSlice{Interval{1, 3, ""}, Interval{4, 5, ""}}
+	n2 := IntervalSlice{Interval{1, 2, ""}}
 
 	require.True(t, n1.Contain(n2))
 	require.False(t, n2.Contain(n1))
 
-	n1 = IntervalSlice{Interval{1, 3}, Interval{4, 5}}
-	n2 = IntervalSlice{Interval{1, 6}}
+	n1 = IntervalSlice{Interval{1, 3, ""}, Interval{4, 5, ""}}
+	n2 = IntervalSlice{Interval{1, 6, ""}}
 
 	require.False(t, n1.Contain(n2))
 	require.True(t, n2.Contain(n1))
 }
 
 func TestMysqlGTIDInsertInterval(t *testing.T) {
-	i := IntervalSlice{Interval{100, 200}}
-	i.InsertInterval(Interval{300, 400})
-	require.Equal(t, IntervalSlice{Interval{100, 200}, Interval{300, 400}}, i)
+	i := IntervalSlice{Interval{100, 200, ""}}
+	i.InsertInterval(Interval{300, 400, ""})
+	require.Equal(t, IntervalSlice{Interval{100, 200, ""}, Interval{300, 400, ""}}, i)
 
-	i.InsertInterval(Interval{50, 70})
-	require.Equal(t, IntervalSlice{Interval{50, 70}, Interval{100, 200}, Interval{300, 400}}, i)
+	i.InsertInterval(Interval{50, 70, ""})
+	require.Equal(t, IntervalSlice{Interval{50, 70, ""}, Interval{100, 200, ""}, Interval{300, 400, ""}}, i)
 
-	i.InsertInterval(Interval{101, 201})
-	require.Equal(t, IntervalSlice{Interval{50, 70}, Interval{100, 201}, Interval{300, 400}}, i)
+	i.InsertInterval(Interval{101, 201, ""})
+	require.Equal(t, IntervalSlice{Interval{50, 70, ""}, Interval{100, 201, ""}, Interval{300, 400, ""}}, i)
 
-	i.InsertInterval(Interval{99, 202})
-	require.Equal(t, IntervalSlice{Interval{50, 70}, Interval{99, 202}, Interval{300, 400}}, i)
+	i.InsertInterval(Interval{99, 202, ""})
+	require.Equal(t, IntervalSlice{Interval{50, 70, ""}, Interval{99, 202, ""}, Interval{300, 400, ""}}, i)
 
-	i.InsertInterval(Interval{102, 302})
-	require.Equal(t, IntervalSlice{Interval{50, 70}, Interval{99, 400}}, i)
+	i.InsertInterval(Interval{102, 302, ""})
+	require.Equal(t, IntervalSlice{Interval{50, 70, ""}, Interval{99, 400, ""}}, i)
 
-	i.InsertInterval(Interval{500, 600})
-	require.Equal(t, IntervalSlice{Interval{50, 70}, Interval{99, 400}, Interval{500, 600}}, i)
+	i.InsertInterval(Interval{500, 600, ""})
+	require.Equal(t, IntervalSlice{Interval{50, 70, ""}, Interval{99, 400, ""}, Interval{500, 600, ""}}, i)
 
-	i.InsertInterval(Interval{50, 100})
-	require.Equal(t, IntervalSlice{Interval{50, 400}, Interval{500, 600}}, i)
+	i.InsertInterval(Interval{50, 100, ""})
+	require.Equal(t, IntervalSlice{Interval{50, 400, ""}, Interval{500, 600, ""}}, i)
 
-	i.InsertInterval(Interval{900, 1000})
-	require.Equal(t, IntervalSlice{Interval{50, 400}, Interval{500, 600}, Interval{900, 1000}}, i)
+	i.InsertInterval(Interval{900, 1000, ""})
+	require.Equal(t, IntervalSlice{Interval{50, 400, ""}, Interval{500, 600, ""}, Interval{900, 1000, ""}}, i)
 
-	i.InsertInterval(Interval{1010, 1020})
-	require.Equal(t, IntervalSlice{Interval{50, 400}, Interval{500, 600}, Interval{900, 1000}, Interval{1010, 1020}}, i)
+	i.InsertInterval(Interval{1010, 1020, ""})
+	require.Equal(t, IntervalSlice{Interval{50, 400, ""}, Interval{500, 600, ""}, Interval{900, 1000, ""}, Interval{1010, 1020, ""}}, i)
 
-	i.InsertInterval(Interval{49, 1000})
-	require.Equal(t, IntervalSlice{Interval{49, 1000}, Interval{1010, 1020}}, i)
+	i.InsertInterval(Interval{49, 1000, ""})
+	require.Equal(t, IntervalSlice{Interval{49, 1000, ""}, Interval{1010, 1020, ""}}, i)
 
-	i.InsertInterval(Interval{1, 1012})
-	require.Equal(t, IntervalSlice{Interval{1, 1020}}, i)
+	i.InsertInterval(Interval{1, 1012, ""})
+	require.Equal(t, IntervalSlice{Interval{1, 1020, ""}}, i)
 }
 
 func TestMysqlGTIDCodec(t *testing.T) {
