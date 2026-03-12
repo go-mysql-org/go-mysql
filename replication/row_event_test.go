@@ -1520,7 +1520,7 @@ func BenchmarkUseDecimal(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, d := range decimalData {
-			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false, false)
 		}
 	}
 }
@@ -1530,7 +1530,7 @@ func BenchmarkNotUseDecimal(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, d := range decimalData {
-			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
+			_, _, _ = e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false, false)
 		}
 	}
 }
@@ -1539,14 +1539,14 @@ func TestDecimal(t *testing.T) {
 	e := &RowsEvent{useDecimal: true}
 	e2 := &RowsEvent{useDecimal: false}
 	for _, d := range decimalData {
-		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
+		v, _, err := e.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false, false)
 		require.NoError(t, err)
 		// no trailing zero
 		dec, err := decimal.NewFromString(d.num)
 		require.NoError(t, err)
 		require.True(t, dec.Equal(v.(decimal.Decimal)))
 
-		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false)
+		v, _, err = e2.decodeValue(d.dumpData, mysql.MYSQL_TYPE_NEWDECIMAL, d.meta, false, false)
 		require.NoError(t, err)
 		require.Equal(t, d.num, v.(string))
 	}
@@ -1567,12 +1567,111 @@ var intData = [][]byte{
 	{12, 0, 0, 0},
 }
 
+func TestDecodeUnsignedIntegers(t *testing.T) {
+	e := &RowsEvent{}
+
+	t.Run("TINY", func(t *testing.T) {
+		testcases := []struct {
+			data     []byte
+			expected uint8
+		}{
+			{[]byte{0x00}, 0},
+			{[]byte{0x01}, 1},
+			{[]byte{0x7F}, 127}, // math.MaxInt8
+			{[]byte{0x80}, 128}, // math.MaxInt8 + 1
+			{[]byte{0xFF}, 255}, // math.MaxUint8
+		}
+		for _, tc := range testcases {
+			v, n, err := e.decodeValue(tc.data, mysql.MYSQL_TYPE_TINY, 0, false, true)
+			require.NoError(t, err)
+			require.Equal(t, 1, n)
+			require.Equal(t, tc.expected, v.(uint8))
+		}
+	})
+
+	t.Run("SHORT", func(t *testing.T) {
+		testcases := []struct {
+			data     []byte
+			expected uint16
+		}{
+			{[]byte{0x00, 0x00}, 0},
+			{[]byte{0x01, 0x00}, 1},
+			{[]byte{0xFF, 0x7F}, 32767}, // math.MaxInt16
+			{[]byte{0x00, 0x80}, 32768}, // math.MaxInt16 + 1
+			{[]byte{0xFF, 0xFF}, 65535}, // math.MaxUint16
+		}
+		for _, tc := range testcases {
+			v, n, err := e.decodeValue(tc.data, mysql.MYSQL_TYPE_SHORT, 0, false, true)
+			require.NoError(t, err)
+			require.Equal(t, 2, n)
+			require.Equal(t, tc.expected, v.(uint16))
+		}
+	})
+
+	t.Run("INT24", func(t *testing.T) {
+		testcases := []struct {
+			data     []byte
+			expected uint32
+		}{
+			{[]byte{0x00, 0x00, 0x00}, 0},
+			{[]byte{0x01, 0x00, 0x00}, 1},
+			{[]byte{0xFF, 0xFF, 0x7F}, 8388607},  // math.MaxInt24
+			{[]byte{0x00, 0x00, 0x80}, 8388608},  // math.MaxInt24 + 1
+			{[]byte{0xFF, 0xFF, 0xFF}, 16777215}, // math.MaxUint24
+		}
+		for _, tc := range testcases {
+			v, n, err := e.decodeValue(tc.data, mysql.MYSQL_TYPE_INT24, 0, false, true)
+			require.NoError(t, err)
+			require.Equal(t, 3, n)
+			require.Equal(t, tc.expected, v.(uint32))
+		}
+	})
+
+	t.Run("LONG", func(t *testing.T) {
+		testcases := []struct {
+			data     []byte
+			expected uint32
+		}{
+			{[]byte{0x00, 0x00, 0x00, 0x00}, 0},
+			{[]byte{0x01, 0x00, 0x00, 0x00}, 1},
+			{[]byte{0xFF, 0xFF, 0xFF, 0x7F}, 2147483647}, // math.MaxInt32
+			{[]byte{0x00, 0x00, 0x00, 0x80}, 2147483648}, // math.MaxInt32 + 1
+			{[]byte{0xFF, 0xFF, 0xFF, 0xFF}, 4294967295}, // math.MaxUint32
+		}
+		for _, tc := range testcases {
+			v, n, err := e.decodeValue(tc.data, mysql.MYSQL_TYPE_LONG, 0, false, true)
+			require.NoError(t, err)
+			require.Equal(t, 4, n)
+			require.Equal(t, tc.expected, v.(uint32))
+		}
+	})
+
+	t.Run("LONGLONG", func(t *testing.T) {
+		testcases := []struct {
+			data     []byte
+			expected uint64
+		}{
+			{[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 0},
+			{[]byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 1},
+			{[]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F}, 9223372036854775807},  // math.MaxInt64
+			{[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80}, 9223372036854775808},  // math.MaxInt64 + 1
+			{[]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, 18446744073709551615}, // math.MaxUint64
+		}
+		for _, tc := range testcases {
+			v, n, err := e.decodeValue(tc.data, mysql.MYSQL_TYPE_LONGLONG, 0, false, true)
+			require.NoError(t, err)
+			require.Equal(t, 8, n)
+			require.Equal(t, tc.expected, v.(uint64))
+		}
+	})
+}
+
 func BenchmarkInt(b *testing.B) {
 	e := &RowsEvent{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, d := range intData {
-			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0, false)
+			_, _, _ = e.decodeValue(d, mysql.MYSQL_TYPE_LONG, 0, false, false)
 		}
 	}
 }
