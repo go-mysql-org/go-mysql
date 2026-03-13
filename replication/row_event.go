@@ -1188,6 +1188,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 	}
 
 	row := make([]any, e.ColumnCount)
+	unsignedMap := e.Table.UnsignedMap()
 
 	// refer: https://github.com/alibaba/canal/blob/c3e38e50e269adafdd38a48c63a1740cde304c67/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogBuffer.java#L63
 	count := 0
@@ -1230,7 +1231,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 
 		var n int
 		var err error
-		row[i], n, err = e.decodeValue(data[pos:], e.Table.ColumnType[i], e.Table.ColumnMeta[i], isPartial)
+		row[i], n, err = e.decodeValue(data[pos:], e.Table.ColumnType[i], e.Table.ColumnMeta[i], isPartial, unsignedMap[i])
 		if err != nil {
 			return 0, err
 		}
@@ -1258,7 +1259,7 @@ func (e *RowsEvent) parseFracTime(t any) any {
 }
 
 // see mysql sql/log_event.cc log_event_print_value
-func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool) (v any, n int, err error) {
+func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool, isUnsigned bool) (v any, n int, err error) {
 	length := 0
 
 	if tp == mysql.MYSQL_TYPE_STRING {
@@ -1283,19 +1284,39 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 		return nil, 0, nil
 	case mysql.MYSQL_TYPE_LONG:
 		n = 4
-		v = mysql.ParseBinaryInt32(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint32(data)
+		} else {
+			v = mysql.ParseBinaryInt32(data)
+		}
 	case mysql.MYSQL_TYPE_TINY:
 		n = 1
-		v = mysql.ParseBinaryInt8(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint8(data)
+		} else {
+			v = mysql.ParseBinaryInt8(data)
+		}
 	case mysql.MYSQL_TYPE_SHORT:
 		n = 2
-		v = mysql.ParseBinaryInt16(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint16(data)
+		} else {
+			v = mysql.ParseBinaryInt16(data)
+		}
 	case mysql.MYSQL_TYPE_INT24:
 		n = 3
-		v = mysql.ParseBinaryInt24(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint24(data)
+		} else {
+			v = mysql.ParseBinaryInt24(data)
+		}
 	case mysql.MYSQL_TYPE_LONGLONG:
 		n = 8
-		v = mysql.ParseBinaryInt64(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint64(data)
+		} else {
+			v = mysql.ParseBinaryInt64(data)
+		}
 	case mysql.MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
