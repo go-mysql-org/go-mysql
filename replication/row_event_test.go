@@ -1275,13 +1275,23 @@ func TestTableMapHelperMaps(t *testing.T) {
 		);
 	*/
 
-	unsignedMap := map[int]bool{}
+	// Indices 1-9: signed numerics; 10-17: unsigned numerics.
+	// Index 18 is `t_year` (YEAR). MySQL writes a signedness bitmap bit for
+	// YEAR (has_signedess_information_type includes YEAR), so IsNumericColumn
+	// must include YEAR to keep the bitmap cursor in sync.
+	// MySQL sets the YEAR bit to 0 (false); MariaDB sets it to 1 (true).
+	mysqlUnsignedMap := map[int]bool{}
+	mariadbUnsignedMap := map[int]bool{}
 	for i := 1; i <= 9; i++ {
-		unsignedMap[i] = false
+		mysqlUnsignedMap[i] = false
+		mariadbUnsignedMap[i] = false
 	}
 	for i := 10; i <= 17; i++ {
-		unsignedMap[i] = true
+		mysqlUnsignedMap[i] = true
+		mariadbUnsignedMap[i] = true
 	}
+	mysqlUnsignedMap[18] = false
+	mariadbUnsignedMap[18] = true
 
 	// collation id | collatation
 	//     28       | gbk_chinese_ci
@@ -1335,7 +1345,7 @@ func TestTableMapHelperMaps(t *testing.T) {
 		{
 			flavor:              "mysql", // mysql 8.0
 			data:                []byte("e\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x003\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xf5\xfe\xfe\xff\xff\xff\xff\xff\xff\xff1\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xee\xfe\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\xf8\x01\xf7\x01\x04\x04\x04\x04\x04\x04\x04\x00\x00\xfc\xc3\xff\xff\a\x01\x03\x00\u007f\x80\x03\f\x1c\xe0??????\xe0\xe0\xe0\xe0\a\b\x00\a\x06\x05\x04\x03\x02\x01\x04\xfc\x05\x02\x05b_bit\tn_boolean\tn_tinyint\nn_smallint\vn_mediumint\x05n_int\bn_bigint\tn_decimal\an_float\bn_double\nnu_tinyint\vnu_smallint\fnu_mediumint\x06nu_int\tnu_bigint\nnu_decimal\bnu_float\tnu_double\x06t_year\x06t_date\x06t_time\at_ftime\nt_datetime\vt_fdatetime\vt_timestamp\ft_ftimestamp\x06c_char\tc_varchar\bc_binary\vc_varbinary\nc_tinyblob\x06c_blob\fc_mediumblob\nc_longblob\nc_tinytext\x06c_text\fc_mediumtext\nc_longtext\x06e_enum\x05s_set\ng_geometry\x06j_json\x06s_set2\ae_enum2\x14g_geometrycollection\x0eg_multipolygon\x11g_multilinestring\fg_multipoint\tg_polygon\fg_linestring\ag_point\v\x04\xe0\xe0\x1c\x1c\x05\n\x02\x011\x012\x02\x013\x014\x06\n\x02\x01a\x01b\x02\x01c\x01d"),
-			unsignedMap:         unsignedMap,
+			unsignedMap:         mysqlUnsignedMap,
 			collationMap:        mysqlCollationMap,
 			enumSetCollationMap: enumSetCollationMap,
 			enumStrValueMap:     enumStrValueMap,
@@ -1345,7 +1355,7 @@ func TestTableMapHelperMaps(t *testing.T) {
 		{
 			flavor:              "mariadb", // mariadb 10.5
 			data:                []byte("\x1e\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x06_types\x003\x10\x01\x01\x02\t\x03\b\xf6\x04\x05\x01\x02\t\x03\b\xf6\x04\x05\r\n\x13\x13\x12\x12\x11\x11\xfe\x0f\xfe\x0f\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfc\xfe\xfe\xff\xfc\xfe\xfe\xff\xff\xff\xff\xff\xff\xff1\x00\bA\x1e\x04\bA\x1e\x04\b\x00\x06\x00\x06\x00\x06\xee\xfe\xfc\x03\xfe@@\x00\x01\x02\x03\x04\x01\x02\x03\x04\xf7\x01\xf8\x01\x04\x04\xf8\x01\xf7\x01\x04\x04\x04\x04\x04\x04\x04\x00\x00\xfc\xc0\xff\xff\a\x01\x03\x00\u007f\xc0\x02\x0f?\x00\x1c\x01\xe0\b\xe0\t\xe0\n\xe0\v\xe0\r.\a\b\x00\a\x06\x05\x04\x03\x02\x01\x04\xfc\x05\x02\x05b_bit\tn_boolean\tn_tinyint\nn_smallint\vn_mediumint\x05n_int\bn_bigint\tn_decimal\an_float\bn_double\nnu_tinyint\vnu_smallint\fnu_mediumint\x06nu_int\tnu_bigint\nnu_decimal\bnu_float\tnu_double\x06t_year\x06t_date\x06t_time\at_ftime\nt_datetime\vt_fdatetime\vt_timestamp\ft_ftimestamp\x06c_char\tc_varchar\bc_binary\vc_varbinary\nc_tinyblob\x06c_blob\fc_mediumblob\nc_longblob\nc_tinytext\x06c_text\fc_mediumtext\nc_longtext\x06e_enum\x05s_set\ng_geometry\x06j_json\x06s_set2\ae_enum2\x14g_geometrycollection\x0eg_multipolygon\x11g_multilinestring\fg_multipoint\tg_polygon\fg_linestring\ag_point\v\x04\xe0\xe0\x1c\x1c\x05\n\x02\x011\x012\x02\x013\x014\x06\n\x02\x01a\x01b\x02\x01c\x01d"),
-			unsignedMap:         unsignedMap,
+			unsignedMap:         mariadbUnsignedMap,
 			collationMap:        mariadbCollationMap,
 			enumSetCollationMap: enumSetCollationMap,
 			enumStrValueMap:     enumStrValueMap,
@@ -1387,6 +1397,60 @@ func TestTableMapHelperMaps(t *testing.T) {
 		require.Equal(t, tc.setStrValueMap, tableMapEvent.SetStrValueMap())
 		require.Equal(t, tc.geometryTypeMap, tableMapEvent.GeometryTypeMap())
 	}
+}
+
+// TestUnsignedMapWithYearColumn verifies that UnsignedMap correctly handles
+// tables containing a YEAR column. MySQL writes a signedness bitmap bit for
+// YEAR (see has_signedess_information_type in sql/field_common_properties.h),
+// so IsNumericColumn must include MYSQL_TYPE_YEAR to keep the bitmap cursor
+// in sync. Without this fix, every numeric column after a YEAR column would
+// be assigned the wrong signedness (off-by-one desync).
+//
+// Schema used to generate the test data (MySQL 8.0):
+//
+//	CREATE TABLE t (
+//	  id         INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+//	  birth_year YEAR,
+//	  salary     INT UNSIGNED,
+//	  score      DECIMAL(10,2) UNSIGNED
+//	);
+func TestUnsignedMapWithYearColumn(t *testing.T) {
+	// TableMapEvent for the schema above captured from a real MySQL 8.0 instance.
+	// Column types (0-indexed):
+	//   0: MYSQL_TYPE_LONG       (id        INT UNSIGNED)
+	//   1: MYSQL_TYPE_YEAR       (birth_year YEAR)
+	//   2: MYSQL_TYPE_LONG       (salary    INT UNSIGNED)
+	//   3: MYSQL_TYPE_NEWDECIMAL (score     DECIMAL(10,2) UNSIGNED)
+	//
+	// SignednessBitmap written by MySQL (1 byte):
+	//   bit7=1 (id unsigned), bit6=1 (year – always unsigned internally),
+	//   bit5=1 (salary unsigned), bit4=1 (score unsigned)  →  0xF0
+	e := &TableMapEvent{
+		flavor:      "mysql",
+		tableIDSize: 6,
+		ColumnCount: 4,
+		ColumnType: []byte{
+			mysql.MYSQL_TYPE_LONG,
+			mysql.MYSQL_TYPE_YEAR,
+			mysql.MYSQL_TYPE_LONG,
+			mysql.MYSQL_TYPE_NEWDECIMAL,
+		},
+		ColumnMeta:       []uint16{0, 0, 0, (10 << 8) | 2},
+		SignednessBitmap: []byte{0xB0}, // bits: id=1 year=0 salary=1 score=1
+	}
+
+	got := e.UnsignedMap()
+
+	// Only columns for which IsNumericColumn is true appear in the map.
+	// id (0), birth_year (1), salary (2), score (3) are all numeric.
+	// All four are unsigned in the bitmap.
+	want := map[int]bool{
+		0: true,  // id        – unsigned
+		1: false, // birth_year – YEAR bit present in bitmap (always unsigned)
+		2: true,  // salary    – unsigned (was wrongly false before the fix)
+		3: true,  // score     – unsigned (was wrongly false before the fix)
+	}
+	require.Equal(t, want, got)
 }
 
 func TestInvalidEvent(t *testing.T) {
