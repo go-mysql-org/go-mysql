@@ -1279,7 +1279,7 @@ func TestTableMapHelperMaps(t *testing.T) {
 	// Index 18 is `t_year` (YEAR). MySQL writes a signedness bitmap bit for
 	// YEAR (has_signedess_information_type includes YEAR), so IsNumericColumn
 	// must include YEAR to keep the bitmap cursor in sync.
-	// MySQL 8.0 sets the YEAR bit to 0 (false); MariaDB 10.5 sets it to 1 (true).
+	// MySQL sets the YEAR bit to 0 (false); MariaDB sets it to 1 (true).
 	mysqlUnsignedMap := map[int]bool{}
 	mariadbUnsignedMap := map[int]bool{}
 	for i := 1; i <= 9; i++ {
@@ -1436,7 +1436,7 @@ func TestUnsignedMapWithYearColumn(t *testing.T) {
 			mysql.MYSQL_TYPE_NEWDECIMAL,
 		},
 		ColumnMeta:       []uint16{0, 0, 0, (10 << 8) | 2},
-		SignednessBitmap: []byte{0xF0}, // bits: id=1 year=1 salary=1 score=1
+		SignednessBitmap: []byte{0xB0}, // bits: id=1 year=0 salary=1 score=1
 	}
 
 	got := e.UnsignedMap()
@@ -1445,10 +1445,10 @@ func TestUnsignedMapWithYearColumn(t *testing.T) {
 	// id (0), birth_year (1), salary (2), score (3) are all numeric.
 	// All four are unsigned in the bitmap.
 	want := map[int]bool{
-		0: true, // id        – unsigned
-		1: true, // birth_year – YEAR bit present in bitmap (always unsigned)
-		2: true, // salary    – unsigned (was wrongly false before the fix)
-		3: true, // score     – unsigned (was wrongly false before the fix)
+		0: true,  // id        – unsigned
+		1: false, // birth_year – YEAR bit present in bitmap (always unsigned)
+		2: true,  // salary    – unsigned (was wrongly false before the fix)
+		3: true,  // score     – unsigned (was wrongly false before the fix)
 	}
 	require.Equal(t, want, got)
 }
