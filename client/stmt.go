@@ -56,6 +56,10 @@ type StmtProcedureMultiResultForward func(res *mysql.Result, err error) error
 // ExecuteProcedureMultiResults runs COM_STMT_EXECUTE and drains all procedure
 // results until SERVER_MORE_RESULTS_EXISTS is no longer set.
 func (s *Stmt) ExecuteProcedureMultiResults(args []any, forward StmtProcedureMultiResultForward) (*mysql.Result, error) {
+	if forward == nil {
+		return nil, errors.New("forward callback cannot be nil")
+	}
+
 	if err := s.write(args...); err != nil {
 		return nil, errors.Trace(err)
 	}
