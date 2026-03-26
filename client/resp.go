@@ -46,6 +46,12 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 		pos += 2
 	}
 
+	// Preserve trailing OK payload (info + session tracking bytes) for
+	// protocol-transparent proxy forwarding.
+	if pos < len(data) {
+		r.OKPayloadSuffix = append([]byte(nil), data[pos:]...)
+	}
+
 	if (c.capability&mysql.CLIENT_SESSION_TRACK > 0) &&
 		(c.status&mysql.SERVER_SESSION_STATE_CHANGED > 0) {
 		var err error

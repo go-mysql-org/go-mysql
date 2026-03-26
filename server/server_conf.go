@@ -54,7 +54,8 @@ func NewDefaultServer() *Server {
 		protocolVersion: 10,
 		capability: mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
 			mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION | mysql.CLIENT_PLUGIN_AUTH | mysql.CLIENT_SSL |
-			mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | mysql.CLIENT_CONNECT_ATTRS,
+			mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | mysql.CLIENT_CONNECT_ATTRS |
+			mysql.CLIENT_MULTI_RESULTS | mysql.CLIENT_PS_MULTI_RESULTS | mysql.CLIENT_SESSION_TRACK,
 		collationId:       mysql.DEFAULT_COLLATION_ID,
 		defaultAuthMethod: mysql.AUTH_NATIVE_PASSWORD,
 		rsaPrivateKey:     rsaPrivateKey,
@@ -100,7 +101,8 @@ func NewServerWithAuth(serverVersion string, collationId uint8, defaultAuthMetho
 
 	capFlag := mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
 		mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION | mysql.CLIENT_PLUGIN_AUTH | mysql.CLIENT_CONNECT_ATTRS |
-		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
+		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA |
+		mysql.CLIENT_MULTI_RESULTS | mysql.CLIENT_PS_MULTI_RESULTS | mysql.CLIENT_SESSION_TRACK
 	if tlsConfig != nil {
 		capFlag |= mysql.CLIENT_SSL
 	}

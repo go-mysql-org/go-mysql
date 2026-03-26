@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -35,6 +36,23 @@ func TestConnWriteOK(t *testing.T) {
 	require.NoError(t, err)
 	expected = []byte{7, 0, 0, 1, mysql.OK_HEADER, 1, 2, 0, 8, 0, 0}
 	require.Equal(t, expected, clientConn.WriteBuffered)
+}
+
+func TestConnWriteOKWithPayloadSuffix(t *testing.T) {
+	clientConn := &mockconn.MockConn{}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+	conn.SetCapability(mysql.CLIENT_PROTOCOL_41)
+
+	result := mysql.NewResultReserveResultset(0)
+	result.AffectedRows = 1
+	result.InsertId = 2
+	result.OKPayloadSuffix = []byte{0x01, 0xfe, 0xaa, 0xbb}
+
+	err := conn.writeOK(result)
+	require.NoError(t, err)
+
+	payload := clientConn.WriteBuffered[4:]
+	require.True(t, bytes.HasSuffix(payload, result.OKPayloadSuffix))
 }
 
 func TestConnWriteEOF(t *testing.T) {

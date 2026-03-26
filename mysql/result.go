@@ -9,6 +9,11 @@ type Result struct {
 	InsertId     uint64
 	AffectedRows uint64
 
+	// OKPayloadSuffix stores OK packet bytes after the fixed PROTOCOL_41 header
+	// (status + warnings). This allows transparent OK packet passthrough when
+	// proxying responses that include info/session-tracking payload.
+	OKPayloadSuffix []byte
+
 	StatusMessage   string
 	SessionTracking *SessionTrackingInfo
 

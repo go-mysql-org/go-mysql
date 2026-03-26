@@ -27,6 +27,9 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 		data = append(data, byte(r.Status), byte(r.Status>>8))
 		data = append(data, byte(r.Warnings), byte(r.Warnings>>8))
 	}
+	if len(r.OKPayloadSuffix) > 0 {
+		data = append(data, r.OKPayloadSuffix...)
+	}
 
 	return c.WritePacket(data)
 }
