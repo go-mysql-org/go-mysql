@@ -132,6 +132,9 @@ func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 			gtid.ServerID: gtid,
 		}
 	} else if o, ok := serverSets[gtid.ServerID]; !ok {
+		// Same domain, different server (e.g. master failover). MariaDB only allows one GTID per domain.
+		slog.Warn("replacing server entries for domain", slog.Uint64("domainID", uint64(gtid.DomainID)), slog.Any("new", gtid))
+		clear(serverSets)
 		serverSets[gtid.ServerID] = gtid
 	} else {
 		err := o.forward(gtid)

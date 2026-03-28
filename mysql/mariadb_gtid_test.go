@@ -179,7 +179,7 @@ func TestMariaDBGTIDSetEqual(t *testing.T) {
 		{"1-1-1,2-2-2", "1-1-1", false},
 		{"1-1-1,2-2-2", "1-1-1,2-2-2", true},
 		{"1-1-1,2-2-2", "1-1-1,2-2-3", false},
-		{"0-1-1,0-2-2", "0-2-2", false},
+		{"0-1-1,0-2-2", "0-2-2", true}, // MariaDB allows only one GTID per domain; 0-2-2 replaces 0-1-1
 	}
 
 	for _, cs := range cases {
