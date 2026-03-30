@@ -102,7 +102,9 @@ func (gtid *MariadbGTID) forward(newer *MariadbGTID) error {
 	return nil
 }
 
-// MariadbGTIDSet is a set of mariadb gtid
+// MariadbGTIDSet represents a MariaDB GTID position (one GTID per domain_id).
+// Despite the name, this is a position, not a set — unlike MySQL's executed GTID set.
+// See https://github.com/go-mysql-org/go-mysql/pull/1122
 type MariadbGTIDSet struct {
 	Sets map[uint32]map[uint32]*MariadbGTID
 }
@@ -121,7 +123,9 @@ func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 	return s, nil
 }
 
-// AddSet adds mariadb gtid into mariadb gtid set
+// AddSet adds or updates a GTID position for a domain. If the domain already has
+// a GTID with a different server_id (e.g. after primary failover), the old entry
+// is replaced to maintain one position per domain_id.
 func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 	if gtid == nil {
 		return nil
