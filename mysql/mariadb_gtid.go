@@ -1,7 +1,6 @@
 package mysql
 
 import (
-	"bytes"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -104,15 +103,15 @@ func (gtid *MariadbGTID) forward(newer *MariadbGTID) error {
 
 // MariadbGTIDSet represents a MariaDB GTID position (one GTID per domain_id).
 // Despite the name, this is a position, not a set — unlike MySQL's executed GTID set.
-// See https://github.com/go-mysql-org/go-mysql/pull/1122
+// See https://github.com/go-mysql-org/go-mysql/issues/1123
 type MariadbGTIDSet struct {
-	Sets map[uint32]map[uint32]*MariadbGTID
+	Sets map[uint32]*MariadbGTID
 }
 
 // ParseMariadbGTIDSet parses str into mariadb gtid sets
 func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 	s := new(MariadbGTIDSet)
-	s.Sets = make(map[uint32]map[uint32]*MariadbGTID)
+	s.Sets = make(map[uint32]*MariadbGTID)
 	if str == "" {
 		return s, nil
 	}
@@ -125,25 +124,18 @@ func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 
 // AddSet adds or updates a GTID position for a domain. If the domain already has
 // a GTID with a different server_id (e.g. after primary failover), the old entry
-// is replaced to maintain one position per domain_id.
+// is replaced via forward() to maintain one position per domain_id.
 func (s *MariadbGTIDSet) AddSet(gtid *MariadbGTID) error {
 	if gtid == nil {
 		return nil
 	}
 
-	if serverSets, ok := s.Sets[gtid.DomainID]; !ok {
-		s.Sets[gtid.DomainID] = map[uint32]*MariadbGTID{
-			gtid.ServerID: gtid,
-		}
-	} else if o, ok := serverSets[gtid.ServerID]; !ok {
-		slog.Warn("replacing server entries for domain", slog.Uint64("domainID", uint64(gtid.DomainID)), slog.Any("new", gtid))
-		clear(serverSets)
-		serverSets[gtid.ServerID] = gtid
-	} else {
-		err := o.forward(gtid)
-		if err != nil {
+	if existing, ok := s.Sets[gtid.DomainID]; ok {
+		if err := existing.forward(gtid); err != nil {
 			return errors.Trace(err)
 		}
+	} else {
+		s.Sets[gtid.DomainID] = gtid.Clone()
 	}
 
 	return nil
@@ -168,10 +160,8 @@ func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 
 func (s *MariadbGTIDSet) String() string {
 	sets := make([]string, 0, len(s.Sets))
-	for _, set := range s.Sets {
-		for _, gtid := range set {
-			sets = append(sets, gtid.String())
-		}
+	for _, gtid := range s.Sets {
+		sets = append(sets, gtid.String())
 	}
 	sort.Strings(sets)
 
@@ -180,29 +170,16 @@ func (s *MariadbGTIDSet) String() string {
 
 // Encode encodes mariadb gtid set
 func (s *MariadbGTIDSet) Encode() []byte {
-	var buf bytes.Buffer
-	sep := ""
-	for _, set := range s.Sets {
-		for _, gtid := range set {
-			buf.WriteString(sep)
-			buf.WriteString(gtid.String())
-			sep = ","
-		}
-	}
-
-	return buf.Bytes()
+	return []byte(s.String())
 }
 
 // Clone clones a mariadb gtid set
 func (s *MariadbGTIDSet) Clone() GTIDSet {
 	clone := &MariadbGTIDSet{
-		Sets: make(map[uint32]map[uint32]*MariadbGTID),
+		Sets: make(map[uint32]*MariadbGTID),
 	}
-	for domainID, set := range s.Sets {
-		clone.Sets[domainID] = make(map[uint32]*MariadbGTID)
-		for serverID, gtid := range set {
-			clone.Sets[domainID][serverID] = gtid.Clone()
-		}
+	for domainID, gtid := range s.Sets {
+		clone.Sets[domainID] = gtid.Clone()
 	}
 
 	return clone
@@ -219,20 +196,13 @@ func (s *MariadbGTIDSet) Equal(o GTIDSet) bool {
 		return false
 	}
 
-	for domainID, set := range other.Sets {
-		serverSet, ok := s.Sets[domainID]
+	for domainID, gtid := range other.Sets {
+		ourGTID, ok := s.Sets[domainID]
 		if !ok {
 			return false
 		}
-		if len(serverSet) != len(set) {
+		if *gtid != *ourGTID {
 			return false
-		}
-		for serverID, gtid := range set {
-			if o, ok := serverSet[serverID]; !ok {
-				return false
-			} else if *gtid != *o {
-				return false
-			}
 		}
 	}
 
@@ -246,17 +216,13 @@ func (s *MariadbGTIDSet) Contain(o GTIDSet) bool {
 		return false
 	}
 
-	for doaminID, set := range other.Sets {
-		serverSet, ok := s.Sets[doaminID]
+	for domainID, gtid := range other.Sets {
+		ourGTID, ok := s.Sets[domainID]
 		if !ok {
 			return false
 		}
-		for serverID, gtid := range set {
-			if o, ok := serverSet[serverID]; !ok {
-				return false
-			} else if !o.Contain(gtid) {
-				return false
-			}
+		if !ourGTID.Contain(gtid) {
+			return false
 		}
 	}
 
