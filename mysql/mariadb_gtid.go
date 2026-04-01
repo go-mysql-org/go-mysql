@@ -61,7 +61,6 @@ func (gtid *MariadbGTID) String() string {
 	return fmt.Sprintf("%d-%d-%d", gtid.DomainID, gtid.ServerID, gtid.SequenceNumber)
 }
 
-// Contain return whether one mariadb gtid covers another mariadb gtid
 func (gtid *MariadbGTID) Contain(other *MariadbGTID) bool {
 	return gtid.DomainID == other.DomainID && gtid.SequenceNumber >= other.SequenceNumber
 }
@@ -75,7 +74,7 @@ func (gtid *MariadbGTID) Clone() *MariadbGTID {
 
 func (gtid *MariadbGTID) forward(newer *MariadbGTID) error {
 	if newer.DomainID != gtid.DomainID {
-		return errors.Errorf("%s is not same with doamin of %s", newer, gtid)
+		return errors.Errorf("%s is not same with domain of %s", newer, gtid)
 	}
 
 	/*
