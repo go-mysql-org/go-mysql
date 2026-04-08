@@ -1,0 +1,50 @@
+services:
+  db-mock:
+    container_name: db-mock
+    build:
+      dockerfile: ./Dockerfile
+    ports:
+      - "127.0.0.1:4000:4000"
+    network_mode: "host"
+  keycloak:
+    image: keycloak/keycloak:26.5
+    container_name: keycloak-service
+    entrypoint: /opt/keycloak/bin/kc.sh --db-connect-timeout=5s
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      PROXY_ADDRESS_FORWARDING: "true"
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://127.0.0.1:4000/keycloak?useSSL=false
+      KC_DB_USERNAME: root
+      KC_DB_PASSWORD:
+      QUARKUS_DATASOURCE_JDBC_ACQUISITION_TIMEOUT: 100s
+      KC_HTTP_POOL_MAX_THREADS: "2"
+      KC_DB_POOL_INITIAL_SIZE: "2"
+      KC_DB_POOL_MAX_SIZE: "2"
+      KC_DB_POOL_MIN_SIZE: "2"
+    ports:
+      - "127.0.0.1:8000:8000"
+    command:
+      - start-dev
+    depends_on:
+      - db-mock
+    restart: on-failure
+    network_mode: "host"
+  my-sql:
+    image: mysql:8.4
+    container_name: my-sql
+    environment:
+      MYSQL_DATABASE: 'keycloak'
+      MYSQL_USER: 'user'
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'true'
+    ports:
+      - "3306:3306"
+    expose:
+      - "3306"
+    volumes:
+      - my-db:/var/lib/mysql
+
+volumes:
+  my-db:
