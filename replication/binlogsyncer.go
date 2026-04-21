@@ -240,9 +240,17 @@ func (b *BinlogSyncer) close() {
 	b.cancel()
 
 	if b.c != nil {
-		err := b.c.SetReadDeadline(utils.Now().Add(100 * time.Millisecond))
-		if err != nil {
-			b.cfg.Logger.Warn("could not set read deadline", slog.Any("error", err))
+		// SetReadDeadline unblocks ReadPacket so onStream notices ctx cancellation.
+		// Some transports (notably SSH tunnels) refuse deadlines with an error, in
+		// which case close the underlying connection to force ReadPacket to return.
+		// Otherwise wg.Wait below parks forever when KILL also fails to reach server
+		// (e.g. thread already reaped, "ERROR 1094 unknown thread id")
+		if err := b.c.SetReadDeadline(utils.Now().Add(100 * time.Millisecond)); err != nil {
+			b.cfg.Logger.Warn("could not set read deadline, closing connection to unblock reader",
+				slog.Any("error", err))
+			if err := b.c.Close(); err != nil {
+				b.cfg.Logger.Warn("could not close connection", slog.Any("error", err))
+			}
 		}
 	}
 
