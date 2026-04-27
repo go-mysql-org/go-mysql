@@ -81,6 +81,17 @@ func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Crede
 		return ErrAccessDeniedNoPassword
 	}
 
+	// Pre-computed hashes are checked first: callers can configure
+	// credentials when only the server-side stored "$A$..." form is
+	// available (e.g. mirroring another server's mysql.user table), and
+	// we skip the per-connect hashPassword work.
+	for _, hash := range credential.HashedPasswords {
+		match, err := auth.CheckHashingPassword(hash, string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
+		if match && err == nil {
+			return nil
+		}
+	}
+
 	for _, password := range credential.Passwords {
 		hash, err := credential.hashPassword(password)
 		if err != nil {

@@ -139,6 +139,20 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 			clientAuthData = clientAuthData[:l-1]
 		}
 	}
+	// Pre-computed hashes are checked first: callers can configure
+	// credentials when only the server-side stored hash is available
+	// (e.g. mirroring `mysql.user.authentication_string`), and we skip
+	// the per-connect hashPassword work.
+	for _, hash := range credential.HashedPasswords {
+		check, err := mysql.Check256HashingPassword(hash, string(clientAuthData))
+		if err != nil {
+			continue
+		}
+		if check {
+			return nil
+		}
+	}
+
 	for _, password := range credential.Passwords {
 		hash, err := credential.hashPassword(password)
 		if err != nil {

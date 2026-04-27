@@ -9,7 +9,9 @@ import (
 
 	_ "github.com/go-mysql-org/go-mysql/driver"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/stretchr/testify/require"
 )
 
@@ -148,41 +150,64 @@ func TestAddUserWithHashedPassword(t *testing.T) {
 	require.Error(t, dbBad.Ping())
 }
 
-// TestAddUserWithHashedPasswordRejectsUnsupportedPlugin confirms the helper
-// fails up front for plugins that don't yet consume HashedPasswords, rather
-// than silently accepting an unauthenticatable user.
-func TestAddUserWithHashedPasswordRejectsUnsupportedPlugin(t *testing.T) {
+// TestAddUserWithHashedPasswordRejectsUnknownPlugin confirms the helper
+// fails up front for an unknown auth plugin name (typo, deprecated, etc.)
+// rather than registering an unauthenticatable user.
+func TestAddUserWithHashedPasswordRejectsUnknownPlugin(t *testing.T) {
 	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
 	someHash := mysql.NativePasswordHash([]byte("anything"))
 
-	err := handler.AddUserWithHashedPassword("bob", someHash, mysql.AUTH_CACHING_SHA2_PASSWORD)
+	err := handler.AddUserWithHashedPassword("bob", someHash, "made_up_auth_plugin")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "AddUserWithHashedPassword does not yet support")
+	require.Contains(t, err.Error(), "unknown authentication plugin")
 }
 
-// TestAddUserWithHashedPasswordRejectsWrongHashLength makes sure that a
-// caller passing anything other than the exact 20 bytes a native_password
-// hash takes (e.g. an empty slice, a string accidentally cast to []byte
-// without DecodePasswordHex, or a truncated value) fails up front rather
-// than registering a user that can never authenticate.
-func TestAddUserWithHashedPasswordRejectsWrongHashLength(t *testing.T) {
+// TestAddUserWithHashedPasswordRejectsClearPassword confirms that
+// mysql_clear_password — which has no meaningful hashed form — is
+// directed to the plaintext API instead.
+func TestAddUserWithHashedPasswordRejectsClearPassword(t *testing.T) {
+	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
+	err := handler.AddUserWithHashedPassword("bob", []byte("anything"), mysql.AUTH_CLEAR_PASSWORD)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "use AddUser with the plaintext")
+}
+
+// TestAddUserWithHashedPasswordRejectsBadFormat covers the per-plugin
+// shape validation: each plugin has a distinct stored-hash format, and
+// passing a value that obviously doesn't match should fail at AddUser
+// time rather than producing a user that can never authenticate.
+func TestAddUserWithHashedPasswordRejectsBadFormat(t *testing.T) {
 	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
 
-	cases := []struct {
-		name string
-		hash []byte
-	}{
-		{"nil", nil},
-		{"empty", []byte{}},
-		{"too short (19 bytes)", make([]byte, 19)},
-		{"too long (21 bytes)", make([]byte, 21)},
-		{"hex string mistakenly passed as bytes", []byte("*6BB4837EB74329105EE4568DDA7DC67ED2CA2AD9")},
+	type tc struct {
+		name   string
+		plugin string
+		hash   []byte
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := handler.AddUserWithHashedPassword("bob", tc.hash)
+	cases := []tc{
+		// mysql_native_password: must be exactly 20 bytes (SHA1×2).
+		{"native: nil", mysql.AUTH_NATIVE_PASSWORD, nil},
+		{"native: empty", mysql.AUTH_NATIVE_PASSWORD, []byte{}},
+		{"native: 19 bytes", mysql.AUTH_NATIVE_PASSWORD, make([]byte, 19)},
+		{"native: 21 bytes", mysql.AUTH_NATIVE_PASSWORD, make([]byte, 21)},
+		{"native: hex string passed as bytes", mysql.AUTH_NATIVE_PASSWORD, []byte("*6BB4837EB74329105EE4568DDA7DC67ED2CA2AD9")},
+
+		// caching_sha2_password: "$A$<iter>$<salt>$<hash>" — wrong type or shape rejected.
+		{"caching_sha2: empty", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte{}},
+		{"caching_sha2: missing $A$ prefix", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte("not-a-hash")},
+		{"caching_sha2: wrong hash type 'B'", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte("$B$005$saltsaltsaltsaltsalt$hashhashhashhashhashhashhashhashhashhash43")},
+		{"caching_sha2: not enough $-parts", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte("$A$005$saltsaltsaltsaltsalt")},
+
+		// sha256_password: "$<iter>$<salt>$<hashHex>" — iterations must be decimal.
+		{"sha256: empty", mysql.AUTH_SHA256_PASSWORD, []byte{}},
+		{"sha256: not a hash", mysql.AUTH_SHA256_PASSWORD, []byte("plain-string")},
+		{"sha256: non-numeric iterations", mysql.AUTH_SHA256_PASSWORD, []byte("$A$saltsaltsaltsaltsalt$hashhashhashhashhashhashhashhash")},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := handler.AddUserWithHashedPassword("bob", c.hash, c.plugin)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "expected 20 bytes")
+			require.Contains(t, err.Error(), "invalid hashed password")
 		})
 	}
 }
@@ -208,6 +233,105 @@ func TestAddUserWithHashedPasswordCopiesSlice(t *testing.T) {
 	require.Len(t, cred.HashedPasswords, 1)
 	require.NotEqual(t, hash, cred.HashedPasswords[0])
 	require.Equal(t, mysql.NativePasswordHash([]byte(plaintext)), cred.HashedPasswords[0])
+}
+
+// TestAddUserWithHashedPassword_CachingSha2 runs the same end-to-end
+// shape as TestAddUserWithHashedPassword, but for caching_sha2_password.
+// We use auth.NewHashPassword to produce the exact stored form a real
+// MySQL server would have at rest, so this also documents the format
+// callers should pass in. Because caching_sha2's full-auth flow sends
+// the plaintext on the wire, the server must be configured with TLS
+// (or an RSA key); we use the same tlsConf as the other server tests.
+func TestAddUserWithHashedPassword_CachingSha2(t *testing.T) {
+	const plaintext = "s3cr3t"
+	stored := []byte(auth.NewHashPassword(plaintext, mysql.AUTH_CACHING_SHA2_PASSWORD))
+
+	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_CACHING_SHA2_PASSWORD)
+	require.NoError(t, handler.AddUserWithHashedPassword("alice", stored, mysql.AUTH_CACHING_SHA2_PASSWORD))
+
+	srv := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), tlsConf)
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	go func() {
+		for {
+			conn, acceptErr := l.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go func(c net.Conn) {
+				co, _ := srv.NewCustomizedConn(c, handler, &EmptyHandler{})
+				if co != nil {
+					for co.HandleCommand() == nil {
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	// Correct plaintext under TLS → success. Two pings exercise both the
+	// full-auth path (cache miss) and the fast-auth path (cache hit).
+	dbOK, err := sql.Open("mysql", "alice:"+plaintext+"@tcp("+l.Addr().String()+")/test?tls=skip-verify")
+	require.NoError(t, err)
+	defer dbOK.Close()
+	dbOK.SetConnMaxLifetime(time.Second)
+	require.NoError(t, dbOK.Ping())
+	require.NoError(t, dbOK.Ping())
+
+	// Wrong plaintext → access denied.
+	dbBad, err := sql.Open("mysql", "alice:wrongpass@tcp("+l.Addr().String()+")/test?tls=skip-verify")
+	require.NoError(t, err)
+	defer dbBad.Close()
+	dbBad.SetConnMaxLifetime(time.Second)
+	require.Error(t, dbBad.Ping())
+}
+
+// TestAddUserWithHashedPassword_Sha256Password mirrors the test above for
+// sha256_password. Same TLS requirement; no cache layer.
+func TestAddUserWithHashedPassword_Sha256Password(t *testing.T) {
+	const plaintext = "s3cr3t"
+	storedString, err := mysql.NewSha256PasswordHash(plaintext)
+	require.NoError(t, err)
+	stored := []byte(storedString)
+
+	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_SHA256_PASSWORD)
+	require.NoError(t, handler.AddUserWithHashedPassword("alice", stored, mysql.AUTH_SHA256_PASSWORD))
+
+	srv := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_SHA256_PASSWORD, test_keys.RSAKey(), tlsConf)
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	go func() {
+		for {
+			conn, acceptErr := l.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go func(c net.Conn) {
+				co, _ := srv.NewCustomizedConn(c, handler, &EmptyHandler{})
+				if co != nil {
+					for co.HandleCommand() == nil {
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	dbOK, err := sql.Open("mysql", "alice:"+plaintext+"@tcp("+l.Addr().String()+")/test?tls=skip-verify")
+	require.NoError(t, err)
+	defer dbOK.Close()
+	dbOK.SetConnMaxLifetime(time.Second)
+	require.NoError(t, dbOK.Ping())
+
+	dbBad, err := sql.Open("mysql", "alice:wrongpass@tcp("+l.Addr().String()+")/test?tls=skip-verify")
+	require.NoError(t, err)
+	defer dbBad.Close()
+	dbBad.SetConnMaxLifetime(time.Second)
+	require.Error(t, dbBad.Ping())
 }
 
 func TestOnAuthFailureCalled(t *testing.T) {
