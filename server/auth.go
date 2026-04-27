@@ -41,14 +41,14 @@ func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) err
 }
 
 func (c *Conn) acquireCredential() error {
-	if len(c.credential.Passwords) > 0 {
+	if c.credential.hasAnyCredential() {
 		return nil
 	}
 	credential, found, err := c.authHandler.GetCredential(c.user)
 	if err != nil {
 		return err
 	}
-	if !found || len(credential.Passwords) == 0 {
+	if !found || !credential.hasAnyCredential() {
 		return mysql.NewDefaultError(mysql.ER_NO_SUCH_USER, c.user, c.RemoteAddr().String())
 	}
 	c.credential = credential
@@ -81,6 +81,15 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential C
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
+	}
+
+	// Pre-computed hashes are checked first: they let callers configure
+	// credentials when only the server-side hash is available (no plaintext),
+	// and they're cheaper per connect because we skip the SHA1(SHA1(...)) step.
+	for _, hash := range credential.HashedPasswords {
+		if mysql.CompareNativePassword(clientAuthData, hash, c.salt) {
+			return nil
+		}
 	}
 
 	for _, password := range credential.Passwords {

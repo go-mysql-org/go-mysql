@@ -42,12 +42,27 @@ func NewInMemoryAuthenticationHandler(defaultAuthMethod ...string) *InMemoryAuth
 }
 
 // Credential holds authentication settings for a user.
+//
 // Passwords contains all valid raw passwords for the user. They are hashed on demand during comparison.
 // If empty password authentication is allowed, Passwords must contain an empty string (e.g., []string{""})
 // rather than being a zero-length slice. A zero-length slice means no valid passwords are configured.
+//
+// HashedPasswords contains pre-computed password hashes that the server compares directly against the
+// client's challenge response, without ever needing the plaintext. This lets callers (e.g. a MySQL proxy
+// rehoming users from another server's `mysql.user` table) configure credentials when only the stored
+// hash is available. The byte format depends on AuthPluginName:
+//
+//   - mysql_native_password: the 20-byte SHA1(SHA1(plaintext)) value, i.e. what NativePasswordHash
+//     returns, or what DecodePasswordHex returns from MySQL's standard "*XXXX..." (41-char) hex form.
+//
+// Other auth plugins do not currently consume HashedPasswords; for them, populate Passwords instead.
+//
+// Both fields can be set on the same Credential: HashedPasswords is checked first (cheaper, no
+// hashing per connect), then Passwords.
 type Credential struct {
-	Passwords      []string
-	AuthPluginName string
+	Passwords       []string
+	HashedPasswords [][]byte
+	AuthPluginName  string
 }
 
 // hashPassword computes the password hash for a given password using the credential's auth plugin.
@@ -77,6 +92,13 @@ func (c Credential) hashPassword(password string) (string, error) {
 // hasEmptyPassword returns true if any password in the credential is empty.
 func (c Credential) hasEmptyPassword() bool {
 	return slices.Contains(c.Passwords, "")
+}
+
+// hasAnyCredential reports whether the credential has at least one usable
+// entry — either a plaintext password (including the empty string, which
+// signals "empty password is OK") or a pre-computed hash.
+func (c Credential) hasAnyCredential() bool {
+	return len(c.Passwords) > 0 || len(c.HashedPasswords) > 0
 }
 
 // InMemoryAuthenticationHandler implements AuthenticationHandler with in-memory credential storage.
@@ -115,6 +137,45 @@ func (h *InMemoryAuthenticationHandler) AddUser(username, password string, optio
 	h.userPool.Store(username, Credential{
 		Passwords:      []string{password},
 		AuthPluginName: authPluginName,
+	})
+	return nil
+}
+
+// AddUserWithHashedPassword registers a user whose password is already in
+// the server-side hashed form, so the plaintext never has to be supplied.
+//
+// The expected byte format depends on authPluginName; see Credential.HashedPasswords.
+// For mysql_native_password (currently the only plugin that consumes
+// HashedPasswords) hash must be the 20-byte SHA1(SHA1(plaintext)) value.
+// To take MySQL's standard 41-character "*XXXX..." form, use
+// mysql.DecodePasswordHex first:
+//
+//	bytes, _ := mysql.DecodePasswordHex("*6BB4837EB74329105EE4568DDA7DC67ED2CA2AD9")
+//	handler.AddUserWithHashedPassword("alice", bytes)
+//
+// authPluginName defaults to the handler's default auth method.
+func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username string, hash []byte, optionalAuthPluginName ...string) error {
+	authPluginName := h.defaultAuthMethod
+	if len(optionalAuthPluginName) > 0 {
+		authPluginName = optionalAuthPluginName[0]
+	}
+
+	if !isAuthMethodSupported(authPluginName) {
+		return errors.Errorf("unknown authentication plugin name '%s'", authPluginName)
+	}
+	if authPluginName != mysql.AUTH_NATIVE_PASSWORD {
+		// Future work: extend HashedPasswords semantics to caching_sha2_password
+		// and sha256_password. Reject up front so callers don't silently get
+		// "auth always fails" for unsupported plugins.
+		return errors.Errorf("AddUserWithHashedPassword does not yet support auth plugin '%s'; only '%s' is supported", authPluginName, mysql.AUTH_NATIVE_PASSWORD)
+	}
+	if len(hash) == 0 {
+		return errors.New("hashed password must not be empty")
+	}
+
+	h.userPool.Store(username, Credential{
+		HashedPasswords: [][]byte{hash},
+		AuthPluginName:  authPluginName,
 	})
 	return nil
 }
