@@ -169,16 +169,26 @@ func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username strin
 		// "auth always fails" for unsupported plugins.
 		return errors.Errorf("AddUserWithHashedPassword does not yet support auth plugin '%s'; only '%s' is supported", authPluginName, mysql.AUTH_NATIVE_PASSWORD)
 	}
-	if len(hash) == 0 {
-		return errors.New("hashed password must not be empty")
+	// mysql_native_password's stored form is exactly SHA1(SHA1(plaintext)) =
+	// 20 bytes. Reject any other length so a misconfigured caller fails up
+	// front rather than ending up with users that always get ER_ACCESS_DENIED.
+	if len(hash) != mysqlNativePasswordHashLen {
+		return errors.Errorf("invalid hashed password length for %s: expected %d bytes, got %d", authPluginName, mysqlNativePasswordHashLen, len(hash))
 	}
 
+	// Defensive copy so a caller that reuses or mutates its backing slice
+	// can't change the stored credential out from under us.
+	stored := slices.Clone(hash)
 	h.userPool.Store(username, Credential{
-		HashedPasswords: [][]byte{hash},
+		HashedPasswords: [][]byte{stored},
 		AuthPluginName:  authPluginName,
 	})
 	return nil
 }
+
+// mysqlNativePasswordHashLen is the length of a native_password hash
+// (sha1(sha1(plaintext))) in bytes.
+const mysqlNativePasswordHashLen = 20
 
 func (h *InMemoryAuthenticationHandler) OnAuthSuccess(conn *Conn) error {
 	return nil

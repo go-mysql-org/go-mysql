@@ -160,11 +160,54 @@ func TestAddUserWithHashedPasswordRejectsUnsupportedPlugin(t *testing.T) {
 	require.Contains(t, err.Error(), "AddUserWithHashedPassword does not yet support")
 }
 
-func TestAddUserWithHashedPasswordRejectsEmptyHash(t *testing.T) {
+// TestAddUserWithHashedPasswordRejectsWrongHashLength makes sure that a
+// caller passing anything other than the exact 20 bytes a native_password
+// hash takes (e.g. an empty slice, a string accidentally cast to []byte
+// without DecodePasswordHex, or a truncated value) fails up front rather
+// than registering a user that can never authenticate.
+func TestAddUserWithHashedPasswordRejectsWrongHashLength(t *testing.T) {
 	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
-	err := handler.AddUserWithHashedPassword("bob", nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "must not be empty")
+
+	cases := []struct {
+		name string
+		hash []byte
+	}{
+		{"nil", nil},
+		{"empty", []byte{}},
+		{"too short (19 bytes)", make([]byte, 19)},
+		{"too long (21 bytes)", make([]byte, 21)},
+		{"hex string mistakenly passed as bytes", []byte("*6BB4837EB74329105EE4568DDA7DC67ED2CA2AD9")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := handler.AddUserWithHashedPassword("bob", tc.hash)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "expected 20 bytes")
+		})
+	}
+}
+
+// TestAddUserWithHashedPasswordCopiesSlice verifies the helper takes a
+// defensive copy of the hash, so a caller that reuses or mutates its
+// backing slice can't change the stored credential afterwards.
+func TestAddUserWithHashedPasswordCopiesSlice(t *testing.T) {
+	plaintext := "s3cr3t"
+	hash := mysql.NativePasswordHash([]byte(plaintext))
+
+	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
+	require.NoError(t, handler.AddUserWithHashedPassword("alice", hash))
+
+	// Mutate the caller's slice. The stored credential must not change.
+	for i := range hash {
+		hash[i] = 0xff
+	}
+
+	cred, found, err := handler.GetCredential("alice")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Len(t, cred.HashedPasswords, 1)
+	require.NotEqual(t, hash, cred.HashedPasswords[0])
+	require.Equal(t, mysql.NativePasswordHash([]byte(plaintext)), cred.HashedPasswords[0])
 }
 
 func TestOnAuthFailureCalled(t *testing.T) {
