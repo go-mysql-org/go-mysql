@@ -34,8 +34,8 @@ func (t Tag) MarshalBinary() ([]byte, error) {
 	if len(t) > 32 {
 		return nil, errors.New("tag length too long")
 	}
-	taglen := uint8(len(t) << 1)
-	return append([]byte{taglen}, []byte(t)...), nil
+	tagLen := uint8(len(t) << 1)
+	return append([]byte{tagLen}, []byte(t)...), nil
 }
 
 // NewTag is taking a string and removes leading and trailing whitespace and changes the case to lowercase
