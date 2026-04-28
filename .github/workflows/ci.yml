@@ -58,7 +58,7 @@ jobs:
         mysql_version:
           - 8.0.45
           - 8.4.8
-          - 9.6.0
+          - 9.7.0
     name: Tests with MySQL ${{ matrix.mysql_version }}
     runs-on: ubuntu-latest
     services:
