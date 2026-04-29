@@ -660,12 +660,14 @@ func TestNormalizeTag(t *testing.T) {
 func FuzzTag_MarshalBinary(f *testing.F) {
 	f.Add("test")
 	f.Fuzz(func(t *testing.T, input string) {
-		r, err := NewTag(input).MarshalBinary()
-		if len(input) > 32 {
+		tag := NewTag(input)
+		r, err := tag.MarshalBinary()
+		if len(tag.String()) > 32 {
 			require.Error(t, err)
 		} else {
 			require.NoError(t, err)
-			require.Equal(t, len(input), int(r[0]>>1))
+			// Note: length of input may differ from tag length due to normalization
+			require.Equal(t, len(tag.String()), int(r[0]>>1), "input: %v, result: %v", input, r)
 		}
 	})
 }
