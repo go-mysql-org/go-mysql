@@ -63,6 +63,10 @@ type MysqlGTIDSet map[uuid.UUID]map[Tag]IntervalSlice
 // This ensures that MysqlGTIDSet implements the GTIDSet interface
 var _ GTIDSet = &MysqlGTIDSet{}
 
+func NewMysqlGTIDSet() MysqlGTIDSet {
+	return make(map[uuid.UUID]map[Tag]IntervalSlice)
+}
+
 func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 	if len(data) < 8 {
 		return nil, errors.Errorf("invalid gtid set buffer, expected 8 or more but got %d", len(data))
@@ -139,10 +143,6 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 		return &s, errors.Errorf("invalid gtid set buffer, found %d trailing bytes", len(data)-pos)
 	}
 	return &s, nil
-}
-
-func NewMysqlGTIDSet() MysqlGTIDSet {
-	return make(map[uuid.UUID]map[Tag]IntervalSlice)
 }
 
 func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
