@@ -567,7 +567,7 @@ func (e *GTIDEvent) GTIDNext() (mysql.GTIDSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	if e.Tag == "" {
+	if e.Tag == mysql.NewTag("") {
 		return mysql.ParseMysqlGTIDSet(
 			strings.Join(
 				[]string{
@@ -582,7 +582,7 @@ func (e *GTIDEvent) GTIDNext() (mysql.GTIDSet, error) {
 		strings.Join(
 			[]string{
 				u.String(),
-				string(e.Tag),
+				e.Tag.String(),
 				strconv.FormatInt(e.GNO, 10),
 			},
 			":",

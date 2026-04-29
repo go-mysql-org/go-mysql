@@ -25,26 +25,33 @@ var tagRegexp = regexp.MustCompile(`^\s*[a-zA-Z_][a-zA-Z0-9_]{0,31}\s*$`)
 // Normalized tags should match: `^[a-z_][a-z0-9_]{0,31}$`
 
 // Tag is a GTID Tag
-type Tag string
+type Tag struct {
+	normalized string
+}
 
-// This ensures that Tag implements the encoding.BinaryMarshaler interface
-var _ encoding.BinaryMarshaler = Tag("")
+// This ensures that Tag implements the encoding.BinaryMarshaler and Stringer interface
+var _ encoding.BinaryMarshaler = Tag{}
+var _ fmt.Stringer = Tag{}
 
 func (t Tag) MarshalBinary() ([]byte, error) {
-	if len(t) > 32 {
+	if len(t.normalized) > 32 {
 		return nil, errors.New("tag length too long")
 	}
-	tagLen := uint8(len(t) << 1)
-	return append([]byte{tagLen}, []byte(t)...), nil
+	tagLen := uint8(len(t.normalized) << 1)
+	return append([]byte{tagLen}, []byte(t.normalized)...), nil
+}
+
+func (t Tag) String() string {
+	return t.normalized
 }
 
 // NewTag is taking a string and removes leading and trailing whitespace and changes the case to lowercase
 func NewTag(str string) Tag {
 	if str == "" {
-		return Tag(str)
+		return Tag{}
 	}
 
-	return Tag(strings.TrimSpace(strings.ToLower(str)))
+	return Tag{strings.TrimSpace(strings.ToLower(str))}
 }
 
 // MysqlGTIDSet is storing a map of SIDs (UUIDs), each with one or more tags.
@@ -84,7 +91,7 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 			if pos+taglen > len(data) {
 				return nil, errors.New("invalid gtid set buffer, tag extends beyond data")
 			}
-			tag = Tag(data[pos : pos+taglen])
+			tag = NewTag(string(data[pos : pos+taglen]))
 			pos += taglen
 		}
 
@@ -187,7 +194,7 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 }
 
 func (s *MysqlGTIDSet) AddGTID(uuid uuid.UUID, gno int64) {
-	s.AddGTIDWithTag(uuid, Tag(""), gno)
+	s.AddGTIDWithTag(uuid, Tag{}, gno)
 }
 
 func (s *MysqlGTIDSet) AddGTIDWithTag(uuid uuid.UUID, tag Tag, gno int64) {
@@ -246,7 +253,7 @@ func (s *MysqlGTIDSet) Encode() []byte {
 		uuids = append(uuids, uuid)
 		for tag := range (*s)[uuid] {
 			sidcount++
-			if format != GtidFormatTagged && tag != Tag("") {
+			if format != GtidFormatTagged && (tag != Tag{""}) {
 				format = GtidFormatTagged
 			}
 		}
@@ -260,7 +267,7 @@ func (s *MysqlGTIDSet) Encode() []byte {
 	})
 	for _, uuid := range uuids {
 		tags := slices.Collect(maps.Keys((*s)[uuid]))
-		slices.Sort(tags)
+		slices.SortFunc(tags, func(a, b Tag) int { return strings.Compare(a.normalized, b.normalized) })
 
 		for _, tag := range tags {
 			ubin, err := uuid.MarshalBinary()
@@ -333,11 +340,11 @@ func (s *MysqlGTIDSet) String() string {
 			tags = append(tags, tag)
 		}
 		// Tags are sorted, empty tag first
-		slices.Sort(tags)
+		slices.SortFunc(tags, func(a, b Tag) int { return strings.Compare(a.normalized, b.normalized) })
 		for _, tag := range tags {
-			if tag != "" {
+			if tag != (Tag{""}) {
 				sb.WriteString(":")
-				sb.WriteString(string(tag))
+				sb.WriteString(tag.String())
 			}
 			for _, interval := range (*s)[uuid][tag] {
 				sb.WriteString(":")

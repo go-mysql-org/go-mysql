@@ -423,7 +423,7 @@ func TestMysqlGTIDSet_Encode(t *testing.T) {
 		{
 			MysqlGTIDSet{
 				uuid.MustParse("071a4ecc-1bf9-11f1-a838-e6dd1807d029"): {
-					"": IntervalSlice{
+					Tag{""}: IntervalSlice{
 						Interval{Start: 1, Stop: 3},
 					},
 				},
@@ -440,7 +440,7 @@ func TestMysqlGTIDSet_Encode(t *testing.T) {
 		{
 			MysqlGTIDSet{
 				uuid.MustParse("071a4ecc-1bf9-11f1-a838-e6dd1807d029"): {
-					"mytagabcdef": IntervalSlice{
+					Tag{"mytagabcdef"}: IntervalSlice{
 						Interval{Start: 1, Stop: 2},
 					},
 				},
@@ -459,10 +459,10 @@ func TestMysqlGTIDSet_Encode(t *testing.T) {
 		{
 			MysqlGTIDSet{
 				uuid.MustParse("071a4ecc-1bf9-11f1-a838-e6dd1807d029"): {
-					"": IntervalSlice{
+					Tag{""}: IntervalSlice{
 						Interval{Start: 1, Stop: 3},
 					},
-					"mytagabcdef": IntervalSlice{
+					Tag{"mytagabcdef"}: IntervalSlice{
 						Interval{Start: 1, Stop: 2},
 					},
 				},
@@ -487,10 +487,10 @@ func TestMysqlGTIDSet_Encode(t *testing.T) {
 			// Same as the one above, but with the Sets in a different order to test sorting.
 			MysqlGTIDSet{
 				uuid.MustParse("071a4ecc-1bf9-11f1-a838-e6dd1807d029"): {
-					"mytagabcdef": IntervalSlice{
+					Tag{"mytagabcdef"}: IntervalSlice{
 						Interval{Start: 1, Stop: 2},
 					},
-					"": IntervalSlice{
+					Tag{""}: IntervalSlice{
 						Interval{Start: 1, Stop: 3},
 					},
 				},
@@ -632,26 +632,26 @@ func TestNormalizeTag(t *testing.T) {
 	}{
 		{
 			"Test",
-			"test",
+			Tag{"test"},
 		},
 		{
 			" test",
-			"test",
+			Tag{"test"},
 		},
 		{
 			" test ",
-			"test",
+			Tag{"test"},
 		},
 		{
 			"\t \t_abc\r",
-			"_abc",
+			Tag{"_abc"},
 		},
 	}
 
 	for _, tc := range cases {
 		r := NewTag(tc.input)
 		require.Equal(t, tc.output, r)
-		if !tagRegexp.MatchString(string(r)) {
+		if !tagRegexp.MatchString(r.String()) {
 			t.Errorf("Normalized tag '%s' doesn't match tagRegexp", r)
 		}
 	}
@@ -660,7 +660,7 @@ func TestNormalizeTag(t *testing.T) {
 func FuzzTag_MarshalBinary(f *testing.F) {
 	f.Add("test")
 	f.Fuzz(func(t *testing.T, input string) {
-		r, err := Tag(input).MarshalBinary()
+		r, err := NewTag(input).MarshalBinary()
 		if len(input) > 32 {
 			require.Error(t, err)
 		} else {
