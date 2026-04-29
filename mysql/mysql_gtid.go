@@ -30,8 +30,10 @@ type Tag struct {
 }
 
 // This ensures that Tag implements the encoding.BinaryMarshaler and Stringer interface
-var _ encoding.BinaryMarshaler = Tag{}
-var _ fmt.Stringer = Tag{}
+var (
+	_ encoding.BinaryMarshaler = Tag{}
+	_ fmt.Stringer             = Tag{}
+)
 
 func (t Tag) MarshalBinary() ([]byte, error) {
 	if len(t.normalized) > 32 {
