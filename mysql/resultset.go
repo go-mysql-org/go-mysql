@@ -53,6 +53,8 @@ func (r *Resultset) returnToPool() {
 	resultsetPool.Put(r)
 }
 
+// Reset prepares the resultset for reuse. After Reset, all r.Fields entries
+// are nil and the caller must repopulate them.
 func (r *Resultset) Reset(fieldsCount int) {
 	r.RawPkg = r.RawPkg[:0]
 
@@ -74,6 +76,7 @@ func (r *Resultset) Reset(fieldsCount int) {
 		r.Fields = make([]*Field, fieldsCount)
 	} else {
 		r.Fields = r.Fields[:fieldsCount]
+		clear(r.Fields)
 	}
 }
 
