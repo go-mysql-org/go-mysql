@@ -510,6 +510,19 @@ func TestEncodeBinaryFieldValueValidationErrors(t *testing.T) {
 	})
 }
 
+// TestBuildSimpleBinaryResultsetEmptyRows verifies that a row-less result
+// still exposes populated *Field entries, so callers reading column
+// metadata before iterating rows see a non-nil Field per column.
+func TestBuildSimpleBinaryResultsetEmptyRows(t *testing.T) {
+	rs, err := BuildSimpleBinaryResultset([]string{"a", "b"}, nil)
+	require.NoError(t, err)
+	require.Len(t, rs.Fields, 2)
+	require.NotNil(t, rs.Fields[0])
+	require.NotNil(t, rs.Fields[1])
+	require.Equal(t, "a", string(rs.Fields[0].Name))
+	require.Equal(t, "b", string(rs.Fields[1].Name))
+}
+
 // TestEncodeBinaryFieldValueTypedNilSlice verifies a typed-nil []byte
 // (e.g. var b []byte) encodes as NULL, not an empty length-encoded string.
 // The interface holding the typed nil is itself non-nil, so the top-level
@@ -558,4 +571,49 @@ func TestEncodeBinaryFieldValueTypedNilSlice(t *testing.T) {
 		row := roundTrip(t, fields, []any{[]byte{}, "after"})
 		require.Equal(t, "after", string(row[1].AsString()))
 	})
+}
+
+// TestBuildSimpleBinaryResultsetFirstRowNilPromotion regresses the silent-
+// data-loss path: when row 0 has nil at column j, the column type is
+// MYSQL_TYPE_NULL and EncodeBinaryFieldValue's (nil, nil) signal would
+// encode every later row's value as NULL. The fix promotes the column to
+// the first non-nil value's type.
+func TestBuildSimpleBinaryResultsetFirstRowNilPromotion(t *testing.T) {
+	rs, err := BuildSimpleBinaryResultset(
+		[]string{"c"},
+		[][]any{
+			{nil},
+			{int64(42)},
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, byte(MYSQL_TYPE_LONGLONG), rs.Fields[0].Type,
+		"column type must be promoted from NULL to LONGLONG when first non-nil arrives")
+	require.Len(t, rs.RowDatas, 2)
+
+	row1, err := rs.RowDatas[1].ParseBinary(rs.Fields, nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(42), row1[0].AsInt64(),
+		"second row's value must round-trip, not silently encode as NULL")
+}
+
+// TestBuildSimpleBinaryResultsetReusesPoolWithFreshFields verifies that a
+// pooled Resultset returned by NewResultset can't leak stale *Field
+// pointers from a previous caller into the new result. The first-row
+// overwrite pattern guarantees Fields[j] is set fresh every call.
+func TestBuildSimpleBinaryResultsetReusesPoolWithFreshFields(t *testing.T) {
+	// First call populates Fields[0].Name = "old".
+	r1, err := BuildSimpleBinaryResultset([]string{"old"}, [][]any{{int64(1)}})
+	require.NoError(t, err)
+	require.Equal(t, []byte("old"), r1.Fields[0].Name)
+
+	// Hand r1 back to the pool, like Result.Close does.
+	resultsetPool.Put(r1)
+
+	// Second call: NewResultset pulls r1 back. Without the first-row
+	// overwrite, Fields[0] would still be the "old" Field and Name would
+	// silently stay "old".
+	r2, err := BuildSimpleBinaryResultset([]string{"new"}, [][]any{{int64(2)}})
+	require.NoError(t, err)
+	require.Equal(t, []byte("new"), r2.Fields[0].Name)
 }

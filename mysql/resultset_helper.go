@@ -697,6 +697,15 @@ func FormatBinaryValue(value any) ([]byte, error) {
 }
 
 func fieldType(value any) (typ uint8, err error) {
+	// Unwrap driver.Valuer so column-type inference matches what
+	// EncodeBinaryFieldValue accepts (sql.NullString, sql.NullInt64, etc.).
+	if v, ok := value.(driver.Valuer); ok {
+		unwrapped, err := v.Value()
+		if err != nil {
+			return 0, errors.Trace(err)
+		}
+		value = unwrapped
+	}
 	switch value.(type) {
 	case int8, int16, int32, int64, int:
 		typ = MYSQL_TYPE_LONGLONG
@@ -807,6 +816,16 @@ func BuildSimpleBinaryResultset(names []string, values [][]any) (*Resultset, err
 
 	bitmapLen := (len(names) + 7 + 2) >> 3
 
+	if len(values) == 0 {
+		// Mirror BuildSimpleTextResultset: a row-less result must still
+		// expose populated *Field entries for column metadata. Charset 33
+		// matches the text builder and formatField's nil case.
+		for i, name := range names {
+			r.Fields[i] = &Field{Name: utils.StringToByteSlice(name), Charset: 33, Type: MYSQL_TYPE_NULL}
+		}
+		return r, nil
+	}
+
 	for i, vs := range values {
 		if len(vs) != len(r.Fields) {
 			return nil, errors.Errorf("row %d has %d column not equal %d", i, len(vs), len(r.Fields))
@@ -824,29 +843,36 @@ func BuildSimpleBinaryResultset(names []string, values [][]any) (*Resultset, err
 				return nil, errors.Trace(err)
 			}
 			if i == 0 {
-				field := &Field{Type: typ}
-				r.Fields[j] = field
-				field.Name = utils.StringToByteSlice(names[j])
-
-				if err = formatField(field, value); err != nil {
+				// Always overwrite on the first row so a pooled Resultset's
+				// stale *Field pointers can't leak into the new result.
+				r.Fields[j] = &Field{Name: utils.StringToByteSlice(names[j]), Type: typ}
+				if err = formatField(r.Fields[j], value); err != nil {
 					return nil, errors.Trace(err)
 				}
+			} else if typ != r.Fields[j].Type {
+				// Promote a column whose first row was nil to the type of
+				// the first non-nil value; otherwise every later row would
+				// encode as NULL.
+				oldIsNull, newIsNull := r.Fields[j].Type == MYSQL_TYPE_NULL, typ == MYSQL_TYPE_NULL
+				if oldIsNull && !newIsNull {
+					r.Fields[j].Type = typ
+					if err = formatField(r.Fields[j], value); err != nil {
+						return nil, errors.Trace(err)
+					}
+				} else if !oldIsNull && !newIsNull {
+					return nil, errors.Errorf("row types aren't consistent")
+				}
 			}
-			if value == nil {
-				nullBitmap[(j+2)/8] |= 1 << (uint(j+2) % 8)
-				continue
-			}
-
-			b, err = FormatBinaryValue(value)
+			b, err = EncodeBinaryFieldValue(r.Fields[j], value)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-
-			if r.Fields[j].Type == MYSQL_TYPE_VAR_STRING {
-				row = append(row, PutLengthEncodedString(b)...)
-			} else {
-				row = append(row, b...)
+			if b == nil {
+				// Encoder signaled NULL.
+				nullBitmap[(j+2)/8] |= 1 << (uint(j+2) % 8)
+				continue
 			}
+			row = append(row, b...)
 		}
 
 		copy(row[1:], nullBitmap)
