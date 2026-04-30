@@ -137,7 +137,11 @@ func toBinaryDate(t time.Time) ([]byte, error) {
 	if t.IsZero() {
 		return []byte{0}, nil
 	}
-	return packDate(uint16(t.Year()), uint8(t.Month()), uint8(t.Day())), nil
+	year := t.Year()
+	if year < 0 || year > 9999 {
+		return nil, errors.Errorf("year %d out of range (0-9999)", year)
+	}
+	return packDate(uint16(year), uint8(t.Month()), uint8(t.Day())), nil
 }
 
 // toBinaryTime encodes a time.Time as a length-prefixed packed binary TIME.
@@ -159,8 +163,12 @@ func toBinaryDateTime(t time.Time) ([]byte, error) {
 	if t.IsZero() {
 		return []byte{0}, nil
 	}
+	year := t.Year()
+	if year < 0 || year > 9999 {
+		return nil, errors.Errorf("year %d out of range (0-9999)", year)
+	}
 	return packDateTime(
-		uint16(t.Year()), uint8(t.Month()), uint8(t.Day()),
+		uint16(year), uint8(t.Month()), uint8(t.Day()),
 		uint8(t.Hour()), uint8(t.Minute()), uint8(t.Second()),
 		uint32(t.Nanosecond()/1000),
 	), nil
