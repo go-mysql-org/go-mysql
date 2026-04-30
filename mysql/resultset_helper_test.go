@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -427,6 +428,20 @@ func TestEncodeBinaryFieldValueValidationErrors(t *testing.T) {
 		// "10000-01-01" is len=11, failing the strict YYYY-MM-DD format check.
 		_, err = EncodeBinaryFieldValue(f, "10000-01-01")
 		require.Error(t, err)
+	})
+
+	t.Run("DATE / DATETIME from time.Time with year out of range rejects", func(t *testing.T) {
+		// time.Time.Year() returns an int with no upstream bound; the
+		// uint16 cast in pack* would silently truncate. Reject explicitly.
+		fDate := &Field{Type: MYSQL_TYPE_DATE}
+		fDt := &Field{Type: MYSQL_TYPE_DATETIME}
+		for _, year := range []int{-1, 10000, 70000} {
+			tm := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+			_, err := EncodeBinaryFieldValue(fDate, tm)
+			require.Error(t, err, "DATE year %d must be rejected", year)
+			_, err = EncodeBinaryFieldValue(fDt, tm)
+			require.Error(t, err, "DATETIME year %d must be rejected", year)
+		}
 	})
 
 	t.Run("TIME with >6 fractional digits rejects", func(t *testing.T) {
