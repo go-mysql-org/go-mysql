@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"fmt"
+	"log"
 
 	"github.com/pingcap/tidb/pkg/parser/auth"
 
@@ -87,7 +88,19 @@ func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Crede
 	// we skip the per-connect hashPassword work.
 	for _, hash := range credential.HashedPasswords {
 		match, err := auth.CheckHashingPassword(hash, string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
-		if match && err == nil {
+		if err != nil {
+			// Stored hashes registered via AddUserWithHashedPassword have
+			// already been shape-checked by validateHashedPassword, so
+			// reaching this branch means either a malformed hash was
+			// installed by constructing Credential directly, or the
+			// upstream verifier changed format expectations. Log so the
+			// silent skip is auditable; auth still falls through to the
+			// plaintext loop and ultimately ErrAccessDenied if nothing
+			// matches.
+			log.Printf("server: caching_sha2_password hash compare error for user %q: %v", c.user, err)
+			continue
+		}
+		if match {
 			return nil
 		}
 	}

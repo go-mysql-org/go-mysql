@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"fmt"
+	"log"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
@@ -146,6 +147,15 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 	for _, hash := range credential.HashedPasswords {
 		check, err := mysql.Check256HashingPassword(hash, string(clientAuthData))
 		if err != nil {
+			// Stored hashes registered via AddUserWithHashedPassword have
+			// already been shape-checked by validateHashedPassword, so
+			// reaching this branch means either a malformed hash was
+			// installed by constructing Credential directly, or the
+			// upstream verifier changed format expectations. Log so the
+			// silent skip is auditable; auth still falls through to the
+			// plaintext loop and ultimately ErrAccessDenied if nothing
+			// matches.
+			log.Printf("server: sha256_password hash compare error for user %q: %v", c.user, err)
 			continue
 		}
 		if check {
