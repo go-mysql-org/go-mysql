@@ -179,9 +179,10 @@ func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username strin
 		authPluginName = optionalAuthPluginName[0]
 	}
 
-	if !isAuthMethodSupported(authPluginName) {
-		return errors.Errorf("unknown authentication plugin name '%s'", authPluginName)
-	}
+	// validateHashedPassword's default case already rejects unknown
+	// plugins, and its AUTH_CLEAR_PASSWORD branch gives a clearer
+	// "use AddUser with the plaintext" message — no need for a
+	// separate isAuthMethodSupported gate here.
 	if err := validateHashedPassword(authPluginName, hash); err != nil {
 		return err
 	}
