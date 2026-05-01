@@ -72,6 +72,41 @@ type Credential struct {
 	AuthPluginName  string
 }
 
+// HashedPassword pairs a stored-form password hash with its auth plugin and
+// guarantees that the pair has been validated for shape (see
+// validateHashedPassword) and that the bytes were defensively copied at
+// construction time. Construct it with NewHashedPassword; the zero value is
+// not usable.
+//
+// The point of the type is to let callers validate a (plugin, hash) pair once
+// — for example when loading credentials at startup — and then reuse the
+// resulting value, instead of revalidating on every AddUser call. See
+// Credential.HashedPasswords for the per-plugin byte format.
+type HashedPassword struct {
+	plugin string
+	data   []byte
+}
+
+// NewHashedPassword validates hash for the given auth plugin and returns a
+// HashedPassword wrapping a defensive copy of the bytes. authPluginName must
+// be one of the supported hash-bearing plugins (mysql_native_password,
+// caching_sha2_password, sha256_password); mysql_clear_password has no
+// hashed form and is rejected. See Credential.HashedPasswords for the
+// expected byte layout per plugin.
+func NewHashedPassword(authPluginName string, hash []byte) (HashedPassword, error) {
+	if err := validateHashedPassword(authPluginName, hash); err != nil {
+		return HashedPassword{}, err
+	}
+	return HashedPassword{plugin: authPluginName, data: slices.Clone(hash)}, nil
+}
+
+// Plugin returns the auth plugin name this hash was constructed for.
+func (h HashedPassword) Plugin() string { return h.plugin }
+
+// Bytes returns a copy of the stored hash bytes. The copy means callers can
+// safely mutate the returned slice without affecting the HashedPassword.
+func (h HashedPassword) Bytes() []byte { return slices.Clone(h.data) }
+
 // hashPassword computes the password hash for a given password using the credential's auth plugin.
 func (c Credential) hashPassword(password string) (string, error) {
 	if password == "" {
@@ -178,23 +213,29 @@ func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username strin
 	if len(optionalAuthPluginName) > 0 {
 		authPluginName = optionalAuthPluginName[0]
 	}
-
-	// validateHashedPassword's default case already rejects unknown
-	// plugins, and its AUTH_CLEAR_PASSWORD branch gives a clearer
-	// "use AddUser with the plaintext" message — no need for a
-	// separate isAuthMethodSupported gate here.
-	if err := validateHashedPassword(authPluginName, hash); err != nil {
+	hp, err := NewHashedPassword(authPluginName, hash)
+	if err != nil {
 		return err
 	}
-
-	// Defensive copy so a caller that reuses or mutates its backing slice
-	// can't change the stored credential out from under us.
-	stored := slices.Clone(hash)
-	h.userPool.Store(username, Credential{
-		HashedPasswords: [][]byte{stored},
-		AuthPluginName:  authPluginName,
-	})
+	h.AddUserHashed(username, hp)
 	return nil
+}
+
+// AddUserHashed registers username with a pre-validated HashedPassword.
+// Equivalent to AddUserWithHashedPassword but takes the already-validated
+// value from NewHashedPassword, which is convenient when the same hash is
+// being installed against multiple usernames or when callers want to keep
+// validation separate from registration.
+func (h *InMemoryAuthenticationHandler) AddUserHashed(username string, hp HashedPassword) {
+	// Defensive copy so a caller that constructed HashedPassword via
+	// NewHashedPassword (which already cloned the input) is still
+	// protected from later AddUserHashed calls accidentally aliasing
+	// the same backing array, and so HashedPassword.Bytes returning a
+	// fresh copy stays consistent with the credential storage model.
+	h.userPool.Store(username, Credential{
+		HashedPasswords: [][]byte{slices.Clone(hp.data)},
+		AuthPluginName:  hp.plugin,
+	})
 }
 
 // mysqlNativePasswordHashLen is the length of a native_password hash

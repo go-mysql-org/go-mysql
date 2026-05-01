@@ -235,6 +235,91 @@ func TestAddUserWithHashedPasswordCopiesSlice(t *testing.T) {
 	require.Equal(t, mysql.NativePasswordHash([]byte(plaintext)), cred.HashedPasswords[0])
 }
 
+// TestNewHashedPassword covers the construction-time validation and the
+// defensive copy of the input hash bytes. These are the two guarantees the
+// type promises beyond a raw (plugin, []byte) pair.
+func TestNewHashedPassword(t *testing.T) {
+	t.Run("native_password roundtrip", func(t *testing.T) {
+		hash := mysql.NativePasswordHash([]byte("s3cr3t"))
+		hp, err := NewHashedPassword(mysql.AUTH_NATIVE_PASSWORD, hash)
+		require.NoError(t, err)
+		require.Equal(t, mysql.AUTH_NATIVE_PASSWORD, hp.Plugin())
+		require.Equal(t, hash, hp.Bytes())
+	})
+
+	t.Run("input slice is copied", func(t *testing.T) {
+		hash := mysql.NativePasswordHash([]byte("s3cr3t"))
+		original := append([]byte(nil), hash...)
+		hp, err := NewHashedPassword(mysql.AUTH_NATIVE_PASSWORD, hash)
+		require.NoError(t, err)
+		// Mutate the caller's slice; the wrapped value must not change.
+		for i := range hash {
+			hash[i] = 0xff
+		}
+		require.Equal(t, original, hp.Bytes())
+	})
+
+	t.Run("Bytes returns a copy", func(t *testing.T) {
+		hash := mysql.NativePasswordHash([]byte("s3cr3t"))
+		hp, err := NewHashedPassword(mysql.AUTH_NATIVE_PASSWORD, hash)
+		require.NoError(t, err)
+		out := hp.Bytes()
+		for i := range out {
+			out[i] = 0xff
+		}
+		require.Equal(t, hash, hp.Bytes())
+	})
+
+	t.Run("rejects unknown plugin", func(t *testing.T) {
+		_, err := NewHashedPassword("not_a_real_plugin", []byte{0x01})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unknown authentication plugin")
+	})
+
+	t.Run("rejects clear password", func(t *testing.T) {
+		_, err := NewHashedPassword(mysql.AUTH_CLEAR_PASSWORD, []byte("plaintext"))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "use AddUser with the plaintext")
+	})
+
+	t.Run("rejects bad shape", func(t *testing.T) {
+		_, err := NewHashedPassword(mysql.AUTH_NATIVE_PASSWORD, []byte{0x00, 0x01})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid hashed password length")
+	})
+}
+
+// TestAddUserHashed verifies the constructor-based registration path
+// stores the credential and is decoupled from the caller's input slice
+// even when the same HashedPassword is reused across multiple users.
+func TestAddUserHashed(t *testing.T) {
+	hash := mysql.NativePasswordHash([]byte("s3cr3t"))
+	hp, err := NewHashedPassword(mysql.AUTH_NATIVE_PASSWORD, hash)
+	require.NoError(t, err)
+
+	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
+	handler.AddUserHashed("alice", hp)
+	handler.AddUserHashed("bob", hp)
+
+	for _, name := range []string{"alice", "bob"} {
+		cred, found, err := handler.GetCredential(name)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Equal(t, mysql.AUTH_NATIVE_PASSWORD, cred.AuthPluginName)
+		require.Len(t, cred.HashedPasswords, 1)
+		require.Equal(t, hash, cred.HashedPasswords[0])
+	}
+
+	// Mutating one stored credential's slice must not bleed into the other:
+	// AddUserHashed clones on insert so the two users don't share storage.
+	cred, _, _ := handler.GetCredential("alice")
+	for i := range cred.HashedPasswords[0] {
+		cred.HashedPasswords[0][i] = 0xff
+	}
+	bobCred, _, _ := handler.GetCredential("bob")
+	require.Equal(t, hash, bobCred.HashedPasswords[0])
+}
+
 // TestAddUserWithHashedPassword_CachingSha2 runs the same end-to-end
 // shape as TestAddUserWithHashedPassword, but for caching_sha2_password.
 // We use auth.NewHashPassword to produce the exact stored form a real
