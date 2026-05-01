@@ -176,6 +176,12 @@ func TestAddUserWithHashedPasswordRejectsClearPassword(t *testing.T) {
 // shape validation: each plugin has a distinct stored-hash format, and
 // passing a value that obviously doesn't match should fail at AddUser
 // time rather than producing a user that can never authenticate.
+//
+// Several caching_sha2 cases below are specifically chosen to be the
+// "panic-shaped" inputs that would trip auth.CheckHashingPassword in
+// upstream tidb (e.g. parts[3][:SALT_LENGTH] on a too-short final
+// segment). validateHashedPassword's <= cachingSha2SaltLen check is what
+// keeps that panic from being reachable through the documented API.
 func TestAddUserWithHashedPasswordRejectsBadFormat(t *testing.T) {
 	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
 
@@ -196,7 +202,19 @@ func TestAddUserWithHashedPasswordRejectsBadFormat(t *testing.T) {
 		{"caching_sha2: empty", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte{}},
 		{"caching_sha2: missing $A$ prefix", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte("not-a-hash")},
 		{"caching_sha2: wrong hash type 'B'", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte("$B$005$saltsaltsaltsaltsalt$hashhashhashhashhashhashhashhashhashhash43")},
-		{"caching_sha2: not enough $-parts", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte("$A$005$saltsaltsaltsaltsalt")},
+
+		// 4-part split, type 'A', iter present, but parts[3] is exactly
+		// SALT_LENGTH (20) bytes — i.e. salt only, no hash tail. Without
+		// the <= SALT_LENGTH check, auth.CheckHashingPassword would slice
+		// parts[3][:SALT_LENGTH] into the salt and then operate on an
+		// empty hash, panicking in upstream tidb. This case pins the
+		// "panic shape" dveeden flagged in PR review.
+		{"caching_sha2: parts[3] exactly SALT_LENGTH (panic shape)", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte("$A$005$saltsaltsaltsaltsalt")},
+		// 4-part split, type 'A', iter present, but parts[3] is shorter
+		// than SALT_LENGTH (1 byte). Same family as the panic shape
+		// above; included separately to make the "way too short" case
+		// unmistakable.
+		{"caching_sha2: parts[3] shorter than SALT_LENGTH", mysql.AUTH_CACHING_SHA2_PASSWORD, []byte("$A$005$x")},
 
 		// sha256_password: "$<iter>$<salt>$<hashHex>" — iterations must be decimal.
 		{"sha256: empty", mysql.AUTH_SHA256_PASSWORD, []byte{}},

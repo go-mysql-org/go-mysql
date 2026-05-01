@@ -66,6 +66,15 @@ func NewInMemoryAuthenticationHandler(defaultAuthMethod ...string) *InMemoryAuth
 //
 // Both fields can be set on the same Credential: HashedPasswords is checked first (cheaper, no
 // hashing per connect), then Passwords.
+//
+// Hashes installed via AddUserWithHashedPassword / NewHashedPassword are
+// shape-checked up front. Constructing a Credential directly and inserting
+// arbitrary bytes into HashedPasswords bypasses that check: a malformed
+// caching_sha2_password value (e.g. a final "$A$<iter>$<salt><hash>"
+// segment shorter than the 20-byte salt) can panic inside the upstream
+// tidb verifier auth.CheckHashingPassword. Callers loading hashes from an
+// untrusted source should go through the documented helpers, or run their
+// own validation before assigning to this field.
 type Credential struct {
 	Passwords       []string
 	HashedPasswords [][]byte
