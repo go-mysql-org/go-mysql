@@ -304,8 +304,9 @@ func TestAddUserWithHashedPasswordCopiesSlice(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Len(t, cred.HashedPasswords, 1)
-	require.NotEqual(t, hash, cred.HashedPasswords[0])
-	require.Equal(t, mysql.NativePasswordHash([]byte(plaintext)), cred.HashedPasswords[0])
+	stored := cred.HashedPasswords[0].Bytes()
+	require.NotEqual(t, hash, stored)
+	require.Equal(t, mysql.NativePasswordHash([]byte(plaintext)), stored)
 }
 
 // TestNewHashedPassword covers the construction-time validation and the
@@ -380,29 +381,30 @@ func TestAddUserHashed(t *testing.T) {
 		require.True(t, found)
 		require.Equal(t, mysql.AUTH_NATIVE_PASSWORD, cred.AuthPluginName)
 		require.Len(t, cred.HashedPasswords, 1)
-		require.Equal(t, hash, cred.HashedPasswords[0])
+		require.Equal(t, hash, cred.HashedPasswords[0].Bytes())
 	}
 
-	// Mutating one stored credential's slice must not bleed into the other:
-	// AddUserHashed clones on insert so the two users don't share storage,
-	// and GetCredential additionally returns a deep copy so a caller's
-	// mutation can't reach back into the user pool either.
+	// HashedPassword's bytes are unreachable from outside the package
+	// (unexported field, Bytes returns a copy), so the only mutable
+	// surface a caller has on the returned credential is the outer
+	// slice itself. Replacing the entry through the returned copy must
+	// not affect the stored value, because GetCredential returns a
+	// shallow clone of that slice.
 	cred, _, _ := handler.GetCredential("alice")
-	for i := range cred.HashedPasswords[0] {
-		cred.HashedPasswords[0][i] = 0xff
-	}
-	bobCred, _, _ := handler.GetCredential("bob")
-	require.Equal(t, hash, bobCred.HashedPasswords[0])
-	// Re-fetch alice: the prior mutation went into the returned copy, not
-	// into the stored credential, so the pool still holds the original hash.
+	cred.HashedPasswords[0] = HashedPassword{}
 	aliceCred2, _, _ := handler.GetCredential("alice")
-	require.Equal(t, hash, aliceCred2.HashedPasswords[0])
+	require.Len(t, aliceCred2.HashedPasswords, 1)
+	require.Equal(t, hash, aliceCred2.HashedPasswords[0].Bytes())
+	bobCred, _, _ := handler.GetCredential("bob")
+	require.Equal(t, hash, bobCred.HashedPasswords[0].Bytes())
 }
 
 // TestGetCredentialReturnsDeepCopy pins the invariant that GetCredential
 // returns a value the caller can freely mutate without affecting the stored
-// credential. This protects against a class of bug where a connection-handler
-// goroutine accidentally rewrites the at-rest hash and locks the user out.
+// credential. With []HashedPassword the inner bytes are unreachable for
+// mutation already, so this test focuses on the two mutable surfaces a
+// caller does have: the Passwords slice elements and the HashedPasswords
+// slice elements.
 func TestGetCredentialReturnsDeepCopy(t *testing.T) {
 	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
 	require.NoError(t, handler.AddUser("alice", "p1"))
@@ -411,14 +413,11 @@ func TestGetCredentialReturnsDeepCopy(t *testing.T) {
 	for _, name := range []string{"alice", "bob"} {
 		first, _, err := handler.GetCredential(name)
 		require.NoError(t, err)
-		// Mutate every accessible byte / element through the returned value.
 		for i := range first.Passwords {
 			first.Passwords[i] = "TAINTED"
 		}
 		for i := range first.HashedPasswords {
-			for j := range first.HashedPasswords[i] {
-				first.HashedPasswords[i][j] = 0xff
-			}
+			first.HashedPasswords[i] = HashedPassword{}
 		}
 		second, _, err := handler.GetCredential(name)
 		require.NoError(t, err)
@@ -432,6 +431,43 @@ func TestGetCredentialReturnsDeepCopy(t *testing.T) {
 			require.NotEqual(t, first.HashedPasswords[0], second.HashedPasswords[0], "%s: stored HashedPasswords leaked through GetCredential", name)
 		}
 	}
+}
+
+// TestAppendUserHashed verifies the rotation path: an existing user can
+// hold multiple HashedPassword entries, both of which authenticate, and
+// the helper rejects mismatched plugin / unknown user inputs.
+func TestAppendUserHashed(t *testing.T) {
+	hashOld := mysql.NativePasswordHash([]byte("old"))
+	hashNew := mysql.NativePasswordHash([]byte("new"))
+	hpOld, err := NewHashedPassword(mysql.AUTH_NATIVE_PASSWORD, hashOld)
+	require.NoError(t, err)
+	hpNew, err := NewHashedPassword(mysql.AUTH_NATIVE_PASSWORD, hashNew)
+	require.NoError(t, err)
+
+	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
+	require.NoError(t, handler.AddUserHashed("alice", hpOld))
+	require.NoError(t, handler.AppendUserHashed("alice", hpNew))
+
+	cred, found, err := handler.GetCredential("alice")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Len(t, cred.HashedPasswords, 2, "rotation should retain both hashes")
+	require.Equal(t, hashOld, cred.HashedPasswords[0].Bytes())
+	require.Equal(t, hashNew, cred.HashedPasswords[1].Bytes())
+
+	// Unknown user must not be auto-created.
+	err = handler.AppendUserHashed("ghost", hpNew)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+
+	// Plugin mismatch on an existing user is rejected.
+	storedSha, err := mysql.NewSha256PasswordHash("anything")
+	require.NoError(t, err)
+	hpSha, err := NewHashedPassword(mysql.AUTH_SHA256_PASSWORD, []byte(storedSha))
+	require.NoError(t, err)
+	err = handler.AppendUserHashed("alice", hpSha)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "existing credential uses")
 }
 
 // TestAddUserHashedRejectsZeroValue covers the Finding #5 invariant:

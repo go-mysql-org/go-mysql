@@ -86,8 +86,8 @@ func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Crede
 	// credentials when only the server-side stored "$A$..." form is
 	// available (e.g. mirroring another server's mysql.user table), and
 	// we skip the per-connect hashPassword work.
-	for _, hash := range credential.HashedPasswords {
-		match, err := safeCachingSha2Check(hash, string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
+	for _, hp := range credential.HashedPasswords {
+		match, err := safeCachingSha2Check(hp.data, string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
 		if err != nil {
 			// Stored hashes registered via AddUserWithHashedPassword have
 			// already been shape-checked by validateHashedPassword, so

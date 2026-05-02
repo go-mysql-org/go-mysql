@@ -129,8 +129,8 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential C
 	// Pre-computed hashes are checked first: they let callers configure
 	// credentials when only the server-side hash is available (no plaintext),
 	// and they're cheaper per connect because we skip the SHA1(SHA1(...)) step.
-	for _, hash := range credential.HashedPasswords {
-		match, err := safeNativeCompare(clientAuthData, hash, c.salt)
+	for _, hp := range credential.HashedPasswords {
+		match, err := safeNativeCompare(clientAuthData, hp.data, c.salt)
 		if err != nil {
 			log.Printf("server: native_password hash compare error for user %q: %v", c.user, err)
 			continue
@@ -191,8 +191,8 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 	// credentials when only the server-side stored hash is available
 	// (e.g. mirroring `mysql.user.authentication_string`), and we skip
 	// the per-connect hashPassword work.
-	for _, hash := range credential.HashedPasswords {
-		check, err := safeSha256Check(hash, string(clientAuthData))
+	for _, hp := range credential.HashedPasswords {
+		check, err := safeSha256Check(hp.data, string(clientAuthData))
 		if err != nil {
 			// Stored hashes registered via AddUserWithHashedPassword have
 			// already been shape-checked by validateHashedPassword, so

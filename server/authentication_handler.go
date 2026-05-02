@@ -51,36 +51,15 @@ func NewInMemoryAuthenticationHandler(defaultAuthMethod ...string) *InMemoryAuth
 // HashedPasswords contains pre-computed password hashes that the server compares directly against the
 // client's challenge response, without ever needing the plaintext. This lets callers (e.g. a MySQL proxy
 // rehoming users from another server's `mysql.user` table) configure credentials when only the stored
-// hash is available. The byte format depends on AuthPluginName:
-//
-//   - mysql_native_password: the 20-byte SHA1(SHA1(plaintext)) value, i.e. what
-//     mysql.NativePasswordHash returns, or what mysql.DecodePasswordHex returns from MySQL's standard
-//     "*XXXX..." (41-char) hex form.
-//   - caching_sha2_password: the bytes of the standard "$A$<iter>$<salt><hash>" stored form (salt
-//     and hash are concatenated, with no '$' between them — see auth.NewHashPassword in
-//     pingcap/tidb). Note that this auth plugin's full-auth flow requires either TLS or a
-//     configured RSA key on the server, because the server must obtain the plaintext to verify it
-//     against the stored hash and to populate the cache. After the first successful full auth the
-//     server caches SHA256(SHA256(plaintext)) per user@host so subsequent connections can take the
-//     fast-auth path.
-//   - sha256_password: the bytes of the standard "$<iter>$<salt>$<hashHex>" stored form, i.e. what
-//     mysql.NewSha256PasswordHash returns. Same TLS-or-RSA requirement as caching_sha2_password,
-//     for the same reason.
+// hash is available. Each entry is a HashedPassword value (see NewHashedPassword) which validates the
+// per-plugin byte format at construction time, so direct assignment cannot install a malformed hash.
+// The expected byte format per plugin is documented on HashedPassword.
 //
 // Both fields can be set on the same Credential: HashedPasswords is checked first (cheaper, no
 // hashing per connect), then Passwords.
-//
-// Hashes installed via AddUserWithHashedPassword / NewHashedPassword are
-// shape-checked up front. Constructing a Credential directly and inserting
-// arbitrary bytes into HashedPasswords bypasses that check: a malformed
-// caching_sha2_password value (e.g. a final "$A$<iter>$<salt><hash>"
-// segment shorter than the 20-byte salt) can panic inside the upstream
-// tidb verifier auth.CheckHashingPassword. Callers loading hashes from an
-// untrusted source should go through the documented helpers, or run their
-// own validation before assigning to this field.
 type Credential struct {
 	Passwords       []string
-	HashedPasswords [][]byte
+	HashedPasswords []HashedPassword
 	AuthPluginName  string
 }
 
@@ -90,10 +69,26 @@ type Credential struct {
 // construction time. Construct it with NewHashedPassword; the zero value is
 // not usable.
 //
-// The point of the type is to let callers validate a (plugin, hash) pair once
-// — for example when loading credentials at startup — and then reuse the
-// resulting value, instead of revalidating on every AddUser call. See
-// Credential.HashedPasswords for the per-plugin byte format.
+// Because the wrapped bytes are unexported and Bytes returns a copy, a
+// HashedPassword value is effectively immutable to outside callers — that's
+// why Credential.HashedPasswords can be exported as []HashedPassword without
+// the panic-shape risks that would come with []byte.
+//
+// The expected byte format per plugin:
+//
+//   - mysql_native_password: the 20-byte SHA1(SHA1(plaintext)) value, i.e. what
+//     mysql.NativePasswordHash returns, or what mysql.DecodePasswordHex returns
+//     from MySQL's standard "*XXXX..." (41-char) hex form.
+//   - caching_sha2_password: the bytes of the standard "$A$<iter>$<salt><hash>"
+//     stored form (salt and hash concatenated, no '$' between them — see
+//     auth.NewHashPassword in pingcap/tidb). Full-auth requires TLS or an RSA
+//     key on the server because the server must obtain the plaintext to verify
+//     it against the stored hash and to populate the cache. After the first
+//     successful full auth the server caches SHA256(SHA256(plaintext)) per
+//     user@host so subsequent connections can take the fast-auth path.
+//   - sha256_password: the bytes of the standard "$<iter>$<salt>$<hashHex>"
+//     stored form, i.e. what mysql.NewSha256PasswordHash returns. Same
+//     TLS-or-RSA requirement as caching_sha2_password.
 type HashedPassword struct {
 	plugin string
 	data   []byte
@@ -155,19 +150,13 @@ func (c Credential) hasAnyCredential() bool {
 	return len(c.Passwords) > 0 || len(c.HashedPasswords) > 0
 }
 
-// cloneCredential returns a deep copy of c so that callers cannot mutate
-// the stored slices. Both Passwords and the per-entry HashedPasswords byte
-// slices are copied; AuthPluginName is a string and is already immutable.
 func cloneCredential(c Credential) Credential {
 	out := Credential{AuthPluginName: c.AuthPluginName}
 	if c.Passwords != nil {
 		out.Passwords = slices.Clone(c.Passwords)
 	}
 	if c.HashedPasswords != nil {
-		out.HashedPasswords = make([][]byte, len(c.HashedPasswords))
-		for i, h := range c.HashedPasswords {
-			out.HashedPasswords[i] = slices.Clone(h)
-		}
+		out.HashedPasswords = slices.Clone(c.HashedPasswords)
 	}
 	return out
 }
@@ -192,13 +181,12 @@ func (h *InMemoryAuthenticationHandler) GetCredential(username string) (credenti
 	if !valid {
 		return Credential{}, true, errors.Errorf("invalid credential")
 	}
-	// Defensive deep copy: Credential carries []string and [][]byte fields
-	// whose backing arrays would otherwise be shared with the stored value.
-	// A caller mutating the returned slices (intentionally or by accident)
-	// must not corrupt the credential held in the user pool.
 	return cloneCredential(c), true, nil
 }
 
+// AddUser registers (or replaces) a user with a single plaintext password.
+// Calling AddUser for an existing username overwrites the previous
+// credential entirely, including any HashedPasswords entries.
 func (h *InMemoryAuthenticationHandler) AddUser(username, password string, optionalAuthPluginName ...string) error {
 	authPluginName := h.defaultAuthMethod
 	if len(optionalAuthPluginName) > 0 {
@@ -216,10 +204,13 @@ func (h *InMemoryAuthenticationHandler) AddUser(username, password string, optio
 	return nil
 }
 
-// AddUserWithHashedPassword registers a user whose password is already in
-// the server-side hashed form, so the plaintext never has to be supplied.
+// AddUserWithHashedPassword registers (or replaces) a user whose password
+// is already in the server-side hashed form, so the plaintext never has to
+// be supplied. Calling it for an existing username overwrites the previous
+// credential entirely, including any HashedPasswords entries; use
+// AppendUserHashed if you want to add another hash to an existing user.
 //
-// The expected byte format depends on authPluginName; see Credential.HashedPasswords
+// The expected byte format depends on authPluginName; see HashedPassword
 // for the full list. As shorthand:
 //
 //   - mysql_native_password: the 20-byte SHA1(SHA1(plaintext)) value. Use
@@ -255,7 +246,12 @@ func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username strin
 	return h.AddUserHashed(username, hp)
 }
 
-// AddUserHashed registers username with a pre-validated HashedPassword.
+// AddUserHashed registers username with a pre-validated HashedPassword,
+// replacing any existing credential for that username (same overwrite
+// semantics as AddUser). To install additional hashes for an existing
+// user — e.g. during password rotation, where both the old and new hash
+// should authenticate for a window — use AppendUserHashed instead.
+//
 // Equivalent to AddUserWithHashedPassword but takes the already-validated
 // value from NewHashedPassword, which is convenient when the same hash is
 // being installed against multiple usernames or when callers want to keep
@@ -263,23 +259,47 @@ func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username strin
 //
 // The HashedPassword zero value is rejected — its plugin name is empty and
 // its data is nil, which would otherwise register a user that is reachable
-// (`hasAnyCredential` returns true on `[][]byte{nil}`) but can never
-// authenticate. To stay defensive against any in-place mutation between
-// NewHashedPassword and this call, AddUserHashed re-runs
+// (hasAnyCredential returns true on a length-1 HashedPasswords slice) but
+// can never authenticate. To stay defensive against any in-place mutation
+// between NewHashedPassword and this call, AddUserHashed re-runs
 // validateHashedPassword on the wrapped (plugin, data) pair.
 func (h *InMemoryAuthenticationHandler) AddUserHashed(username string, hp HashedPassword) error {
 	if err := validateHashedPassword(hp.plugin, hp.data); err != nil {
 		return err
 	}
-	// Defensive copy so a caller that constructed HashedPassword via
-	// NewHashedPassword (which already cloned the input) is still
-	// protected from later AddUserHashed calls accidentally aliasing
-	// the same backing array, and so HashedPassword.Bytes returning a
-	// fresh copy stays consistent with the credential storage model.
 	h.userPool.Store(username, Credential{
-		HashedPasswords: [][]byte{slices.Clone(hp.data)},
+		HashedPasswords: []HashedPassword{hp},
 		AuthPluginName:  hp.plugin,
 	})
+	return nil
+}
+
+// AppendUserHashed adds another hash to an existing user's credential,
+// rather than replacing it. The intended use case is password rotation:
+// install the new hash alongside the old, let in-flight clients drain on
+// the old credential, then prune the old hash.
+//
+// The user must already exist (returns an error otherwise — use
+// AddUserHashed for first-time registration), and hp's auth plugin must
+// match the existing credential's AuthPluginName so a single verifier
+// flow handles every entry.
+func (h *InMemoryAuthenticationHandler) AppendUserHashed(username string, hp HashedPassword) error {
+	if err := validateHashedPassword(hp.plugin, hp.data); err != nil {
+		return err
+	}
+	v, ok := h.userPool.Load(username)
+	if !ok {
+		return errors.Errorf("user %q not found; use AddUserHashed to register", username)
+	}
+	c, valid := v.(Credential)
+	if !valid {
+		return errors.Errorf("invalid credential stored for user %q", username)
+	}
+	if c.AuthPluginName != hp.plugin {
+		return errors.Errorf("cannot append %s hash to user %q (existing credential uses %s)", hp.plugin, username, c.AuthPluginName)
+	}
+	c.HashedPasswords = append(slices.Clone(c.HashedPasswords), hp)
+	h.userPool.Store(username, c)
 	return nil
 }
 
