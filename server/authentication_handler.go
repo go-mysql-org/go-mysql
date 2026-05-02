@@ -56,13 +56,16 @@ func NewInMemoryAuthenticationHandler(defaultAuthMethod ...string) *InMemoryAuth
 //   - mysql_native_password: the 20-byte SHA1(SHA1(plaintext)) value, i.e. what
 //     mysql.NativePasswordHash returns, or what mysql.DecodePasswordHex returns from MySQL's standard
 //     "*XXXX..." (41-char) hex form.
-//   - caching_sha2_password: the bytes of the standard "$A$<iter>$<salt>$<hash>" stored form, i.e.
-//     what auth.NewHashPassword(plaintext, AUTH_CACHING_SHA2_PASSWORD) returns. Note that this auth
-//     plugin's full-auth flow requires either TLS or a configured RSA key on the server (same
-//     constraint as plaintext Passwords). After the first successful full auth the server caches
-//     SHA256(SHA256(plaintext)) per user@host so subsequent connections can take the fast-auth path.
+//   - caching_sha2_password: the bytes of the standard "$A$<iter>$<salt><hash>" stored form (salt
+//     and hash are concatenated, with no '$' between them — see auth.NewHashPassword in
+//     pingcap/tidb). Note that this auth plugin's full-auth flow requires either TLS or a
+//     configured RSA key on the server, because the server must obtain the plaintext to verify it
+//     against the stored hash and to populate the cache. After the first successful full auth the
+//     server caches SHA256(SHA256(plaintext)) per user@host so subsequent connections can take the
+//     fast-auth path.
 //   - sha256_password: the bytes of the standard "$<iter>$<salt>$<hashHex>" stored form, i.e. what
-//     mysql.NewSha256PasswordHash returns. Same TLS/RSA requirement as caching_sha2_password.
+//     mysql.NewSha256PasswordHash returns. Same TLS-or-RSA requirement as caching_sha2_password,
+//     for the same reason.
 //
 // Both fields can be set on the same Credential: HashedPasswords is checked first (cheaper, no
 // hashing per connect), then Passwords.
@@ -152,6 +155,23 @@ func (c Credential) hasAnyCredential() bool {
 	return len(c.Passwords) > 0 || len(c.HashedPasswords) > 0
 }
 
+// cloneCredential returns a deep copy of c so that callers cannot mutate
+// the stored slices. Both Passwords and the per-entry HashedPasswords byte
+// slices are copied; AuthPluginName is a string and is already immutable.
+func cloneCredential(c Credential) Credential {
+	out := Credential{AuthPluginName: c.AuthPluginName}
+	if c.Passwords != nil {
+		out.Passwords = slices.Clone(c.Passwords)
+	}
+	if c.HashedPasswords != nil {
+		out.HashedPasswords = make([][]byte, len(c.HashedPasswords))
+		for i, h := range c.HashedPasswords {
+			out.HashedPasswords[i] = slices.Clone(h)
+		}
+	}
+	return out
+}
+
 // InMemoryAuthenticationHandler implements AuthenticationHandler with in-memory credential storage.
 type InMemoryAuthenticationHandler struct {
 	userPool          sync.Map // username -> Credential
@@ -172,7 +192,11 @@ func (h *InMemoryAuthenticationHandler) GetCredential(username string) (credenti
 	if !valid {
 		return Credential{}, true, errors.Errorf("invalid credential")
 	}
-	return c, true, nil
+	// Defensive deep copy: Credential carries []string and [][]byte fields
+	// whose backing arrays would otherwise be shared with the stored value.
+	// A caller mutating the returned slices (intentionally or by accident)
+	// must not corrupt the credential held in the user pool.
+	return cloneCredential(c), true, nil
 }
 
 func (h *InMemoryAuthenticationHandler) AddUser(username, password string, optionalAuthPluginName ...string) error {
@@ -200,7 +224,7 @@ func (h *InMemoryAuthenticationHandler) AddUser(username, password string, optio
 //
 //   - mysql_native_password: the 20-byte SHA1(SHA1(plaintext)) value. Use
 //     mysql.DecodePasswordHex to strip the "*" and decode MySQL's 41-char hex form.
-//   - caching_sha2_password: the bytes of "$A$<iter>$<salt>$<hash>".
+//   - caching_sha2_password: the bytes of "$A$<iter>$<salt><hash>".
 //   - sha256_password: the bytes of "$<iter>$<salt>$<hashHex>".
 //
 // The hash is rejected up front if it doesn't match the expected shape for
@@ -209,12 +233,14 @@ func (h *InMemoryAuthenticationHandler) AddUser(username, password string, optio
 // defaults to the handler's default auth method.
 //
 // caching_sha2_password and sha256_password additionally require the server
-// to be configured with TLS or an RSA key, since the full-auth flow sends
-// the plaintext on the wire — same constraint that already applies to
-// plaintext Passwords with these plugins.
+// to be configured with TLS or an RSA key, because the full-auth flow needs
+// the plaintext on the server side — both to verify against the stored hash
+// and (for caching_sha2) to populate the cache. Same constraint that
+// already applies to plaintext Passwords with these plugins.
 //
 // Example:
 //
+//	handler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
 //	bytes, _ := mysql.DecodePasswordHex("*6BB4837EB74329105EE4568DDA7DC67ED2CA2AD9")
 //	handler.AddUserWithHashedPassword("alice", bytes)
 func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username string, hash []byte, optionalAuthPluginName ...string) error {
@@ -226,8 +252,7 @@ func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username strin
 	if err != nil {
 		return err
 	}
-	h.AddUserHashed(username, hp)
-	return nil
+	return h.AddUserHashed(username, hp)
 }
 
 // AddUserHashed registers username with a pre-validated HashedPassword.
@@ -235,7 +260,17 @@ func (h *InMemoryAuthenticationHandler) AddUserWithHashedPassword(username strin
 // value from NewHashedPassword, which is convenient when the same hash is
 // being installed against multiple usernames or when callers want to keep
 // validation separate from registration.
-func (h *InMemoryAuthenticationHandler) AddUserHashed(username string, hp HashedPassword) {
+//
+// The HashedPassword zero value is rejected — its plugin name is empty and
+// its data is nil, which would otherwise register a user that is reachable
+// (`hasAnyCredential` returns true on `[][]byte{nil}`) but can never
+// authenticate. To stay defensive against any in-place mutation between
+// NewHashedPassword and this call, AddUserHashed re-runs
+// validateHashedPassword on the wrapped (plugin, data) pair.
+func (h *InMemoryAuthenticationHandler) AddUserHashed(username string, hp HashedPassword) error {
+	if err := validateHashedPassword(hp.plugin, hp.data); err != nil {
+		return err
+	}
 	// Defensive copy so a caller that constructed HashedPassword via
 	// NewHashedPassword (which already cloned the input) is still
 	// protected from later AddUserHashed calls accidentally aliasing
@@ -245,11 +280,32 @@ func (h *InMemoryAuthenticationHandler) AddUserHashed(username string, hp Hashed
 		HashedPasswords: [][]byte{slices.Clone(hp.data)},
 		AuthPluginName:  hp.plugin,
 	})
+	return nil
 }
 
-// mysqlNativePasswordHashLen is the length of a native_password hash
-// (sha1(sha1(plaintext))) in bytes.
-const mysqlNativePasswordHashLen = 20
+const (
+	// mysqlNativePasswordHashLen is the length of a native_password hash
+	// (sha1(sha1(plaintext))) in bytes.
+	mysqlNativePasswordHashLen = 20
+	// cachingSha2SaltLen is auth.SALT_LENGTH (the constant is unexported
+	// in pingcap/tidb's parser/auth package). The salt is 20 bytes for
+	// caching_sha2_password regardless of plaintext length.
+	cachingSha2SaltLen = 20
+	// cachingSha2HashLen is the length of the hash portion appended after
+	// the salt in the final $A$<iter>$<salt><hash> segment, derived from
+	// the eleven b64From24bit calls in auth.hashCrypt (10 × 4 chars + 1
+	// × 3 chars).
+	cachingSha2HashLen = 43
+	// sha256HashHexLen is the length of the hash segment in
+	// $<iter>$<salt>$<hashHex> for sha256_password — sha256 produces 32
+	// bytes and hex.EncodeToString doubles that.
+	sha256HashHexLen = 64
+)
+
+// isHexDigit reports whether b is one of [0-9a-fA-F].
+func isHexDigit(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
+}
 
 // validateHashedPassword does a lightweight shape check on a stored-hash
 // byte string for the given auth plugin. It does NOT verify cryptographic
@@ -271,11 +327,12 @@ func validateHashedPassword(authPluginName string, hash []byte) error {
 		// Standard form is "$A$<iter-hex>$<salt><hash>" with the salt
 		// (auth.SALT_LENGTH = 20 bytes) and hash (43 bytes) concatenated
 		// in the final segment — see auth.NewHashPassword and
-		// auth.CheckHashingPassword. We require a 4-part split with
-		// hashType "A" and a final segment strictly longer than the salt
-		// so the hash bytes are present (CheckHashingPassword would panic
-		// otherwise on `parts[3][:SALT_LENGTH]`).
-		const cachingSha2SaltLen = 20 // = auth.SALT_LENGTH (unexported constant value)
+		// auth.CheckHashingPassword in pingcap/tidb. We require a 4-part
+		// split with hashType "A", a non-empty hex iteration count, and
+		// a final segment of exactly salt+hash bytes. The exact-length
+		// check both prevents the upstream panic on parts[3][:SALT_LENGTH]
+		// and ensures we don't store hashes the verifier would always
+		// reject.
 		parts := bytes.Split(hash, []byte("$"))
 		if len(parts) != 4 || len(parts[0]) != 0 {
 			return errors.Errorf("invalid hashed password for %s: expected $A$<iter>$<salt><hash> form", authPluginName)
@@ -286,13 +343,22 @@ func validateHashedPassword(authPluginName string, hash []byte) error {
 		if len(parts[2]) == 0 {
 			return errors.Errorf("invalid hashed password for %s: missing iteration count", authPluginName)
 		}
-		if len(parts[3]) <= cachingSha2SaltLen {
-			return errors.Errorf("invalid hashed password for %s: final segment must contain salt and hash (got %d bytes, need >%d)", authPluginName, len(parts[3]), cachingSha2SaltLen)
+		for _, b := range parts[2] {
+			if !isHexDigit(b) {
+				return errors.Errorf("invalid hashed password for %s: iteration count must be hex", authPluginName)
+			}
+		}
+		if want, got := cachingSha2SaltLen+cachingSha2HashLen, len(parts[3]); got != want {
+			return errors.Errorf("invalid hashed password for %s: final segment must be exactly %d bytes (salt+hash), got %d", authPluginName, want, got)
 		}
 		return nil
 	case mysql.AUTH_SHA256_PASSWORD:
 		// Standard form is "$<iter-decimal>$<salt:mysql.SALT_LENGTH=16>$<hashHex:64>"
 		// — see mysql.NewSha256PasswordHash and mysql.Check256HashingPassword.
+		// We require an exact-length salt and a 64-char hex digest because
+		// that is what the verifier produces when reconstructing for the
+		// equality check; any other shape is a stored-format mismatch and
+		// would never authenticate, so it's better to reject up front.
 		parts := bytes.Split(hash, []byte("$"))
 		if len(parts) != 4 || len(parts[0]) != 0 {
 			return errors.Errorf("invalid hashed password for %s: expected $<iter>$<salt>$<hashHex> form", authPluginName)
@@ -305,11 +371,16 @@ func validateHashedPassword(authPluginName string, hash []byte) error {
 				return errors.Errorf("invalid hashed password for %s: iteration count must be decimal", authPluginName)
 			}
 		}
-		if len(parts[2]) < mysql.SALT_LENGTH {
-			return errors.Errorf("invalid hashed password for %s: salt must be at least %d bytes (got %d)", authPluginName, mysql.SALT_LENGTH, len(parts[2]))
+		if len(parts[2]) != mysql.SALT_LENGTH {
+			return errors.Errorf("invalid hashed password for %s: salt must be exactly %d bytes (got %d)", authPluginName, mysql.SALT_LENGTH, len(parts[2]))
 		}
-		if len(parts[3]) == 0 {
-			return errors.Errorf("invalid hashed password for %s: missing hash segment", authPluginName)
+		if len(parts[3]) != sha256HashHexLen {
+			return errors.Errorf("invalid hashed password for %s: hash segment must be exactly %d hex chars (got %d)", authPluginName, sha256HashHexLen, len(parts[3]))
+		}
+		for _, b := range parts[3] {
+			if !isHexDigit(b) {
+				return errors.Errorf("invalid hashed password for %s: hash segment must be hex", authPluginName)
+			}
 		}
 		return nil
 	case mysql.AUTH_CLEAR_PASSWORD:

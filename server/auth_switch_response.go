@@ -87,16 +87,17 @@ func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Crede
 	// available (e.g. mirroring another server's mysql.user table), and
 	// we skip the per-connect hashPassword work.
 	for _, hash := range credential.HashedPasswords {
-		match, err := auth.CheckHashingPassword(hash, string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
+		match, err := safeCachingSha2Check(hash, string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
 		if err != nil {
 			// Stored hashes registered via AddUserWithHashedPassword have
 			// already been shape-checked by validateHashedPassword, so
 			// reaching this branch means either a malformed hash was
-			// installed by constructing Credential directly, or the
-			// upstream verifier changed format expectations. Log so the
-			// silent skip is auditable; auth still falls through to the
-			// plaintext loop and ultimately ErrAccessDenied if nothing
-			// matches.
+			// installed by constructing Credential directly (which can
+			// trigger an upstream slice-out-of-bounds panic that
+			// safeCachingSha2Check converts to an error), or the upstream
+			// verifier changed format expectations. Log so the silent skip
+			// is auditable; auth still falls through to the plaintext loop
+			// and ultimately ErrAccessDenied if nothing matches.
 			log.Printf("server: caching_sha2_password hash compare error for user %q: %v", c.user, err)
 			continue
 		}
