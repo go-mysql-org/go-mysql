@@ -133,15 +133,5 @@ func (s IntervalSlice) Contain(sub IntervalSlice) bool {
 }
 
 func (s IntervalSlice) Equal(o IntervalSlice) bool {
-	if len(s) != len(o) {
-		return false
-	}
-
-	for i := range s {
-		if s[i].Start != o[i].Start || s[i].Stop != o[i].Stop {
-			return false
-		}
-	}
-
-	return true
+	return slices.Equal(s, o)
 }
