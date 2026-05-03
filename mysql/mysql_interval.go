@@ -89,7 +89,7 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 	if len(s) == 0 {
 		return s
 	}
-	n := IntervalSlice{}
+	n := make(IntervalSlice, 0, len(s))
 
 	s.Sort()
 

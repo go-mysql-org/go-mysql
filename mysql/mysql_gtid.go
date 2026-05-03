@@ -115,7 +115,7 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 		if len(data) < pos+(int(intervalCount)*16) {
 			return nil, errors.Errorf("invalid gtid set buffer, expected %d or more but got %d", pos+(int(intervalCount)*16), len(data))
 		}
-		var intervals IntervalSlice
+		intervals := make(IntervalSlice, 0, intervalCount)
 		for range intervalCount {
 			start := int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
 			pos += 8
@@ -213,7 +213,7 @@ func (s *MysqlGTIDSet) AddGTIDWithTag(uuid uuid.UUID, tag Tag, gno int64) {
 }
 
 func (s *MysqlGTIDSet) Clone() GTIDSet {
-	g := NewMysqlGTIDSet()
+	g := make(MysqlGTIDSet, len(*s))
 	for k, v := range *s {
 		newInnerMap := make(map[Tag]IntervalSlice, len(v))
 		for k2, v2 := range v {
@@ -251,7 +251,7 @@ func (s *MysqlGTIDSet) Encode() []byte {
 
 	format := GtidFormatClassic
 	sidCount := uint64(0)
-	var uuids []uuid.UUID
+	uuids := make([]uuid.UUID, 0, len(*s))
 	for uuid := range *s {
 		uuids = append(uuids, uuid)
 		for tag := range (*s)[uuid] {
@@ -328,7 +328,7 @@ func (s *MysqlGTIDSet) IsEmpty() bool {
 func (s *MysqlGTIDSet) String() string {
 	var sb strings.Builder
 	sep := ""
-	var uuids []uuid.UUID
+	uuids := make([]uuid.UUID, 0, len(*s))
 	for uuid := range *s {
 		uuids = append(uuids, uuid)
 	}
@@ -339,7 +339,7 @@ func (s *MysqlGTIDSet) String() string {
 		sb.WriteString(sep)
 		sb.WriteString(uuid.String())
 		sep = ","
-		var tags []Tag
+		tags := make([]Tag, 0, len((*s)[uuid]))
 		for tag := range (*s)[uuid] {
 			tags = append(tags, tag)
 		}

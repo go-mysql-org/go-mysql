@@ -547,6 +547,14 @@ func TestMysqlGTIDSet_Equal(t *testing.T) {
 	g4, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57,3E11FA47-71CA-11E1-9E33-C80AA9429563:11-17")
 	require.NoError(t, err)
 	require.False(t, g1.Equal(g4))
+
+	// Same UUID and same outer-map length but different inner-map (tag) counts.
+	g5, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
+	require.NoError(t, err)
+	g6, err := ParseMysqlGTIDSet("3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10:mytag:1-5")
+	require.NoError(t, err)
+	require.False(t, g5.Equal(g6))
+	require.False(t, g6.Equal(g5))
 }
 
 func TestMysqlGTIDSet_IsEmpty(t *testing.T) {
