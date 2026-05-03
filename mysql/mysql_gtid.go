@@ -73,7 +73,7 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 	}
 	s := NewMysqlGTIDSet()
 	format, n := DecodeSid(data)
-	tag := NewTag("")
+	tag := Tag{}
 	pos := 8
 	for range n {
 		if len(data) < pos+16 {
@@ -91,14 +91,14 @@ func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
 			if pos >= len(data) {
 				return nil, errors.New("invalid gtid set buffer, tag length expected")
 			}
-			taglen := int(data[pos] >> 1)
+			tagLen := int(data[pos] >> 1)
 			pos++
 
-			if pos+taglen > len(data) {
+			if pos+tagLen > len(data) {
 				return nil, errors.New("invalid gtid set buffer, tag extends beyond data")
 			}
-			tag = NewTag(string(data[pos : pos+taglen]))
-			pos += taglen
+			tag = NewTag(string(data[pos : pos+tagLen]))
+			pos += tagLen
 		}
 
 		if len(data) < pos+8 {
@@ -170,7 +170,7 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 			s[u] = make(map[Tag]IntervalSlice, 1)
 		}
 		// Handle interval(s) and tags
-		tag := NewTag("")
+		tag := Tag{}
 		for i := 1; i < len(sep); i++ {
 			if tagRegexp.MatchString(sep[i]) {
 				tag = NewTag(sep[i])
@@ -225,43 +225,44 @@ func (s *MysqlGTIDSet) Clone() GTIDSet {
 }
 
 func (s *MysqlGTIDSet) Contain(o GTIDSet) bool {
-	if om, ok := o.(*MysqlGTIDSet); ok {
-		for k := range *om {
-			if _, ok := (*s)[k]; !ok {
+	om, ok := o.(*MysqlGTIDSet)
+	if !ok {
+		return false
+	}
+	for k := range *om {
+		if _, ok := (*s)[k]; !ok {
+			return false
+		}
+		for k2 := range (*om)[k] {
+			if i, ok := (*s)[k][k2]; !ok {
 				return false
-			}
-			for k2 := range (*om)[k] {
-				if i, ok := (*s)[k][k2]; !ok {
+			} else {
+				if !i.Contain((*om)[k][k2]) {
 					return false
-				} else {
-					if !i.Contain((*om)[k][k2]) {
-						return false
-					}
 				}
 			}
 		}
-		return true
 	}
-	return false
+	return true
 }
 
 func (s *MysqlGTIDSet) Encode() []byte {
 	var buf bytes.Buffer
 
 	format := GtidFormatClassic
-	sidcount := uint64(0)
+	sidCount := uint64(0)
 	var uuids []uuid.UUID
 	for uuid := range *s {
 		uuids = append(uuids, uuid)
 		for tag := range (*s)[uuid] {
-			sidcount++
-			if format != GtidFormatTagged && (tag != Tag{""}) {
+			sidCount++
+			if format != GtidFormatTagged && (tag != Tag{}) {
 				format = GtidFormatTagged
 			}
 		}
 	}
 
-	sid := encodeSid(format, sidcount)
+	sid := encodeSid(format, sidCount)
 	buf.Write(sid)
 
 	slices.SortFunc(uuids, func(a, b uuid.UUID) int {
@@ -299,24 +300,25 @@ func (s *MysqlGTIDSet) Encode() []byte {
 }
 
 func (s *MysqlGTIDSet) Equal(o GTIDSet) bool {
-	if om, ok := o.(*MysqlGTIDSet); ok {
-		if len(*s) != len(*om) {
+	om, ok := o.(*MysqlGTIDSet)
+	if !ok {
+		return false
+	}
+	if len(*s) != len(*om) {
+		return false
+	}
+	for u, sm := range *s {
+		omm, ok := (*om)[u]
+		if !ok || len(sm) != len(omm) {
 			return false
 		}
-		for u, sm := range *s {
-			omm, ok := (*om)[u]
-			if !ok || len(sm) != len(omm) {
+		for k, i := range sm {
+			if !i.Equal(omm[k]) {
 				return false
 			}
-			for k, i := range sm {
-				if !i.Equal(omm[k]) {
-					return false
-				}
-			}
 		}
-		return true
 	}
-	return false
+	return true
 }
 
 func (s *MysqlGTIDSet) IsEmpty() bool {
@@ -344,7 +346,7 @@ func (s *MysqlGTIDSet) String() string {
 		// Tags are sorted, empty tag first
 		slices.SortFunc(tags, func(a, b Tag) int { return strings.Compare(a.normalized, b.normalized) })
 		for _, tag := range tags {
-			if tag != (Tag{""}) {
+			if tag != (Tag{}) {
 				sb.WriteString(":")
 				sb.WriteString(tag.String())
 			}
@@ -362,23 +364,23 @@ func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 	if err != nil {
 		return err
 	}
-	if om, ok := o.(*MysqlGTIDSet); ok {
-		for k, v := range *om {
-			if _, ok := (*s)[k]; ok {
-				for k2, v2 := range (*om)[k] {
-					if _, ok := (*s)[k][k2]; ok {
-						(*s)[k][k2] = append((*s)[k][k2], (*om)[k][k2]...).Normalize()
-					} else {
-						(*s)[k][k2] = v2
-					}
-				}
-			} else {
-				(*s)[k] = v
-			}
-		}
-	} else {
+	om, ok := o.(*MysqlGTIDSet)
+	if !ok {
 		// This can't happen as ParseMysqlGTIDSet() always returns a MysqlGTIDSet
 		return errors.New("incompatible GTID types")
+	}
+	for k, v := range *om {
+		if _, ok := (*s)[k]; ok {
+			for k2, v2 := range (*om)[k] {
+				if _, ok := (*s)[k][k2]; ok {
+					(*s)[k][k2] = append((*s)[k][k2], (*om)[k][k2]...).Normalize()
+				} else {
+					(*s)[k][k2] = v2
+				}
+			}
+		} else {
+			(*s)[k] = v
+		}
 	}
 	return nil
 }
