@@ -271,12 +271,10 @@ type PreviousGTIDsEvent struct {
 
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos := 0
-
-	if len(data) < 8 {
-		return errors.New("data for PreviousGTIDEvent is truncated")
+	format, uuidCount, err := mysql.DecodeSid(data)
+	if err != nil {
+		return err
 	}
-
-	format, uuidCount := mysql.DecodeSid(data)
 	if uuidCount == 0 {
 		return nil
 	}

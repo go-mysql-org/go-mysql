@@ -22,16 +22,22 @@ func TestDecodeSid(t *testing.T) {
 		input      []byte
 		gtidFormat GtidFormat
 		uuidCount  uint64
+		expectErr  bool
 	}{
-		{[]byte{1, 2, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 2},
-		{[]byte{1, 1, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 1},
-		{[]byte{1, 0, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 0},
-		{[]byte{1, 0, 0, 0, 0, 0, 0, 0}, GtidFormatClassic, 1},
-		{[]byte{1, 0, 0, 0, 0, 0, 0}, GtidFormatClassic, 0},
+		{[]byte{1, 2, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 2, false},
+		{[]byte{1, 1, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 1, false},
+		{[]byte{1, 0, 0, 0, 0, 0, 0, 1}, GtidFormatTagged, 0, false},
+		{[]byte{1, 0, 0, 0, 0, 0, 0, 0}, GtidFormatClassic, 1, false},
+		{[]byte{1, 0, 0, 0, 0, 0, 0}, GtidFormatClassic, 0, true}, // too short
 	}
 
 	for _, tc := range testcases {
-		format, uuidCount := DecodeSid(tc.input)
+		format, uuidCount, err := DecodeSid(tc.input)
+		if tc.expectErr {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+		}
 		assert.Equal(t, tc.gtidFormat, format)
 		assert.Equal(t, tc.uuidCount, uuidCount)
 	}
@@ -49,7 +55,12 @@ func FuzzDecodeSid(f *testing.F) {
 		f.Add(tc)
 	}
 	f.Fuzz(func(t *testing.T, input []byte) {
-		fmt, sidnr := DecodeSid(input)
+		fmt, sidnr, err := DecodeSid(input)
+		if len(input) >= 8 {
+			require.NoError(t, err)
+		} else {
+			require.Error(t, err)
+		}
 		enc := encodeSid(fmt, sidnr)
 		if len(input) >= 8 {
 			if fmt == GtidFormatTagged {

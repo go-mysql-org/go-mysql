@@ -68,11 +68,11 @@ func NewMysqlGTIDSet() MysqlGTIDSet {
 }
 
 func DecodeMysqlGTIDSet(data []byte) (*MysqlGTIDSet, error) {
-	if len(data) < 8 {
-		return nil, errors.Errorf("invalid gtid set buffer, expected 8 or more but got %d", len(data))
-	}
 	s := NewMysqlGTIDSet()
-	format, n := DecodeSid(data)
+	format, n, err := DecodeSid(data)
+	if err != nil {
+		return nil, err
+	}
 	tag := Tag{}
 	pos := 8
 	for range n {
@@ -394,10 +394,9 @@ func (s *MysqlGTIDSet) Update(GTIDStr string) error {
 // see also:
 // decode_nsids_format in mysql/mysql-server
 // https://github.com/mysql/mysql-server/blob/61a3a1d8ef15512396b4c2af46e922a19bf2b174/sql/rpl_gtid_set.cc#L1363-L1378
-func DecodeSid(data []byte) (format GtidFormat, sidnr uint64) {
+func DecodeSid(data []byte) (format GtidFormat, sidnr uint64, err error) {
 	if len(data) < 8 {
-		// input too short, the function signature doesn't allow us to return an error here.
-		return format, sidnr
+		return format, 0, errors.New("failed to decode source identifier, input too short")
 	}
 	if data[7] == 0x1 {
 		format = GtidFormatTagged
@@ -407,10 +406,10 @@ func DecodeSid(data []byte) (format GtidFormat, sidnr uint64) {
 		masked := make([]byte, 8)
 		copy(masked, data[1:7])
 		sidnr = binary.LittleEndian.Uint64(masked)
-		return format, sidnr
+		return format, sidnr, nil
 	}
 	sidnr = binary.LittleEndian.Uint64(data[:8])
-	return format, sidnr
+	return format, sidnr, nil
 }
 
 func encodeSid(format GtidFormat, sidnr uint64) []byte {
