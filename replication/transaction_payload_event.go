@@ -78,21 +78,20 @@ func (e *TransactionPayloadEvent) decodeFields(data []byte) error {
 		if fieldType == OTW_PAYLOAD_HEADER_END_MARK {
 			e.Payload = data[offset:]
 			break
-		} else {
-			fieldLength := mysql.FixedLengthInt(data[offset : offset+1])
-			offset++
-
-			switch fieldType {
-			case OTW_PAYLOAD_SIZE_FIELD:
-				e.Size = mysql.FixedLengthInt(data[offset : offset+fieldLength])
-			case OTW_PAYLOAD_COMPRESSION_TYPE_FIELD:
-				e.CompressionType = mysql.FixedLengthInt(data[offset : offset+fieldLength])
-			case OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD:
-				e.UncompressedSize = mysql.FixedLengthInt(data[offset : offset+fieldLength])
-			}
-
-			offset += fieldLength
 		}
+		fieldLength := mysql.FixedLengthInt(data[offset : offset+1])
+		offset++
+
+		switch fieldType {
+		case OTW_PAYLOAD_SIZE_FIELD:
+			e.Size = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+		case OTW_PAYLOAD_COMPRESSION_TYPE_FIELD:
+			e.CompressionType = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+		case OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD:
+			e.UncompressedSize = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+		}
+
+		offset += fieldLength
 	}
 
 	return nil

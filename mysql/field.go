@@ -100,7 +100,7 @@ func (f *Field) Parse(p FieldData) (err error) {
 	pos += n
 
 	// skip oc
-	pos += 1
+	pos++
 
 	// charset
 	f.Charset = binary.LittleEndian.Uint16(p[pos:])

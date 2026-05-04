@@ -95,7 +95,7 @@ func (c *Conn) readInitialHandshake() error {
 	if len(data) > pos {
 		// default server a_protocol_character_set, only the lower 8-bits
 		// c.charset = data[pos]
-		pos += 1
+		pos++
 
 		c.status = binary.LittleEndian.Uint16(data[pos : pos+2])
 		pos += 2
@@ -173,11 +173,10 @@ func (c *Conn) genAuthResponse(authData []byte) ([]byte, bool, error) {
 			// write cleartext auth packet
 			// see: https://dev.mysql.com/doc/refman/8.0/en/sha256-pluggable-authentication.html
 			return []byte(c.password), true, nil
-		} else {
-			// request public key from server
-			// see: https://dev.mysql.com/doc/internals/en/public-key-retrieval.html
-			return []byte{1}, false, nil
 		}
+		// request public key from server
+		// see: https://dev.mysql.com/doc/internals/en/public-key-retrieval.html
+		return []byte{1}, false, nil
 	case mysql.AUTH_MARIADB_ED25519:
 		if len(authData) != 32 {
 			return nil, false, mysql.ErrMalformPacket

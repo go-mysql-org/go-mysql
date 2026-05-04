@@ -240,25 +240,25 @@ func (c *Conn) Ping() error {
 }
 
 // SetCapability marks the specified flag as explicitly enabled by the client.
-func (c *Conn) SetCapability(cap uint32) error {
-	if !slices.Contains(optionalCapabilities, cap) {
+func (c *Conn) SetCapability(_cap uint32) error {
+	if !slices.Contains(optionalCapabilities, _cap) {
 		return errors.New("unsupported or unknown capability")
 	}
-	c.ccaps |= cap
-	c.clientExplicitOffCaps &^= cap
+	c.ccaps |= _cap
+	c.clientExplicitOffCaps &^= _cap
 	return nil
 }
 
 // UnsetCapability marks the specified flag as explicitly disabled by the client.
 // This disables the flag even if the server supports it.
-func (c *Conn) UnsetCapability(cap uint32) {
-	c.ccaps &^= cap
-	c.clientExplicitOffCaps |= cap
+func (c *Conn) UnsetCapability(_cap uint32) {
+	c.ccaps &^= _cap
+	c.clientExplicitOffCaps |= _cap
 }
 
 // HasCapability returns true if the connection has the specific capability
-func (c *Conn) HasCapability(cap uint32) bool {
-	return c.ccaps&cap != 0
+func (c *Conn) HasCapability(_cap uint32) bool {
+	return c.ccaps&_cap != 0
 }
 
 // UseSSL: use default SSL
@@ -313,16 +313,15 @@ func (c *Conn) CompareServerVersion(v string) (int, error) {
 func (c *Conn) Execute(command string, args ...any) (*mysql.Result, error) {
 	if len(args) == 0 {
 		return c.exec(command)
-	} else {
-		if s, err := c.Prepare(command); err != nil {
-			return nil, errors.Trace(err)
-		} else {
-			var r *mysql.Result
-			r, err = s.Execute(args...)
-			s.Close()
-			return r, err
-		}
 	}
+	s, err := c.Prepare(command)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	var r *mysql.Result
+	r, err = s.Execute(args...)
+	s.Close()
+	return r, err
 }
 
 // ExecuteMultiple will call perResultCallback for every result of the multiple queries
@@ -434,10 +433,9 @@ func (c *Conn) SetCharset(charset string) error {
 
 	if _, err := c.exec(fmt.Sprintf("SET NAMES %s", charset)); err != nil {
 		return errors.Trace(err)
-	} else {
-		c.charset = charset
-		return nil
 	}
+	c.charset = charset
+	return nil
 }
 
 func (c *Conn) SetCollation(collation string) error {

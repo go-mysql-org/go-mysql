@@ -12,9 +12,8 @@ type RowData []byte
 func (p RowData) Parse(f []*Field, binary bool, dst []FieldValue) ([]FieldValue, error) {
 	if binary {
 		return p.ParseBinary(f, dst)
-	} else {
-		return p.ParseText(f, dst)
 	}
+	return p.ParseText(f, dst)
 }
 
 func (p RowData) ParseText(f []*Field, dst []FieldValue) ([]FieldValue, error) {
@@ -187,10 +186,9 @@ func (p RowData) ParseBinary(f []*Field, dst []FieldValue) ([]FieldValue, error)
 				data[i].Type = FieldValueTypeString
 				data[i].str = append(data[i].str[:0], v...)
 				continue
-			} else {
-				data[i].Type = FieldValueTypeNull
-				continue
 			}
+			data[i].Type = FieldValueTypeNull
+			continue
 
 		case MYSQL_TYPE_DATE, MYSQL_TYPE_NEWDATE:
 			var num uint64

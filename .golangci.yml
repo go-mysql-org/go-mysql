@@ -13,6 +13,7 @@ linters:
     - unused
     - whitespace
     - modernize
+    - revive
   settings:
     govet:
       disable:
@@ -23,6 +24,19 @@ linters:
     nolintlint:
       require-specific: true
       allow-unused: false
+    revive:
+      enable-default-rules: true
+      rules:
+        - name: var-naming
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+        - name: empty-block
+          disabled: true
+        - name: exported
+          disabled: true
+        - name: error-strings
+          disabled: true
   exclusions:
     generated: lax
     presets:

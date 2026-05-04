@@ -88,7 +88,7 @@ func (s *Stmt) write(args ...any) error {
 
 	length := 1 + 4 + 1 + 4 + ((paramsNum + 7) >> 3) + 1 + (paramsNum << 1)
 
-	var newParamBoundFlag byte = 0
+	var newParamBoundFlag byte
 
 	for i := range args {
 		if args[i] == nil {
@@ -269,7 +269,7 @@ func (c *Conn) Prepare(query string) (*Stmt, error) {
 	pos += 2
 
 	// reserved
-	pos += 1
+	pos++
 
 	if len(data) >= 12 {
 		// warnings

@@ -297,7 +297,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 				return errors.New("data for PreviousGTIDEvent is truncated: missing tag length")
 			}
 			tagLength := int(data[pos] >> 1)
-			pos += 1
+			pos++
 			if tagLength > 32 {
 				return errors.New("tag is longer than expected")
 			} else if tagLength > 0 { // 0 == no tag, >0 == tag
@@ -317,7 +317,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 				buf.WriteString(",")
 			}
 			buf.WriteString(uuid)
-			currentSetnr += 1
+			currentSetnr++
 		}
 
 		if pos+8 > len(data) {
@@ -345,7 +345,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 			}
 		}
 		if len(tag) == 0 {
-			currentSetnr += 1
+			currentSetnr++
 		}
 	}
 	e.GTIDSets = buf.String()
@@ -931,7 +931,7 @@ func (e *MariadbGTIDEvent) Decode(data []byte) error {
 	e.GTID.DomainID = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 	e.Flags = data[pos]
-	pos += 1
+	pos++
 
 	if (e.Flags & BINLOG_MARIADB_FL_GROUP_COMMIT_ID) > 0 {
 		e.CommitID = binary.LittleEndian.Uint64(data[pos:])

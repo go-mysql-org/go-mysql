@@ -183,15 +183,14 @@ func (h *testCacheHandler) handleQuery(query string, binary bool) (*mysql.Result
 
 		if err != nil {
 			return nil, errors.Trace(err)
-		} else {
-			return &mysql.Result{
-				Status:       0,
-				Warnings:     0,
-				InsertId:     0,
-				AffectedRows: 0,
-				Resultset:    r,
-			}, nil
 		}
+		return &mysql.Result{
+			Status:       0,
+			Warnings:     0,
+			InsertId:     0,
+			AffectedRows: 0,
+			Resultset:    r,
+		}, nil
 	case "insert":
 		return &mysql.Result{
 			Status:       0,

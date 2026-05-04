@@ -54,9 +54,8 @@ func parseInterval(str string) (i Interval, err error) {
 func (i Interval) String() (s string) {
 	if i.Stop == i.Start+1 {
 		return fmt.Sprintf("%d", i.Start)
-	} else {
-		return fmt.Sprintf("%d-%d", i.Start, i.Stop-1)
 	}
+	return fmt.Sprintf("%d-%d", i.Start, i.Stop-1)
 }
 
 type IntervalSlice []Interval
@@ -101,10 +100,9 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 		if s[i].Start > last.Stop {
 			n = append(n, s[i])
 			continue
-		} else {
-			stop := max(last.Stop, s[i].Stop)
-			n[len(n)-1] = Interval{last.Start, stop}
 		}
+		stop := max(last.Stop, s[i].Stop)
+		n[len(n)-1] = Interval{last.Start, stop}
 	}
 
 	return n

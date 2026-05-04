@@ -59,7 +59,7 @@ func toBinaryDateTime(t time.Time) ([]byte, error) {
 	}
 
 	year, month, day := t.Year(), t.Month(), t.Day()
-	hour, min, sec := t.Hour(), t.Minute(), t.Second()
+	hour, _min, sec := t.Hour(), t.Minute(), t.Second()
 	nanosec := t.Nanosecond()
 
 	if nanosec > 0 {
@@ -68,16 +68,16 @@ func toBinaryDateTime(t time.Time) ([]byte, error) {
 		buf.WriteByte(byte(month))
 		buf.WriteByte(byte(day))
 		buf.WriteByte(byte(hour))
-		buf.WriteByte(byte(min))
+		buf.WriteByte(byte(_min))
 		buf.WriteByte(byte(sec))
 		_ = binary.Write(&buf, binary.LittleEndian, uint32(nanosec/1000))
-	} else if hour > 0 || min > 0 || sec > 0 {
+	} else if hour > 0 || _min > 0 || sec > 0 {
 		buf.WriteByte(byte(7))
 		_ = binary.Write(&buf, binary.LittleEndian, uint16(year))
 		buf.WriteByte(byte(month))
 		buf.WriteByte(byte(day))
 		buf.WriteByte(byte(hour))
-		buf.WriteByte(byte(min))
+		buf.WriteByte(byte(_min))
 		buf.WriteByte(byte(sec))
 	} else {
 		buf.WriteByte(byte(4))
@@ -291,7 +291,6 @@ func BuildSimpleBinaryResultset(names []string, values [][]any) (*Resultset, err
 func BuildSimpleResultset(names []string, values [][]any, binary bool) (*Resultset, error) {
 	if binary {
 		return BuildSimpleBinaryResultset(names, values)
-	} else {
-		return BuildSimpleTextResultset(names, values)
 	}
+	return BuildSimpleTextResultset(names, values)
 }

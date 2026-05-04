@@ -178,11 +178,11 @@ func ParseMysqlGTIDSet(str string) (GTIDSet, error) {
 					s[u][tag] = nil
 				}
 			} else {
-				if in, err := parseInterval(sep[i]); err != nil {
+				in, err := parseInterval(sep[i])
+				if err != nil {
 					return nil, errors.Trace(err)
-				} else {
-					s[u][tag] = append(s[u][tag], in)
 				}
+				s[u][tag] = append(s[u][tag], in)
 			}
 		}
 		for tag, val := range s[u] {
@@ -234,12 +234,12 @@ func (s *MysqlGTIDSet) Contain(o GTIDSet) bool {
 			return false
 		}
 		for k2 := range (*om)[k] {
-			if i, ok := (*s)[k][k2]; !ok {
+			i, ok := (*s)[k][k2]
+			if !ok {
 				return false
-			} else {
-				if !i.Contain((*om)[k][k2]) {
-					return false
-				}
+			}
+			if !i.Contain((*om)[k][k2]) {
+				return false
 			}
 		}
 	}

@@ -131,9 +131,8 @@ func parseValues(str string) ([]string, error) {
 					continue
 				} else if str[j] == '\'' {
 					break
-				} else {
-					j++
 				}
+				j++
 			}
 
 			if j >= len(str) {

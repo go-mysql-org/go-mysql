@@ -246,9 +246,8 @@ func (h *testHandler) handleQuery(query string, binary bool) (*mysql.Result, err
 
 		if err != nil {
 			return nil, errors.Trace(err)
-		} else {
-			return mysql.NewResult(r), nil
 		}
+		return mysql.NewResult(r), nil
 	case "insert":
 		res := mysql.NewResultReserveResultset(0)
 		res.InsertId = 1

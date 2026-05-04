@@ -342,9 +342,8 @@ func (c *Conn) WriteValue(value any) error {
 			return c.writeStreamResultset(v.StreamResult)
 		} else if v != nil && v.HasResultset() {
 			return c.writeResultset(v.Resultset)
-		} else {
-			return c.writeOK(v)
 		}
+		return c.writeOK(v)
 	case []*mysql.Field:
 		return c.writeFieldList(v, nil)
 	case []mysql.FieldValue:

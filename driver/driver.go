@@ -310,12 +310,11 @@ func (c *Conn) CheckNamedValue(nv *sqldriver.NamedValue) error {
 			// we've found a CheckNamedValueFunc that handled this named value
 			// no need to keep looking
 			return nil
-		} else {
-			// we've found an error, if the error is driver.ErrSkip then
-			// keep looking otherwise return the unknown error
-			if !goErrors.Is(err, sqldriver.ErrSkip) {
-				return err
-			}
+		}
+		// we've found an error, if the error is driver.ErrSkip then
+		// keep looking otherwise return the unknown error
+		if !goErrors.Is(err, sqldriver.ErrSkip) {
+			return err
 		}
 	}
 	return sqldriver.ErrSkip
@@ -407,18 +406,17 @@ func buildNamedArgs(args []sqldriver.NamedValue) []any {
 	return a
 }
 
-func (st *state) replyError(err error) error {
+func (s *state) replyError(err error) error {
 	isBadConnection := mysql.ErrorEqual(err, mysql.ErrBadConn)
 
-	if st.useStdLibErrors && isBadConnection {
+	if s.useStdLibErrors && isBadConnection {
 		return sqldriver.ErrBadConn
-	} else {
-		// if we have a bad connection, this mark the state of this connection as not valid
-		// do the database/sql package can discard it instead of placing it back in the
-		// sql.DB pool.
-		st.valid = !isBadConnection
-		return errors.Trace(err)
 	}
+	// if we have a bad connection, this mark the state of this connection as not valid
+	// do the database/sql package can discard it instead of placing it back in the
+	// sql.DB pool.
+	s.valid = !isBadConnection
+	return errors.Trace(err)
 }
 
 func (c *Conn) Exec(query string, args []sqldriver.Value) (sqldriver.Result, error) {

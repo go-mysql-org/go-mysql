@@ -22,15 +22,14 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		}
 		c.cfg.Logger.Info("start sync binlog at binlog file", slog.Any("pos", pos))
 		return s, nil
-	} else {
-		gsetClone := gset.Clone()
-		s, err := c.syncer.StartSyncGTID(gset)
-		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
-		}
-		c.cfg.Logger.Info("start sync binlog at GTID set", slog.Any("gset", gsetClone))
-		return s, nil
 	}
+	gsetClone := gset.Clone()
+	s, err := c.syncer.StartSyncGTID(gset)
+	if err != nil {
+		return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
+	}
+	c.cfg.Logger.Info("start sync binlog at GTID set", slog.Any("gset", gsetClone))
+	return s, nil
 }
 
 func (c *Canal) runSyncBinlog() error {

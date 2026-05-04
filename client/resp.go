@@ -444,12 +444,10 @@ func (c *Conn) readResultColumns(result *mysql.Result) (err error) {
 				c.status = result.Status
 			}
 			return nil
-		} else {
-			return mysql.ErrMalformPacket
 		}
-	} else {
-		return nil
+		return mysql.ErrMalformPacket
 	}
+	return nil
 }
 
 func (c *Conn) readResultRows(result *mysql.Result, isBinary bool) (err error) {

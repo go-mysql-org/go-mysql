@@ -1050,9 +1050,8 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 	if !ok {
 		if len(e.tables) > 0 {
 			return 0, errors.Errorf("invalid table id %d, no corresponding table map event", e.TableID)
-		} else {
-			return 0, errors.Annotatef(errMissingTableMapEvent, "table id %d", e.TableID)
 		}
+		return 0, errors.Annotatef(errMissingTableMapEvent, "table id %d", e.TableID)
 	}
 	return pos, nil
 }
@@ -1060,13 +1059,13 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 	pos := 0
 	extraDataType := data[pos]
-	pos += 1
+	pos++
 	switch extraDataType {
 	case ENUM_EXTRA_ROW_INFO_TYPECODE_NDB:
 		ndbLength := int(data[pos])
-		pos += 1
+		pos++
 		e.NdbFormat = data[pos]
-		pos += 1
+		pos++
 		e.NdbData = data[pos : pos+ndbLength-2]
 	case ENUM_EXTRA_ROW_INFO_TYPECODE_PARTITION:
 		if e.eventType == UPDATE_ROWS_EVENTv1 || e.eventType == UPDATE_ROWS_EVENTv2 || e.eventType == PARTIAL_UPDATE_ROWS_EVENT {
@@ -1552,7 +1551,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (a
 	value := uint32(data[0])
 	var res strings.Builder
 	res.Grow(precision + 2)
-	var mask uint32 = 0
+	var mask uint32
 	if value&0x80 == 0 {
 		mask = uint32((1 << 32) - 1)
 		res.WriteString("-")
@@ -1714,7 +1713,7 @@ func decodeDatetime2(data []byte, dec uint16, parseTime bool) (any, int, error) 
 	n := int(5 + (dec+1)/2)
 
 	intPart := int64(mysql.BFixedLengthInt(data[0:5])) - DATETIMEF_INT_OFS
-	var frac int64 = 0
+	var frac int64
 
 	switch dec {
 	case 1, 2:

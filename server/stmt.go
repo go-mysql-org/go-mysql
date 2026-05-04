@@ -302,10 +302,9 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			if !isNull {
 				args[i] = mysql.TypedBytes{Type: tp, Bytes: v}
 				continue
-			} else {
-				args[i] = nil
-				continue
 			}
+			args[i] = nil
+			continue
 		default:
 			return errors.Errorf("Stmt Unknown FieldType %d", tp)
 		}

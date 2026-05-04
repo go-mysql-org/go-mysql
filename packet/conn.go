@@ -184,9 +184,8 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 func (c *Conn) currentPacketReader() io.Reader {
 	if c.Compression == mysql.MYSQL_COMPRESS_NONE || c.compressedReader == nil {
 		return c.reader
-	} else {
-		return c.compressedReader
 	}
+	return c.compressedReader
 }
 
 func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
@@ -252,10 +251,9 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	// packet and updating the Conn state with a new compressedReader.
 	if _, err := c.copyN(b, 4); err != nil {
 		return errors.Wrapf(mysql.ErrBadConn, "io.ReadFull(header) failed. err %v", err)
-	} else {
-		// copy was successful so copy the 4 bytes from the buffer to the header
-		copy(c.header[:4], b.Bytes()[:4])
 	}
+	// copy was successful so copy the 4 bytes from the buffer to the header
+	copy(c.header[:4], b.Bytes()[:4])
 
 	length := int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16)
 	sequence := c.header[3]
@@ -275,14 +273,13 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, n, length)
 	} else if n != int64(length) {
 		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", n, length)
-	} else {
-		if length < mysql.MaxPayloadLen {
-			return nil
-		}
+	}
+	if length < mysql.MaxPayloadLen {
+		return nil
+	}
 
-		if err = c.ReadPacketTo(w); err != nil {
-			return errors.Wrap(err, "ReadPacketTo failed")
-		}
+	if err := c.ReadPacketTo(w); err != nil {
+		return errors.Wrap(err, "ReadPacketTo failed")
 	}
 
 	return nil
@@ -305,11 +302,10 @@ func (c *Conn) WritePacket(data []byte) error {
 		} else if n != (4 + mysql.MaxPayloadLen) {
 			return errors.Wrapf(mysql.ErrBadConn,
 				"Write(payload portion) failed. only %v bytes written, while %v expected", n, 4+mysql.MaxPayloadLen)
-		} else {
-			c.Sequence++
-			length -= mysql.MaxPayloadLen
-			data = data[mysql.MaxPayloadLen:]
 		}
+		c.Sequence++
+		length -= mysql.MaxPayloadLen
+		data = data[mysql.MaxPayloadLen:]
 	}
 
 	data[0] = byte(length)

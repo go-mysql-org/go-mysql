@@ -81,29 +81,28 @@ func (c *Conn) dispatch(data []byte) any {
 		c.Conn = nil
 		return noResponse{}
 	case mysql.COM_QUERY:
-		if r, err := c.h.HandleQuery(utils.ByteSliceToString(data)); err != nil {
+		r, err := c.h.HandleQuery(utils.ByteSliceToString(data))
+		if err != nil {
 			return err
-		} else {
-			return r
 		}
+		return r
 	case mysql.COM_PING:
 		return nil
 	case mysql.COM_INIT_DB:
 		if err := c.h.UseDB(utils.ByteSliceToString(data)); err != nil {
 			return err
-		} else {
-			return nil
 		}
+		return nil
 	case mysql.COM_FIELD_LIST:
 		before, after, _ := bytes.Cut(data, []byte{0x00})
 		table := utils.ByteSliceToString(before)
 		wildcard := utils.ByteSliceToString(after)
 
-		if fs, err := c.h.HandleFieldList(table, wildcard); err != nil {
+		fs, err := c.h.HandleFieldList(table, wildcard)
+		if err != nil {
 			return err
-		} else {
-			return fs
 		}
+		return fs
 	case mysql.COM_STMT_PREPARE:
 		c.stmtID++
 		st := new(Stmt)
@@ -112,21 +111,20 @@ func (c *Conn) dispatch(data []byte) any {
 		var err error
 		if st.Params, st.Columns, st.Context, err = c.h.HandleStmtPrepare(st.Query); err != nil {
 			return err
-		} else {
-			if provider, ok := st.Context.(*stmt.PreparedStmt); ok {
-				st.RawParamFields = provider.RawParamFields
-				st.RawColumnFields = provider.RawColumnFields
-			}
-			st.ResetParams()
-			c.stmts[c.stmtID] = st
-			return st
 		}
+		if provider, ok := st.Context.(*stmt.PreparedStmt); ok {
+			st.RawParamFields = provider.RawParamFields
+			st.RawColumnFields = provider.RawColumnFields
+		}
+		st.ResetParams()
+		c.stmts[c.stmtID] = st
+		return st
 	case mysql.COM_STMT_EXECUTE:
-		if r, err := c.handleStmtExecute(data); err != nil {
+		r, err := c.handleStmtExecute(data)
+		if err != nil {
 			return err
-		} else {
-			return r
 		}
+		return r
 	case mysql.COM_STMT_CLOSE:
 		if err := c.handleStmtClose(data); err != nil {
 			return err
@@ -138,11 +136,11 @@ func (c *Conn) dispatch(data []byte) any {
 		}
 		return noResponse{}
 	case mysql.COM_STMT_RESET:
-		if r, err := c.handleStmtReset(data); err != nil {
+		r, err := c.handleStmtReset(data)
+		if err != nil {
 			return err
-		} else {
-			return r
 		}
+		return r
 	case mysql.COM_SET_OPTION:
 		if err := c.h.HandleOtherCommand(cmd, data); err != nil {
 			return err
@@ -152,37 +150,34 @@ func (c *Conn) dispatch(data []byte) any {
 	case mysql.COM_REGISTER_SLAVE:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			return h.HandleRegisterSlave(data)
-		} else {
-			return c.h.HandleOtherCommand(cmd, data)
 		}
+		return c.h.HandleOtherCommand(cmd, data)
 	case mysql.COM_BINLOG_DUMP:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			pos, err := parseBinlogDump(data)
 			if err != nil {
 				return err
 			}
-			if s, err := h.HandleBinlogDump(pos); err != nil {
+			s, err := h.HandleBinlogDump(pos)
+			if err != nil {
 				return err
-			} else {
-				return s
 			}
-		} else {
-			return c.h.HandleOtherCommand(cmd, data)
+			return s
 		}
+		return c.h.HandleOtherCommand(cmd, data)
 	case mysql.COM_BINLOG_DUMP_GTID:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			gtidSet, err := parseBinlogDumpGTID(data)
 			if err != nil {
 				return err
 			}
-			if s, err := h.HandleBinlogDumpGTID(gtidSet); err != nil {
+			s, err := h.HandleBinlogDumpGTID(gtidSet)
+			if err != nil {
 				return err
-			} else {
-				return s
 			}
-		} else {
-			return c.h.HandleOtherCommand(cmd, data)
+			return s
 		}
+		return c.h.HandleOtherCommand(cmd, data)
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}
