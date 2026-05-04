@@ -22,8 +22,8 @@ type clientTestSuite struct {
 }
 
 func TestClientSuite(t *testing.T) {
-	segs := strings.Split(*test_util.MysqlPort, ",")
-	for _, seg := range segs {
+	segs := strings.SplitSeq(*test_util.MysqlPort, ",")
+	for seg := range segs {
 		suite.Run(t, &clientTestSuite{port: seg})
 	}
 }

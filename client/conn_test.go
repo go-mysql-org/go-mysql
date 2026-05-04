@@ -19,8 +19,8 @@ type connTestSuite struct {
 }
 
 func TestConnSuite(t *testing.T) {
-	segs := strings.Split(*test_util.MysqlPort, ",")
-	for _, seg := range segs {
+	segs := strings.SplitSeq(*test_util.MysqlPort, ",")
+	for seg := range segs {
 		suite.Run(t, &connTestSuite{port: seg})
 	}
 }

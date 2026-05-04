@@ -37,8 +37,8 @@ func main() {
 	d.SkipMasterData(*skipBinlogPos)
 
 	if len(*ignoreTables) > 0 {
-		subs := strings.Split(*ignoreTables, ",")
-		for _, sub := range subs {
+		subs := strings.SplitSeq(*ignoreTables, ",")
+		for sub := range subs {
 			if seps := strings.Split(sub, "."); len(seps) == 2 {
 				d.AddIgnoreTables(seps[0], seps[1])
 			}
