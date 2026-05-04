@@ -163,6 +163,28 @@ func TestIntervalSlice_Contain(t *testing.T) {
 	}
 }
 
+// TestIntervalSlice_Contain_UnsortedSub asserts that Contain returns the
+// correct result regardless of whether sub is sorted. Both subs below cover
+// the same set of values ({2, 12}), and both are subsets of s, so Contain
+// must return true for both.
+func TestIntervalSlice_Contain_UnsortedSub(t *testing.T) {
+	s := IntervalSlice{
+		Interval{Start: 1, Stop: 3},
+		Interval{Start: 10, Stop: 15},
+	}
+	sortedSub := IntervalSlice{
+		Interval{Start: 2, Stop: 3},
+		Interval{Start: 12, Stop: 13},
+	}
+	unsortedSub := IntervalSlice{
+		Interval{Start: 12, Stop: 13},
+		Interval{Start: 2, Stop: 3},
+	}
+
+	require.True(t, s.Contain(sortedSub))
+	require.True(t, s.Contain(unsortedSub))
+}
+
 func TestIntervalSlice_Equal(t *testing.T) {
 	cases := []struct {
 		sliceA IntervalSlice

@@ -3,6 +3,7 @@ package mysql
 import (
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -109,26 +110,20 @@ func (s IntervalSlice) Normalize() IntervalSlice {
 	return n
 }
 
-// Contain returns true if sub in s
+// Contain returns true if sub in s. s must be sorted and normalized; sub may
+// be in any order.
 func (s IntervalSlice) Contain(sub IntervalSlice) bool {
-	j := 0
 	for i := range sub {
-		for ; j < len(s); j++ {
-			if sub[i].Start > s[j].Stop {
-				continue
-			} else {
-				break
-			}
-		}
+		j := sort.Search(len(s), func(j int) bool {
+			return sub[i].Start <= s[j].Stop
+		})
 		if j == len(s) {
 			return false
 		}
-
 		if sub[i].Start < s[j].Start || sub[i].Stop > s[j].Stop {
 			return false
 		}
 	}
-
 	return true
 }
 
