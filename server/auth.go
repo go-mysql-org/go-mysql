@@ -8,9 +8,6 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"fmt"
-	"log"
-
-	"github.com/pingcap/tidb/pkg/parser/auth"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
@@ -78,46 +75,6 @@ func scrambleValidation(cached, nonce, scramble []byte) bool {
 	return subtle.ConstantTimeCompare(m, cached) == 1
 }
 
-// safeNativeCompare wraps mysql.CompareNativePassword in a recover so a
-// malformed stored hash (installed by constructing Credential directly,
-// bypassing validateHashedPassword) cannot crash the connection goroutine.
-// Returns (match, err); on panic, err is non-nil and match is false.
-func safeNativeCompare(clientAuthData, hash, salt []byte) (match bool, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			match = false
-			err = errors.Errorf("CompareNativePassword panicked: %v", r)
-		}
-	}()
-	return mysql.CompareNativePassword(clientAuthData, hash, salt), nil
-}
-
-// safeSha256Check wraps mysql.Check256HashingPassword in a recover for the
-// same reason as safeNativeCompare. The verifier slices into parts[2][:16]
-// which can panic on malformed stored hashes.
-func safeSha256Check(hash []byte, password string) (match bool, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			match = false
-			err = errors.Errorf("Check256HashingPassword panicked: %v", r)
-		}
-	}()
-	return mysql.Check256HashingPassword(hash, password)
-}
-
-// safeCachingSha2Check wraps auth.CheckHashingPassword in a recover. The
-// upstream verifier slices into parts[3][:SALT_LENGTH] which can panic on
-// malformed stored hashes.
-func safeCachingSha2Check(hash []byte, password, plugin string) (match bool, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			match = false
-			err = errors.Errorf("CheckHashingPassword panicked: %v", r)
-		}
-	}()
-	return auth.CheckHashingPassword(hash, password, plugin)
-}
-
 func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential Credential) error {
 	if isEmptyPassword(clientAuthData) {
 		if credential.hasEmptyPassword() {
@@ -130,12 +87,7 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential C
 	// credentials when only the server-side hash is available (no plaintext),
 	// and they're cheaper per connect because we skip the SHA1(SHA1(...)) step.
 	for _, hp := range credential.HashedPasswords {
-		match, err := safeNativeCompare(clientAuthData, hp.data, c.salt)
-		if err != nil {
-			log.Printf("server: native_password hash compare error for user %q: %v", c.user, err)
-			continue
-		}
-		if match {
+		if mysql.CompareNativePassword(clientAuthData, hp.data, c.salt) {
 			return nil
 		}
 	}
@@ -192,18 +144,15 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 	// (e.g. mirroring `mysql.user.authentication_string`), and we skip
 	// the per-connect hashPassword work.
 	for _, hp := range credential.HashedPasswords {
-		check, err := safeSha256Check(hp.data, string(clientAuthData))
+		check, err := mysql.Check256HashingPassword(hp.data, string(clientAuthData))
 		if err != nil {
-			// Stored hashes registered via AddUserWithHashedPassword have
-			// already been shape-checked by validateHashedPassword, so
-			// reaching this branch means either a malformed hash was
-			// installed by constructing Credential directly (which can
-			// trigger an upstream slice-out-of-bounds panic that
-			// safeSha256Check converts to an error), or the upstream
-			// verifier changed format expectations. Log so the silent
+			// Stored hashes are shape-checked at construction time
+			// (validateHashedPassword via NewHashedPassword), so reaching
+			// this branch implies the upstream verifier changed format
+			// expectations. Log via the configurable logger so the silent
 			// skip is auditable; auth still falls through to the plaintext
 			// loop and ultimately ErrAccessDenied if nothing matches.
-			log.Printf("server: sha256_password hash compare error for user %q: %v", c.user, err)
+			c.serverConf.logger().Error("sha256_password hash compare error", "user", c.user, "error", err)
 			continue
 		}
 		if check {

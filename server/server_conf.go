@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -35,6 +36,24 @@ type Server struct {
 	tlsConfig         *tls.Config
 	cacheShaPassword  *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
 	authProvider      AuthenticationProvider
+	log               *slog.Logger
+}
+
+// SetLogger overrides the slog.Logger this Server uses for diagnostics.
+// If never set (or set to nil), the Server falls back to slog.Default()
+// at log time. Intended for embedding-application use cases that want to
+// route server diagnostics into an existing structured-logging pipeline.
+func (s *Server) SetLogger(l *slog.Logger) {
+	s.log = l
+}
+
+// logger returns the configured slog.Logger or slog.Default() if none has
+// been set. Used internally by the auth code paths.
+func (s *Server) logger() *slog.Logger {
+	if s.log == nil {
+		return slog.Default()
+	}
+	return s.log
 }
 
 // NewDefaultServer: New mysql server with default settings.

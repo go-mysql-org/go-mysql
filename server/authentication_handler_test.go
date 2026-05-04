@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"database/sql"
+	"log/slog"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -621,42 +623,69 @@ func TestAddUserWithHashedPassword_Sha256Password(t *testing.T) {
 	require.Error(t, dbBad.Ping())
 }
 
-// TestSafeVerifierWrappersRecover pins the Finding #2 invariant: the
-// recover-safe wrappers around the upstream verifier calls must convert
-// any slice-out-of-bounds panic on a malformed stored hash into a
-// boring (false, error) return, so a Credential constructed directly
-// (bypassing validateHashedPassword) cannot kill the connection
-// goroutine.
-func TestSafeVerifierWrappersRecover(t *testing.T) {
-	t.Run("safeSha256Check on parts[2] shorter than SALT_LENGTH", func(t *testing.T) {
-		// 4 $-segments, decimal iterations, but salt is 1 byte so the
-		// upstream verifier's parts[2][:SALT_LENGTH] would slice past the
-		// end and panic.
-		bad := []byte("$5$x$" + // iter=5, salt="x", hash=""
-			"deadbeef")
-		match, err := safeSha256Check(bad, "anything")
-		require.False(t, match)
-		require.Error(t, err)
-	})
-	t.Run("safeCachingSha2Check on parts[3] shorter than SALT_LENGTH", func(t *testing.T) {
-		// $A$, hex iter, then a final segment well below SALT_LENGTH.
-		bad := []byte("$A$005$x")
-		match, err := safeCachingSha2Check(bad, "anything", mysql.AUTH_CACHING_SHA2_PASSWORD)
-		require.False(t, match)
-		require.Error(t, err)
-	})
-	t.Run("safeNativeCompare on undersized hash", func(t *testing.T) {
-		// Native verifier is permissive about input shapes (it doesn't
-		// fixed-length-slice), so this case is mostly here to document
-		// that the wrapper exists and never panics regardless of input.
-		// An empty hash is enough to demonstrate "no panic, no match".
-		match, err := safeNativeCompare([]byte("client-data"), nil, make([]byte, 20))
-		require.False(t, match)
-		// err may be nil if the verifier itself doesn't panic on this
-		// shape; the contract is "no panic", not "always errors".
-		_ = err
-	})
+// TestServerLoggerWiring verifies SetLogger replaces the slog.Logger
+// used by the auth code paths. We trigger the sha256_password
+// hash-compare error log by stuffing a malformed HashedPassword
+// directly into a Credential (bypassing NewHashedPassword's validation,
+// which is the only realistic way that error path gets exercised in
+// practice) and assert the configured logger captures the message.
+func TestServerLoggerWiring(t *testing.T) {
+	// Custom handler that hands back a Credential carrying a
+	// malformed sha256 hash (5 $-segments). NewHashedPassword would
+	// reject this, but the field is exported so a buggy caller could
+	// produce it — and we want the resulting log to land on the
+	// configured logger, not stdout.
+	bad := HashedPassword{plugin: mysql.AUTH_SHA256_PASSWORD, data: []byte("$$$$$$nope")}
+	handler := &fixedCredentialHandler{
+		cred: Credential{
+			HashedPasswords: []HashedPassword{bad},
+			AuthPluginName:  mysql.AUTH_SHA256_PASSWORD,
+		},
+	}
+
+	var buf bytes.Buffer
+	srv := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_SHA256_PASSWORD, test_keys.RSAKey(), tlsConf)
+	srv.SetLogger(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	go func() {
+		conn, acceptErr := l.Accept()
+		if acceptErr != nil {
+			return
+		}
+		co, _ := srv.NewCustomizedConn(conn, handler, &EmptyHandler{})
+		if co != nil {
+			for co.HandleCommand() == nil {
+			}
+		}
+	}()
+
+	db, err := sql.Open("mysql", "alice:wrongpass@tcp("+l.Addr().String()+")/test?tls=skip-verify")
+	require.NoError(t, err)
+	defer db.Close()
+	db.SetConnMaxLifetime(time.Second)
+	_ = db.Ping() // expected to fail; we only care about the log line
+
+	require.Contains(t, buf.String(), "sha256_password hash compare error",
+		"configured logger should receive auth diagnostic; got: %q", buf.String())
+	require.Contains(t, buf.String(), "user=alice")
 }
+
+// fixedCredentialHandler is a test-only AuthenticationHandler that
+// returns the same Credential for any username. Used to inject
+// hand-crafted Credentials into the auth flow without going through
+// the public AddUser* helpers (which would validate the hash and
+// reject the malformed entry needed by TestServerLoggerWiring).
+type fixedCredentialHandler struct{ cred Credential }
+
+func (h *fixedCredentialHandler) GetCredential(string) (Credential, bool, error) {
+	return h.cred, true, nil
+}
+func (h *fixedCredentialHandler) OnAuthSuccess(*Conn) error  { return nil }
+func (h *fixedCredentialHandler) OnAuthFailure(*Conn, error) {}
 
 func TestOnAuthFailureCalled(t *testing.T) {
 	handler := &hookTrackingAuthenticationHandler{
