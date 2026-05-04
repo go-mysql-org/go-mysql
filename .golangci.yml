@@ -12,6 +12,7 @@ linters:
     - unconvert
     - unused
     - whitespace
+    - modernize
   settings:
     govet:
       disable:
