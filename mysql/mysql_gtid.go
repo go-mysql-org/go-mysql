@@ -58,6 +58,8 @@ func NewTag(str string) Tag {
 
 // MysqlGTIDSet is storing a map of SIDs (UUIDs), each with one or more tags.
 // And each tag has one or more Intervals.
+//
+//nolint:revive // Can't use mysql.GTIDSet instead of mysql.MysqlGTIDSet as the former already exists and this is a specific implementation of that.
 type MysqlGTIDSet map[uuid.UUID]map[Tag]IntervalSlice
 
 // This ensures that MysqlGTIDSet implements the GTIDSet interface

@@ -325,17 +325,17 @@ func (c *Conn) handleStmtSendLongData(data []byte) error {
 		return nil
 	}
 
-	paramId := binary.LittleEndian.Uint16(data[4:6])
-	if paramId >= uint16(s.Params) {
+	paramID := binary.LittleEndian.Uint16(data[4:6])
+	if paramID >= uint16(s.Params) {
 		return nil
 	}
 
-	if s.Args[paramId] == nil {
-		s.Args[paramId] = data[6:]
+	if s.Args[paramID] == nil {
+		s.Args[paramID] = data[6:]
 	} else {
-		if b, ok := s.Args[paramId].([]byte); ok {
+		if b, ok := s.Args[paramID].([]byte); ok {
 			b = append(b, data[6:]...)
-			s.Args[paramId] = b
+			s.Args[paramID] = b
 		} else {
 			return nil
 		}

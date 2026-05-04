@@ -119,10 +119,10 @@ func (s *schemaTestSuite) TestSchema() {
 	require.Equal(s.T(), uint(12), ta.Columns[14].MaxSize)
 	require.Equal(s.T(), uint(0), ta.Columns[14].FixedSize)
 
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_test")
 	require.NoError(s.T(), err)
 
-	require.Equal(s.T(), ta, taSqlDb)
+	require.Equal(s.T(), ta, taSQLDb)
 }
 
 func (s *schemaTestSuite) TestSchemaColumnExtraFlags() {
@@ -164,10 +164,10 @@ func (s *schemaTestSuite) TestSchemaColumnExtraFlags() {
 		require.False(s.T(), ta.Columns[exprIdx].IsAutoUpdating)
 	}
 
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_column_extra_flags_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_column_extra_flags_test")
 	require.NoError(s.T(), err)
 
-	require.Equal(s.T(), ta, taSqlDb)
+	require.Equal(s.T(), ta, taSQLDb)
 }
 
 func (s *schemaTestSuite) TestQuoteSchema() {
@@ -214,10 +214,10 @@ func (s *schemaTestSuite) TestSchemaWithMultiValueIndex() {
 	require.Len(s.T(), ta.Indexes[1].Columns, 1)
 	require.Equal(s.T(), "", ta.Indexes[1].Columns[0])
 
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "multi_value_idx_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "multi_value_idx_test")
 	require.NoError(s.T(), err)
 
-	require.Equal(s.T(), ta, taSqlDb)
+	require.Equal(s.T(), ta, taSQLDb)
 }
 
 func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
@@ -283,10 +283,10 @@ func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
 		require.True(s.T(), nameIdx.Visible, "name_idx should be visible when database doesn't support invisible indexes")
 	}
 
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "invisible_idx_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "invisible_idx_test")
 	require.NoError(s.T(), err)
 
-	require.Equal(s.T(), ta, taSqlDb)
+	require.Equal(s.T(), ta, taSQLDb)
 }
 
 func (s *schemaTestSuite) TestInvisibleIndexColumnDetection() {
@@ -384,10 +384,10 @@ func (s *schemaTestSuite) TestVisibleFieldInSchema() {
 	}
 
 	// Test with SQL DB connection as well
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "visible_field_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "visible_field_test")
 	require.NoError(s.T(), err)
 
-	for _, idx := range taSqlDb.Indexes {
+	for _, idx := range taSQLDb.Indexes {
 		require.True(s.T(), idx.Visible, "Index %s should be visible by default (SQL DB)", idx.Name)
 	}
 }

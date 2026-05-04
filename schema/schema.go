@@ -23,6 +23,8 @@ var (
 )
 
 // Different column type
+//
+//nolint:revive // exported column-type constants kept for backward compatibility
 const (
 	TYPE_NUMBER    = iota + 1 // tinyint, smallint, int, bigint, year
 	TYPE_FLOAT                // float, double
@@ -249,6 +251,7 @@ func IsTableExist(conn mysql.Executer, schema string, name string) (bool, error)
 	return r.RowNumber() == 1, nil
 }
 
+//nolint:revive // exported function renamed would be a breaking API change
 func NewTableFromSqlDB(conn *sql.DB, schema string, name string) (*Table, error) {
 	ta := &Table{
 		Schema:  schema,
@@ -257,11 +260,11 @@ func NewTableFromSqlDB(conn *sql.DB, schema string, name string) (*Table, error)
 		Indexes: make([]*Index, 0, 8),
 	}
 
-	if err := ta.fetchColumnsViaSqlDB(conn); err != nil {
+	if err := ta.fetchColumnsViaSQLDB(conn); err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if err := ta.fetchIndexesViaSqlDB(conn); err != nil {
+	if err := ta.fetchIndexesViaSQLDB(conn); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -305,7 +308,7 @@ func (ta *Table) fetchColumns(conn mysql.Executer) error {
 	return nil
 }
 
-func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
+func (ta *Table) fetchColumnsViaSQLDB(conn *sql.DB) error {
 	r, err := conn.Query(fmt.Sprintf("show full columns from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
 		return errors.Trace(err)
@@ -382,7 +385,7 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	return ta.fetchPrimaryKeyColumns()
 }
 
-func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
+func (ta *Table) fetchIndexesViaSQLDB(conn *sql.DB) error {
 	r, err := conn.Query(fmt.Sprintf("show index from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
 		return errors.Trace(err)

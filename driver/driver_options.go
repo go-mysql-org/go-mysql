@@ -10,6 +10,8 @@ import (
 
 // DriverOption sets configuration on a client connection before the MySQL handshake.
 // The value represents the query string parameter value supplied by in the DNS.
+//
+//nolint:revive // driver.Option may have been a better name, but this is already in use.
 type DriverOption func(c *client.Conn, value string) error
 
 // UseSslOption sets the connection to use a tls.Config with InsecureSkipVerify set to true.

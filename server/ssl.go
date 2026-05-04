@@ -97,11 +97,11 @@ func generateAndSignRSACerts(caPem, caKey []byte) ([]byte, []byte) {
 	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
 
 	// sign the certificate
-	cert_b, err := x509.CreateCertificate(rand.Reader, ca, cert, &priv.PublicKey, catls.PrivateKey)
+	certB, err := x509.CreateCertificate(rand.Reader, ca, cert, &priv.PublicKey, catls.PrivateKey)
 	if err != nil {
 		panic(err)
 	}
-	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert_b})
+	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certB})
 	keyPem := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 
 	return certPem, keyPem

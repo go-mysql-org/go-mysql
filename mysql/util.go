@@ -197,6 +197,7 @@ func EncryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, 
 	return rsa.EncryptOAEP(sha1v, rand.Reader, pub, plain, nil)
 }
 
+//nolint:revive // exported auth constants kept for backward compatibility
 const (
 	SALT_LENGTH                = 16
 	ITERATION_MULTIPLIER       = 1000

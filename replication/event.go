@@ -289,7 +289,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 		if pos+16 > len(data) {
 			return errors.New("data for PreviousGTIDEvent is truncated: missing UUID")
 		}
-		uuid := e.decodeUuid(data[pos : pos+16])
+		uuid := e.decodeUUID(data[pos : pos+16])
 		pos += 16
 		var tag string
 		if format == mysql.GtidFormatTagged {
@@ -357,7 +357,7 @@ func (e *PreviousGTIDsEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
-func (e *PreviousGTIDsEvent) decodeUuid(data []byte) string {
+func (e *PreviousGTIDsEvent) decodeUUID(data []byte) string {
 	return fmt.Sprintf("%s-%s-%s-%s-%s", hex.EncodeToString(data[0:4]), hex.EncodeToString(data[4:6]),
 		hex.EncodeToString(data[6:8]), hex.EncodeToString(data[8:10]), hex.EncodeToString(data[10:]))
 }

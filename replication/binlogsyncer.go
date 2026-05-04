@@ -982,7 +982,7 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 		select {
 		case s.ch <- e:
 		case <-b.ctx.Done():
-			return errors.New("sync is being closed...")
+			return errors.New("sync is being closed")
 		}
 	}
 

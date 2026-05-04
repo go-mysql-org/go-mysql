@@ -113,7 +113,8 @@ func parseValues(str string) ([]string, error) {
 		if str[i] != '\'' {
 			// no string, read until comma
 			j := i + 1
-			for ; j < len(str) && str[j] != ','; j++ {
+			for j < len(str) && str[j] != ',' {
+				j++
 			}
 			values = append(values, str[i:j])
 			// skip ,

@@ -1067,8 +1067,8 @@ func TestRowsDataExtraData(t *testing.T) {
 		data                    []byte
 		tableData               []byte
 		eventType               EventType
-		expectPartitionId       uint16
-		expectSourcePartitionId uint16
+		expectPartitionID       uint16
+		expectSourcePartitionID uint16
 		expectNdbFormat         byte
 		expectNdbData           []byte
 	}{
@@ -1094,8 +1094,8 @@ func TestRowsDataExtraData(t *testing.T) {
 			data:                    []byte("s\x00\x00\x00\x00\x00\x01\x00\x0f\x00\x00\f\x00\x01\x00\x00\x04\x80\x00\x04\x00\x00\x00\x02\xff\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x02\x00\x00\x00\x02\x00\x00\x00\x00\x04\x00\x00\x00\x04\x00\x00\x00\x00\x03\x00\x00\x00\x03\x00\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00"),
 			tableData:               []byte("s\x00\x00\x00\x00\x00\x01\x00\abdteste\x00\x01t\x00\x02\x03\x03\x00\x02\x01\x01\x00"),
 			eventType:               WRITE_ROWS_EVENTv2,
-			expectPartitionId:       0x0,
-			expectSourcePartitionId: 0x0,
+			expectPartitionID:       0x0,
+			expectSourcePartitionID: 0x0,
 			expectNdbFormat:         0x0,
 			expectNdbData:           []byte("\x01\x00\x00\x04\x80\x00\x04\x00\x00\x00"),
 		},
@@ -1124,8 +1124,8 @@ func TestRowsDataExtraData(t *testing.T) {
 			data:                    []byte("p\x03\x00\x00\x00\x00\x01\x00\x05\x00\x01\x03\x00\x01\xff\x00\x03\x00\x00\x00"),
 			tableData:               []byte("p\x03\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01\x01\x01\x00"),
 			eventType:               WRITE_ROWS_EVENTv2,
-			expectPartitionId:       0x3,
-			expectSourcePartitionId: 0x0,
+			expectPartitionID:       0x3,
+			expectSourcePartitionID: 0x0,
 			expectNdbFormat:         0x0,
 			expectNdbData:           []byte(nil),
 		},
@@ -1133,8 +1133,8 @@ func TestRowsDataExtraData(t *testing.T) {
 			data:                    []byte("p\x03\x00\x00\x00\x00\x01\x00\a\x00\x01\x01\x00\x03\x00\x01\xff\xff\x00\x03\x00\x00\x00\x00\x01\x00\x00\x00"),
 			tableData:               []byte("p\x03\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01\x01\x01\x00"),
 			eventType:               UPDATE_ROWS_EVENTv2,
-			expectPartitionId:       0x1,
-			expectSourcePartitionId: 0x3,
+			expectPartitionID:       0x1,
+			expectSourcePartitionID: 0x3,
 			expectNdbFormat:         0x0,
 			expectNdbData:           []byte(nil),
 		},
@@ -1143,8 +1143,8 @@ func TestRowsDataExtraData(t *testing.T) {
 			data:                    []byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x01\xff\xfe\x03\x00\x00\x00"),
 			tableData:               []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01"),
 			eventType:               WRITE_ROWS_EVENTv2,
-			expectPartitionId:       0x0,
-			expectSourcePartitionId: 0x0,
+			expectPartitionID:       0x0,
+			expectSourcePartitionID: 0x0,
 			expectNdbFormat:         0x0,
 			expectNdbData:           []byte(nil),
 		},
@@ -1152,8 +1152,8 @@ func TestRowsDataExtraData(t *testing.T) {
 			data:                    []byte("m\x00\x00\x00\x00\x00\x01\x00\x02\x00\x01\xff\xff\xfe\x03\x00\x00\x00\xfe\x01\x00\x00\x00"),
 			tableData:               []byte("m\x00\x00\x00\x00\x00\x01\x00\x04test\x00\x04test\x00\x01\x03\x00\x01"),
 			eventType:               UPDATE_ROWS_EVENTv2,
-			expectPartitionId:       0x0,
-			expectSourcePartitionId: 0x0,
+			expectPartitionID:       0x0,
+			expectSourcePartitionID: 0x0,
 			expectNdbFormat:         0x0,
 			expectNdbData:           []byte(nil),
 		},
@@ -1174,8 +1174,8 @@ func TestRowsDataExtraData(t *testing.T) {
 
 		err = rowsEvent.Decode(tc.data)
 		require.NoError(t, err)
-		require.Equal(t, tc.expectPartitionId, rowsEvent.PartitionId)
-		require.Equal(t, tc.expectSourcePartitionId, rowsEvent.SourcePartitionId)
+		require.Equal(t, tc.expectPartitionID, rowsEvent.PartitionId)
+		require.Equal(t, tc.expectSourcePartitionID, rowsEvent.SourcePartitionId)
 		require.Equal(t, tc.expectNdbFormat, rowsEvent.NdbFormat)
 		require.Equal(t, tc.expectNdbData, rowsEvent.NdbData)
 	}

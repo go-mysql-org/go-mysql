@@ -56,6 +56,7 @@ func (b *BinlogSyncer) StartBackupWithHandler(p mysql.Position, timeout time.Dur
 		timeout = 30 * 3600 * 24 * time.Second
 	}
 	if b.cfg.SynchronousEventHandler != nil {
+		//nolint:revive // leading identifier is a Go function name
 		return errors.New("StartBackupWithHandler cannot be used when SynchronousEventHandler is set. Use StartSynchronousBackup instead.")
 	}
 
@@ -86,6 +87,7 @@ func (b *BinlogSyncer) StartBackupWithHandlerAndGTID(gset mysql.GTIDSet, timeout
 		timeout = 30 * 3600 * 24 * time.Second
 	}
 	if b.cfg.SynchronousEventHandler != nil {
+		//nolint:revive // leading identifier is a Go function name
 		return errors.New("StartBackupWithHandlerAndGTID cannot be used when SynchronousEventHandler is set. Use StartSynchronousBackupWithGTID instead.")
 	}
 

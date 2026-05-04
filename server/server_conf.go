@@ -28,7 +28,7 @@ type Server struct {
 	serverVersion     string // e.g. "8.0.12"
 	protocolVersion   int    // minimal 10
 	capability        uint32 // server capability flag
-	collationId       uint8
+	collationID       uint8
 	defaultAuthMethod string // default authentication method, 'mysql_native_password'
 	rsaPrivateKey     *rsa.PrivateKey
 	rsaPublicKeyBytes []byte
@@ -55,7 +55,7 @@ func NewDefaultServer() *Server {
 		capability: mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
 			mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION | mysql.CLIENT_PLUGIN_AUTH | mysql.CLIENT_SSL |
 			mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | mysql.CLIENT_CONNECT_ATTRS,
-		collationId:       mysql.DEFAULT_COLLATION_ID,
+		collationID:       mysql.DEFAULT_COLLATION_ID,
 		defaultAuthMethod: mysql.AUTH_NATIVE_PASSWORD,
 		rsaPrivateKey:     rsaPrivateKey,
 		rsaPublicKeyBytes: rsaPublicKeyBytes,
@@ -80,12 +80,12 @@ func NewDefaultServer() *Server {
 // The rsaKey parameter is used for password encryption on non-TLS connections with 'caching_sha2_password' and 'sha256_password'.
 // If it's is nil, it will attempt to extract an RSA key from tlsConfig.Certificates[0].
 // If no RSA key is available, non-TLS connections will not be supported for these auth methods (TLS connections will still work).
-func NewServer(serverVersion string, collationId uint8, defaultAuthMethod string, rsaKey *rsa.PrivateKey, tlsConfig *tls.Config) *Server {
+func NewServer(serverVersion string, collationID uint8, defaultAuthMethod string, rsaKey *rsa.PrivateKey, tlsConfig *tls.Config) *Server {
 	authProvider := &DefaultAuthenticationProvider{}
-	return NewServerWithAuth(serverVersion, collationId, defaultAuthMethod, rsaKey, tlsConfig, authProvider)
+	return NewServerWithAuth(serverVersion, collationID, defaultAuthMethod, rsaKey, tlsConfig, authProvider)
 }
 
-func NewServerWithAuth(serverVersion string, collationId uint8, defaultAuthMethod string, rsaKey *rsa.PrivateKey, tlsConfig *tls.Config, authProvider AuthenticationProvider) *Server {
+func NewServerWithAuth(serverVersion string, collationID uint8, defaultAuthMethod string, rsaKey *rsa.PrivateKey, tlsConfig *tls.Config, authProvider AuthenticationProvider) *Server {
 	if authProvider == nil || !authProvider.Validate(defaultAuthMethod) {
 		panic(fmt.Sprintf("server authentication method '%s' is not supported", defaultAuthMethod))
 	}
@@ -108,7 +108,7 @@ func NewServerWithAuth(serverVersion string, collationId uint8, defaultAuthMetho
 		serverVersion:     serverVersion,
 		protocolVersion:   10,
 		capability:        capFlag,
-		collationId:       collationId,
+		collationID:       collationID,
 		defaultAuthMethod: defaultAuthMethod,
 		rsaPrivateKey:     rsaKey,
 		rsaPublicKeyBytes: rsaPublicKeyBytes(rsaKey),

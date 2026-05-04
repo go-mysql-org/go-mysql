@@ -465,10 +465,10 @@ func (c *Conn) readResultRows(result *mysql.Result, isBinary bool) (err error) {
 			if c.capability&mysql.CLIENT_DEPRECATE_EOF != 0 {
 				// Treat like OK
 				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
-				insertId, _, m := mysql.LengthEncodedInt(data[1+n:])
+				insertID, _, m := mysql.LengthEncodedInt(data[1+n:])
 				result.Status = binary.LittleEndian.Uint16(data[1+n+m:])
 				result.AffectedRows = affectedRows
-				result.InsertId = insertId
+				result.InsertId = insertID
 				c.status = result.Status
 			} else if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 				result.Warnings = binary.LittleEndian.Uint16(data[1:])
@@ -518,10 +518,10 @@ func (c *Conn) readResultRowsStreaming(result *mysql.Result, isBinary bool, perR
 			if c.capability&mysql.CLIENT_DEPRECATE_EOF != 0 {
 				// Treat like OK
 				affectedRows, _, n := mysql.LengthEncodedInt(data[1:])
-				insertId, _, m := mysql.LengthEncodedInt(data[1+n:])
+				insertID, _, m := mysql.LengthEncodedInt(data[1+n:])
 				result.Status = binary.LittleEndian.Uint16(data[1+n+m:])
 				result.AffectedRows = affectedRows
-				result.InsertId = insertId
+				result.InsertId = insertID
 				c.status = result.Status
 			} else if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 				result.Warnings = binary.LittleEndian.Uint16(data[1:])

@@ -1,3 +1,4 @@
+//nolint:revive // legacy MySQL/MariaDB binlog protocol constants (LOG_EVENT_*, BINLOG_*, MARIADB_*, COM_*, etc.) are kept verbatim from the upstream protocol for backward compatibility
 package replication
 
 const (

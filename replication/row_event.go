@@ -851,6 +851,8 @@ func (e *TableMapEvent) IsEnumOrSetColumn(i int) bool {
 }
 
 // JsonColumnCount returns the number of JSON columns in this table
+//
+//nolint:revive // exported method renamed would be a breaking API change
 func (e *TableMapEvent) JsonColumnCount() uint64 {
 	count := uint64(0)
 	for _, t := range e.ColumnType {
@@ -921,8 +923,8 @@ type RowsEvent struct {
 	NdbFormat byte
 	NdbData   []byte
 
-	PartitionId       uint16
-	SourcePartitionId uint16
+	PartitionId       uint16 //nolint:revive // exported field renamed would be a breaking API change
+	SourcePartitionId uint16 //nolint:revive // exported field renamed would be a breaking API change
 
 	// lenenc_int
 	ColumnCount uint64
@@ -1007,6 +1009,7 @@ func (t EnumRowImageType) String() string {
 // Bits for binlog_row_value_options sysvar
 type EnumBinlogRowValueOptions byte
 
+//nolint:revive // exported constant renamed would be a breaking API change
 const (
 	// Store JSON updates in partial form
 	EnumBinlogRowValueOptionsPartialJsonUpdates = EnumBinlogRowValueOptions(iota + 1)
@@ -1174,14 +1177,14 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 
 	pos := 0
 
-	var isPartialJsonUpdate bool
+	var isPartialJSONUpdate bool
 
 	var partialBitmap []byte
 	if e.eventType == PARTIAL_UPDATE_ROWS_EVENT && rowImageType == EnumRowImageTypeUpdateAI {
 		binlogRowValueOptions, _, n := mysql.LengthEncodedInt(data[pos:]) // binlog_row_value_options
 		pos += n
-		isPartialJsonUpdate = EnumBinlogRowValueOptions(binlogRowValueOptions)&EnumBinlogRowValueOptionsPartialJsonUpdates != 0
-		if isPartialJsonUpdate {
+		isPartialJSONUpdate = EnumBinlogRowValueOptions(binlogRowValueOptions)&EnumBinlogRowValueOptionsPartialJsonUpdates != 0
+		if isPartialJSONUpdate {
 			byteCount := bitmapByteSize(int(e.Table.JsonColumnCount()))
 			partialBitmap = data[pos : pos+byteCount]
 			pos += byteCount
@@ -1215,7 +1218,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 		   the partial_bits bitmap has a bit for every JSON column
 		   regardless of whether it is included in the bitmap or not.
 		*/
-		isPartial := isPartialJsonUpdate &&
+		isPartial := isPartialJSONUpdate &&
 			(rowImageType == EnumRowImageTypeUpdateAI) &&
 			(e.Table.ColumnType[i] == mysql.MYSQL_TYPE_JSON) &&
 			isBitSetIncr(partialBitmap, &partialBitmapIndex)
@@ -1459,15 +1462,15 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 		} else {
 			if isPartial {
 				var diff *JsonDiff
-				diff, err = e.decodeJsonPartialBinary(data[meta:n])
+				diff, err = e.decodeJSONPartialBinary(data[meta:n])
 				if err == nil {
 					v = diff
 				} else {
-					fmt.Printf("decodeJsonPartialBinary(%q) fail: %s\n", data[meta:n], err)
+					fmt.Printf("decodeJSONPartialBinary(%q) fail: %s\n", data[meta:n], err)
 				}
 			} else {
 				var d []byte
-				d, err = e.decodeJsonBinary(data[meta:n])
+				d, err = e.decodeJSONBinary(data[meta:n])
 				if err == nil {
 					v = utils.ByteSliceToString(d)
 				}
@@ -1706,6 +1709,7 @@ func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Loc
 	}, n, nil
 }
 
+//nolint:revive // DATETIMEF_INT_OFS mirrors the upstream MySQL temporal-encoding constant
 const DATETIMEF_INT_OFS int64 = 0x8000000000
 
 func decodeDatetime2(data []byte, dec uint16, parseTime bool) (any, int, error) {
@@ -1768,6 +1772,7 @@ func decodeDatetime2(data []byte, dec uint16, parseTime bool) (any, int, error) 
 	}, n, nil
 }
 
+//nolint:revive // TIMEF_* mirror the upstream MySQL temporal-encoding constants
 const (
 	TIMEF_OFS     int64 = 0x800000000000
 	TIMEF_INT_OFS int64 = 0x800000

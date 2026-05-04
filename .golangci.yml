@@ -27,15 +27,7 @@ linters:
     revive:
       enable-default-rules: true
       rules:
-        - name: var-naming
-          disabled: true
         - name: unused-parameter
-          disabled: true
-        - name: empty-block
-          disabled: true
-        - name: exported
-          disabled: true
-        - name: error-strings
           disabled: true
   exclusions:
     generated: lax

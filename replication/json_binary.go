@@ -11,6 +11,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
+//nolint:revive // JSONB type tags mirror the upstream MySQL JSON binary format
 const (
 	JSONB_SMALL_OBJECT byte = iota // small JSON object
 	JSONB_LARGE_OBJECT             // large JSON object
@@ -28,6 +29,7 @@ const (
 	JSONB_OPAQUE       byte = 0x0f // custom data (any MySQL data type)
 )
 
+//nolint:revive // JSONB literal tags mirror the upstream MySQL JSON binary format
 const (
 	JSONB_NULL_LITERAL  byte = 0x00
 	JSONB_TRUE_LITERAL  byte = 0x01
@@ -47,6 +49,7 @@ const (
 
 var ErrCorruptedJSONDiff = fmt.Errorf("corrupted JSON diff") // ER_CORRUPTED_JSON_DIFF
 
+//nolint:revive // exported type renamed would be a breaking API change
 type (
 	// JsonDiffOperation is an enum that describes what kind of operation a JsonDiff object represents.
 	// https://github.com/mysql/mysql-server/blob/8.0/sql/json_diff.h
@@ -55,6 +58,7 @@ type (
 
 type FloatWithTrailingZero float64
 
+//nolint:revive // exported constants renamed would be a breaking API change
 const (
 	// The JSON value in the given path is replaced with a new value.
 	//
@@ -74,6 +78,7 @@ const (
 	JsonDiffOperationRemove
 )
 
+//nolint:revive // exported type renamed would be a breaking API change
 type (
 	JsonDiff struct {
 		Op    JsonDiffOperation
@@ -131,9 +136,9 @@ func jsonbGetValueEntrySize(isSmall bool) int {
 	return jsonbValueEntrySizeLarge
 }
 
-// decodeJsonBinary decodes the JSON binary encoding data and returns
+// decodeJSONBinary decodes the JSON binary encoding data and returns
 // the common JSON encoding data.
-func (e *RowsEvent) decodeJsonBinary(data []byte) ([]byte, error) {
+func (e *RowsEvent) decodeJSONBinary(data []byte) ([]byte, error) {
 	d := jsonBinaryDecoder{
 		useDecimal:               e.useDecimal,
 		useFloatWithTrailingZero: e.useFloatWithTrailingZero,
@@ -557,7 +562,7 @@ func (d *jsonBinaryDecoder) decodeVariableLength(data []byte) (int, int) {
 	return 0, 0
 }
 
-func (e *RowsEvent) decodeJsonPartialBinary(data []byte) (*JsonDiff, error) {
+func (e *RowsEvent) decodeJSONPartialBinary(data []byte) (*JsonDiff, error) {
 	// see Json_diff_vector::read_binary() in mysql-server/sql/json_diff.cc
 	operationNumber := JsonDiffOperation(data[0])
 	switch operationNumber {
@@ -588,7 +593,7 @@ func (e *RowsEvent) decodeJsonPartialBinary(data []byte) (*JsonDiff, error) {
 	valueLength, _, n := mysql.LengthEncodedInt(data)
 	data = data[n:]
 
-	d, err := e.decodeJsonBinary(data[:valueLength])
+	d, err := e.decodeJSONBinary(data[:valueLength])
 	if err != nil {
 		return nil, fmt.Errorf("cannot read json diff for field %q: %w", path, err)
 	}

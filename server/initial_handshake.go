@@ -25,7 +25,7 @@ func (c *Conn) writeInitialHandshake() error {
 	data = append(data, byte(defaultFlag), byte(defaultFlag>>8))
 
 	// charset
-	data = append(data, c.serverConf.collationId)
+	data = append(data, c.serverConf.collationID)
 
 	// status
 	data = append(data, byte(c.status), byte(c.status>>8))

@@ -46,6 +46,7 @@ func TestOnAuthSuccessCalled(t *testing.T) {
 		conn, _ := l.Accept()
 		co, _ := NewDefaultServer().NewCustomizedConn(conn, handler, &EmptyHandler{})
 		if co != nil {
+			//nolint:revive // loop drains commands; work is in the condition
 			for co.HandleCommand() == nil {
 			}
 		}
@@ -76,6 +77,7 @@ func TestOnAuthSuccessCanReject(t *testing.T) {
 		conn, _ := l.Accept()
 		co, _ := NewDefaultServer().NewCustomizedConn(conn, handler, &EmptyHandler{})
 		if co != nil {
+			//nolint:revive // loop drains commands; work is in the condition
 			for co.HandleCommand() == nil {
 			}
 		}
@@ -106,6 +108,7 @@ func TestOnAuthFailureCalled(t *testing.T) {
 		conn, _ := l.Accept()
 		co, _ := NewDefaultServer().NewCustomizedConn(conn, handler, &EmptyHandler{})
 		if co != nil {
+			//nolint:revive // loop drains commands; work is in the condition
 			for co.HandleCommand() == nil {
 			}
 		}

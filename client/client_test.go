@@ -46,8 +46,8 @@ func (s *clientTestSuite) SetupSuite() {
 	_, err = s.c.Execute("USE " + *testDB)
 	require.NoError(s.T(), err)
 
-	s.testConn_CreateTable()
-	s.testStmt_CreateTable()
+	s.testConnCreateTable()
+	s.testStmtCreateTable()
 }
 
 func (s *clientTestSuite) TearDownSuite() {
@@ -55,20 +55,20 @@ func (s *clientTestSuite) TearDownSuite() {
 		return
 	}
 
-	s.testConn_DropTable()
-	s.testStmt_DropTable()
+	s.testConnDropTable()
+	s.testStmtDropTable()
 
 	if s.c != nil {
 		s.c.Close()
 	}
 }
 
-func (s *clientTestSuite) testConn_DropTable() {
+func (s *clientTestSuite) testConnDropTable() {
 	_, err := s.c.Execute("drop table if exists mixer_test_conn")
 	require.NoError(s.T(), err)
 }
 
-func (s *clientTestSuite) testConn_CreateTable() {
+func (s *clientTestSuite) testConnCreateTable() {
 	str := `CREATE TABLE IF NOT EXISTS mixer_test_conn (
           id BIGINT(64) UNSIGNED  NOT NULL,
           str VARCHAR(256),
@@ -266,7 +266,7 @@ func (s *clientTestSuite) TestConn_SetCollation() {
 	require.Error(s.T(), err)
 }
 
-func (s *clientTestSuite) testStmt_DropTable() {
+func (s *clientTestSuite) testStmtDropTable() {
 	str := `drop table if exists mixer_test_stmt`
 
 	stmt, err := s.c.Prepare(str)
@@ -279,7 +279,7 @@ func (s *clientTestSuite) testStmt_DropTable() {
 	require.NoError(s.T(), err)
 }
 
-func (s *clientTestSuite) testStmt_CreateTable() {
+func (s *clientTestSuite) testStmtCreateTable() {
 	str := `CREATE TABLE IF NOT EXISTS mixer_test_stmt (
           id BIGINT(64) UNSIGNED  NOT NULL,
           str VARCHAR(256),
