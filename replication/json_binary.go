@@ -486,11 +486,11 @@ func (d *jsonBinaryDecoder) decodeTime(data []byte) any {
 
 	intPart := v >> 24
 	hour := (intPart >> 12) % (1 << 10)
-	_min := (intPart >> 6) % (1 << 6)
+	minute := (intPart >> 6) % (1 << 6)
 	sec := intPart % (1 << 6)
 	frac := v % (1 << 24)
 
-	return fmt.Sprintf("%s%02d:%02d:%02d.%06d", sign, hour, _min, sec, frac)
+	return fmt.Sprintf("%s%02d:%02d:%02d.%06d", sign, hour, minute, sec, frac)
 }
 
 func (d *jsonBinaryDecoder) decodeDateTime(data []byte) any {

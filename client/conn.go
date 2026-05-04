@@ -240,25 +240,25 @@ func (c *Conn) Ping() error {
 }
 
 // SetCapability marks the specified flag as explicitly enabled by the client.
-func (c *Conn) SetCapability(_cap uint32) error {
-	if !slices.Contains(optionalCapabilities, _cap) {
+func (c *Conn) SetCapability(capability uint32) error {
+	if !slices.Contains(optionalCapabilities, capability) {
 		return errors.New("unsupported or unknown capability")
 	}
-	c.ccaps |= _cap
-	c.clientExplicitOffCaps &^= _cap
+	c.ccaps |= capability
+	c.clientExplicitOffCaps &^= capability
 	return nil
 }
 
 // UnsetCapability marks the specified flag as explicitly disabled by the client.
 // This disables the flag even if the server supports it.
-func (c *Conn) UnsetCapability(_cap uint32) {
-	c.ccaps &^= _cap
-	c.clientExplicitOffCaps |= _cap
+func (c *Conn) UnsetCapability(capability uint32) {
+	c.ccaps &^= capability
+	c.clientExplicitOffCaps |= capability
 }
 
 // HasCapability returns true if the connection has the specific capability
-func (c *Conn) HasCapability(_cap uint32) bool {
-	return c.ccaps&_cap != 0
+func (c *Conn) HasCapability(capability uint32) bool {
+	return c.ccaps&capability != 0
 }
 
 // UseSSL: use default SSL
