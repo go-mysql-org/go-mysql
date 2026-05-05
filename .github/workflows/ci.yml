@@ -10,7 +10,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ "1.26", "1.25", "1.24" ]
+        go: [ "1.26", "1.25" ]
         os: [ ubuntu-latest, ubuntu-24.04, ubuntu-22.04, ubuntu-24.04-arm ]
     name: Tests Go ${{ matrix.go }} on ${{ matrix.os }} # This name is used in main branch protection rules
     runs-on: ${{ matrix.os }}
