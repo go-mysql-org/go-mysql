@@ -1,3 +1,18 @@
+### Tag v1.15.0 (2026-05-05)
+
+* Update dependencies. [#1136](https://github.com/go-mysql-org/go-mysql/pull/1136) ([dveeden](https://github.com/dveeden))
+* Enable more revive checks. [#1135](https://github.com/go-mysql-org/go-mysql/pull/1135) ([dveeden](https://github.com/dveeden))
+* Enable revive. [#1134](https://github.com/go-mysql-org/go-mysql/pull/1134) ([dveeden](https://github.com/dveeden))
+* Run go fix ./.... [#1133](https://github.com/go-mysql-org/go-mysql/pull/1133) ([dveeden](https://github.com/dveeden))
+* Mysql: Parsing MySQL GTIDs with tags (second alternative implementation). [#1125](https://github.com/go-mysql-org/go-mysql/pull/1125) ([dveeden](https://github.com/dveeden))
+* Replication: fix BinlogSyncer.Close hang on SSH tunnels. [#1128](https://github.com/go-mysql-org/go-mysql/pull/1128) ([serprex](https://github.com/serprex))
+* CI: Update to MySQL 9.7. [#1130](https://github.com/go-mysql-org/go-mysql/pull/1130) ([dveeden](https://github.com/dveeden))
+* Refactor: flatten MariadbGTIDSet to map[uint32]*MariadbGTID (one entry per domain). [#1124](https://github.com/go-mysql-org/go-mysql/pull/1124) ([triplefighter7619](https://github.com/triplefighter7619))
+* Fix: MariadbGTIDSet.AddSet() replace server entry on same domain to avoid duplicate domain id error. [#1122](https://github.com/go-mysql-org/go-mysql/pull/1122) ([triplefighter7619](https://github.com/triplefighter7619))
+* Replication: fix IsNumericColumn to include MYSQL_TYPE_YEAR and MYSQL_TYPE_DECIMAL. [#1119](https://github.com/go-mysql-org/go-mysql/pull/1119) ([vikaxsh](https://github.com/vikaxsh))
+* Replication: decode unsigned integer types correctly in RowsEvent. [#1117](https://github.com/go-mysql-org/go-mysql/pull/1117) ([yanhao-pro](https://github.com/yanhao-pro))
+* Fix: incorrect offset in parseBinlogDumpGTID. [#1115](https://github.com/go-mysql-org/go-mysql/pull/1115) ([zkramorev](https://github.com/zkramorev))
+
 ### Tag v1.14.0 (2026-02-23)
 
 * Driver: improve RE matching case. [#1107](https://github.com/go-mysql-org/go-mysql/pull/1107) ([lance6716](https://github.com/lance6716))
