@@ -54,9 +54,7 @@ func (t *testSyncerSuite) testExecute(query string) {
 }
 
 func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
-	t.wg.Add(1)
-	go func() {
-		defer t.wg.Done()
+	t.wg.Go(func() {
 
 		if s == nil {
 			return
@@ -78,7 +76,7 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 				os.Stdout.Sync()
 			}
 		}
-	}()
+	})
 
 	// use mixed format
 	t.testExecute("SET SESSION binlog_format = 'MIXED'")

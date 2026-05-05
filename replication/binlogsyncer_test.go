@@ -105,12 +105,10 @@ func TestCloseUnblocksWhenSetReadDeadlineFails(t *testing.T) {
 
 	// Mimic onStream's parked ReadPacket: block until the underlying conn is
 	// closed, then honour ctx cancellation before signalling wg.Done.
-	b.wg.Add(1)
-	go func() {
-		defer b.wg.Done()
+	b.wg.Go(func() {
 		_, _ = b.c.ReadPacket()
 		<-b.ctx.Done()
-	}()
+	})
 
 	done := make(chan struct{})
 	go func() {
