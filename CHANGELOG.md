@@ -3,7 +3,7 @@
 * Update dependencies. [#1136](https://github.com/go-mysql-org/go-mysql/pull/1136) ([dveeden](https://github.com/dveeden))
 * Enable more revive checks. [#1135](https://github.com/go-mysql-org/go-mysql/pull/1135) ([dveeden](https://github.com/dveeden))
 * Enable revive. [#1134](https://github.com/go-mysql-org/go-mysql/pull/1134) ([dveeden](https://github.com/dveeden))
-* Run go fix ./.... [#1133](https://github.com/go-mysql-org/go-mysql/pull/1133) ([dveeden](https://github.com/dveeden))
+* Run go fix ./... [#1133] ([dveeden](https://github.com/dveeden))
 * Mysql: Parsing MySQL GTIDs with tags (second alternative implementation). [#1125](https://github.com/go-mysql-org/go-mysql/pull/1125) ([dveeden](https://github.com/dveeden))
 * Replication: fix BinlogSyncer.Close hang on SSH tunnels. [#1128](https://github.com/go-mysql-org/go-mysql/pull/1128) ([serprex](https://github.com/serprex))
 * CI: Update to MySQL 9.7. [#1130](https://github.com/go-mysql-org/go-mysql/pull/1130) ([dveeden](https://github.com/dveeden))
