@@ -2,7 +2,7 @@
 
 #### Breaking Changes
 
-API Refactoring: `MysqlGTIDSet` and `MariadbGTIDSet` have been refactored in #1124 and #1125. Please review the updated type definitions as this may require adjustments in downstream code.
+API Refactoring: `MysqlGTIDSet` and `MariadbGTIDSet` have been refactored in [#1124](https://github.com/go-mysql-org/go-mysql/pull/1124) and [#1125](https://github.com/go-mysql-org/go-mysql/pull/1125). Please review the updated type definitions as this may require adjustments in downstream code.
 
 * Update dependencies. [#1136](https://github.com/go-mysql-org/go-mysql/pull/1136) ([dveeden](https://github.com/dveeden))
 * Enable more revive checks. [#1135](https://github.com/go-mysql-org/go-mysql/pull/1135) ([dveeden](https://github.com/dveeden))
