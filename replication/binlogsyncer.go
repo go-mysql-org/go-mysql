@@ -393,18 +393,24 @@ func (b *BinlogSyncer) enableSemiSync() error {
 		return nil
 	}
 
-	r, err := b.c.Execute("SHOW VARIABLES LIKE 'rpl_semi_sync_master_enabled';")
+	// MySQL 8.0.26 renamed rpl_semi_sync_master_enabled to
+	// rpl_semi_sync_source_enabled (keeping the old name as an alias) and
+	// 8.4.0 removed the alias, so accept either spelling.
+	r, err := b.c.Execute("SHOW VARIABLES WHERE Variable_name IN ('rpl_semi_sync_master_enabled', 'rpl_semi_sync_source_enabled')")
 	if err != nil {
 		return errors.Trace(err)
 	}
 	s, _ := r.GetString(0, 1)
 	if s != "ON" {
-		b.cfg.Logger.Error("master does not support semi synchronous replication, use no semi-sync")
+		b.cfg.Logger.Error("source does not support semi synchronous replication, use no semi-sync")
 		b.cfg.SemiSyncEnabled = false
 		return nil
 	}
 
-	_, err = b.c.Execute(`SET @rpl_semi_sync_slave = 1;`)
+	// MySQL 8.0.26 also renamed the @rpl_semi_sync_slave session variable
+	// to @rpl_semi_sync_replica. These are user variables, so setting both
+	// is harmless on either server version.
+	_, err = b.c.Execute(`SET @rpl_semi_sync_slave = 1, @rpl_semi_sync_replica = 1;`)
 	if err != nil {
 		return errors.Trace(err)
 	}
