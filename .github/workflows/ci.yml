@@ -58,7 +58,7 @@ jobs:
           - 8.4.8
           - 9.7.0
     name: Tests with MySQL ${{ matrix.mysql_version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     services:
       mysql:
         image: mysql:${{ matrix.mysql_version }}
@@ -86,9 +86,8 @@ jobs:
       - name: Run tests
         run: |
           # separate test to avoid RESET MASTER conflict
-          # TODO: Fix "dump/" and "canal/": mysqldump tries to run SHOW MASTER STATUS on v8.4.0
-          go test $(go list ./... | grep -v canal | grep -v dump)
-          # go test $(go list ./... | grep canal | grep -v dump)
+          go test $(go list ./... | grep -v canal)
+          go test $(go list ./... | grep canal)
 
   golangci:
     name: golangci
