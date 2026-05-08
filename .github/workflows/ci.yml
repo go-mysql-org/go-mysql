@@ -86,9 +86,8 @@ jobs:
       - name: Run tests
         run: |
           # separate test to avoid RESET MASTER conflict
-          # TODO: Fix "dump/" and "canal/": mysqldump tries to run SHOW MASTER STATUS on v8.4.0
-          go test $(go list ./... | grep -v canal | grep -v dump)
-          # go test $(go list ./... | grep canal | grep -v dump)
+          go test $(go list ./... | grep -v canal)
+          go test $(go list ./... | grep canal)
 
   golangci:
     name: golangci
