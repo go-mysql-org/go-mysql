@@ -37,6 +37,7 @@ type BinlogParser struct {
 
 	useDecimal               bool
 	useFloatWithTrailingZero bool
+	renderJSONAsMySQLText    bool
 	ignoreJSONDecodeErr      bool
 	verifyChecksum           bool
 
@@ -203,6 +204,12 @@ func (p *BinlogParser) SetUseDecimal(useDecimal bool) {
 
 func (p *BinlogParser) SetUseFloatWithTrailingZero(useFloatWithTrailingZero bool) {
 	p.useFloatWithTrailingZero = useFloatWithTrailingZero
+}
+
+// SetRenderJSONAsMySQLText toggles MySQL-text JSON rendering for RowsEvents.
+// See BinlogSyncerConfig.RenderJSONAsMySQLText for the full rationale.
+func (p *BinlogParser) SetRenderJSONAsMySQLText(renderJSONAsMySQLText bool) {
+	p.renderJSONAsMySQLText = renderJSONAsMySQLText
 }
 
 func (p *BinlogParser) SetIgnoreJSONDecodeError(ignoreJSONDecodeErr bool) {
@@ -432,6 +439,7 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 	e.timestampStringLocation = p.timestampStringLocation
 	e.useDecimal = p.useDecimal
 	e.useFloatWithTrailingZero = p.useFloatWithTrailingZero
+	e.renderJSONAsMySQLText = p.renderJSONAsMySQLText
 	e.ignoreJSONDecodeErr = p.ignoreJSONDecodeErr
 
 	switch h.EventType {

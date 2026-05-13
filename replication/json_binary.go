@@ -138,7 +138,20 @@ func jsonbGetValueEntrySize(isSmall bool) int {
 
 // decodeJSONBinary decodes the JSON binary encoding data and returns
 // the common JSON encoding data.
+//
+// When RenderJSONAsMySQLText is set on the parent RowsEvent the bytes are
+// rendered directly to MySQL-style JSON text via the renderer in
+// json_mysql_text.go, preserving each JSONB value's original type tag
+// (INT vs DOUBLE-with-trailing-zero vs OPAQUE/NEWDECIMAL etc.). Otherwise
+// the legacy path runs: decode to a Go value tree, then json.Marshal.
+// The two paths produce different byte sequences for the same input (the
+// renderer adds spaces after ':' and ',', preserves "1.0" doubles, etc.)
+// -- callers comparing outputs byte-for-byte should pick one and stick.
 func (e *RowsEvent) decodeJSONBinary(data []byte) ([]byte, error) {
+	if e.renderJSONAsMySQLText {
+		return renderJSONAsMySQLText(data, e.ignoreJSONDecodeErr)
+	}
+
 	d := jsonBinaryDecoder{
 		useDecimal:               e.useDecimal,
 		useFloatWithTrailingZero: e.useFloatWithTrailingZero,
