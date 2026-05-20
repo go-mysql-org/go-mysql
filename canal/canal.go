@@ -222,6 +222,7 @@ func parseIdent(s string) (ident, rest string, ok bool) {
 		return s, "", true
 	}
 	var buf strings.Builder
+	buf.Grow(len(s))
 	for i := 1; i < len(s); i++ {
 		if s[i] != '`' {
 			buf.WriteByte(s[i])
