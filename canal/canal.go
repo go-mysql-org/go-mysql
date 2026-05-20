@@ -180,6 +180,8 @@ func (c *Canal) prepareDumper() error {
 	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
 		if db, table, ok := splitDBTable(ignoreTable); ok {
 			c.dumper.AddIgnoreTables(db, table)
+		} else {
+			slog.Warn("failed to parse ignored tables", "ignoreTable", ignoreTable)
 		}
 	}
 
@@ -194,8 +196,7 @@ func (c *Canal) prepareDumper() error {
 
 // splitDBTable parses an entry from DumpConfig.IgnoreTables into a database
 // and table name. Both the plain `db.table` form and the MySQL-quoted form
-// `` `db`.`table` `` (or any mix) are accepted. Inside backticks any character
-// is allowed and a literal backtick is written as ``.
+// `db`.`table` (or any mix) are accepted.
 func splitDBTable(s string) (db, table string, ok bool) {
 	db, rest, ok := parseIdent(s)
 	if !ok || !strings.HasPrefix(rest, ".") {
