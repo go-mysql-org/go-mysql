@@ -1,8 +1,8 @@
 package canal
 
 import (
+	"bytes"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -12,6 +12,8 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
+
+var beginQuery = []byte("BEGIN")
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 	gset := c.master.GTIDSet()
@@ -193,10 +195,10 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 }
 
 func isBeginQuery(query []byte) bool {
-	stmt := strings.TrimSpace(string(query))
-	stmt = strings.TrimRight(stmt, ";")
-	stmt = strings.TrimSpace(stmt)
-	return strings.EqualFold(stmt, "BEGIN")
+	stmt := bytes.TrimSpace(query)
+	stmt = bytes.TrimRight(stmt, ";")
+	stmt = bytes.TrimSpace(stmt)
+	return bytes.EqualFold(stmt, beginQuery)
 }
 
 type node struct {
