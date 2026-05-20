@@ -96,6 +96,11 @@ type Config struct {
 	// and requires additional privileges.
 	DisableFlushBinlogWhileWaiting bool `toml:"disable_flush_binlog_while_waiting"`
 
+	// TransactionalPosSync avoids syncing positions that may belong to an unfinished transaction.
+	// When enabled, BEGIN QueryEvent does not call OnPosSynced, XIDEvent calls it with force=true,
+	// and Close does not force a final OnPosSynced call.
+	TransactionalPosSync bool `toml:"transactional_pos_sync"`
+
 	// Set TLS config
 	TLSConfig *tls.Config
 

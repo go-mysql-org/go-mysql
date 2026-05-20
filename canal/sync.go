@@ -2,6 +2,7 @@ package canal
 
 import (
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -118,6 +119,9 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		return nil
 	case *replication.XIDEvent:
 		savePos = true
+		if c.cfg.TransactionalPosSync {
+			force = true
+		}
 		// try to save the position later
 		if err := c.eventHandler.OnXID(ev.Header, pos); err != nil {
 			return errors.Trace(err)
@@ -138,6 +142,9 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 			return errors.Trace(err)
 		}
 	case *replication.QueryEvent:
+		if c.cfg.TransactionalPosSync && isBeginQuery(e.Query) {
+			return nil
+		}
 		stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 		if err != nil {
 			// The parser does not understand all syntax.
@@ -183,6 +190,13 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 	}
 
 	return nil
+}
+
+func isBeginQuery(query []byte) bool {
+	stmt := strings.TrimSpace(string(query))
+	stmt = strings.TrimRight(stmt, ";")
+	stmt = strings.TrimSpace(stmt)
+	return strings.EqualFold(stmt, "BEGIN")
 }
 
 type node struct {
