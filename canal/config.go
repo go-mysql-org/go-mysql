@@ -27,8 +27,15 @@ type DumpConfig struct {
 
 	Databases []string `toml:"dbs"`
 
-	// Ignore table format is db.table
-	IgnoreTables []string `toml:"ignore_tables"`
+	// IgnoreTables maps database names to a list of tables to ignore.
+	//
+	// In TOML this is expressed as a sub-table where each key is a database
+	// name and the value is a list of tables, for example:
+	//
+	//	[dump.ignore_tables]
+	//	mydb = ["t1", "t2"]
+	//	"weird.db.name" = ["other"]
+	IgnoreTables map[string][]string `toml:"ignore_tables"`
 
 	// Dump only selected records. Quotes are mandatory
 	Where string `toml:"where"`
