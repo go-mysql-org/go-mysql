@@ -181,7 +181,7 @@ func (c *Canal) prepareDumper() error {
 		if db, table, ok := splitDBTable(ignoreTable); ok {
 			c.dumper.AddIgnoreTables(db, table)
 		} else {
-			slog.Warn("failed to parse ignored tables", "ignoreTable", ignoreTable)
+			c.cfg.Logger.Warn("failed to parse ignored tables", "ignoreTable", ignoreTable)
 		}
 	}
 
