@@ -112,7 +112,7 @@ func formatMySQLDouble(f float64) string {
 // that may not form valid UTF-8.
 func writeJSONString(buf *bytes.Buffer, s []byte) {
 	const hexdigits = "0123456789abcdef"
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if c < 0x20 || c == '"' || c == '\\' {
 			switch c {
