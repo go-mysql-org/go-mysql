@@ -23,7 +23,10 @@ func TestFormatMySQLDouble(t *testing.T) {
 		{0.0, "0.0"},
 		{-3.0, "-3.0"},
 		{1e10, "10000000000.0"},
-		// Non-integer values: shortest round-trippable form.
+		// Non-integer values: shortest round-trippable form. Note that
+		// Go's 'g' emits "1.5e-05" where MySQL's my_gcvt emits "1.5e-5";
+		// the float64 value (and therefore the re-stored JSONB) is
+		// identical, only the visible text differs.
 		{3.14, "3.14"},
 		{-2.5, "-2.5"},
 		{0.1, "0.1"},
@@ -50,12 +53,27 @@ func TestWriteJSONString(t *testing.T) {
 		{"tab\there", `tab\there`},
 		{"ctrl\x01char", `ctrl\u0001char`},
 		{"unicode: é 漢", "unicode: é 漢"},
+		// MySQL JSON is byte-transparent; invalid UTF-8 bytes are passed
+		// through verbatim rather than replaced with U+FFFD.
+		{"\xff\xfe", "\xff\xfe"},
 	}
 	for _, c := range cases {
 		var buf bytes.Buffer
 		writeJSONString(&buf, []byte(c.in))
 		require.Equal(t, c.want, buf.String(), "in=%q", c.in)
 	}
+}
+
+// TestRenderJSONAsMySQLText_OpaqueUnknown covers the fallback branch for
+// JSONB_OPAQUE values whose inner type is not one of the recognised MySQL
+// temporal/decimal types. MySQL serialises these as "base64:typeNN:<b64>".
+func TestRenderJSONAsMySQLText_OpaqueUnknown(t *testing.T) {
+	payload := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	// MYSQL_TYPE_BLOB (0xfc) is not handled specially by the decoder.
+	data := append([]byte{JSONB_OPAQUE, mysql.MYSQL_TYPE_BLOB, byte(len(payload))}, payload...)
+	out, err := renderJSONAsMySQLText(data, false)
+	require.NoError(t, err)
+	require.Equal(t, `"base64:type252:3q2+7w=="`, string(out))
 }
 
 // TestRenderJSONAsMySQLText_Double exercises the renderer directly on a
@@ -156,7 +174,7 @@ func TestRenderJSONAsMySQLText_Object(t *testing.T) {
 	data := append([]byte{JSONB_SMALL_OBJECT}, body...)
 	out, err := renderJSONAsMySQLText(data, false)
 	require.NoError(t, err)
-	require.Equal(t, `{"a": 1, "b": "x"}`, string(out))
+	require.Equal(t, `{"a":1,"b":"x"}`, string(out))
 }
 
 // TestRenderJSONAsMySQLText_Array exercises SMALL_ARRAY with a mix of
@@ -181,7 +199,151 @@ func TestRenderJSONAsMySQLText_Array(t *testing.T) {
 	data := append([]byte{JSONB_SMALL_ARRAY}, body...)
 	out, err := renderJSONAsMySQLText(data, false)
 	require.NoError(t, err)
-	require.Equal(t, `[1, "x", true]`, string(out))
+	require.Equal(t, `[1,"x",true]`, string(out))
+}
+
+// TestRenderJSONAsMySQLText_LargeObject exercises the LARGE_OBJECT
+// offset table (4-byte offsets/counts) which the SMALL_OBJECT test
+// does not cover. INT32 also becomes an inline value in large mode,
+// where it was a pointer value in small mode.
+func TestRenderJSONAsMySQLText_LargeObject(t *testing.T) {
+	// Layout for {"a": 1, "b": "x"} as JSONB LARGE_OBJECT body:
+	//   header (u32 count, u32 size)        = 8 bytes
+	//   2 key entries (u32 offset, u16 len) = 12 bytes
+	//   2 value entries (u8 tp, u32 slot)   = 10 bytes
+	//   "a", "b"                            = 2 bytes
+	//   varlen=1, 'x'                       = 2 bytes
+	//   total body                          = 34 bytes
+	//
+	// Value 0 (INT16) is inline in large mode too, but the inline slot
+	// is 4 bytes wide -- we use the first 2 and zero-pad the rest.
+	body := []byte{
+		0x02, 0x00, 0x00, 0x00, // count = 2
+		0x22, 0x00, 0x00, 0x00, // size = 34
+		// key entry 0: offset=30, len=1
+		0x1E, 0x00, 0x00, 0x00, 0x01, 0x00,
+		// key entry 1: offset=31, len=1
+		0x1F, 0x00, 0x00, 0x00, 0x01, 0x00,
+		// value entry 0: INT16 inline = 1 (zero-padded to 4 bytes)
+		JSONB_INT16, 0x01, 0x00, 0x00, 0x00,
+		// value entry 1: STRING at offset 32
+		JSONB_STRING, 0x20, 0x00, 0x00, 0x00,
+		'a', 'b',
+		0x01, 'x',
+	}
+	data := append([]byte{JSONB_LARGE_OBJECT}, body...)
+	out, err := renderJSONAsMySQLText(data, false)
+	require.NoError(t, err)
+	require.Equal(t, `{"a":1,"b":"x"}`, string(out))
+}
+
+// TestRenderJSONAsMySQLText_LargeArray exercises the LARGE_ARRAY path
+// with a mix of inline scalars (INT16, LITERAL) and a pointer value
+// (STRING).
+func TestRenderJSONAsMySQLText_LargeArray(t *testing.T) {
+	// Layout for [1, "x", true] as JSONB LARGE_ARRAY body:
+	//   header (u32 count, u32 size)      = 8 bytes
+	//   3 value entries (u8 tp, u32 slot) = 15 bytes
+	//   varlen=1, 'x'                     = 2 bytes
+	//   total body                        = 25 bytes
+	body := []byte{
+		0x03, 0x00, 0x00, 0x00, // count = 3
+		0x19, 0x00, 0x00, 0x00, // size = 25
+		// value entry 0: INT16 inline = 1
+		JSONB_INT16, 0x01, 0x00, 0x00, 0x00,
+		// value entry 1: STRING at offset 23
+		JSONB_STRING, 0x17, 0x00, 0x00, 0x00,
+		// value entry 2: LITERAL inline true
+		JSONB_LITERAL, JSONB_TRUE_LITERAL, 0x00, 0x00, 0x00,
+		0x01, 'x',
+	}
+	data := append([]byte{JSONB_LARGE_ARRAY}, body...)
+	out, err := renderJSONAsMySQLText(data, false)
+	require.NoError(t, err)
+	require.Equal(t, `[1,"x",true]`, string(out))
+}
+
+// TestRenderJSONAsMySQLText_NestedObject exercises a jsonObject value
+// nested inside another jsonObject. This is the path that would break
+// if jsonObject.MarshalJSON ever stopped recursing through json.Marshal
+// (e.g. if a future change started writing leaf bytes directly).
+func TestRenderJSONAsMySQLText_NestedObject(t *testing.T) {
+	// Inner SMALL_OBJECT body for {"inner": 1}:
+	//   header (u16,u16) = 4
+	//   1 key entry      = 4
+	//   1 value entry    = 3
+	//   "inner"          = 5
+	//   total            = 16 bytes
+	inner := []byte{
+		0x01, 0x00, // count = 1
+		0x10, 0x00, // size = 16
+		0x0B, 0x00, 0x05, 0x00, // key entry: offset=11, len=5
+		JSONB_INT16, 0x01, 0x00, // INT16 inline = 1
+		'i', 'n', 'n', 'e', 'r',
+	}
+	// Outer SMALL_OBJECT body for {"outer": <inner>}:
+	//   header        = 4
+	//   1 key entry   = 4
+	//   1 value entry = 3
+	//   "outer"       = 5
+	//   inner body    = 16
+	//   total         = 32 bytes
+	outer := []byte{
+		0x01, 0x00, // count = 1
+		0x20, 0x00, // size = 32
+		0x0B, 0x00, 0x05, 0x00, // key entry: offset=11, len=5
+		JSONB_SMALL_OBJECT, 0x10, 0x00, // value: SMALL_OBJECT at offset 16
+		'o', 'u', 't', 'e', 'r',
+	}
+	outer = append(outer, inner...)
+	data := append([]byte{JSONB_SMALL_OBJECT}, outer...)
+	out, err := renderJSONAsMySQLText(data, false)
+	require.NoError(t, err)
+	require.Equal(t, `{"outer":{"inner":1}}`, string(out))
+}
+
+// TestRenderJSONAsMySQLText_KeyEscaping verifies that object keys go
+// through the same escaping path as string values: characters needing
+// JSON escapes are escaped, and multi-byte UTF-8 passes through
+// verbatim.
+func TestRenderJSONAsMySQLText_KeyEscaping(t *testing.T) {
+	// SMALL_OBJECT body for {"a\"b": 1, "héllo": 2}.
+	// "a\"b" is 3 bytes; "héllo" is 6 bytes (é = 0xC3 0xA9 in UTF-8).
+	//   header        = 4
+	//   2 key entries = 8
+	//   2 value entries = 6
+	//   header end    = 18
+	//   "a\"b" at 18, len 3
+	//   "héllo" at 21, len 6
+	//   total         = 27 bytes
+	body := []byte{
+		0x02, 0x00, // count = 2
+		0x1B, 0x00, // size = 27
+		0x12, 0x00, 0x03, 0x00, // key entry 0: offset=18, len=3
+		0x15, 0x00, 0x06, 0x00, // key entry 1: offset=21, len=6
+		JSONB_INT16, 0x01, 0x00, // INT16 inline = 1
+		JSONB_INT16, 0x02, 0x00, // INT16 inline = 2
+		'a', '"', 'b',
+		'h', 0xC3, 0xA9, 'l', 'l', 'o',
+	}
+	data := append([]byte{JSONB_SMALL_OBJECT}, body...)
+	out, err := renderJSONAsMySQLText(data, false)
+	require.NoError(t, err)
+	require.Equal(t, "{\"a\\\"b\":1,\"héllo\":2}", string(out))
+}
+
+// TestRenderJSONAsMySQLText_OpaqueDecimalShort exercises the bounds
+// check on the NEWDECIMAL header. Previously a payload shorter than 2
+// bytes would index past the slice; now it surfaces a decode error.
+func TestRenderJSONAsMySQLText_OpaqueDecimalShort(t *testing.T) {
+	data := []byte{
+		JSONB_OPAQUE,
+		mysql.MYSQL_TYPE_NEWDECIMAL,
+		0x01, // payload varlen = 1, but NEWDECIMAL needs >= 2
+		0x02,
+	}
+	_, err := renderJSONAsMySQLText(data, false)
+	require.Error(t, err)
 }
 
 // TestRenderJSONAsMySQLText_OpaqueDecimal exercises the NEWDECIMAL path

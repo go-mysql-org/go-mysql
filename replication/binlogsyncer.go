@@ -79,37 +79,28 @@ type BinlogSyncerConfig struct {
 	// FloatWithTrailingZero structure for floats.
 	UseFloatWithTrailingZero bool
 
-	// RenderJSONAsMySQLText, when true, makes RowsEvent JSON-column values
-	// render as MySQL's textual JSON output (the representation MySQL
-	// returns from "SELECT json_col" or "CAST(json_col AS char)"), instead
-	// of routing the value through a Go intermediate (map/slice/float64/
-	// decimal) followed by json.Marshal. See renderJSONAsMySQLText in
-	// json_mysql_text.go for known divergences from MySQL's exact output.
+	// RenderJSONAsMySQLText, when true, preserves each JSONB value's
+	// original type tag (DOUBLE 1.0 stays "1.0"; NEWDECIMAL stays
+	// unquoted) in RowsEvent JSON columns. The default decode->json.Marshal
+	// path is lossy for DOUBLE and NEWDECIMAL, which matters when replaying
+	// the output back into a MySQL JSON column.
 	//
-	// The default behaviour is lossy in two ways that bite anyone replaying
-	// the decoded string back into a MySQL JSON column (e.g. binlog-based
-	// replication / migration tools):
-	//
-	//  * JSONB_DOUBLE: a whole-number double like 1.0 round-trips through
-	//    float64 + json.Marshal as "1", which MySQL re-parses as a JSON
-	//    INTEGER. UseFloatWithTrailingZero addresses this subset.
-	//  * JSONB_OPAQUE / NEWDECIMAL: SQL decimals such as
-	//    JSON_OBJECT('x', 1.0) decode to a Go string "1.0", which
-	//    json.Marshal then quotes -- so the value lands in the target as
-	//    the JSON STRING "1.0" rather than the original DECIMAL.
-	//    UseDecimal does not help: shopspring/decimal still marshals as a
-	//    quoted string by default and Decimal.String() trims trailing
-	//    zeros (1.0 -> "1").
-	//
-	// With RenderJSONAsMySQLText=true the decoder emits text directly from
-	// the JSONB byte stream, preserving each value's MySQL JSON type tag.
-	// Recommended when the consumer plans to feed the string back into a
-	// MySQL JSON column.
-	//
-	// Note: when RenderJSONAsMySQLText is enabled, UseDecimal and
-	// UseFloatWithTrailingZero have no effect on JSON-column values --
-	// the renderer always emits MySQL-canonical text for decimals and
-	// trailing-zero doubles. Both flags still apply to non-JSON columns.
+	// Side effects to be aware of when enabling this on existing pipelines:
+	//   - UseDecimal and UseFloatWithTrailingZero have no effect on JSON
+	//     columns (the renderer always emits MySQL-style text).
+	//   - Object key order changes from lexicographic (Go map iteration
+	//     via json.Marshal) to JSONB key order (length-then-bytes), which
+	//     matches MySQL's own text output.
+	//   - JSON OPAQUE values of unrecognised inner types are emitted as
+	//     "base64:typeN:<b64>" (matching mysqld) instead of the raw
+	//     payload bytes.
+	//   - JSON DATE values render as "YYYY-MM-DD" instead of the legacy
+	//     "YYYY-MM-DD 00:00:00.000000".
+	//   - IgnoreJSONDecodeError applies slightly more leniently: an empty
+	//     or 1-byte-short top-level payload becomes "null" instead of an
+	//     error.
+	//   - Only applies to JSON columns; non-JSON DECIMAL/DATE/etc. columns
+	//     are unaffected.
 	RenderJSONAsMySQLText bool
 
 	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
