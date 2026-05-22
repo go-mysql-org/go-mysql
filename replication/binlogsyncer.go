@@ -96,9 +96,6 @@ type BinlogSyncerConfig struct {
 	//     payload bytes.
 	//   - JSON DATE values render as "YYYY-MM-DD" instead of the legacy
 	//     "YYYY-MM-DD 00:00:00.000000".
-	//   - IgnoreJSONDecodeError applies slightly more leniently: an empty
-	//     or 1-byte-short top-level payload becomes "null" instead of an
-	//     error.
 	//   - Only applies to JSON columns; non-JSON DECIMAL/DATE/etc. columns
 	//     are unaffected.
 	RenderJSONAsMySQLText bool

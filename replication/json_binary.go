@@ -151,7 +151,7 @@ func (e *RowsEvent) decodeJSONBinary(data []byte) ([]byte, error) {
 	}
 
 	if d.isDataShort(data, 1) {
-		if d.mysqlTextMode && d.ignoreDecodeErr {
+		if d.ignoreDecodeErr {
 			return []byte("null"), nil
 		}
 		return nil, d.err
@@ -159,7 +159,7 @@ func (e *RowsEvent) decodeJSONBinary(data []byte) ([]byte, error) {
 
 	v := d.decodeValue(data[0], data[1:])
 	if d.err != nil {
-		if d.mysqlTextMode && d.ignoreDecodeErr {
+		if d.ignoreDecodeErr {
 			return []byte("null"), nil
 		}
 		return nil, d.err
@@ -488,7 +488,7 @@ func (d *jsonBinaryDecoder) decodeOpaque(data []byte) any {
 	case mysql.MYSQL_TYPE_DATE:
 		// Historically dates have been decoded the same as datetime (including the time portion).
 		// This is mostly harmless, but in text-mode we want to ensure that
-		// the time portion is emitted.
+		// the time portion is omitted.
 		return d.decodeDateTime(data, d.mysqlTextMode)
 	case mysql.MYSQL_TYPE_DATETIME, mysql.MYSQL_TYPE_TIMESTAMP:
 		return d.decodeDateTime(data, false)
