@@ -2,9 +2,63 @@ package replication
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+// TestBinlogParser_cloneForPayloadDecode verifies that the inner parser
+// used for decompressed transaction payloads inherits user-settable
+// decode options from its parent. Without this, JSON columns in
+// compressed transactions would silently fall back to legacy rendering
+// even when RenderJSONAsMySQLText (and friends) are configured on the
+// outer parser.
+func TestBinlogParser_cloneForPayloadDecode(t *testing.T) {
+	loc, err := time.LoadLocation("UTC")
+	require.NoError(t, err)
+
+	outer := NewBinlogParser()
+	outer.SetFlavor("mariadb")
+	outer.SetRawMode(true)
+	outer.SetParseTime(true)
+	outer.SetTimestampStringLocation(loc)
+	outer.SetUseDecimal(true)
+	outer.SetUseFloatWithTrailingZero(true)
+	outer.SetRenderJSONAsMySQLText(true)
+	outer.SetIgnoreJSONDecodeError(true)
+	outer.SetVerifyChecksum(true) // intentionally not propagated
+	outer.SetPayloadDecoderConcurrency(7)
+
+	inner := outer.cloneForPayloadDecode()
+
+	require.Equal(t, "mariadb", inner.flavor)
+	require.True(t, inner.rawMode)
+	require.True(t, inner.parseTime)
+	require.Same(t, loc, inner.timestampStringLocation)
+	require.True(t, inner.useDecimal)
+	require.True(t, inner.useFloatWithTrailingZero)
+	require.True(t, inner.renderJSONAsMySQLText)
+	require.True(t, inner.ignoreJSONDecodeErr)
+	require.Equal(t, 7, inner.payloadDecoderConcurrency)
+	// Checksum verification must be off: nested events do not carry
+	// their own checksum trailers.
+	require.False(t, inner.verifyChecksum)
+	// tables must be a fresh map, not shared with the outer parser.
+	require.NotNil(t, inner.tables)
+	require.NotSame(t, &outer.tables, &inner.tables)
+}
+
+// TestNewTransactionPayloadEvent_InheritsParent verifies that events
+// created via the parser path carry a reference to it, so that
+// decodePayload picks up the parser options.
+func TestNewTransactionPayloadEvent_InheritsParent(t *testing.T) {
+	p := NewBinlogParser()
+	p.format = &FormatDescriptionEvent{} // newTransactionPayloadEvent dereferences this
+	p.SetRenderJSONAsMySQLText(true)
+
+	e := p.newTransactionPayloadEvent()
+	require.Same(t, p, e.parent)
+}
 
 func TestTransactionPayloadEventDecode(t *testing.T) {
 	e := &TransactionPayloadEvent{

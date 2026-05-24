@@ -141,7 +141,10 @@ func jsonbGetValueEntrySize(isSmall bool) int {
 // common JSON encoding data. When RenderJSONAsMySQLText is set on the
 // parent RowsEvent the decoder wraps leaf values in MySQL-text marshalers
 // (see json_mysql_text.go) so json.Marshal produces MySQL's textual JSON
-// form, preserving each JSONB value's original type tag.
+// form, faithful to each JSONB value's original type tag where the JSON
+// text grammar can express it. NEWDECIMAL is the one tag that cannot be
+// preserved on text round-trip (no decimal literal in JSON); see
+// BinlogSyncerConfig.RenderJSONAsMySQLText for the full caveat list.
 func (e *RowsEvent) decodeJSONBinary(data []byte) ([]byte, error) {
 	d := jsonBinaryDecoder{
 		useDecimal:               e.useDecimal,

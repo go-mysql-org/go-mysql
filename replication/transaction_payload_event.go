@@ -29,8 +29,15 @@ const (
 )
 
 type TransactionPayloadEvent struct {
-	format           FormatDescriptionEvent
-	concurrency      int
+	format      FormatDescriptionEvent
+	concurrency int
+	// parent is the BinlogParser that produced this event. The inner
+	// parser used to decode the decompressed payload inherits its
+	// user-settable options (UseDecimal, RenderJSONAsMySQLText, ...) so
+	// that compressed and uncompressed rows decode identically. nil when
+	// the event is constructed outside of BinlogParser, in which case
+	// decodePayload falls back to default parser options.
+	parent           *BinlogParser
 	Size             uint64
 	UncompressedSize uint64
 	CompressionType  uint64
@@ -117,10 +124,18 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 	}
 
 	// The uncompressed data needs to be split up into individual events for Parse()
-	// to work on them. We can't use e.parser directly as we need to disable checksums
-	// but we still need the initialization from the FormatDescriptionEvent. We can't
-	// modify e.parser as it is used elsewhere.
-	parser := NewBinlogParser()
+	// to work on them. We can't use the parent parser directly as we need to disable
+	// checksums but we still need the initialization from the FormatDescriptionEvent.
+	// We can't modify the parent parser as it is used elsewhere. We do however want
+	// to inherit user-settable decode options (UseDecimal, RenderJSONAsMySQLText,
+	// IgnoreJSONDecodeError, ...) so that rows inside a compressed payload decode
+	// with the same semantics as uncompressed rows.
+	var parser *BinlogParser
+	if e.parent != nil {
+		parser = e.parent.cloneForPayloadDecode()
+	} else {
+		parser = NewBinlogParser()
+	}
 	parser.format = &FormatDescriptionEvent{
 		Version:                e.format.Version,
 		ServerVersion:          e.format.ServerVersion,

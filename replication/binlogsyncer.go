@@ -79,23 +79,33 @@ type BinlogSyncerConfig struct {
 	// FloatWithTrailingZero structure for floats.
 	UseFloatWithTrailingZero bool
 
-	// RenderJSONAsMySQLText, when true, preserves each JSONB value's
-	// original type tag (DOUBLE 1.0 stays "1.0"; NEWDECIMAL stays
-	// unquoted) in RowsEvent JSON columns. The default decode->json.Marshal
-	// path is lossy for DOUBLE and NEWDECIMAL, which matters when replaying
-	// the output back into a MySQL JSON column.
+	// RenderJSONAsMySQLText, when true, makes the JSONB decoder emit text
+	// that is faithful to each value's original JSONB type tag where the
+	// JSON text grammar can express it. The default decode->json.Marshal
+	// path is lossy for DOUBLE and (less importantly) NEWDECIMAL, which
+	// matters when replaying the output back into a MySQL JSON column.
 	//
-	// Side effects to be aware of when enabling this on existing pipelines:
-	//   - UseDecimal and UseFloatWithTrailingZero have no effect on JSON
-	//     columns (the renderer always emits MySQL-style text).
-	//   - Object key order changes from lexicographic (Go map iteration
-	//     via json.Marshal) to JSONB key order (length-then-bytes), which
-	//     matches MySQL's own text output.
-	//   - JSON OPAQUE values of unrecognised inner types are emitted as
+	// Per-tag behaviour:
+	//   - JSONB_DOUBLE 1.0 renders as "1.0" (not "1"), so MySQL re-stores
+	//     it as JSONB_DOUBLE rather than JSONB_INT.
+	//   - JSONB_OPAQUE NEWDECIMAL renders as an unquoted number rather
+	//     than a quoted string. Note that MySQL's JSON text grammar has
+	//     no syntax for a decimal literal: re-inserting the text creates
+	//     a JSON DOUBLE, not the original JSONB_OPAQUE NEWDECIMAL. The
+	//     numeric value is preserved, the opaque type tag is not.
+	//   - JSONB_OPAQUE DATE renders as "YYYY-MM-DD" (not the legacy
+	//     "YYYY-MM-DD 00:00:00.000000").
+	//   - JSONB_OPAQUE values of unrecognised inner types render as
 	//     "base64:typeN:<b64>" (matching mysqld) instead of the raw
 	//     payload bytes.
-	//   - JSON DATE values render as "YYYY-MM-DD" instead of the legacy
-	//     "YYYY-MM-DD 00:00:00.000000".
+	//   - Object key order is preserved from the JSONB stream
+	//     (length-then-bytes) instead of the lexicographic order Go maps
+	//     produce, matching MySQL's own text output.
+	//
+	// Other notes:
+	//   - UseDecimal and UseFloatWithTrailingZero have no effect on JSON
+	//     columns when this is enabled (the renderer always emits
+	//     MySQL-style text).
 	//   - Only applies to JSON columns; non-JSON DECIMAL/DATE/etc. columns
 	//     are unaffected.
 	RenderJSONAsMySQLText bool

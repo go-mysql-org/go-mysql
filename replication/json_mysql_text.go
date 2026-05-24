@@ -11,16 +11,21 @@ import (
 // This file holds the MySQL-text marshalers used by jsonBinaryDecoder
 // when its mysqlTextMode flag is set. Wrapping the leaf decode returns
 // in these types lets the existing json.Marshal pass produce JSON text
-// that preserves each JSONB value's original type tag (DOUBLE 1.0 stays
-// "1.0"; NEWDECIMAL stays unquoted; etc.) and the JSONB key order, so
-// that re-inserting the text into a MySQL JSON column reproduces the
-// original JSONB binary.
+// that is faithful to each JSONB value's original type tag where the
+// JSON text grammar can express it (DOUBLE 1.0 stays "1.0"; NEWDECIMAL
+// stays unquoted; etc.) and preserves the JSONB key order.
 //
-// Note: the output is type-faithful, not byte-identical to MySQL's
-// "SELECT json_col" form. Inter-token whitespace is compact (no space
-// after ',' or ':'), and floating-point text differs in some
-// exponent/precision corner cases (see jsonMySQLDouble). Binary
-// round-trip through a JSON column is unaffected.
+// Caveats:
+//   - The output is type-faithful, not byte-identical to MySQL's
+//     "SELECT json_col" form. Inter-token whitespace is compact (no
+//     space after ',' or ':') and floating-point text differs in some
+//     exponent/precision corner cases (see jsonMySQLDouble).
+//   - NEWDECIMAL is the one tag that cannot be preserved on text
+//     round-trip: MySQL's JSON text grammar has no decimal literal, so
+//     re-inserting the unquoted number yields a JSON DOUBLE, not the
+//     original JSONB_OPAQUE NEWDECIMAL. The numeric value still
+//     round-trips; only the opaque type tag is lost. All other tags
+//     covered here do reproduce the original JSONB binary on re-insert.
 
 // jsonString carries a JSONB string payload as raw bytes so MarshalJSON
 // can pass non-ASCII bytes through verbatim. MySQL JSON is byte-
