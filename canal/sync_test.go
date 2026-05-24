@@ -69,24 +69,6 @@ func mustParseMysqlGTIDSet(t *testing.T, value string) mysql.GTIDSet {
 	return set
 }
 
-func TestIsBeginQuery(t *testing.T) {
-	tests := []struct {
-		query string
-		want  bool
-	}{
-		{query: "BEGIN", want: true},
-		{query: " begin ; ", want: true},
-		{query: "BEGIN WORK"},
-		{query: "START TRANSACTION"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.query, func(t *testing.T) {
-			require.Equal(t, tt.want, isBeginQuery([]byte(tt.query)))
-		})
-	}
-}
-
 func TestHandleEventBeginPositionSync(t *testing.T) {
 	const sid = "24bc7850-2c58-11ee-be56-0242ac120002"
 
@@ -138,6 +120,46 @@ func TestHandleEventBeginPositionSync(t *testing.T) {
 				require.Equal(t, tt.wantGTIDSet, handler.calls[0].set)
 				require.False(t, handler.calls[0].force)
 			}
+		})
+	}
+}
+
+func TestHandleEventCommitPositionSync(t *testing.T) {
+	const sid = "24bc7850-2c58-11ee-be56-0242ac120002"
+
+	tests := []struct {
+		name                 string
+		transactionalPosSync bool
+		wantForce            bool
+	}{
+		{name: "legacy keeps commit force false"},
+		{name: "transactional sync forces commit", transactionalPosSync: true, wantForce: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, handler := newPosSyncTestCanal(t, tt.transactionalPosSync)
+			c.master.Update(mysql.Position{Name: "mysql-bin.000001", Pos: 123})
+			c.master.UpdateGTIDSet(mustParseMysqlGTIDSet(t, sid+":1"))
+
+			err := c.handleEvent(&replication.BinlogEvent{
+				Header: &replication.EventHeader{
+					Timestamp: 10,
+					LogPos:    789,
+					EventType: replication.QUERY_EVENT,
+				},
+				Event: &replication.QueryEvent{
+					Query: []byte("COMMIT"),
+					GSet:  mustParseMysqlGTIDSet(t, sid+":1-2"),
+				},
+			})
+			require.NoError(t, err)
+
+			require.Len(t, handler.calls, 1)
+			require.Equal(t, mysql.Position{Name: "mysql-bin.000001", Pos: 789}, handler.calls[0].pos)
+			require.Equal(t, sid+":1-2", handler.calls[0].set)
+			require.Equal(t, tt.wantForce, handler.calls[0].force)
+			require.Equal(t, sid+":1-2", c.master.GTIDSet().String())
 		})
 	}
 }

@@ -13,7 +13,10 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
-var beginQuery = []byte("BEGIN")
+var (
+	beginQuery  = []byte("BEGIN")
+	commitQuery = []byte("COMMIT")
+)
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 	gset := c.master.GTIDSet()
@@ -144,8 +147,13 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 			return errors.Trace(err)
 		}
 	case *replication.QueryEvent:
-		if c.cfg.TransactionalPosSync && isBeginQuery(e.Query) {
-			return nil
+		if c.cfg.TransactionalPosSync {
+			if bytes.Equal(e.Query, beginQuery) {
+				return nil
+			}
+			if bytes.Equal(e.Query, commitQuery) {
+				force = true
+			}
 		}
 		stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 		if err != nil {
@@ -192,13 +200,6 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 	}
 
 	return nil
-}
-
-func isBeginQuery(query []byte) bool {
-	stmt := bytes.TrimSpace(query)
-	stmt = bytes.TrimRight(stmt, ";")
-	stmt = bytes.TrimSpace(stmt)
-	return bytes.EqualFold(stmt, beginQuery)
 }
 
 type node struct {
