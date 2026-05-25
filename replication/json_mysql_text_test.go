@@ -4,11 +4,23 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/stretchr/testify/require"
 )
+
+// renderJSONAsMySQLText is a thin entry point used by tests. Production
+// code reaches this path through RowsEvent.decodeJSONBinary.
+func renderJSONAsMySQLText(data []byte, ignoreDecodeErr bool) ([]byte, error) {
+	e := &RowsEvent{
+		renderJSONAsMySQLText: true,
+		ignoreJSONDecodeErr:   ignoreDecodeErr,
+	}
+	return e.decodeJSONBinary(data)
+}
 
 func TestFormatMySQLDouble(t *testing.T) {
 	cases := []struct {
@@ -450,4 +462,113 @@ func TestBinlogParser_SetRenderJSONAsMySQLText(t *testing.T) {
 	require.True(t, parser.renderJSONAsMySQLText)
 	parser.SetRenderJSONAsMySQLText(false)
 	require.False(t, parser.renderJSONAsMySQLText)
+}
+
+// TestRenderJSONAsMySQLText_StringEscaping checks that a JSONB_STRING
+// payload containing characters that JSON requires to be escaped
+// (notably ", \, and control bytes) is emitted with the correct
+// backslash escapes. The per-character escape logic lives in
+// writeJSONString and is unit-tested directly by TestWriteJSONString;
+// this case exercises it through jsonString.MarshalJSON to make sure
+// the quote-and-escape sequencing in MarshalJSON is correct.
+func TestRenderJSONAsMySQLText_StringEscaping(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"double_quote", `a"b`, `"a\"b"`},
+		{"backslash", `a\b`, `"a\\b"`},
+		{"both", `a"\b`, `"a\"\\b"`},
+		{"newline", "a\nb", `"a\nb"`},
+		{"control_byte", "a\x01b", `"a\u0001b"`},
+		{"plain", "hello", `"hello"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			data := append([]byte{JSONB_STRING, byte(len(c.in))}, []byte(c.in)...)
+			out, err := renderJSONAsMySQLText(data, false)
+			require.NoError(t, err)
+			require.Equal(t, c.want, string(out))
+		})
+	}
+}
+
+// TestRenderJSONAsMySQLText_OpaqueDispatch locks in which inner MySQL
+// type bytes take a typed decode path inside JSONB_OPAQUE and which
+// fall through to the "base64:typeN:..." envelope. The explicit set is
+// small (NEWDECIMAL, TIME, DATE, DATETIME, TIMESTAMP); everything else
+// must base64-encode. If a future change adds a new explicit branch in
+// decodeOpaque, this table must be updated too -- otherwise the new
+// branch is the silent kind of change that breaks downstream
+// round-tripping.
+func TestRenderJSONAsMySQLText_OpaqueDispatch(t *testing.T) {
+	// Explicit cases: the output must NOT carry the base64 envelope.
+	// Value formatting is covered by the dedicated Opaque{Decimal,
+	// Date, DateTime, Time} tests above; here we only assert the
+	// dispatch decision.
+	explicit := []struct {
+		name      string
+		innerType byte
+		payload   []byte
+	}{
+		{"NEWDECIMAL", mysql.MYSQL_TYPE_NEWDECIMAL, []byte{0x02, 0x01, 0x81, 0x00}},
+		{"TIME", mysql.MYSQL_TYPE_TIME, encodeJSONTimePayload(t, 0, 0, 0, 0)},
+		{"DATE", mysql.MYSQL_TYPE_DATE, encodeJSONDateTimePayload(t, 2024, 1, 15, 0, 0, 0, 0)},
+		{"DATETIME", mysql.MYSQL_TYPE_DATETIME, encodeJSONDateTimePayload(t, 2024, 1, 15, 10, 30, 45, 0)},
+		{"TIMESTAMP", mysql.MYSQL_TYPE_TIMESTAMP, encodeJSONDateTimePayload(t, 2024, 1, 15, 10, 30, 45, 0)},
+	}
+	for _, c := range explicit {
+		t.Run("explicit/"+c.name, func(t *testing.T) {
+			data := append([]byte{JSONB_OPAQUE, c.innerType, byte(len(c.payload))}, c.payload...)
+			out, err := renderJSONAsMySQLText(data, false)
+			require.NoError(t, err)
+			require.False(t, strings.Contains(string(out), "base64:"),
+				"type %s must not use base64 fallback, got %q", c.name, string(out))
+		})
+	}
+
+	// Fallback cases: every other byte the decoder might see must be
+	// emitted via the base64 envelope, matching mysqld's serialisation.
+	// We assert the full output (not just the prefix) so a regression
+	// that drops or mangles the trailing bytes is caught.
+	fallback := []struct {
+		name      string
+		innerType byte
+	}{
+		{"DECIMAL", mysql.MYSQL_TYPE_DECIMAL},
+		{"TINY", mysql.MYSQL_TYPE_TINY},
+		{"SHORT", mysql.MYSQL_TYPE_SHORT},
+		{"LONG", mysql.MYSQL_TYPE_LONG},
+		{"FLOAT", mysql.MYSQL_TYPE_FLOAT},
+		{"DOUBLE", mysql.MYSQL_TYPE_DOUBLE},
+		{"NULL", mysql.MYSQL_TYPE_NULL},
+		{"LONGLONG", mysql.MYSQL_TYPE_LONGLONG},
+		{"INT24", mysql.MYSQL_TYPE_INT24},
+		{"YEAR", mysql.MYSQL_TYPE_YEAR},
+		{"NEWDATE", mysql.MYSQL_TYPE_NEWDATE},
+		{"VARCHAR", mysql.MYSQL_TYPE_VARCHAR},
+		{"BIT", mysql.MYSQL_TYPE_BIT},
+		{"JSON", mysql.MYSQL_TYPE_JSON},
+		{"ENUM", mysql.MYSQL_TYPE_ENUM},
+		{"SET", mysql.MYSQL_TYPE_SET},
+		{"TINY_BLOB", mysql.MYSQL_TYPE_TINY_BLOB},
+		{"MEDIUM_BLOB", mysql.MYSQL_TYPE_MEDIUM_BLOB},
+		{"LONG_BLOB", mysql.MYSQL_TYPE_LONG_BLOB},
+		{"BLOB", mysql.MYSQL_TYPE_BLOB},
+		{"VAR_STRING", mysql.MYSQL_TYPE_VAR_STRING},
+		{"STRING", mysql.MYSQL_TYPE_STRING},
+		{"GEOMETRY", mysql.MYSQL_TYPE_GEOMETRY},
+	}
+	payload := []byte{0xDE, 0xAD}
+	const wantB64 = "3q0=" // base64.StdEncoding.EncodeToString([]byte{0xDE, 0xAD})
+	for _, c := range fallback {
+		t.Run("fallback/"+c.name, func(t *testing.T) {
+			data := append([]byte{JSONB_OPAQUE, c.innerType, byte(len(payload))}, payload...)
+			out, err := renderJSONAsMySQLText(data, false)
+			require.NoError(t, err)
+			want := `"base64:type` + strconv.Itoa(int(c.innerType)) + `:` + wantB64 + `"`
+			require.Equal(t, want, string(out))
+		})
+	}
 }

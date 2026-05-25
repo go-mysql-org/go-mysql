@@ -145,13 +145,3 @@ func writeJSONString(buf *bytes.Buffer, s []byte) {
 		buf.WriteByte(c)
 	}
 }
-
-// renderJSONAsMySQLText is a thin entry point used by tests. Production
-// code reaches this path through RowsEvent.decodeJSONBinary.
-func renderJSONAsMySQLText(data []byte, ignoreDecodeErr bool) ([]byte, error) {
-	e := &RowsEvent{
-		renderJSONAsMySQLText: true,
-		ignoreJSONDecodeErr:   ignoreDecodeErr,
-	}
-	return e.decodeJSONBinary(data)
-}
