@@ -48,10 +48,10 @@ func TestBinlogParser_cloneForPayloadDecode(t *testing.T) {
 	require.NotSame(t, &outer.tables, &inner.tables)
 }
 
-// TestNewTransactionPayloadEvent_InheritsParent verifies that events
+// TestNewTransactionPayloadEventInheritsParent verifies that events
 // created via the parser path carry a reference to it, so that
 // decodePayload picks up the parser options.
-func TestNewTransactionPayloadEvent_InheritsParent(t *testing.T) {
+func TestNewTransactionPayloadEventInheritsParent(t *testing.T) {
 	p := NewBinlogParser()
 	p.format = &FormatDescriptionEvent{} // newTransactionPayloadEvent dereferences this
 	p.SetRenderJSONAsMySQLText(true)

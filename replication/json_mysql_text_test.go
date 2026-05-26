@@ -12,8 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// renderJSONAsMySQLText is a thin entry point used by tests. Production
-// code reaches this path through RowsEvent.decodeJSONBinary.
+// renderJSONAsMySQLText is a test-only helper that synthesises a minimal
+// RowsEvent so unit tests can drive jsonBinaryDecoder directly with the
+// mysql-text mode enabled. Production code does not call this; it
+// constructs RowsEvents via BinlogParser.newRowsEvent and reaches the
+// same decoder through RowsEvent.decodeJSONBinary.
 func renderJSONAsMySQLText(data []byte, ignoreDecodeErr bool) ([]byte, error) {
 	e := &RowsEvent{
 		renderJSONAsMySQLText: true,
