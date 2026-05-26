@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestBinlogParser_cloneForPayloadDecode verifies that the inner parser
+// TestBinlogParserCloneForPayloadDecode verifies that the inner parser
 // used for decompressed transaction payloads inherits user-settable
 // decode options from its parent. Without this, JSON columns in
 // compressed transactions would silently fall back to legacy rendering
 // even when RenderJSONAsMySQLText (and friends) are configured on the
 // outer parser.
-func TestBinlogParser_cloneForPayloadDecode(t *testing.T) {
+func TestBinlogParserCloneForPayloadDecode(t *testing.T) {
 	loc, err := time.LoadLocation("UTC")
 	require.NoError(t, err)
 

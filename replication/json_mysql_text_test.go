@@ -79,10 +79,10 @@ func TestWriteJSONString(t *testing.T) {
 	}
 }
 
-// TestRenderJSONAsMySQLText_OpaqueUnknown covers the fallback branch for
+// TestRenderJSONAsMySQLTextOpaqueUnknown covers the fallback branch for
 // JSONB_OPAQUE values whose inner type is not one of the recognised MySQL
 // temporal/decimal types. MySQL serialises these as "base64:typeNN:<b64>".
-func TestRenderJSONAsMySQLText_OpaqueUnknown(t *testing.T) {
+func TestRenderJSONAsMySQLTextOpaqueUnknown(t *testing.T) {
 	payload := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 	// MYSQL_TYPE_BLOB (0xfc) is not handled specially by the decoder.
 	data := append([]byte{JSONB_OPAQUE, mysql.MYSQL_TYPE_BLOB, byte(len(payload))}, payload...)
@@ -91,7 +91,7 @@ func TestRenderJSONAsMySQLText_OpaqueUnknown(t *testing.T) {
 	require.Equal(t, `"base64:type252:3q2+7w=="`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_Double exercises the renderer directly on a
+// TestRenderJSONAsMySQLTextDouble exercises the renderer directly on a
 // hand-constructed JSONB_DOUBLE byte stream (the simplest JSONB layout:
 // a single scalar). It confirms the renderer emits MySQL-style "1.0" for
 // a whole-number double instead of "1" (which the legacy decoder would
@@ -101,7 +101,7 @@ func TestRenderJSONAsMySQLText_OpaqueUnknown(t *testing.T) {
 // inline-vs-pointer values, NEWDECIMAL/DATETIME payloads) are covered by
 // the fixture tests below. Full end-to-end coverage against a live MySQL
 // binlog stream lives in github.com/block/spirit's pkg/repl tests.
-func TestRenderJSONAsMySQLText_Double(t *testing.T) {
+func TestRenderJSONAsMySQLTextDouble(t *testing.T) {
 	// JSONB top-level value: a single type byte followed by 8 bytes of
 	// little-endian IEEE 754 representing 1.0.
 	data := make([]byte, 1+8)
@@ -113,9 +113,9 @@ func TestRenderJSONAsMySQLText_Double(t *testing.T) {
 	require.Equal(t, "1.0", string(out))
 }
 
-// TestRenderJSONAsMySQLText_Int verifies that JSONB integers stay
+// TestRenderJSONAsMySQLTextInt verifies that JSONB integers stay
 // integers (no spurious ".0" decoration).
-func TestRenderJSONAsMySQLText_Int(t *testing.T) {
+func TestRenderJSONAsMySQLTextInt(t *testing.T) {
 	data := make([]byte, 1+2)
 	data[0] = JSONB_INT16
 	binary.LittleEndian.PutUint16(data[1:], uint16(int16(42)))
@@ -125,8 +125,8 @@ func TestRenderJSONAsMySQLText_Int(t *testing.T) {
 	require.Equal(t, "42", string(out))
 }
 
-// TestRenderJSONAsMySQLText_Literal exercises the LITERAL path.
-func TestRenderJSONAsMySQLText_Literal(t *testing.T) {
+// TestRenderJSONAsMySQLTextLiteral exercises the LITERAL path.
+func TestRenderJSONAsMySQLTextLiteral(t *testing.T) {
 	cases := []struct {
 		lit  byte
 		want string
@@ -143,9 +143,9 @@ func TestRenderJSONAsMySQLText_Literal(t *testing.T) {
 	}
 }
 
-// TestRenderJSONAsMySQLText_EmptyObject and _EmptyArray check the
-// degenerate header-only cases.
-func TestRenderJSONAsMySQLText_EmptyObject(t *testing.T) {
+// TestRenderJSONAsMySQLTextEmptyObject and TestRenderJSONAsMySQLTextEmptyArray
+// check the degenerate header-only cases.
+func TestRenderJSONAsMySQLTextEmptyObject(t *testing.T) {
 	// SMALL_OBJECT body: count=0 (LE u16), size=4 (LE u16) -- just the header.
 	data := []byte{JSONB_SMALL_OBJECT, 0x00, 0x00, 0x04, 0x00}
 	out, err := renderJSONAsMySQLText(data, false)
@@ -153,17 +153,17 @@ func TestRenderJSONAsMySQLText_EmptyObject(t *testing.T) {
 	require.Equal(t, "{}", string(out))
 }
 
-func TestRenderJSONAsMySQLText_EmptyArray(t *testing.T) {
+func TestRenderJSONAsMySQLTextEmptyArray(t *testing.T) {
 	data := []byte{JSONB_SMALL_ARRAY, 0x00, 0x00, 0x04, 0x00}
 	out, err := renderJSONAsMySQLText(data, false)
 	require.NoError(t, err)
 	require.Equal(t, "[]", string(out))
 }
 
-// TestRenderJSONAsMySQLText_Object exercises the SMALL_OBJECT offset table
+// TestRenderJSONAsMySQLTextObject exercises the SMALL_OBJECT offset table
 // with one inline value (INT16) and one pointer value (STRING). This is
 // the main path that risks getting offset arithmetic wrong.
-func TestRenderJSONAsMySQLText_Object(t *testing.T) {
+func TestRenderJSONAsMySQLTextObject(t *testing.T) {
 	// Layout for {"a": 1, "b": "x"} as JSONB SMALL_OBJECT body:
 	//   0-1   count = 2                       (LE u16)
 	//   2-3   total body size = 22            (LE u16)
@@ -192,9 +192,9 @@ func TestRenderJSONAsMySQLText_Object(t *testing.T) {
 	require.Equal(t, `{"a":1,"b":"x"}`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_Array exercises SMALL_ARRAY with a mix of
+// TestRenderJSONAsMySQLTextArray exercises SMALL_ARRAY with a mix of
 // inline scalars (INT16, LITERAL) and a pointer value (STRING).
-func TestRenderJSONAsMySQLText_Array(t *testing.T) {
+func TestRenderJSONAsMySQLTextArray(t *testing.T) {
 	// Layout for [1, "x", true]:
 	//   0-1  count = 3
 	//   2-3  size = 15
@@ -217,11 +217,11 @@ func TestRenderJSONAsMySQLText_Array(t *testing.T) {
 	require.Equal(t, `[1,"x",true]`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_LargeObject exercises the LARGE_OBJECT
+// TestRenderJSONAsMySQLTextLargeObject exercises the LARGE_OBJECT
 // offset table (4-byte offsets/counts) which the SMALL_OBJECT test
 // does not cover. INT32 also becomes an inline value in large mode,
 // where it was a pointer value in small mode.
-func TestRenderJSONAsMySQLText_LargeObject(t *testing.T) {
+func TestRenderJSONAsMySQLTextLargeObject(t *testing.T) {
 	// Layout for {"a": 1, "b": "x"} as JSONB LARGE_OBJECT body:
 	//   header (u32 count, u32 size)        = 8 bytes
 	//   2 key entries (u32 offset, u16 len) = 12 bytes
@@ -252,10 +252,10 @@ func TestRenderJSONAsMySQLText_LargeObject(t *testing.T) {
 	require.Equal(t, `{"a":1,"b":"x"}`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_LargeArray exercises the LARGE_ARRAY path
+// TestRenderJSONAsMySQLTextLargeArray exercises the LARGE_ARRAY path
 // with a mix of inline scalars (INT16, LITERAL) and a pointer value
 // (STRING).
-func TestRenderJSONAsMySQLText_LargeArray(t *testing.T) {
+func TestRenderJSONAsMySQLTextLargeArray(t *testing.T) {
 	// Layout for [1, "x", true] as JSONB LARGE_ARRAY body:
 	//   header (u32 count, u32 size)      = 8 bytes
 	//   3 value entries (u8 tp, u32 slot) = 15 bytes
@@ -278,11 +278,11 @@ func TestRenderJSONAsMySQLText_LargeArray(t *testing.T) {
 	require.Equal(t, `[1,"x",true]`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_NestedObject exercises a jsonObject value
+// TestRenderJSONAsMySQLTextNestedObject exercises a jsonObject value
 // nested inside another jsonObject. This is the path that would break
 // if jsonObject.MarshalJSON ever stopped recursing through json.Marshal
 // (e.g. if a future change started writing leaf bytes directly).
-func TestRenderJSONAsMySQLText_NestedObject(t *testing.T) {
+func TestRenderJSONAsMySQLTextNestedObject(t *testing.T) {
 	// Inner SMALL_OBJECT body for {"inner": 1}:
 	//   header (u16,u16) = 4
 	//   1 key entry      = 4
@@ -317,11 +317,11 @@ func TestRenderJSONAsMySQLText_NestedObject(t *testing.T) {
 	require.Equal(t, `{"outer":{"inner":1}}`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_KeyEscaping verifies that object keys go
+// TestRenderJSONAsMySQLTextKeyEscaping verifies that object keys go
 // through the same escaping path as string values: characters needing
 // JSON escapes are escaped, and multi-byte UTF-8 passes through
 // verbatim.
-func TestRenderJSONAsMySQLText_KeyEscaping(t *testing.T) {
+func TestRenderJSONAsMySQLTextKeyEscaping(t *testing.T) {
 	// SMALL_OBJECT body for {"a\"b": 1, "héllo": 2}.
 	// "a\"b" is 3 bytes; "héllo" is 6 bytes (é = 0xC3 0xA9 in UTF-8).
 	//   header        = 4
@@ -347,10 +347,10 @@ func TestRenderJSONAsMySQLText_KeyEscaping(t *testing.T) {
 	require.Equal(t, "{\"a\\\"b\":1,\"héllo\":2}", string(out))
 }
 
-// TestRenderJSONAsMySQLText_OpaqueDecimalShort exercises the bounds
+// TestRenderJSONAsMySQLTextOpaqueDecimalShort exercises the bounds
 // check on the NEWDECIMAL header. Previously a payload shorter than 2
 // bytes would index past the slice; now it surfaces a decode error.
-func TestRenderJSONAsMySQLText_OpaqueDecimalShort(t *testing.T) {
+func TestRenderJSONAsMySQLTextOpaqueDecimalShort(t *testing.T) {
 	data := []byte{
 		JSONB_OPAQUE,
 		mysql.MYSQL_TYPE_NEWDECIMAL,
@@ -361,11 +361,11 @@ func TestRenderJSONAsMySQLText_OpaqueDecimalShort(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestRenderJSONAsMySQLText_OpaqueDecimal exercises the NEWDECIMAL path
+// TestRenderJSONAsMySQLTextOpaqueDecimal exercises the NEWDECIMAL path
 // inside JSONB_OPAQUE. This is the value class where the legacy decoder
 // loses the JSON DECIMAL type (it becomes a quoted JSON STRING) and the
 // renderer must keep the value unquoted.
-func TestRenderJSONAsMySQLText_OpaqueDecimal(t *testing.T) {
+func TestRenderJSONAsMySQLTextOpaqueDecimal(t *testing.T) {
 	// For precision=2, scale=1 the MySQL DECIMAL binary form needs 1 byte
 	// for the integer digit and 1 byte for the fractional digit. The sign
 	// is encoded in the high bit of the first byte (set => positive).
@@ -406,9 +406,9 @@ func encodeJSONTimePayload(t *testing.T, hour, minute, second, frac int64) []byt
 	return payload
 }
 
-// TestRenderJSONAsMySQLText_OpaqueDateTime exercises the DATETIME path.
+// TestRenderJSONAsMySQLTextOpaqueDateTime exercises the DATETIME path.
 // MySQL emits these quoted with microsecond resolution.
-func TestRenderJSONAsMySQLText_OpaqueDateTime(t *testing.T) {
+func TestRenderJSONAsMySQLTextOpaqueDateTime(t *testing.T) {
 	payload := encodeJSONDateTimePayload(t, 2024, 1, 15, 10, 30, 45, 123456)
 	data := append([]byte{JSONB_OPAQUE, mysql.MYSQL_TYPE_DATETIME, 0x08}, payload...)
 	out, err := renderJSONAsMySQLText(data, false)
@@ -416,10 +416,10 @@ func TestRenderJSONAsMySQLText_OpaqueDateTime(t *testing.T) {
 	require.Equal(t, `"2024-01-15 10:30:45.123456"`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_OpaqueDate exercises the DATE path. The
+// TestRenderJSONAsMySQLTextOpaqueDate exercises the DATE path. The
 // renderer is more correct here than the legacy decoder, which always
 // formats DATE values with a trailing " 00:00:00.000000".
-func TestRenderJSONAsMySQLText_OpaqueDate(t *testing.T) {
+func TestRenderJSONAsMySQLTextOpaqueDate(t *testing.T) {
 	payload := encodeJSONDateTimePayload(t, 2024, 1, 15, 0, 0, 0, 0)
 	data := append([]byte{JSONB_OPAQUE, mysql.MYSQL_TYPE_DATE, 0x08}, payload...)
 	out, err := renderJSONAsMySQLText(data, false)
@@ -427,8 +427,8 @@ func TestRenderJSONAsMySQLText_OpaqueDate(t *testing.T) {
 	require.Equal(t, `"2024-01-15"`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_OpaqueTime exercises the TIME path.
-func TestRenderJSONAsMySQLText_OpaqueTime(t *testing.T) {
+// TestRenderJSONAsMySQLTextOpaqueTime exercises the TIME path.
+func TestRenderJSONAsMySQLTextOpaqueTime(t *testing.T) {
 	payload := encodeJSONTimePayload(t, 10, 30, 45, 123456)
 	data := append([]byte{JSONB_OPAQUE, mysql.MYSQL_TYPE_TIME, 0x08}, payload...)
 	out, err := renderJSONAsMySQLText(data, false)
@@ -436,12 +436,12 @@ func TestRenderJSONAsMySQLText_OpaqueTime(t *testing.T) {
 	require.Equal(t, `"10:30:45.123456"`, string(out))
 }
 
-// TestRenderJSONAsMySQLText_IgnoreDecodeError verifies that with
+// TestRenderJSONAsMySQLTextIgnoreDecodeError verifies that with
 // ignoreDecodeErr=true the renderer returns a *valid* JSON document
 // ("null") rather than the half-written buffer it accumulated before
 // hitting the error. This matches the legacy decoder, which returns
 // Go nil -> json.Marshal -> "null" in the same scenario.
-func TestRenderJSONAsMySQLText_IgnoreDecodeError(t *testing.T) {
+func TestRenderJSONAsMySQLTextIgnoreDecodeError(t *testing.T) {
 	// SMALL_OBJECT body that claims size=10 but only supplies 4 bytes.
 	data := []byte{JSONB_SMALL_OBJECT, 0x00, 0x00, 0x0A, 0x00}
 
@@ -458,7 +458,7 @@ func TestRenderJSONAsMySQLText_IgnoreDecodeError(t *testing.T) {
 	require.Equal(t, "null", string(out))
 }
 
-func TestBinlogParser_SetRenderJSONAsMySQLText(t *testing.T) {
+func TestBinlogParserSetRenderJSONAsMySQLText(t *testing.T) {
 	parser := NewBinlogParser()
 	require.False(t, parser.renderJSONAsMySQLText)
 	parser.SetRenderJSONAsMySQLText(true)
@@ -467,14 +467,14 @@ func TestBinlogParser_SetRenderJSONAsMySQLText(t *testing.T) {
 	require.False(t, parser.renderJSONAsMySQLText)
 }
 
-// TestRenderJSONAsMySQLText_StringEscaping checks that a JSONB_STRING
+// TestRenderJSONAsMySQLTextStringEscaping checks that a JSONB_STRING
 // payload containing characters that JSON requires to be escaped
 // (notably ", \, and control bytes) is emitted with the correct
 // backslash escapes. The per-character escape logic lives in
 // writeJSONString and is unit-tested directly by TestWriteJSONString;
 // this case exercises it through jsonString.MarshalJSON to make sure
 // the quote-and-escape sequencing in MarshalJSON is correct.
-func TestRenderJSONAsMySQLText_StringEscaping(t *testing.T) {
+func TestRenderJSONAsMySQLTextStringEscaping(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string
@@ -497,7 +497,7 @@ func TestRenderJSONAsMySQLText_StringEscaping(t *testing.T) {
 	}
 }
 
-// TestRenderJSONAsMySQLText_OpaqueDispatch locks in which inner MySQL
+// TestRenderJSONAsMySQLTextOpaqueDispatch locks in which inner MySQL
 // type bytes take a typed decode path inside JSONB_OPAQUE and which
 // fall through to the "base64:typeN:..." envelope. The explicit set is
 // small (NEWDECIMAL, TIME, DATE, DATETIME, TIMESTAMP); everything else
@@ -505,7 +505,7 @@ func TestRenderJSONAsMySQLText_StringEscaping(t *testing.T) {
 // decodeOpaque, this table must be updated too -- otherwise the new
 // branch is the silent kind of change that breaks downstream
 // round-tripping.
-func TestRenderJSONAsMySQLText_OpaqueDispatch(t *testing.T) {
+func TestRenderJSONAsMySQLTextOpaqueDispatch(t *testing.T) {
 	// Explicit cases: the output must NOT carry the base64 envelope.
 	// Value formatting is covered by the dedicated Opaque{Decimal,
 	// Date, DateTime, Time} tests above; here we only assert the
