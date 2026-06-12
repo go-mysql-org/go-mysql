@@ -89,8 +89,10 @@ func main() {
 	c.SetEventHandler(&handler{})
 
 	go func() {
+		var err error
 		if len(*gtid) > 0 {
-			gset, err := mysql.ParseGTIDSet(*flavor, *gtid)
+			var gset mysql.GTIDSet
+			gset, err = mysql.ParseGTIDSet(*flavor, *gtid)
 			if err != nil {
 				fmt.Printf("parse GTID set err %v\n", err)
 				return
