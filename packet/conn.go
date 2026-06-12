@@ -168,8 +168,12 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 
 	compressedLength := int(uint32(c.compressedHeader[0]) | uint32(c.compressedHeader[1])<<8 | uint32(c.compressedHeader[2])<<16)
 	uncompressedLength := int(uint32(c.compressedHeader[4]) | uint32(c.compressedHeader[5])<<8 | uint32(c.compressedHeader[6])<<16)
+
+	// Always bound reads to this frame's payload (compressedLength bytes on the wire).
+	// copyN relies on hitting EOF at the frame boundary to advance CompressedSequence
+	// and move on to the next compressed packet.
+	limitedReader := io.LimitReader(c.reader, int64(compressedLength))
 	if uncompressedLength > 0 {
-		limitedReader := io.LimitReader(c.reader, int64(compressedLength))
 		switch c.Compression {
 		case mysql.MYSQL_COMPRESS_ZLIB:
 			return compress.GetPooledZlibReader(limitedReader)
@@ -178,7 +182,12 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 		}
 	}
 
-	return nil, nil
+	// uncompressedLength == 0 means the payload was sent verbatim (compression wasn't
+	// worthwhile for this chunk). It must still be bounded to the frame: returning the
+	// raw, unbounded connection here lets a packet that spans into the following frame
+	// read straight through that frame's header, desyncing the compressed stream and
+	// surfacing later as "invalid compressed sequence" / "zlib: invalid header".
+	return limitedReader, nil
 }
 
 func (c *Conn) currentPacketReader() io.Reader {
