@@ -35,6 +35,8 @@ var (
 	startName = flag.String("bin_name", "", "start sync from binlog name")
 	startPos  = flag.Uint("bin_pos", 0, "start sync from binlog position of")
 
+	gtid = flag.String("gtid", "", "start sync from GTID set, e.g. 'de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2' (MySQL) or '0-1-1' (MariaDB)")
+
 	heartbeatPeriod = flag.Duration("heartbeat", 60*time.Second, "master heartbeat period")
 	readTimeout     = flag.Duration("read_timeout", 90*time.Second, "connection read timeout")
 )
@@ -86,13 +88,21 @@ func main() {
 
 	c.SetEventHandler(&handler{})
 
-	startPos := mysql.Position{
-		Name: *startName,
-		Pos:  uint32(*startPos),
-	}
-
 	go func() {
-		err = c.RunFrom(startPos)
+		if len(*gtid) > 0 {
+			gset, err := mysql.ParseGTIDSet(*flavor, *gtid)
+			if err != nil {
+				fmt.Printf("parse GTID set err %v\n", err)
+				return
+			}
+			err = c.StartFromGTID(gset)
+		} else {
+			startPos := mysql.Position{
+				Name: *startName,
+				Pos:  uint32(*startPos),
+			}
+			err = c.RunFrom(startPos)
+		}
 		if err != nil {
 			fmt.Printf("start canal err %v", err)
 		}
