@@ -145,10 +145,13 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 			c.cfg.Logger.Error("error parsing query, will skip this event", slog.String("query", string(e.Query)), slog.Any("error", err))
 			return nil
 		}
-		if len(stmts) > 0 {
-			savePos = true
-		}
 		for _, stmt := range stmts {
+			switch stmt.(type) {
+			case *ast.BeginStmt, *ast.SavepointStmt:
+				// transaction not yet complete; checkpointing here would skip it on GTID resume
+				continue
+			}
+			savePos = true
 			nodes := parseStmt(stmt)
 			for _, node := range nodes {
 				if node.db == "" {
