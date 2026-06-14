@@ -47,7 +47,7 @@ func main() {
 	err := mysql.ValidateFlavor(*flavor)
 	if err != nil {
 		fmt.Printf("Flavor error: %v\n", errors.ErrorStack(err))
-		return
+		os.Exit(1)
 	}
 
 	cfg := canal.NewDefaultConfig()
@@ -65,7 +65,7 @@ func main() {
 
 	c, err := canal.NewCanal(cfg)
 	if err != nil {
-		fmt.Printf("create canal err %v", err)
+		fmt.Printf("create canal err: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -88,25 +88,30 @@ func main() {
 
 	c.SetEventHandler(&handler{})
 
+	// Parse GTID in main goroutine so invalid GTID causes immediate exit.
+	var gset mysql.GTIDSet
+	if len(*gtid) > 0 {
+		var err error
+		gset, err = mysql.ParseGTIDSet(*flavor, *gtid)
+		if err != nil {
+			fmt.Printf("parse GTID set err: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	go func() {
 		var err error
-		if len(*gtid) > 0 {
-			var gset mysql.GTIDSet
-			gset, err = mysql.ParseGTIDSet(*flavor, *gtid)
-			if err != nil {
-				fmt.Printf("parse GTID set err %v\n", err)
-				return
-			}
+		if gset != nil {
 			err = c.StartFromGTID(gset)
 		} else {
-			startPos := mysql.Position{
+			from := mysql.Position{
 				Name: *startName,
 				Pos:  uint32(*startPos),
 			}
-			err = c.RunFrom(startPos)
+			err = c.RunFrom(from)
 		}
 		if err != nil {
-			fmt.Printf("start canal err %v", err)
+			fmt.Printf("start canal err: %v\n", err)
 		}
 	}()
 
