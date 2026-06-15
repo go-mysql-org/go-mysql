@@ -104,7 +104,12 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 		utils.BytesBufferPut(buf)
 	}()
 
-	if c.Compression != mysql.MYSQL_COMPRESS_NONE {
+	// compressedReader is reset to nil after each WritePacket, so a nil reader here means
+	// we're at the start of a new compressed frame and need to read its header. While a
+	// frame still has buffered packets to hand out, we reuse the existing reader rather
+	// than consuming another frame header. (newCompressedPacketReader never returns a nil
+	// reader, so its nilness fully tracks whether a frame read is in progress.)
+	if c.Compression != mysql.MYSQL_COMPRESS_NONE && c.compressedReader == nil {
 		var err error
 		c.compressedReader, err = c.newCompressedPacketReader()
 		if err != nil {

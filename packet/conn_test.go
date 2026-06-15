@@ -117,6 +117,39 @@ func TestReadPacketPacketSpanningZlibFrames(t *testing.T) {
 	}
 }
 
+// TestReadPacketMultiplePacketsInOneZlibFrame guards reader reuse across reads: a
+// server may pack several MySQL packets into a single compressed frame, and each is
+// retrieved by a separate ReadPacket call. The first read consumes the frame header
+// and decompresses; subsequent reads must continue from the same compressedReader
+// rather than consuming another frame header. Recreating the reader on every read
+// (e.g. dropping the nil guard) reads garbage as the next frame's header and desyncs.
+func TestReadPacketMultiplePacketsInOneZlibFrame(t *testing.T) {
+	payloadA := bytes.Repeat([]byte("alpha "), 8)
+	payloadB := bytes.Repeat([]byte("bravo "), 8)
+
+	// Two complete MySQL packets (sequence 0 and 1) inside one zlib frame.
+	combined := append(mysqlPacket(0, payloadA), mysqlPacket(1, payloadB)...)
+	stream := zlibFrame(t, 0, combined)
+
+	c := newReadTestConn(stream, mysql.MYSQL_COMPRESS_ZLIB)
+
+	got, err := c.ReadPacket()
+	if err != nil {
+		t.Fatalf("ReadPacket #1: %v", err)
+	}
+	if !bytes.Equal(got, payloadA) {
+		t.Fatalf("packet #1 mismatch:\n got  %q\n want %q", got, payloadA)
+	}
+
+	got, err = c.ReadPacket()
+	if err != nil {
+		t.Fatalf("ReadPacket #2: %v", err)
+	}
+	if !bytes.Equal(got, payloadB) {
+		t.Fatalf("packet #2 mismatch:\n got  %q\n want %q", got, payloadB)
+	}
+}
+
 // TestReadPacketSingleUncompressedFrame guards the common small-response case:
 // a whole packet inside one uncompressed frame.
 func TestReadPacketSingleUncompressedFrame(t *testing.T) {
