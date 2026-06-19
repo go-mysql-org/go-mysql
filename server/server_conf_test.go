@@ -77,7 +77,6 @@ func TestNegotiatedMultiResultsCapability(t *testing.T) {
 		if connErr != nil {
 			return
 		}
-		defer sConn.Close()
 		for {
 			if handleErr := sConn.HandleCommand(); handleErr != nil {
 				return
