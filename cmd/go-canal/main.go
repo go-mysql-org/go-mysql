@@ -35,6 +35,8 @@ var (
 	startName = flag.String("bin_name", "", "start sync from binlog name")
 	startPos  = flag.Uint("bin_pos", 0, "start sync from binlog position of")
 
+	gtid = flag.String("gtid", "", "start sync from GTID set, e.g. 'de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2' (MySQL) or '0-1-1' (MariaDB)")
+
 	heartbeatPeriod = flag.Duration("heartbeat", 60*time.Second, "master heartbeat period")
 	readTimeout     = flag.Duration("read_timeout", 90*time.Second, "connection read timeout")
 )
@@ -45,7 +47,7 @@ func main() {
 	err := mysql.ValidateFlavor(*flavor)
 	if err != nil {
 		fmt.Printf("Flavor error: %v\n", errors.ErrorStack(err))
-		return
+		os.Exit(1)
 	}
 
 	cfg := canal.NewDefaultConfig()
@@ -63,7 +65,7 @@ func main() {
 
 	c, err := canal.NewCanal(cfg)
 	if err != nil {
-		fmt.Printf("create canal err %v", err)
+		fmt.Printf("create canal err: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -86,15 +88,30 @@ func main() {
 
 	c.SetEventHandler(&handler{})
 
-	startPos := mysql.Position{
-		Name: *startName,
-		Pos:  uint32(*startPos),
+	// Parse GTID in main goroutine so invalid GTID causes immediate exit.
+	var gset mysql.GTIDSet
+	if len(*gtid) > 0 {
+		var err error
+		gset, err = mysql.ParseGTIDSet(*flavor, *gtid)
+		if err != nil {
+			fmt.Printf("parse GTID set err: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	go func() {
-		err = c.RunFrom(startPos)
+		var err error
+		if gset != nil {
+			err = c.StartFromGTID(gset)
+		} else {
+			from := mysql.Position{
+				Name: *startName,
+				Pos:  uint32(*startPos),
+			}
+			err = c.RunFrom(from)
+		}
 		if err != nil {
-			fmt.Printf("start canal err %v", err)
+			fmt.Printf("start canal err: %v\n", err)
 		}
 	}()
 
