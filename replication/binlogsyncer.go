@@ -1007,6 +1007,21 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 		if !b.cfg.DiscardGTIDSet {
 			event.GSet = b.getCurrentGtidSet()
 		}
+
+	case *TransactionPayloadEvent:
+		// XID/Query decoded from compressed payload need GTID set attached,
+		// same as their uncompressed counterparts above; GTID event precedes
+		// payload uncompressed, so currGset already covers this transaction
+		if !b.cfg.DiscardGTIDSet {
+			for _, inner := range event.Events {
+				switch innerEvent := inner.Event.(type) {
+				case *XIDEvent:
+					innerEvent.GSet = b.getCurrentGtidSet()
+				case *QueryEvent:
+					innerEvent.GSet = b.getCurrentGtidSet()
+				}
+			}
+		}
 	}
 
 	// Use SynchronousEventHandler if it's set
