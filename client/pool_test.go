@@ -25,16 +25,6 @@ func TestPoolSuite(t *testing.T) {
 	}
 }
 
-func (s *poolTestSuite) SetupSuite() {
-	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
-	conn, err := Connect(addr, *testUser, *testPassword, "")
-	if err != nil {
-		s.T().Skipf("skipping pool integration suite, mysql unavailable at %s: %v", addr, err)
-		return
-	}
-	conn.Close()
-}
-
 func (s *poolTestSuite) TestPool_Close() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	pool, err := NewPoolWithOptions(addr, *testUser, *testPassword, "",

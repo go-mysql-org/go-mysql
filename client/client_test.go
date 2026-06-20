@@ -36,10 +36,7 @@ func (s *clientTestSuite) SetupSuite() {
 		// the collation set is the default value
 		return conn.SetCollation(mysql.DEFAULT_COLLATION_NAME)
 	})
-	if err != nil {
-		s.T().Skipf("skipping client integration suite, mysql unavailable at %s: %v", addr, err)
-		return
-	}
+	require.NoError(s.T(), err)
 
 	var result *mysql.Result
 	result, err = s.c.Execute("CREATE DATABASE IF NOT EXISTS " + *testDB)

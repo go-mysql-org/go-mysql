@@ -34,10 +34,7 @@ func (s *connTestSuite) SetupSuite() {
 		c.SetAttributes(map[string]string{"attrtest": "attrvalue"})
 		return err
 	})
-	if err != nil {
-		s.T().Skipf("skipping conn integration suite, mysql unavailable at %s: %v", addr, err)
-		return
-	}
+	require.NoError(s.T(), err)
 
 	_, err = s.c.Execute("CREATE DATABASE IF NOT EXISTS " + *testDB)
 	require.NoError(s.T(), err)

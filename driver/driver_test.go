@@ -35,10 +35,6 @@ func (s *testDriverSuite) SetupSuite() {
 	var err error
 	s.db, err = sqlx.Open("mysql", dsn)
 	require.NoError(s.T(), err)
-	if err = s.db.Ping(); err != nil {
-		s.T().Skipf("skipping driver integration suite, mysql unavailable at %s: %v", addr, err)
-		return
-	}
 }
 
 func (s *testDriverSuite) TearDownSuite() {

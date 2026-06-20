@@ -16,8 +16,12 @@ func Example() {
 	// tlsConfig := NewClientTLSConfig(caPem, certPem, keyPem, false, "your-server-name")
 	// conn, err := client.Connect("127.0.0.1:3306", "root", "", "test", func(c *Conn) {c.SetTLSConfig(tlsConfig)})
 	if err != nil {
-		fmt.Printf("skip example: %v\n", err)
-		return
+		msg := fmt.Sprintf(`
+This example needs a MySQL listening on 127.0.0.1:3006 with user "root" and 
+empty password. Please check the connectivity using mysql client.
+---
+Connect to MySQL failed: %v`, err)
+		panic(msg)
 	}
 
 	err = conn.Ping()
@@ -85,4 +89,22 @@ func Example() {
 			}
 		}
 	}
+	// Output:
+	// InsertId: 0, AffectedRows: 2
+	// Value of Row 0, Column 0: 1
+	// Value of Row 0, Column 'id': 1
+	// Row number 0
+	// 	Column number 0
+	// 		value (type: 2): 1
+	// 		int64 value: 1
+	// 	Column number 1
+	// 		value (type: 4): []byte{0x61, 0x62, 0x63}
+	// 		string value: abc
+	// Row number 1
+	// 	Column number 0
+	// 		value (type: 2): 2
+	// 		int64 value: 2
+	// 	Column number 1
+	// 		value (type: 4): []byte{0x64, 0x65, 0x66}
+	// 		string value: def
 }

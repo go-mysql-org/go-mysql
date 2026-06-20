@@ -29,16 +29,10 @@ func (s *schemaTestSuite) SetupSuite() {
 
 	var err error
 	s.conn, err = client.Connect(addr, "root", "", "")
-	if err != nil {
-		s.T().Skipf("skipping dump integration suite, mysql unavailable at %s: %v", addr, err)
-		return
-	}
+	require.NoError(s.T(), err)
 
 	s.d, err = NewDumper(*execution, addr, "root", "")
-	if err != nil {
-		s.T().Skipf("skipping dump integration suite, dumper unavailable: %v", err)
-		return
-	}
+	require.NoError(s.T(), err)
 	require.NotNil(s.T(), s.d)
 
 	s.d.SetCharset("utf8")
