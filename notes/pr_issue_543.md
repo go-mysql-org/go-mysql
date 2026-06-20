@@ -1,85 +1,49 @@
-# PR Description: Canal table memory cache optimization (#543)
-
+# PR Description: Canal table-cache bounding and RunFrom startup recovery
 ## Summary
-This proposal addresses memory growth risk in canal table metadata caching by introducing a bounded caching strategy. The current cache behavior can retain table entries indefinitely in long-running or high-churn workloads, which may lead to avoidable memory waste.
-
-Issue: #543
-
-## Problem statement
-Canal maintains table-related metadata in memory for performance, but with unbounded retention:
-- instances observing many schemas/tables over time can accumulate stale entries,
-- memory usage may grow beyond practical limits in dynamic environments,
-- cache entries that are no longer hot continue occupying heap.
-
-The issue request suggests evaluating `LRU` or local persistence (`localdb`) to reduce waste.
-
-## Root cause
-The table memory cache lifecycle is not constrained by eviction or compaction policy. This favors hit-rate but provides no upper bound on resident table metadata footprint.
-
-## Goals
-- Bound memory usage of table metadata cache.
-- Preserve fast access for hot tables.
-- Avoid behavior regression in CDC correctness.
-- Keep migration/rollout low-risk.
-
-## Proposed approach
-Use a two-tier strategy:
-1. **Primary:** LRU-based in-memory cache with configurable capacity.
-2. **Optional extension:** local persistent backing store for cold metadata (feature-gated), used only if operationally required.
-
-### Why LRU first
-- Lowest implementation and operational complexity.
-- Immediate memory bound with predictable behavior.
-- Keeps hot-path latency low for frequently accessed tables.
-
-### Why localdb optional
-- Useful for extreme cardinality scenarios.
-- Introduces I/O and durability considerations; therefore should be incremental and opt-in.
-
-## Design outline
-- Replace/augment current unbounded table cache map with LRU container.
-- Add configuration knobs (example names):
-  - `canal.table_cache.capacity` (max entries),
-  - `canal.table_cache.enable_lru` (default true once stable),
-  - `canal.table_cache.localdb.enabled` (default false).
-- Maintain existing lookup semantics from caller perspective.
-- On eviction, drop only cacheable metadata artifacts (no data-loss semantics).
-
+This branch improves Canal in two production pain points:
+- bound table metadata cache growth to reduce long-running memory pressure (#543),
+- recover startup when `RunFrom` points to an impossible binlog position (#642).
+## Motivation
+Two independent failure modes were observed in real deployments:
+- Table metadata cache can grow unbounded under high schema/table churn.
+- Restart from stale checkpoints can fail with:
+  `Client requested master to start replication from impossible position ...`
+Both cause operational instability (memory creep or startup failure) and require manual intervention.
+## Changes included
+### 1) Bounded table metadata cache (#543)
+- Added `Config.TableCacheCapacity` (default `1024`) in `canal/config.go`.
+- Added LRU bookkeeping in Canal cache management and integrated it into:
+  - `GetTable`,
+  - `SetTableCache`,
+  - `ClearTableCache`.
+- When cache size exceeds capacity, least-recently-used table metadata is evicted.
+- `TableCacheCapacity <= 0` preserves unbounded behavior for backward compatibility.
+- `DiscardNoMetaRowEvent` cleanup behavior remains consistent for evicted keys.
+### 2) `RunFrom` impossible-position recovery (#642)
+- Added impossible-position detection helper (`isImpossibleBinlogPositionError`).
+- In startup path (`startSyncer`), when `StartSync(pos)` fails with impossible-position error:
+  - fetch current valid master position (`GetMasterPos()`),
+  - retry sync from recovered position,
+  - update in-memory master position and emit recovery logs.
+- Added startup-recovery helpers for error parsing/retry:
+  - `fallbackStartPosFromImpossiblePositionError`,
+  - `retrySyncFromImpossiblePosition`,
+  to cover cases where startup errors surface during the initial stream read path.
 ## Compatibility and behavior
-- Backward-compatible defaults should preserve current functionality.
-- In workloads below capacity, behavior is effectively unchanged.
-- Above capacity, cold entries are evicted and lazily reloaded on next access.
-
-## Testing plan
-- Unit tests:
-  - cache hit/miss behavior parity,
-  - deterministic LRU eviction order,
-  - capacity boundary and churn scenarios.
-- Integration tests:
-  - canal run against rotating table sets,
-  - verify no CDC event correctness regressions,
-  - monitor memory plateau under sustained churn.
-- Performance checks:
-  - compare steady-state memory footprint,
-  - ensure acceptable cache-miss penalty.
-
-## Risks and mitigations
-- **Risk:** Increased misses for rarely used tables.
-  - **Mitigation:** conservative default capacity + tuning docs.
-- **Risk:** Latency spikes during metadata reload.
-  - **Mitigation:** benchmark and expose capacity configuration.
-- **Risk (if localdb enabled):** storage I/O overhead.
-  - **Mitigation:** keep localdb disabled by default; feature gate.
-
-## Rollout plan
-1. Introduce LRU implementation behind config flag.
-2. Validate in representative workloads.
-3. Set default to enabled after confidence.
-4. Keep optional localdb path for future follow-up if needed.
-
-## Operational notes
-- Expose cache metrics (entry count, evictions, misses) to simplify tuning.
-- Document recommended capacity sizing by table cardinality and memory budget.
-
+- Valid `RunFrom` positions keep existing behavior.
+- Non-impossible-position errors are still returned (no broad suppression).
+- Cache remains configurable; unbounded mode is retained via capacity <= 0.
+## Tests and validation
+- Added `canal/table_cache_test.go`:
+  - LRU eviction order,
+  - cache-clear behavior with LRU tracking.
+- Added `canal/sync_test.go` coverage for impossible-position detection and fallback parsing.
+- Targeted validation run:
+  - `go test ./canal -run 'TestGetShowBinaryLogQuery|TestIsImpossibleBinlogPositionError|TestFallbackStartPosFromImpossiblePositionError'` ✅
+- Note: full `go test ./canal` integration suite requires `mysqldump` available in PATH.
+## Risk assessment
+- Cache capacity set too low can increase metadata reload frequency.
+- Recovery logic is intentionally constrained to explicit impossible-position signatures to avoid masking unrelated failures.
 ## Issue linkage
-- Closes: #543
+- Closes #543
+- Closes #642
