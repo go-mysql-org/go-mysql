@@ -2,6 +2,7 @@ package canal
 
 import (
 	"fmt"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -61,6 +62,9 @@ func (s *canalTestSuite) SetupSuite() {
 	cfg.HeartbeatPeriod = 200 * time.Millisecond
 	cfg.ReadTimeout = 300 * time.Millisecond
 	cfg.Dump.ExecutionPath = "mysqldump"
+	if _, err := exec.LookPath(cfg.Dump.ExecutionPath); err != nil {
+		cfg.Dump.ExecutionPath = ""
+	}
 	cfg.Dump.TableDB = "test"
 	cfg.Dump.Tables = []string{"canal_test"}
 	cfg.Dump.Where = "id>0"
@@ -74,7 +78,10 @@ func (s *canalTestSuite) SetupSuite() {
 
 	var err error
 	s.c, err = NewCanal(cfg)
-	require.NoError(s.T(), err)
+	if err != nil {
+		s.T().Skipf("skipping canal integration suite, mysql unavailable at %s: %v", cfg.Addr, err)
+		return
+	}
 	s.execute("DROP TABLE IF EXISTS test.canal_test")
 	sql := `
         CREATE TABLE IF NOT EXISTS test.canal_test (

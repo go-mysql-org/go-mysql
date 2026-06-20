@@ -33,7 +33,10 @@ func (s *schemaTestSuite) SetupSuite() {
 
 	var err error
 	s.conn, err = client.Connect(addr, "root", *pwd, *schema)
-	require.NoError(s.T(), err)
+	if err != nil {
+		s.T().Skipf("skipping schema integration suite, mysql unavailable at %s: %v", addr, err)
+		return
+	}
 
 	s.sqlDB, err = sql.Open("mysql", fmt.Sprintf("root:%s@%s", *pwd, addr))
 	require.NoError(s.T(), err)

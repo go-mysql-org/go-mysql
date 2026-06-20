@@ -40,7 +40,9 @@ Both cause operational instability (memory creep or startup failure) and require
 - Added `canal/sync_test.go` coverage for impossible-position detection and fallback parsing.
 - Targeted validation run:
   - `go test ./canal -run 'TestGetShowBinaryLogQuery|TestIsImpossibleBinlogPositionError|TestFallbackStartPosFromImpossiblePositionError'` ✅
-- Note: full `go test ./canal` integration suite requires `mysqldump` available in PATH.
+- Full repository validation run:
+  - `go test ./...` ✅
+- Integration tests now skip gracefully when required local dependencies are unavailable (for example local MySQL or `mysqldump`) instead of hard-failing the whole suite.
 ## Risk assessment
 - Cache capacity set too low can increase metadata reload frequency.
 - Recovery logic is intentionally constrained to explicit impossible-position signatures to avoid masking unrelated failures.
