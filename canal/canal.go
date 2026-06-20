@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"container/list"
 	"context"
 	"fmt"
 	"io"
@@ -46,6 +47,9 @@ type Canal struct {
 	tableLock          sync.RWMutex
 	tables             map[string]*schema.Table
 	errorTablesGetTime map[string]time.Time
+	tableCacheCapacity int
+	tableCacheOrder    *list.List
+	tableCacheNodes    map[string]*list.Element
 
 	tableMatchCache   map[string]bool
 	includeTableRegex []*regexp.Regexp
@@ -80,6 +84,11 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.eventHandler = &DummyEventHandler{}
 	c.parser = parser.New()
 	c.tables = make(map[string]*schema.Table)
+	c.tableCacheCapacity = c.cfg.TableCacheCapacity
+	if c.tableCacheCapacity > 0 {
+		c.tableCacheOrder = list.New()
+		c.tableCacheNodes = make(map[string]*list.Element)
+	}
 	if c.cfg.DiscardNoMetaRowEvent {
 		c.errorTablesGetTime = make(map[string]time.Time)
 	}
@@ -327,9 +336,12 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	if !c.checkTableMatch(key) {
 		return nil, ErrExcludedTable
 	}
-	c.tableLock.RLock()
+	c.tableLock.Lock()
 	t, ok := c.tables[key]
-	c.tableLock.RUnlock()
+	if ok {
+		c.touchTableCacheLocked(key)
+	}
+	c.tableLock.Unlock()
 
 	if ok {
 		return t, nil
@@ -366,7 +378,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 			ta.AddColumn("id", "bigint(20)", "", "")
 			ta.AddColumn("type", "char(1)", "", "")
 			c.tableLock.Lock()
-			c.tables[key] = ta
+			c.setTableCacheLocked(key, ta)
 			c.tableLock.Unlock()
 			return ta, nil
 		}
@@ -383,7 +395,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	}
 
 	c.tableLock.Lock()
-	c.tables[key] = t
+	c.setTableCacheLocked(key, t)
 	if c.cfg.DiscardNoMetaRowEvent {
 		// if get table info success, delete this key from errorTablesGetTime
 		delete(c.errorTablesGetTime, key)
@@ -397,18 +409,69 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 func (c *Canal) ClearTableCache(db []byte, table []byte) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
-	delete(c.tables, key)
+	c.deleteTableCacheLocked(key)
 	if c.cfg.DiscardNoMetaRowEvent {
 		delete(c.errorTablesGetTime, key)
 	}
 	c.tableLock.Unlock()
 }
 
+func (c *Canal) touchTableCacheLocked(key string) {
+	if c.tableCacheCapacity <= 0 || c.tableCacheOrder == nil || c.tableCacheNodes == nil {
+		return
+	}
+	if ele, ok := c.tableCacheNodes[key]; ok {
+		c.tableCacheOrder.MoveToBack(ele)
+	}
+}
+
+func (c *Canal) deleteTableCacheLocked(key string) {
+	delete(c.tables, key)
+	if c.tableCacheCapacity <= 0 || c.tableCacheOrder == nil || c.tableCacheNodes == nil {
+		return
+	}
+	if ele, ok := c.tableCacheNodes[key]; ok {
+		c.tableCacheOrder.Remove(ele)
+		delete(c.tableCacheNodes, key)
+	}
+}
+
+func (c *Canal) setTableCacheLocked(key string, table *schema.Table) {
+	c.tables[key] = table
+	if c.tableCacheCapacity <= 0 || c.tableCacheOrder == nil || c.tableCacheNodes == nil {
+		return
+	}
+
+	if ele, ok := c.tableCacheNodes[key]; ok {
+		c.tableCacheOrder.MoveToBack(ele)
+	} else {
+		c.tableCacheNodes[key] = c.tableCacheOrder.PushBack(key)
+	}
+
+	for len(c.tables) > c.tableCacheCapacity {
+		front := c.tableCacheOrder.Front()
+		if front == nil {
+			return
+		}
+		evictedKey, ok := front.Value.(string)
+		if !ok {
+			c.tableCacheOrder.Remove(front)
+			continue
+		}
+		c.tableCacheOrder.Remove(front)
+		delete(c.tableCacheNodes, evictedKey)
+		delete(c.tables, evictedKey)
+		if c.cfg.DiscardNoMetaRowEvent {
+			delete(c.errorTablesGetTime, evictedKey)
+		}
+	}
+}
+
 // SetTableCache sets table cache value for the given table
 func (c *Canal) SetTableCache(db []byte, table []byte, schema *schema.Table) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
-	c.tables[key] = schema
+	c.setTableCacheLocked(key, schema)
 	if c.cfg.DiscardNoMetaRowEvent {
 		// if get table info success, delete this key from errorTablesGetTime
 		delete(c.errorTablesGetTime, key)

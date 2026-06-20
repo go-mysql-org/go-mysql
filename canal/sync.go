@@ -2,6 +2,9 @@ package canal
 
 import (
 	"log/slog"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -12,13 +15,39 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
+var (
+	impossiblePositionErrText       = "Client requested master to start replication from impossible position"
+	impossiblePositionFirstEventReg = regexp.MustCompile(`the first event '([^']+)' at ([0-9]+)`)
+)
+
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 	gset := c.master.GTIDSet()
 	if gset == nil || gset.String() == "" {
 		pos := c.master.Position()
 		s, err := c.syncer.StartSync(pos)
 		if err != nil {
-			return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
+			if !isImpossibleBinlogPositionError(err) {
+				return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
+			}
+
+			fallbackPos, fallbackErr := c.GetMasterPos()
+			if fallbackErr != nil {
+				return nil, errors.Errorf("start sync replication at binlog %v error %v; fallback to master position failed: %v", pos, err, fallbackErr)
+			}
+
+			c.cfg.Logger.Warn("requested binlog position is impossible, falling back to current master position",
+				slog.Any("requested_pos", pos),
+				slog.Any("fallback_pos", fallbackPos),
+				slog.Any("error", err),
+			)
+
+			s, err = c.syncer.StartSync(fallbackPos)
+			if err != nil {
+				return nil, errors.Errorf("start sync replication fallback at binlog %v error %v (requested %v)", fallbackPos, err, pos)
+			}
+			c.master.Update(fallbackPos)
+			c.cfg.Logger.Info("start sync binlog at fallback binlog file", slog.Any("pos", fallbackPos))
+			return s, nil
 		}
 		c.cfg.Logger.Info("start sync binlog at binlog file", slog.Any("pos", pos))
 		return s, nil
@@ -32,17 +61,44 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 	return s, nil
 }
 
+func isImpossibleBinlogPositionError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if mysql.ErrorCode(err.Error()) == mysql.ER_MASTER_FATAL_ERROR_READING_BINLOG {
+		errMsg := strings.ToLower(err.Error())
+		return strings.Contains(errMsg, "impossible position")
+	}
+
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "impossible position")
+}
+
 func (c *Canal) runSyncBinlog() error {
 	s, err := c.startSyncer()
 	if err != nil {
 		return err
 	}
+	attemptedImpossiblePositionRecovery := false
 
 	for {
 		ev, err := s.GetEvent(c.ctx)
 		if err != nil {
+			if !attemptedImpossiblePositionRecovery {
+				recoveredStreamer, recovered, recoverErr := c.retrySyncFromImpossiblePosition(err)
+				if recoverErr != nil {
+					return recoverErr
+				}
+				if recovered {
+					attemptedImpossiblePositionRecovery = true
+					s = recoveredStreamer
+					continue
+				}
+			}
 			return errors.Trace(err)
 		}
+		attemptedImpossiblePositionRecovery = true
 
 		// Update the delay between the Canal and the Master before the handler hooks are called
 		c.updateReplicationDelay(ev)
@@ -73,6 +129,75 @@ func (c *Canal) runSyncBinlog() error {
 	}
 }
 
+func (c *Canal) retrySyncFromImpossiblePosition(err error) (*replication.BinlogStreamer, bool, error) {
+	gset := c.master.GTIDSet()
+	if gset != nil && gset.String() != "" {
+		return nil, false, nil
+	}
+
+	current := c.master.Position()
+	fallback, ok := fallbackStartPosFromImpossiblePositionError(current, err)
+	if !ok {
+		return nil, false, nil
+	}
+
+	c.cfg.Logger.Warn(
+		"requested start position is impossible, retrying from a recovered position",
+		slog.Any("from", current),
+		slog.Any("to", fallback),
+		slog.Any("error", err),
+	)
+
+	c.syncer.Close()
+	if err := c.prepareSyncer(); err != nil {
+		return nil, false, errors.Trace(err)
+	}
+
+	s, startErr := c.syncer.StartSync(fallback)
+	if startErr != nil {
+		return nil, false, errors.Errorf("start sync replication at recovered binlog %v error %v", fallback, startErr)
+	}
+
+	c.master.Update(fallback)
+	c.cfg.Logger.Info("start sync binlog at recovered position", slog.Any("pos", fallback))
+	return s, true, nil
+}
+
+func fallbackStartPosFromImpossiblePositionError(current mysql.Position, err error) (mysql.Position, bool) {
+	if err == nil || current.Name == "" {
+		return mysql.Position{}, false
+	}
+
+	errText := err.Error()
+	if cause := errors.Cause(err); cause != nil && cause != err {
+		errText = errText + " " + cause.Error()
+	}
+	if !strings.Contains(errText, impossiblePositionErrText) {
+		return mysql.Position{}, false
+	}
+
+	fallback := current
+	matches := impossiblePositionFirstEventReg.FindStringSubmatch(errText)
+	if len(matches) == 3 {
+		fallback.Name = matches[1]
+		firstPos, parseErr := strconv.ParseUint(matches[2], 10, 32)
+		if parseErr != nil {
+			return mysql.Position{}, false
+		}
+		fallback.Pos = uint32(firstPos)
+	} else {
+		fallback.Pos = 4
+	}
+
+	if fallback.Pos < 4 {
+		fallback.Pos = 4
+	}
+	if fallback == current {
+		return mysql.Position{}, false
+	}
+
+	return fallback, true
+}
 func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 	savePos := false
 	force := false
