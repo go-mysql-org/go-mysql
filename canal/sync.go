@@ -26,28 +26,31 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		pos := c.master.Position()
 		s, err := c.syncer.StartSync(pos)
 		if err != nil {
-			if !isImpossibleBinlogPositionError(err) {
-				return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
-			}
+			if isImpossibleBinlogPositionError(err) {
+				fallbackPos, fallbackErr := c.GetMasterPos()
+				if fallbackErr != nil {
+					return nil, errors.Errorf("start sync replication at binlog %v error %v; fallback to master position failed: %v", pos, err, fallbackErr)
+				}
 
-			fallbackPos, fallbackErr := c.GetMasterPos()
-			if fallbackErr != nil {
-				return nil, errors.Errorf("start sync replication at binlog %v error %v; fallback to master position failed: %v", pos, err, fallbackErr)
-			}
+				c.cfg.Logger.Warn("requested binlog position is impossible, falling back to current master position",
+					slog.Any("requested_pos", pos),
+					slog.Any("fallback_pos", fallbackPos),
+					slog.Any("error", err),
+				)
 
-			c.cfg.Logger.Warn("requested binlog position is impossible, falling back to current master position",
-				slog.Any("requested_pos", pos),
-				slog.Any("fallback_pos", fallbackPos),
-				slog.Any("error", err),
-			)
-
-			s, err = c.syncer.StartSync(fallbackPos)
-			if err != nil {
-				return nil, errors.Errorf("start sync replication fallback at binlog %v error %v (requested %v)", fallbackPos, err, pos)
+				s, err = c.syncer.StartSync(fallbackPos)
+				if err == nil {
+					c.master.Update(fallbackPos)
+					c.cfg.Logger.Info("start sync binlog at fallback binlog file", slog.Any("pos", fallbackPos))
+					return s, nil
+				}
+				c.cfg.Logger.Warn("fallback start sync failed, returning original startup error",
+					slog.Any("requested_pos", pos),
+					slog.Any("fallback_pos", fallbackPos),
+					slog.Any("fallback_error", err),
+				)
 			}
-			c.master.Update(fallbackPos)
-			c.cfg.Logger.Info("start sync binlog at fallback binlog file", slog.Any("pos", fallbackPos))
-			return s, nil
+			return nil, errors.Errorf("start sync replication at binlog %v error %v", pos, err)
 		}
 		c.cfg.Logger.Info("start sync binlog at binlog file", slog.Any("pos", pos))
 		return s, nil

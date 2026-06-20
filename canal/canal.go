@@ -336,14 +336,14 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	if !c.checkTableMatch(key) {
 		return nil, ErrExcludedTable
 	}
-	c.tableLock.Lock()
+	c.tableLock.RLock()
 	t, ok := c.tables[key]
-	if ok {
-		c.touchTableCacheLocked(key)
-	}
-	c.tableLock.Unlock()
+	c.tableLock.RUnlock()
 
 	if ok {
+		c.tableLock.Lock()
+		c.touchTableCacheLocked(key)
+		c.tableLock.Unlock()
 		return t, nil
 	}
 
@@ -378,6 +378,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 			ta.AddColumn("id", "bigint(20)", "", "")
 			ta.AddColumn("type", "char(1)", "", "")
 			c.tableLock.Lock()
+			c.tables[key] = ta
 			c.setTableCacheLocked(key, ta)
 			c.tableLock.Unlock()
 			return ta, nil
@@ -395,6 +396,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 	}
 
 	c.tableLock.Lock()
+	c.tables[key] = t
 	c.setTableCacheLocked(key, t)
 	if c.cfg.DiscardNoMetaRowEvent {
 		// if get table info success, delete this key from errorTablesGetTime
@@ -409,6 +411,7 @@ func (c *Canal) GetTable(db string, table string) (*schema.Table, error) {
 func (c *Canal) ClearTableCache(db []byte, table []byte) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
+	delete(c.tables, key)
 	c.deleteTableCacheLocked(key)
 	if c.cfg.DiscardNoMetaRowEvent {
 		delete(c.errorTablesGetTime, key)
@@ -426,7 +429,6 @@ func (c *Canal) touchTableCacheLocked(key string) {
 }
 
 func (c *Canal) deleteTableCacheLocked(key string) {
-	delete(c.tables, key)
 	if c.tableCacheCapacity <= 0 || c.tableCacheOrder == nil || c.tableCacheNodes == nil {
 		return
 	}
@@ -437,7 +439,7 @@ func (c *Canal) deleteTableCacheLocked(key string) {
 }
 
 func (c *Canal) setTableCacheLocked(key string, table *schema.Table) {
-	c.tables[key] = table
+	_ = table
 	if c.tableCacheCapacity <= 0 || c.tableCacheOrder == nil || c.tableCacheNodes == nil {
 		return
 	}
@@ -471,6 +473,7 @@ func (c *Canal) setTableCacheLocked(key string, table *schema.Table) {
 func (c *Canal) SetTableCache(db []byte, table []byte, schema *schema.Table) {
 	key := fmt.Sprintf("%s.%s", db, table)
 	c.tableLock.Lock()
+	c.tables[key] = schema
 	c.setTableCacheLocked(key, schema)
 	if c.cfg.DiscardNoMetaRowEvent {
 		// if get table info success, delete this key from errorTablesGetTime
