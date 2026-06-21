@@ -52,17 +52,17 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 
 		// Example status message:
 		// "Records: 3  Duplicates: 0  Warnings: 0"
-		statusMessageLength := int(data[pos])
-		pos++
+		statusMessageLength, _, n := mysql.LengthEncodedInt(data[pos:])
+		pos += n
 		if statusMessageLength > 0 {
-			r.StatusMessage = utils.ByteSliceToString(data[pos : pos+statusMessageLength])
-			pos += statusMessageLength
+			r.StatusMessage = utils.ByteSliceToString(data[pos : pos+int(statusMessageLength)])
+			pos += int(statusMessageLength)
 		}
 
-		sessionTrackingChangeLength := int(data[pos])
-		pos++
+		sessionTrackingChangeLength, _, n := mysql.LengthEncodedInt(data[pos:])
+		pos += n
 		dataLength := len(data[pos:])
-		if dataLength != sessionTrackingChangeLength {
+		if dataLength != int(sessionTrackingChangeLength) {
 			return nil, fmt.Errorf("incorrect data length for session tracking data: expected %d but got %d",
 				sessionTrackingChangeLength, dataLength)
 		}
@@ -82,7 +82,8 @@ func decodeSessionTracking(data []byte) (s *mysql.SessionTrackingInfo, err error
 	for pos < len(data) {
 		sessionTrackingChangeType := data[pos]
 		pos++ // session tracking type
-		pos++ // length of session tracking data, unused
+		_, _, n := mysql.LengthEncodedInt(data[pos:])
+		pos += n // length of session tracking data, unused
 
 		switch sessionTrackingChangeType {
 		case mysql.SESSION_TRACK_SYSTEM_VARIABLES:
@@ -103,8 +104,10 @@ func decodeSessionTracking(data []byte) (s *mysql.SessionTrackingInfo, err error
 			s.Schema = utils.ByteSliceToString(data[pos : pos+int(schemaInfoLength)])
 			pos += int(schemaInfoLength)
 		case mysql.SESSION_TRACK_STATE_CHANGE:
-			s.State = string(data[pos])
+			stateLen := data[pos]
 			pos++
+			s.State = utils.ByteSliceToString(data[pos : pos+int(stateLen)])
+			pos += int(stateLen)
 		case mysql.SESSION_TRACK_GTIDS:
 			gtidFormat := data[pos]
 			if gtidFormat != 0 {

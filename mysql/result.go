@@ -36,13 +36,13 @@ func AppendOKSessionTrackSuffix(data []byte, r *Result) []byte {
 	}
 
 	statusMessage := r.StatusMessage
-	data = append(data, byte(len(statusMessage)))
+	data = append(data, PutLengthEncodedInt(uint64(len(statusMessage)))...)
 	if len(statusMessage) > 0 {
 		data = append(data, statusMessage...)
 	}
 
 	block := encodeSessionTracking(r.SessionTracking)
-	data = append(data, byte(len(block)))
+	data = append(data, PutLengthEncodedInt(uint64(len(block)))...)
 	if len(block) > 0 {
 		data = append(data, block...)
 	}
@@ -65,54 +65,56 @@ func encodeSessionTracking(s *SessionTrackingInfo) []byte {
 		sort.Strings(names)
 		for _, name := range names {
 			value := s.Variables[name]
-			payload := make([]byte, 0, 2+len(name)+len(value))
-			payload = append(payload, byte(len(name)))
-			payload = append(payload, name...)
-			payload = append(payload, byte(len(value)))
-			payload = append(payload, value...)
+			var payload []byte
+			payload = appendLenEncString(payload, name)
+			payload = appendLenEncString(payload, value)
 			data = appendSessionTrackEntry(data, SESSION_TRACK_SYSTEM_VARIABLES, payload)
 		}
 	}
 
 	if s.Schema != "" {
-		payload := make([]byte, 0, 1+len(s.Schema))
-		payload = append(payload, byte(len(s.Schema)))
-		payload = append(payload, s.Schema...)
+		var payload []byte
+		payload = appendLenEncString(payload, s.Schema)
 		data = appendSessionTrackEntry(data, SESSION_TRACK_SCHEMA, payload)
 	}
 
 	if s.State != "" {
-		data = appendSessionTrackEntry(data, SESSION_TRACK_STATE_CHANGE, []byte(s.State[:1]))
+		var payload []byte
+		payload = appendLenEncString(payload, s.State[:1])
+		data = appendSessionTrackEntry(data, SESSION_TRACK_STATE_CHANGE, payload)
 	}
 
 	if s.GTID != "" {
-		payload := make([]byte, 0, 2+len(s.GTID))
+		var payload []byte
 		payload = append(payload, 0x00)
-		payload = append(payload, byte(len(s.GTID)))
-		payload = append(payload, s.GTID...)
+		payload = appendLenEncString(payload, s.GTID)
 		data = appendSessionTrackEntry(data, SESSION_TRACK_GTIDS, payload)
 	}
 
 	if s.Characteristics != "" {
-		payload := make([]byte, 0, 1+len(s.Characteristics))
-		payload = append(payload, byte(len(s.Characteristics)))
-		payload = append(payload, s.Characteristics...)
+		var payload []byte
+		payload = appendLenEncString(payload, s.Characteristics)
 		data = appendSessionTrackEntry(data, SESSION_TRACK_TRANSACTION_CHARACTERISTICS, payload)
 	}
 
 	if s.TransactionState != "" {
-		payload := make([]byte, 0, 1+len(s.TransactionState))
-		payload = append(payload, byte(len(s.TransactionState)))
-		payload = append(payload, s.TransactionState...)
+		var payload []byte
+		payload = appendLenEncString(payload, s.TransactionState)
 		data = appendSessionTrackEntry(data, SESSION_TRACK_TRANSACTION_STATE, payload)
 	}
 
 	return data
 }
 
+func appendLenEncString(data []byte, s string) []byte {
+	data = append(data, PutLengthEncodedInt(uint64(len(s)))...)
+	data = append(data, s...)
+	return data
+}
+
 func appendSessionTrackEntry(data []byte, trackType byte, payload []byte) []byte {
 	data = append(data, trackType)
-	data = append(data, byte(len(payload)))
+	data = append(data, PutLengthEncodedInt(uint64(len(payload)))...)
 	data = append(data, payload...)
 	return data
 }

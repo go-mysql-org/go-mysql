@@ -56,7 +56,7 @@ func TestConnWriteOKWithSessionTrack(t *testing.T) {
 
 	sessionTrackBlock := []byte{
 		mysql.SESSION_TRACK_SCHEMA, 0x6, 0x5, 'm', 'y', 's', 'q', 'l',
-		mysql.SESSION_TRACK_STATE_CHANGE, 0x1, '1',
+		mysql.SESSION_TRACK_STATE_CHANGE, 0x2, 0x1, '1',
 	}
 	expectedPayload := []byte{
 		mysql.OK_HEADER, 1, 2,
