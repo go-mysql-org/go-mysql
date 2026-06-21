@@ -28,6 +28,11 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 		data = append(data, byte(r.Warnings), byte(r.Warnings>>8))
 	}
 
+	if c.capability&mysql.CLIENT_SESSION_TRACK > 0 &&
+		r.Status&mysql.SERVER_SESSION_STATE_CHANGED > 0 {
+		data = mysql.AppendOKSessionTrackSuffix(data, r)
+	}
+
 	return c.WritePacket(data)
 }
 

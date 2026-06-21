@@ -37,6 +37,39 @@ func TestConnWriteOK(t *testing.T) {
 	require.Equal(t, expected, clientConn.WriteBuffered)
 }
 
+func TestConnWriteOKWithSessionTrack(t *testing.T) {
+	clientConn := &mockconn.MockConn{}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+	conn.SetCapability(mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK)
+
+	result := mysql.NewResultReserveResultset(0)
+	result.AffectedRows = 1
+	result.InsertId = 2
+	result.Status = mysql.SERVER_SESSION_STATE_CHANGED
+	result.SessionTracking = &mysql.SessionTrackingInfo{
+		Schema: "mysql",
+		State:  "1",
+	}
+
+	err := conn.writeOK(result)
+	require.NoError(t, err)
+
+	sessionTrackBlock := []byte{
+		mysql.SESSION_TRACK_SCHEMA, 0x6, 0x5, 'm', 'y', 's', 'q', 'l',
+		mysql.SESSION_TRACK_STATE_CHANGE, 0x1, '1',
+	}
+	expectedPayload := []byte{
+		mysql.OK_HEADER, 1, 2,
+		0x00, 0x40, // SERVER_SESSION_STATE_CHANGED
+		0x00, 0x00, // warnings
+		0x00, // status message length
+		byte(len(sessionTrackBlock)),
+	}
+	expectedPayload = append(expectedPayload, sessionTrackBlock...)
+	expected := append([]byte{byte(len(expectedPayload)), 0, 0, 0}, expectedPayload...)
+	require.Equal(t, expected, clientConn.WriteBuffered)
+}
+
 func TestConnWriteEOF(t *testing.T) {
 	clientConn := &mockconn.MockConn{}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
