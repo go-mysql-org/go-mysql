@@ -12,7 +12,6 @@ import (
 var multiResultServerCapabilities = []uint32{
 	mysql.CLIENT_MULTI_RESULTS,
 	mysql.CLIENT_PS_MULTI_RESULTS,
-	mysql.CLIENT_SESSION_TRACK,
 }
 
 func TestDefaultServerCapabilities(t *testing.T) {
