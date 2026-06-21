@@ -1,0 +1,86 @@
+# Bitbucket Pipelines CI for go-mysql.
+# Aligned to mirror .github/workflows/ci.yml as closely as Bitbucket allows:
+#   * Go matrix 1.15 + 1.16 (parallel test steps).
+#   * `go test ./...` (no -race / no timeout) — same command as the GH job.
+#   * MySQL with binlog + GTID, root / empty password / db `test` on 127.0.0.1:3306
+#     (the defaults in the *_test.go flags). MySQL 5.7 to match the ubuntu-18.04 era.
+#   * Runs on every branch push AND every pull request (== GH `on: [push, pull_request]`).
+#   * Tests + golangci-lint run in parallel.
+#
+# Two unavoidable Bitbucket-isms (can't be byte-identical to GH):
+#   1. MySQL is launched with `docker run` rather than a Pipelines `service:` block,
+#      because services can't take the --log-bin/--gtid-mode flags the tests need.
+#      A `docker run -p` port is reachable at 127.0.0.1:3306 from the build step.
+#   2. golangci-lint is pinned to v1.48.0 — the GH job used `version: latest`, but
+#      latest now ERRORS on the deadcode/structcheck/varcheck linters in .golangci.yml
+#      (removed in v1.49+). v1.48.0 is the last release that still has them.
+#      Recommended follow-up: modernize .golangci.yml, then move to latest.
+
+image: golang:1.16          # default (lint step); test steps override per Go version
+
+definitions:
+  services:
+    docker:
+      memory: 3072          # headroom for the MySQL container
+  caches:
+    gomodcache: /go/pkg/mod
+
+  steps:
+    - step: &test-go116
+        name: Tests Go 1.16 (MySQL 5.7 binlog+GTID)
+        image: golang:1.16
+        size: 2x
+        services:
+          - docker
+        caches:
+          - gomodcache
+        script: &test-script
+          - apt-get update >/dev/null && apt-get install -y --no-install-recommends default-mysql-client >/dev/null
+          - |
+            docker run -d --name mysql -p 3306:3306 \
+              -e MYSQL_ALLOW_EMPTY_PASSWORD=yes \
+              -e MYSQL_DATABASE=test \
+              mysql:5.7 \
+              --server-id=1 --log-bin=mysql-bin --binlog-format=ROW \
+              --gtid-mode=ON --enforce-gtid-consistency=ON
+          - |
+            echo "Waiting for MySQL to accept connections..."
+            for i in $(seq 1 60); do
+              if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot --silent 2>/dev/null; then echo "MySQL is up"; break; fi
+              if [ "$i" = "60" ]; then echo "MySQL failed to start"; docker logs mysql; exit 1; fi
+              sleep 2
+            done
+          - mysql -h 127.0.0.1 -uroot -e "CREATE DATABASE IF NOT EXISTS test; SHOW VARIABLES LIKE 'log_bin'; SELECT @@gtid_mode;"
+          - go test ./...
+
+    - step: &test-go115
+        name: Tests Go 1.15 (MySQL 5.7 binlog+GTID)
+        image: golang:1.15
+        size: 2x
+        services:
+          - docker
+        caches:
+          - gomodcache
+        script: *test-script
+
+    - step: &lint
+        name: golangci-lint
+        caches:
+          - gomodcache
+        script:
+          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.48.0
+          - "$(go env GOPATH)/bin/golangci-lint run --timeout 5m"
+
+pipelines:
+  branches:
+    '**':
+      - parallel:
+          - step: *test-go116
+          - step: *test-go115
+          - step: *lint
+  pull-requests:
+    '**':
+      - parallel:
+          - step: *test-go116
+          - step: *test-go115
+          - step: *lint
