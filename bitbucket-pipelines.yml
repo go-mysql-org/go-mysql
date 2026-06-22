@@ -72,8 +72,50 @@ definitions:
           - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.64.8
           - "$(go env GOPATH)/bin/golangci-lint run --timeout 5m"
 
+    # Cuts an auto-incremented semver tag (patch bump) when a commit lands on main —
+    # i.e. when a PR is merged. Only runs after the test/lint steps pass (see the
+    # `branches.main` pipeline below). Bitbucket-only: there is no equivalent in the
+    # GitHub workflow this file otherwise mirrors.
+    - step: &tag-release
+        name: Tag release (semver patch bump)
+        image: alpine/git:latest
+        clone:
+          depth: full        # need full history so all existing tags are visible
+        script:
+          - git config user.name "bitbucket-pipelines"
+          - git config user.email "pipelines@bitbucket.org"
+          - git fetch --tags --quiet
+          - |
+            latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+            if [ -z "$latest" ]; then
+              new="v0.1.0"
+              echo "No existing semver tag found; starting at $new"
+            else
+              ver=${latest#v}
+              major=$(echo "$ver" | cut -d. -f1)
+              minor=$(echo "$ver" | cut -d. -f2)
+              patch=$(echo "$ver" | cut -d. -f3)
+              new="v${major}.${minor}.$((patch + 1))"
+              echo "Latest tag $latest -> new tag $new"
+            fi
+            # No-op if HEAD is already tagged (e.g. a re-run of the same commit).
+            if git describe --exact-match --tags HEAD >/dev/null 2>&1; then
+              echo "HEAD already tagged; skipping."
+              exit 0
+            fi
+            git tag -a "$new" -m "Release $new (PR merged to main)"
+            git push origin "$new"
+
 pipelines:
   branches:
+    # Explicit, more-specific glob: main pushes (= PR merges) run this instead of '**'.
+    # Tests/lint run first; the tag step only executes if they all pass.
+    main:
+      - parallel:
+          - step: *test-go116
+          - step: *test-go115
+          - step: *lint
+      - step: *tag-release
     '**':
       - parallel:
           - step: *test-go116
