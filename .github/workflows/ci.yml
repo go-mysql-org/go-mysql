@@ -8,24 +8,27 @@ jobs:
         go: ['1.16', '1.15']
     name: Tests Go ${{ matrix.go }}
     # ubuntu-18.04 was retired by GitHub (jobs hung "waiting for a runner").
-    # ubuntu-latest ships MySQL 8.0, so the setup below uses 8.0-compatible SQL.
+    # ubuntu-latest ships MySQL 8.0, but go-mysql's tests were validated against
+    # MySQL 5.7 (the old 18.04 default), so we run 5.7 via Docker to match — same
+    # as bitbucket-pipelines.yml. (`docker run -p` is reachable at 127.0.0.1:3306.)
     runs-on: ubuntu-latest
 
     steps:
-      - name: Setup MySQL
+      - name: Setup MySQL 5.7 (binlog + GTID)
         run: |
-          echo -n "mysql -V: " ; mysql -V
-          echo -n "mysqldump -V: " ; mysqldump -V
-
-          echo -e '[mysqld]\nserver-id=1\nlog-bin=mysql\nbinlog-format=row\ngtid-mode=ON\nenforce_gtid_consistency=ON\ndefault-authentication-plugin=mysql_native_password\n' | sudo tee /etc/mysql/conf.d/replication.cnf
-          sudo service mysql start
-          # MySQL 8.0 removed the PASSWORD() function: set root to empty password + native auth via ALTER USER
-          sudo mysql -uroot -proot -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY ''; FLUSH PRIVILEGES;"
-          # SSL/RSA files (auto-generated on 8.0; tolerate absence of the helper)
-          sudo mysql_ssl_rsa_setup --uid=mysql || true
-          mysql -e "CREATE DATABASE IF NOT EXISTS test;" -uroot
-          mysql -e "SHOW VARIABLES LIKE 'log_bin'" -uroot
-          mysql -e "SELECT @@gtid_mode" -uroot
+          docker run -d --name mysql -p 3306:3306 \
+            -e MYSQL_ALLOW_EMPTY_PASSWORD=yes \
+            -e MYSQL_DATABASE=test \
+            mysql:5.7 \
+            --server-id=1 --log-bin=mysql-bin --binlog-format=ROW \
+            --gtid-mode=ON --enforce-gtid-consistency=ON
+          echo "Waiting for MySQL to accept connections..."
+          for i in $(seq 1 60); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot --silent 2>/dev/null; then echo "MySQL is up"; break; fi
+            if [ "$i" = "60" ]; then echo "MySQL failed to start"; docker logs mysql; exit 1; fi
+            sleep 2
+          done
+          mysql -h 127.0.0.1 -uroot -e "CREATE DATABASE IF NOT EXISTS test; SHOW VARIABLES LIKE 'log_bin'; SELECT @@gtid_mode;"
       - name: Prepare for Go
         run: |
           sudo apt-get install -y make gcc

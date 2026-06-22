@@ -53,7 +53,7 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 
 	// include & exclude config
 	cfg.IncludeTableRegex = make([]string, 1)
-	cfg.IncludeTableRegex[0] = ".*\\.canal_test"
+	cfg.IncludeTableRegex[0] = "test.canal_test"
 	cfg.ExcludeTableRegex = make([]string, 2)
 	cfg.ExcludeTableRegex[0] = "mysql\\..*"
 	cfg.ExcludeTableRegex[1] = ".*\\..*_inner"
@@ -386,25 +386,7 @@ func TestWithoutSchemeExp(t *testing.T) {
 func TestGenerateCharsetQuery(t *testing.T) {
 	c := &Canal{}
 
-	expected := `
-		SELECT 
-		    c.ORDINAL_POSITION,
-			CASE 
-				WHEN c.CHARACTER_SET_NAME IS NOT NULL THEN c.CHARACTER_SET_NAME
-				WHEN c.DATA_TYPE IN ('binary','varbinary','tinyblob','blob','mediumblob','longblob') THEN col.CHARACTER_SET_NAME
-			END AS CHARACTER_SET_NAME,
-			c.COLUMN_NAME
-		FROM 
-			information_schema.COLUMNS c
-		LEFT JOIN information_schema.TABLES t
-			ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
-		LEFT JOIN information_schema.COLLATIONS col
-			ON col.COLLATION_NAME = t.TABLE_COLLATION
-		WHERE 
-			c.TABLE_SCHEMA = ?
-			AND c.TABLE_NAME = ?
-			AND (c.CHARACTER_SET_NAME IS NOT NULL OR c.DATA_TYPE IN ('binary','varbinary','tinyblob','blob','mediumblob','longblob'));
-		`
+	expected := `SELECT c.ORDINAL_POSITION, COALESCE( CASE WHEN c.CHARACTER_SET_NAME IS NOT NULL THEN c.CHARACTER_SET_NAME WHEN c.DATA_TYPE IN ('binary','varbinary','tinyblob','blob','mediumblob','longblob') THEN col.CHARACTER_SET_NAME ELSE col.CHARACTER_SET_NAME END, 'utf8mb4' ) AS CHARACTER_SET_NAME, c.COLUMN_NAME FROM information_schema.COLUMNS c LEFT JOIN information_schema.TABLES t ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME LEFT JOIN information_schema.COLLATIONS col ON col.COLLATION_NAME = t.TABLE_COLLATION WHERE c.TABLE_SCHEMA = ? AND c.TABLE_NAME = ? AND (c.CHARACTER_SET_NAME IS NOT NULL OR c.DATA_TYPE IN ('binary','varbinary','tinyblob','blob','mediumblob','longblob') OR c.DATA_TYPE IN ('varchar','char','text','tinytext','mediumtext','longtext'));`
 
 	actual, err := c.GenerateCharsetQuery()
 	assert.NoError(t, err)
