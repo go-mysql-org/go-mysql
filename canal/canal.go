@@ -539,7 +539,6 @@ func (c *Canal) GetColumnsCharsets() error {
 		if err := c.setColumnsCharsetFromRows(tableRegex, rows); err != nil {
 			return fmt.Errorf("failed to set charset from rows for table %s: %w", tableRegex, err)
 		}
-
 	}
 
 	return nil
