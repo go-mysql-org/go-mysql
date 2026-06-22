@@ -22,5 +22,4 @@ linters:
 linters-settings:
   nolintlint:
     allow-unused: false
-    allow-leading-space: false
     require-specific: true
