@@ -41,7 +41,7 @@ func (b *BufPool) Return(buf *bytes.Buffer) {
 }
 
 /*
-Conn is the base class to handle MySQL protocol.
+	Conn is the base class to handle MySQL protocol.
 */
 type Conn struct {
 	net.Conn
