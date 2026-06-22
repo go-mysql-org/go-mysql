@@ -5,9 +5,11 @@ jobs:
   test:
     strategy:
       matrix:
-        go: [ 1.16, 1.15 ]
+        go: ['1.16', '1.15']
     name: Tests Go ${{ matrix.go }}
-    runs-on: ubuntu-18.04
+    # ubuntu-18.04 was retired by GitHub (jobs hung "waiting for a runner").
+    # ubuntu-latest ships MySQL 8.0, so the setup below uses 8.0-compatible SQL.
+    runs-on: ubuntu-latest
 
     steps:
       - name: Setup MySQL
@@ -15,22 +17,24 @@ jobs:
           echo -n "mysql -V: " ; mysql -V
           echo -n "mysqldump -V: " ; mysqldump -V
 
-          echo -e '[mysqld]\nserver-id=1\nlog-bin=mysql\nbinlog-format=row\ngtid-mode=ON\nenforce_gtid_consistency=ON\n' | sudo tee /etc/mysql/conf.d/replication.cnf
+          echo -e '[mysqld]\nserver-id=1\nlog-bin=mysql\nbinlog-format=row\ngtid-mode=ON\nenforce_gtid_consistency=ON\ndefault-authentication-plugin=mysql_native_password\n' | sudo tee /etc/mysql/conf.d/replication.cnf
           sudo service mysql start
-          sudo mysql -h 127.0.0.1 -uroot -proot -e "use mysql; update user set authentication_string=PASSWORD('') where User='root'; update user set plugin='mysql_native_password'; FLUSH PRIVILEGES;"
-          # create ssl/rsa files for mysql ssl support
-          sudo mysql_ssl_rsa_setup --uid=mysql
+          # MySQL 8.0 removed the PASSWORD() function: set root to empty password + native auth via ALTER USER
+          sudo mysql -uroot -proot -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY ''; FLUSH PRIVILEGES;"
+          # SSL/RSA files (auto-generated on 8.0; tolerate absence of the helper)
+          sudo mysql_ssl_rsa_setup --uid=mysql || true
           mysql -e "CREATE DATABASE IF NOT EXISTS test;" -uroot
           mysql -e "SHOW VARIABLES LIKE 'log_bin'" -uroot
+          mysql -e "SELECT @@gtid_mode" -uroot
       - name: Prepare for Go
         run: |
           sudo apt-get install -y make gcc
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
       - name: Checkout code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
       - name: Run tests
         run: go test ./...
 
@@ -38,8 +42,11 @@ jobs:
     name: golangci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          version: latest
+          go-version: '1.22'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
