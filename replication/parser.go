@@ -387,6 +387,10 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 		p.tables[te.TableID] = te
 	}
 
+	if tpe, ok := e.(*TransactionPayloadEvent); ok {
+		tpe.stampInnerEventPositions(h)
+	}
+
 	if re, ok := e.(*RowsEvent); ok {
 		if (re.Flags & RowsEventStmtEndFlag) > 0 {
 			// Refer https://github.com/alibaba/canal/blob/38cc81b7dab29b51371096fb6763ca3a8432ffee/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogEvent.java#L176

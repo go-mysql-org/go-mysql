@@ -106,6 +106,23 @@ func (e *TransactionPayloadEvent) decodeFields(data []byte) error {
 	return nil
 }
 
+// stampInnerEventPositions fixes LogPos of decoded inner events. MySQL copies
+// them from transaction cache before position fixup, so they arrive with
+// LogPos=0. Stamp checkpoint-equivalent positions: payload start for
+// mid-transaction events (resume there replays whole transaction, matching
+// uncompressed semantics), payload end for final event (XID/COMMIT, resume
+// there skips transaction)
+func (e *TransactionPayloadEvent) stampInnerEventPositions(h *EventHeader) {
+	if len(e.Events) == 0 || h.LogPos < h.EventSize {
+		return
+	}
+	start := h.LogPos - h.EventSize
+	for _, inner := range e.Events {
+		inner.Header.LogPos = start
+	}
+	e.Events[len(e.Events)-1].Header.LogPos = h.LogPos
+}
+
 func (e *TransactionPayloadEvent) decodePayload() error {
 	if e.CompressionType != ZSTD {
 		return fmt.Errorf("TransactionPayloadEvent has compression type %d (%s)",

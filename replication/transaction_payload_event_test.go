@@ -147,4 +147,41 @@ func TestTransactionPayloadEventDecode(t *testing.T) {
 	devent, ok := e.Events[6].Event.(*RowsEvent)
 	require.True(t, ok)
 	require.Equal(t, devent.Type(), EnumRowsEventTypeDelete)
+
+	// MySQL writes inner events with LogPos=0 (copied from transaction cache
+	// before position fixup); parser must stamp usable positions, see
+	// stampInnerEventPositions
+	for _, inner := range e.Events {
+		require.Equal(t, uint32(0), inner.Header.LogPos)
+	}
+}
+
+func TestTransactionPayloadEventStampInnerEventPositions(t *testing.T) {
+	mk := func(types ...EventType) *TransactionPayloadEvent {
+		e := &TransactionPayloadEvent{}
+		for _, typ := range types {
+			e.Events = append(e.Events, &BinlogEvent{Header: &EventHeader{EventType: typ}})
+		}
+		return e
+	}
+
+	e := mk(QUERY_EVENT, TABLE_MAP_EVENT, WRITE_ROWS_EVENTv2, XID_EVENT)
+	e.stampInnerEventPositions(&EventHeader{LogPos: 5000, EventSize: 1200})
+	// mid-transaction events point at payload start so resume replays
+	// whole transaction
+	for _, inner := range e.Events[:3] {
+		require.Equal(t, uint32(3800), inner.Header.LogPos)
+	}
+	// final event (XID) points past payload so resume skips transaction
+	require.Equal(t, uint32(5000), e.Events[3].Header.LogPos)
+
+	// outer LogPos=0 (eg artificial event), leave inner events untouched
+	e = mk(QUERY_EVENT, XID_EVENT)
+	e.stampInnerEventPositions(&EventHeader{LogPos: 0, EventSize: 1200})
+	for _, inner := range e.Events {
+		require.Equal(t, uint32(0), inner.Header.LogPos)
+	}
+
+	// no events, must not panic
+	mk().stampInnerEventPositions(&EventHeader{LogPos: 5000, EventSize: 1200})
 }
