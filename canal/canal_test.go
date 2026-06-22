@@ -52,6 +52,9 @@ func (s *canalTestSuite) SetUpSuite(c *C) {
 	cfg.Dump.Where = "id>0"
 
 	// include & exclude config
+	// NOTE: GetColumnsCharsets (called from NewCanal) requires each IncludeTableRegex
+	// entry to be a literal db.table, so this uses "test.canal_test" rather than a
+	// cross-db regex like ".*\\.canal_test".
 	cfg.IncludeTableRegex = make([]string, 1)
 	cfg.IncludeTableRegex[0] = "test.canal_test"
 	cfg.ExcludeTableRegex = make([]string, 2)
@@ -192,9 +195,12 @@ func (s *canalTestSuite) TestCanalFilter(c *C) {
 	sch, err := s.c.GetTable("test", "canal_test")
 	c.Assert(err, IsNil)
 	c.Assert(sch, NotNil)
-	_, err = s.c.GetTable("not_exist_db", "canal_test")
-	c.Assert(errors.Trace(err), Not(Equals), ErrExcludedTable)
 	// excluded
+	// IncludeTableRegex is the literal "test.canal_test", so a table in another
+	// database is not matched and is therefore excluded.
+	sch, err = s.c.GetTable("not_exist_db", "canal_test")
+	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
+	c.Assert(sch, IsNil)
 	sch, err = s.c.GetTable("test", "canal_test_inner")
 	c.Assert(errors.Cause(err), Equals, ErrExcludedTable)
 	c.Assert(sch, IsNil)
