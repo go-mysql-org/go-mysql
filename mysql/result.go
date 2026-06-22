@@ -79,9 +79,7 @@ func encodeSessionTracking(s *SessionTrackingInfo) []byte {
 	}
 
 	if s.State != "" {
-		var payload []byte
-		payload = appendLenEncString(payload, s.State[:1])
-		data = appendSessionTrackEntry(data, SESSION_TRACK_STATE_CHANGE, payload)
+		data = appendSessionTrackEntry(data, SESSION_TRACK_STATE_CHANGE, []byte(s.State[:1]))
 	}
 
 	if s.GTID != "" {

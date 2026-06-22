@@ -104,10 +104,8 @@ func decodeSessionTracking(data []byte) (s *mysql.SessionTrackingInfo, err error
 			s.Schema = utils.ByteSliceToString(data[pos : pos+int(schemaInfoLength)])
 			pos += int(schemaInfoLength)
 		case mysql.SESSION_TRACK_STATE_CHANGE:
-			stateLen := data[pos]
+			s.State = string(data[pos])
 			pos++
-			s.State = utils.ByteSliceToString(data[pos : pos+int(stateLen)])
-			pos += int(stateLen)
 		case mysql.SESSION_TRACK_GTIDS:
 			gtidFormat := data[pos]
 			if gtidFormat != 0 {
