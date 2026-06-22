@@ -49,39 +49,39 @@ func TestHeartbeatIntervalConversion(t *testing.T) {
 // TestShouldSendHeartbeat tests the heartbeat timing logic
 func TestShouldSendHeartbeat(t *testing.T) {
 	tests := []struct {
-		name             string
+		name              string
 		heartbeatInterval time.Duration
-		lastEventTime    time.Time
-		currentTime      time.Time
-		expected         bool
+		lastEventTime     time.Time
+		currentTime       time.Time
+		expected          bool
 	}{
 		{
-			name:             "Disabled (zero interval)",
+			name:              "Disabled (zero interval)",
 			heartbeatInterval: 0,
-			lastEventTime:    time.Now().Add(-100 * time.Second),
-			currentTime:      time.Now(),
-			expected:         false,
+			lastEventTime:     time.Now().Add(-100 * time.Second),
+			currentTime:       time.Now(),
+			expected:          false,
 		},
 		{
-			name:             "Not enough time passed",
+			name:              "Not enough time passed",
 			heartbeatInterval: 60 * time.Second,
-			lastEventTime:    time.Now().Add(-30 * time.Second),
-			currentTime:      time.Now(),
-			expected:         false,
+			lastEventTime:     time.Now().Add(-30 * time.Second),
+			currentTime:       time.Now(),
+			expected:          false,
 		},
 		{
-			name:             "Exactly at interval",
+			name:              "Exactly at interval",
 			heartbeatInterval: 60 * time.Second,
-			lastEventTime:    time.Now().Add(-60 * time.Second),
-			currentTime:      time.Now(),
-			expected:         true,
+			lastEventTime:     time.Now().Add(-60 * time.Second),
+			currentTime:       time.Now(),
+			expected:          true,
 		},
 		{
-			name:             "Past interval",
+			name:              "Past interval",
 			heartbeatInterval: 60 * time.Second,
-			lastEventTime:    time.Now().Add(-120 * time.Second),
-			currentTime:      time.Now(),
-			expected:         true,
+			lastEventTime:     time.Now().Add(-120 * time.Second),
+			currentTime:       time.Now(),
+			expected:          true,
 		},
 	}
 
@@ -275,4 +275,3 @@ func (h *mockHeartbeatEventHandler) OnRow(e *RowsEvent) error {
 func (h *mockHeartbeatEventHandler) String() string {
 	return "mockHeartbeatEventHandler"
 }
-

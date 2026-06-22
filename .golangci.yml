@@ -2,13 +2,11 @@ linters:
   disable-all: true
   enable:
     # All code is ready for:
-    - deadcode
+    # deadcode/structcheck/varcheck were removed in golangci-lint v1.49 — folded into `unused`.
     - errcheck
     - staticcheck
-    - structcheck
     - typecheck
     - unused
-    - varcheck
     - misspell
     - nolintlint
     - goimports

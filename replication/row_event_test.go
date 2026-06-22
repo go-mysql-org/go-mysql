@@ -1446,7 +1446,7 @@ func TestDecodeStringLatin1(t *testing.T) {
 			name: "Long string (>255, 2-byte length)",
 			input: func() []byte {
 				buf := new(bytes.Buffer)
-				binary.Write(buf, binary.LittleEndian, uint16(6))
+				_ = binary.Write(buf, binary.LittleEndian, uint16(6))
 				buf.Write([]byte{0xe2, 'f', 'g', 'h', 0xe9, 0x00}) // 'âfghé\0'
 				return buf.Bytes()
 			}(),

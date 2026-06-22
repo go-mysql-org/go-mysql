@@ -37,7 +37,7 @@ func (t *mysqlTestSuite) TestMysqlGTIDInterval(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(i, check.DeepEquals, Interval{1, 2})
 
-	i, err = parseInterval("1-2")
+	_, err = parseInterval("1-2")
 	c.Assert(err, check.IsNil)
 }
 
