@@ -5,6 +5,11 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
+	"time"
+
 	. "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
 	"github.com/shopspring/decimal"
@@ -18,10 +23,6 @@ import (
 	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
-	"io"
-	"strconv"
-	"strings"
-	"time"
 )
 
 var errMissingTableMapEvent = errors.New("invalid table id, no corresponding table map event")
