@@ -61,6 +61,24 @@ func TestDecodeSessionTracking(t *testing.T) {
 	}
 }
 
+// TestDecodeSessionTrackingLargeValues verifies that fields longer than 250
+// bytes are decoded correctly (requires length-encoded integers, not raw bytes).
+func TestDecodeSessionTrackingLargeValues(t *testing.T) {
+	longVar := string(make([]byte, 300)) // 300 zero bytes — > 250 so lenenc is 3 bytes
+	longGTID := string(make([]byte, 260))
+
+	info := &mysql.SessionTrackingInfo{
+		Variables: map[string]string{"long_var": longVar},
+		GTID:      longGTID,
+	}
+
+	encoded := mysql.EncodeSessionTracking(info)
+	decoded, err := decodeSessionTracking(encoded)
+	require.NoError(t, err)
+	require.Equal(t, longVar, decoded.Variables["long_var"])
+	require.Equal(t, longGTID, decoded.GTID)
+}
+
 func TestHandleOKPacket(t *testing.T) {
 	c := Conn{
 		capability: mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK,

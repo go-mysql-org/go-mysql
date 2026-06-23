@@ -50,6 +50,12 @@ func AppendOKSessionTrackSuffix(data []byte, r *Result) []byte {
 	return data
 }
 
+// EncodeSessionTracking serializes a SessionTrackingInfo into the
+// session-state-changes block used in OK packets.
+func EncodeSessionTracking(s *SessionTrackingInfo) []byte {
+	return encodeSessionTracking(s)
+}
+
 func encodeSessionTracking(s *SessionTrackingInfo) []byte {
 	if s == nil {
 		return nil

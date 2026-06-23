@@ -70,6 +70,33 @@ func TestConnWriteOKWithSessionTrack(t *testing.T) {
 	require.Equal(t, expected, clientConn.WriteBuffered)
 }
 
+func TestConnWriteOKStatusMessageWithoutStateChange(t *testing.T) {
+	clientConn := &mockconn.MockConn{}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+	conn.SetCapability(mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK)
+
+	result := mysql.NewResultReserveResultset(0)
+	result.AffectedRows = 1
+	result.InsertId = 2
+	result.StatusMessage = "hello"
+	// No SERVER_SESSION_STATE_CHANGED — only the info string should be emitted.
+
+	err := conn.writeOK(result)
+	require.NoError(t, err)
+
+	msg := []byte("hello")
+	expectedPayload := []byte{
+		mysql.OK_HEADER, 1, 2,
+		0x00, 0x00, // status flags (no SESSION_STATE_CHANGED)
+		0x00, 0x00, // warnings
+		byte(len(msg)), // info lenenc length
+	}
+	expectedPayload = append(expectedPayload, msg...)
+	expectedPayload = append(expectedPayload, 0x00) // empty session-state block length
+	expected := append([]byte{byte(len(expectedPayload)), 0, 0, 0}, expectedPayload...)
+	require.Equal(t, expected, clientConn.WriteBuffered)
+}
+
 func TestConnWriteEOF(t *testing.T) {
 	clientConn := &mockconn.MockConn{}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
