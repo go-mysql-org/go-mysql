@@ -46,12 +46,9 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 		pos += 2
 	}
 
-	if (c.capability&mysql.CLIENT_SESSION_TRACK > 0) &&
-		(c.status&mysql.SERVER_SESSION_STATE_CHANGED > 0) {
-		var err error
-
-		// Example status message:
-		// "Records: 3  Duplicates: 0  Warnings: 0"
+	if c.capability&mysql.CLIENT_SESSION_TRACK > 0 {
+		// info string is always present when CLIENT_SESSION_TRACK is negotiated.
+		// Example: "Records: 3  Duplicates: 0  Warnings: 0"
 		statusMessageLength, _, n := mysql.LengthEncodedInt(data[pos:])
 		pos += n
 		if statusMessageLength > 0 {
@@ -59,16 +56,19 @@ func (c *Conn) handleOKPacket(data []byte) (*mysql.Result, error) {
 			pos += int(statusMessageLength)
 		}
 
-		sessionTrackingChangeLength, _, n := mysql.LengthEncodedInt(data[pos:])
-		pos += n
-		dataLength := len(data[pos:])
-		if dataLength != int(sessionTrackingChangeLength) {
-			return nil, fmt.Errorf("incorrect data length for session tracking data: expected %d but got %d",
-				sessionTrackingChangeLength, dataLength)
-		}
-		r.SessionTracking, err = decodeSessionTracking(data[pos:])
-		if err != nil {
-			return nil, err
+		if c.status&mysql.SERVER_SESSION_STATE_CHANGED > 0 {
+			sessionTrackingChangeLength, _, n := mysql.LengthEncodedInt(data[pos:])
+			pos += n
+			dataLength := len(data[pos:])
+			if dataLength != int(sessionTrackingChangeLength) {
+				return nil, fmt.Errorf("incorrect data length for session tracking data: expected %d but got %d",
+					sessionTrackingChangeLength, dataLength)
+			}
+			var err error
+			r.SessionTracking, err = decodeSessionTracking(data[pos:])
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
