@@ -74,6 +74,10 @@ type Config struct {
 	// discard row event without table meta
 	DiscardNoMetaRowEvent bool `toml:"discard_no_meta_row_event"`
 
+	// TableCacheCapacity is the maximum number of table metadata entries kept in memory.
+	// If <= 0, table metadata cache size is unbounded.
+	TableCacheCapacity int `toml:"table_cache_capacity"`
+
 	Dump DumpConfig `toml:"dump"`
 
 	UseDecimal bool `toml:"use_decimal"`
@@ -155,6 +159,7 @@ func NewDefaultConfig() *Config {
 	c.Dump.ExecutionPath = mysql.DEFAULT_DUMP_EXECUTION_PATH
 	c.Dump.DiscardErr = true
 	c.Dump.SkipMasterData = false
+	c.TableCacheCapacity = 1024
 
 	c.Logger = slog.Default()
 
