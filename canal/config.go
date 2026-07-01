@@ -96,6 +96,10 @@ type Config struct {
 	// and requires additional privileges.
 	DisableFlushBinlogWhileWaiting bool `toml:"disable_flush_binlog_while_waiting"`
 
+	// TransactionalPosSync avoids syncing positions that may belong to an unfinished transaction.
+	// When enabled, commit events call OnPosSynced with force=true.
+	TransactionalPosSync bool `toml:"transactional_pos_sync"`
+
 	// Set TLS config
 	TLSConfig *tls.Config
 

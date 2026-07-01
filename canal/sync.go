@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"bytes"
 	"log/slog"
 	"time"
 
@@ -10,6 +11,11 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/parser/ast"
+)
+
+var (
+	beginQuery  = []byte("BEGIN")
+	commitQuery = []byte("COMMIT")
 )
 
 func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
@@ -118,6 +124,9 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		return nil
 	case *replication.XIDEvent:
 		savePos = true
+		if c.cfg.TransactionalPosSync {
+			force = true
+		}
 		// try to save the position later
 		if err := c.eventHandler.OnXID(ev.Header, pos); err != nil {
 			return errors.Trace(err)
@@ -138,6 +147,14 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 			return errors.Trace(err)
 		}
 	case *replication.QueryEvent:
+		if c.cfg.TransactionalPosSync {
+			if bytes.Equal(e.Query, beginQuery) {
+				return nil
+			}
+			if bytes.Equal(e.Query, commitQuery) {
+				force = true
+			}
+		}
 		stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 		if err != nil {
 			// The parser does not understand all syntax.
