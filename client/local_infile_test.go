@@ -48,7 +48,7 @@ func readServerCOMQuery(t *testing.T, pc *packet.Conn) {
 	pkt, err := pc.ReadPacket()
 	require.NoError(t, err)
 	require.NotEmpty(t, pkt)
-	require.Equal(t, byte(mysql.COM_QUERY), pkt[0])
+	require.Equal(t, mysql.COM_QUERY, pkt[0])
 }
 
 func TestExecQueryRelayLocalInfile_DirectOK(t *testing.T) {
@@ -129,7 +129,7 @@ func TestExecQueryRelayLocalInfile_RelaySuccess(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.Equal(t, byte(mysql.LocalInFile_HEADER), requestPayload[0])
+	require.Equal(t, mysql.LocalInFile_HEADER, requestPayload[0])
 	require.Equal(t, "test.csv", string(requestPayload[1:]))
 }
 
