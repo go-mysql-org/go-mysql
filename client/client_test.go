@@ -34,13 +34,7 @@ func (s *clientTestSuite) SetupSuite() {
 	s.c, err = Connect(addr, *testUser, *testPassword, "", func(conn *Conn) error {
 		// test the collation logic, but this is essentially a no-op since
 		// the collation set is the default value
-		if err := conn.SetCollation(mysql.DEFAULT_COLLATION_NAME); err != nil {
-			return err
-		}
-		if err := conn.SetCapability(mysql.CLIENT_MULTI_RESULTS); err != nil {
-			return err
-		}
-		return conn.SetCapability(mysql.CLIENT_PS_MULTI_RESULTS)
+		return conn.SetCollation(mysql.DEFAULT_COLLATION_NAME)
 	})
 	require.NoError(s.T(), err)
 
