@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 )
@@ -55,7 +56,7 @@ func NewDefaultServer() *Server {
 		capability: mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
 			mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION | mysql.CLIENT_PLUGIN_AUTH | mysql.CLIENT_SSL |
 			mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | mysql.CLIENT_CONNECT_ATTRS | mysql.CLIENT_SESSION_TRACK |
-			mysql.CLIENT_MULTI_RESULTS | mysql.CLIENT_PS_MULTI_RESULTS | mysql.CLIENT_LOCAL_FILES,
+			mysql.CLIENT_MULTI_RESULTS | mysql.CLIENT_PS_MULTI_RESULTS,
 		collationID:       mysql.DEFAULT_COLLATION_ID,
 		defaultAuthMethod: mysql.AUTH_NATIVE_PASSWORD,
 		rsaPrivateKey:     rsaPrivateKey,
@@ -102,7 +103,7 @@ func NewServerWithAuth(serverVersion string, collationID uint8, defaultAuthMetho
 	capFlag := mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG | mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
 		mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION | mysql.CLIENT_PLUGIN_AUTH | mysql.CLIENT_CONNECT_ATTRS |
 		mysql.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | mysql.CLIENT_SESSION_TRACK |
-		mysql.CLIENT_MULTI_RESULTS | mysql.CLIENT_PS_MULTI_RESULTS | mysql.CLIENT_LOCAL_FILES
+		mysql.CLIENT_MULTI_RESULTS | mysql.CLIENT_PS_MULTI_RESULTS
 	if tlsConfig != nil {
 		capFlag |= mysql.CLIENT_SSL
 	}
@@ -130,15 +131,25 @@ func (s *Server) InvalidateCache(username string, host string) {
 
 // Capability returns the capability flags advertised in the initial handshake.
 func (s *Server) Capability() uint32 {
-	return s.capability
+	return atomic.LoadUint32(&s.capability)
 }
 
 // SetCapability enables additional server capabilities advertised in the handshake.
 func (s *Server) SetCapability(capability uint32) {
-	s.capability |= capability
+	for {
+		old := atomic.LoadUint32(&s.capability)
+		if atomic.CompareAndSwapUint32(&s.capability, old, old|capability) {
+			break
+		}
+	}
 }
 
 // UnsetCapability disables server capabilities advertised in the handshake.
 func (s *Server) UnsetCapability(capability uint32) {
-	s.capability &= ^capability
+	for {
+		old := atomic.LoadUint32(&s.capability)
+		if atomic.CompareAndSwapUint32(&s.capability, old, old&^capability) {
+			break
+		}
+	}
 }

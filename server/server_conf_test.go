@@ -12,7 +12,6 @@ import (
 var multiResultServerCapabilities = []uint32{
 	mysql.CLIENT_MULTI_RESULTS,
 	mysql.CLIENT_PS_MULTI_RESULTS,
-	mysql.CLIENT_LOCAL_FILES,
 }
 
 func TestDefaultServerCapabilities(t *testing.T) {
@@ -117,6 +116,7 @@ func TestLocalFilesCapabilityNegotiated(t *testing.T) {
 	defer l.Close()
 
 	svr := NewDefaultServer()
+	svr.SetCapability(mysql.CLIENT_LOCAL_FILES)
 	authHandler := NewInMemoryAuthenticationHandler()
 	require.NoError(t, authHandler.AddUser("root", ""))
 
@@ -149,11 +149,10 @@ func TestLocalFilesCapabilityNegotiated(t *testing.T) {
 		"CLIENT_LOCAL_FILES must be negotiated for LOAD DATA LOCAL INFILE relay, got: %s", negotiated)
 }
 
-// TestLocalFilesCapabilityCanBeDisabled verifies that downstream users can opt out of
-// CLIENT_LOCAL_FILES when they do not need LOAD DATA LOCAL INFILE relay support.
+// TestLocalFilesCapabilityCanBeDisabled verifies that CLIENT_LOCAL_FILES is not advertised
+// by default and is not negotiated unless explicitly enabled via SetCapability.
 func TestLocalFilesCapabilityCanBeDisabled(t *testing.T) {
 	svr := NewDefaultServer()
-	svr.UnsetCapability(mysql.CLIENT_LOCAL_FILES)
 	require.False(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
