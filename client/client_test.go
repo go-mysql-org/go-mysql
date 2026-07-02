@@ -548,7 +548,19 @@ END`)
 		require.NoError(s.T(), dropErr)
 	}()
 
-	stmt, err := s.c.Prepare("CALL " + procName + "()")
+	// A dedicated connection with CLIENT_MULTI_RESULTS and CLIENT_PS_MULTI_RESULTS
+	// is required; these are optional capabilities not set on the shared suite conn.
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	mc, err := Connect(addr, *testUser, *testPassword, *testDB, func(conn *Conn) error {
+		if err := conn.SetCapability(mysql.CLIENT_MULTI_RESULTS); err != nil {
+			return err
+		}
+		return conn.SetCapability(mysql.CLIENT_PS_MULTI_RESULTS)
+	})
+	require.NoError(s.T(), err)
+	defer mc.Close()
+
+	stmt, err := mc.Prepare("CALL " + procName + "()")
 	require.NoError(s.T(), err)
 	defer stmt.Close()
 
