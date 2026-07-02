@@ -396,16 +396,19 @@ func (c *Conn) ExecuteSelectStreaming(command string, result *mysql.Result, perR
 func (c *Conn) cleanupLocalInfileAfterRelayError() error {
 	data := make([]byte, 4)
 	if err := c.WritePacket(data); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	resp, err := c.ReadPacket()
 	if err != nil {
-		return err
+		return errors.Trace(err)
+	}
+	if len(resp) == 0 {
+		return errors.New("unexpected empty packet during local infile cleanup")
 	}
 	switch resp[0] {
 	case mysql.OK_HEADER:
 		_, err := c.handleOKPacket(resp)
-		return err
+		return errors.Trace(err)
 	case mysql.ERR_HEADER:
 		_ = c.handleErrorPacket(resp)
 		return nil
@@ -433,6 +436,9 @@ func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfil
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	if len(data) == 0 {
+		return nil, errors.New("unexpected empty packet from server")
+	}
 	switch data[0] {
 	case mysql.OK_HEADER:
 		return c.handleOKPacket(data)
@@ -448,6 +454,9 @@ func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfil
 		data2, err := c.ReadPacket()
 		if err != nil {
 			return nil, errors.Trace(err)
+		}
+		if len(data2) == 0 {
+			return nil, errors.New("unexpected empty packet after LOCAL INFILE")
 		}
 		switch data2[0] {
 		case mysql.OK_HEADER:
