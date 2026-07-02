@@ -391,6 +391,77 @@ func (c *Conn) ExecuteSelectStreaming(command string, result *mysql.Result, perR
 	return c.readResultStreaming(false, result, perRowCallback, perResultCallback)
 }
 
+// cleanupLocalInfileAfterRelayError sends an empty payload packet (EOF for LOCAL INFILE) and reads
+// the server's OK or ERR so the client connection is resynchronized after relayFile failed mid-transfer.
+func (c *Conn) cleanupLocalInfileAfterRelayError() error {
+	data := make([]byte, 4)
+	if err := c.WritePacket(data); err != nil {
+		return err
+	}
+	resp, err := c.ReadPacket()
+	if err != nil {
+		return err
+	}
+	switch resp[0] {
+	case mysql.OK_HEADER:
+		_, err := c.handleOKPacket(resp)
+		return err
+	case mysql.ERR_HEADER:
+		_ = c.handleErrorPacket(resp)
+		return nil
+	default:
+		return errors.Errorf("unexpected packet during local infile cleanup: 0x%x", resp[0])
+	}
+}
+
+// ExecQueryRelayLocalInfile sends COM_QUERY and handles the LOCAL INFILE protocol when the server
+// responds with a 0xfb packet. relayFile receives that full request payload and must forward the
+// request to the application client, read file-data packets from that client, and write each to
+// this connection via WritePacket (4-byte header prefix + payload) until an empty packet signals
+// EOF. The final OK or ERR from the upstream server is read and returned.
+//
+// If relayFile returns an error the connection is resynchronized before the error is returned so
+// the connection can be reused.
+//
+// This is the proxy-friendly counterpart to the local-file reading in client/auth.go. It does not
+// access the filesystem; ownership of the file transfer is delegated entirely to the caller.
+func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfileRequestPayload []byte) error) (*mysql.Result, error) {
+	if err := c.execSend(query); err != nil {
+		return nil, errors.Trace(err)
+	}
+	data, err := c.ReadPacket()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	switch data[0] {
+	case mysql.OK_HEADER:
+		return c.handleOKPacket(data)
+	case mysql.ERR_HEADER:
+		return nil, c.handleErrorPacket(data)
+	case mysql.LocalInFile_HEADER:
+		if err := relayFile(data); err != nil {
+			if cleanupErr := c.cleanupLocalInfileAfterRelayError(); cleanupErr != nil {
+				return nil, errors.Errorf("local infile relay failed: %v; cleanup failed: %v", err, cleanupErr)
+			}
+			return nil, errors.Trace(err)
+		}
+		data2, err := c.ReadPacket()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		switch data2[0] {
+		case mysql.OK_HEADER:
+			return c.handleOKPacket(data2)
+		case mysql.ERR_HEADER:
+			return nil, c.handleErrorPacket(data2)
+		default:
+			return nil, errors.Errorf("unexpected packet after LOCAL INFILE: 0x%x", data2[0])
+		}
+	default:
+		return nil, errors.Errorf("unexpected response to COM_QUERY (expected OK, ERR, or LOCAL INFILE): 0x%x", data[0])
+	}
+}
+
 func (c *Conn) Begin() error {
 	_, err := c.exec("BEGIN")
 	return errors.Trace(err)
