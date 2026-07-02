@@ -20,7 +20,7 @@ func (c *Conn) writeInitialHandshake() error {
 	// filter 0x00 byte, terminating the first part of a scramble
 	data = append(data, 0x00)
 
-	defaultFlag := c.serverConf.capability
+	defaultFlag := c.serverConf.Capability()
 	// capability flag lower 2 bytes, using default capability here
 	data = append(data, byte(defaultFlag), byte(defaultFlag>>8))
 

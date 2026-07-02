@@ -27,7 +27,7 @@ func TestNewServerCapabilities(t *testing.T) {
 func assertServerAdvertisesCapabilities(t *testing.T, s *Server) {
 	t.Helper()
 	for _, cap := range multiResultServerCapabilities {
-		require.True(t, s.capability&cap != 0,
+		require.True(t, s.Capability()&cap != 0,
 			"expected server to advertise %s", mysql.CapNames[cap])
 	}
 }
@@ -106,4 +106,87 @@ func TestNegotiatedMultiResultsCapability(t *testing.T) {
 	defer result.Close()
 	require.True(t, result.HasResultset())
 	require.Equal(t, 2, len(result.Values))
+}
+
+// TestLocalFilesCapabilityNegotiated verifies that CLIENT_LOCAL_FILES is advertised
+// by the server and survives handshake negotiation when requested by the client.
+func TestLocalFilesCapabilityNegotiated(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	svr := NewDefaultServer()
+	svr.SetCapability(mysql.CLIENT_LOCAL_FILES)
+	authHandler := NewInMemoryAuthenticationHandler()
+	require.NoError(t, authHandler.AddUser("root", ""))
+
+	go func() {
+		conn, acceptErr := l.Accept()
+		if acceptErr != nil {
+			return
+		}
+		sConn, connErr := svr.NewCustomizedConn(conn, authHandler, EmptyHandler{})
+		if connErr != nil {
+			return
+		}
+		for {
+			if handleErr := sConn.HandleCommand(); handleErr != nil {
+				return
+			}
+		}
+	}()
+
+	c, err := client.Connect(l.Addr().String(), "root", "", "",
+		func(conn *client.Conn) error {
+			return conn.SetCapability(mysql.CLIENT_LOCAL_FILES)
+		},
+	)
+	require.NoError(t, err)
+	defer c.Close()
+
+	negotiated := c.CapabilityString()
+	require.Contains(t, negotiated, "CLIENT_LOCAL_FILES",
+		"CLIENT_LOCAL_FILES must be negotiated for LOAD DATA LOCAL INFILE relay, got: %s", negotiated)
+}
+
+// TestLocalFilesCapabilityCanBeDisabled verifies that CLIENT_LOCAL_FILES is not advertised
+// by default and is not negotiated unless explicitly enabled via SetCapability.
+func TestLocalFilesCapabilityCanBeDisabled(t *testing.T) {
+	svr := NewDefaultServer()
+	require.False(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	authHandler := NewInMemoryAuthenticationHandler()
+	require.NoError(t, authHandler.AddUser("root", ""))
+
+	go func() {
+		conn, acceptErr := l.Accept()
+		if acceptErr != nil {
+			return
+		}
+		sConn, connErr := svr.NewCustomizedConn(conn, authHandler, EmptyHandler{})
+		if connErr != nil {
+			return
+		}
+		for {
+			if handleErr := sConn.HandleCommand(); handleErr != nil {
+				return
+			}
+		}
+	}()
+
+	c, err := client.Connect(l.Addr().String(), "root", "", "",
+		func(conn *client.Conn) error {
+			return conn.SetCapability(mysql.CLIENT_LOCAL_FILES)
+		},
+	)
+	require.NoError(t, err)
+	defer c.Close()
+
+	negotiated := c.CapabilityString()
+	require.NotContains(t, negotiated, "CLIENT_LOCAL_FILES",
+		"CLIENT_LOCAL_FILES must not be negotiated when the server does not advertise it, got: %s", negotiated)
 }
