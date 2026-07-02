@@ -127,3 +127,18 @@ func isAuthMethodSupported(authMethod string) bool {
 func (s *Server) InvalidateCache(username string, host string) {
 	s.cacheShaPassword.Delete(fmt.Sprintf("%s@%s", username, host))
 }
+
+// Capability returns the capability flags advertised in the initial handshake.
+func (s *Server) Capability() uint32 {
+	return s.capability
+}
+
+// SetCapability enables additional server capabilities advertised in the handshake.
+func (s *Server) SetCapability(capability uint32) {
+	s.capability |= capability
+}
+
+// UnsetCapability disables server capabilities advertised in the handshake.
+func (s *Server) UnsetCapability(capability uint32) {
+	s.capability &= ^capability
+}

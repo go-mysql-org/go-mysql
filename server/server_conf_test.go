@@ -28,7 +28,7 @@ func TestNewServerCapabilities(t *testing.T) {
 func assertServerAdvertisesCapabilities(t *testing.T, s *Server) {
 	t.Helper()
 	for _, cap := range multiResultServerCapabilities {
-		require.True(t, s.capability&cap != 0,
+		require.True(t, s.Capability()&cap != 0,
 			"expected server to advertise %s", mysql.CapNames[cap])
 	}
 }
@@ -147,4 +147,47 @@ func TestLocalFilesCapabilityNegotiated(t *testing.T) {
 	negotiated := c.CapabilityString()
 	require.Contains(t, negotiated, "CLIENT_LOCAL_FILES",
 		"CLIENT_LOCAL_FILES must be negotiated for LOAD DATA LOCAL INFILE relay, got: %s", negotiated)
+}
+
+// TestLocalFilesCapabilityCanBeDisabled verifies that downstream users can opt out of
+// CLIENT_LOCAL_FILES when they do not need LOAD DATA LOCAL INFILE relay support.
+func TestLocalFilesCapabilityCanBeDisabled(t *testing.T) {
+	svr := NewDefaultServer()
+	svr.UnsetCapability(mysql.CLIENT_LOCAL_FILES)
+	require.False(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	authHandler := NewInMemoryAuthenticationHandler()
+	require.NoError(t, authHandler.AddUser("root", ""))
+
+	go func() {
+		conn, acceptErr := l.Accept()
+		if acceptErr != nil {
+			return
+		}
+		sConn, connErr := svr.NewCustomizedConn(conn, authHandler, EmptyHandler{})
+		if connErr != nil {
+			return
+		}
+		for {
+			if handleErr := sConn.HandleCommand(); handleErr != nil {
+				return
+			}
+		}
+	}()
+
+	c, err := client.Connect(l.Addr().String(), "root", "", "",
+		func(conn *client.Conn) error {
+			return conn.SetCapability(mysql.CLIENT_LOCAL_FILES)
+		},
+	)
+	require.NoError(t, err)
+	defer c.Close()
+
+	negotiated := c.CapabilityString()
+	require.NotContains(t, negotiated, "CLIENT_LOCAL_FILES",
+		"CLIENT_LOCAL_FILES must not be negotiated when the server does not advertise it, got: %s", negotiated)
 }
