@@ -34,7 +34,13 @@ func (s *clientTestSuite) SetupSuite() {
 	s.c, err = Connect(addr, *testUser, *testPassword, "", func(conn *Conn) error {
 		// test the collation logic, but this is essentially a no-op since
 		// the collation set is the default value
-		return conn.SetCollation(mysql.DEFAULT_COLLATION_NAME)
+		if err := conn.SetCollation(mysql.DEFAULT_COLLATION_NAME); err != nil {
+			return err
+		}
+		if err := conn.SetCapability(mysql.CLIENT_MULTI_RESULTS); err != nil {
+			return err
+		}
+		return conn.SetCapability(mysql.CLIENT_PS_MULTI_RESULTS)
 	})
 	require.NoError(s.T(), err)
 
@@ -531,6 +537,46 @@ INSERT INTO field_value_test VALUES (
 	}
 }
 
+func (s *clientTestSuite) TestStmt_ExecuteProcedureMultiResults() {
+	const procName = "go_mysql_test_multi_result"
+
+	_, err := s.c.Execute("DROP PROCEDURE IF EXISTS " + procName)
+	require.NoError(s.T(), err)
+
+	_, err = s.c.Execute(`CREATE PROCEDURE ` + procName + `()
+BEGIN
+  SELECT 1 AS n;
+  SELECT 2 AS n;
+END`)
+	require.NoError(s.T(), err)
+	defer func() {
+		_, dropErr := s.c.Execute("DROP PROCEDURE IF EXISTS " + procName)
+		require.NoError(s.T(), dropErr)
+	}()
+
+	stmt, err := s.c.Prepare("CALL " + procName + "()")
+	require.NoError(s.T(), err)
+	defer stmt.Close()
+
+	var resultSets int
+	result, err := stmt.ExecuteProcedureMultiResults(func(res *mysql.Result, err error) error {
+		require.NoError(s.T(), err)
+		if res != nil && res.HasResultset() {
+			resultSets++
+			n, getErr := res.GetInt(0, 0)
+			require.NoError(s.T(), getErr)
+			require.Contains(s.T(), []int64{1, 2}, n)
+			res.Close()
+		}
+		return nil
+	})
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), result)
+	require.True(s.T(), result.StreamingDone)
+	require.Equal(s.T(), mysql.StreamingMultiple, result.Streaming)
+	require.Equal(s.T(), 2, resultSets)
+}
+
 func (s *clientTestSuite) TestLongPassword() {
 	_, err := s.c.Execute("DROP USER IF EXISTS 'test_long_password'@'%'")
 	require.NoError(s.T(), err)
@@ -542,4 +588,10 @@ func (s *clientTestSuite) TestLongPassword() {
 	require.NoError(s.T(), err)
 	err = c.Close()
 	require.NoError(s.T(), err)
+}
+
+func TestExecuteProcedureMultiResults_NilCallback(t *testing.T) {
+	s := &Stmt{conn: &Conn{}}
+	_, err := s.ExecuteProcedureMultiResults(nil)
+	require.ErrorContains(t, err, "forward callback cannot be nil")
 }
