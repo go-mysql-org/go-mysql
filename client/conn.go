@@ -418,17 +418,19 @@ func (c *Conn) cleanupLocalInfileAfterRelayError() error {
 }
 
 // ExecQueryRelayLocalInfile sends COM_QUERY and handles the LOCAL INFILE protocol when the server
-// responds with a 0xfb packet. relayFile receives that full request payload and must forward the
-// request to the application client, read file-data packets from that client, and write each to
-// this connection via WritePacket (4-byte header prefix + payload) until an empty packet signals
-// EOF. The final OK or ERR from the upstream server is read and returned.
+// responds with a 0xfb packet. relayFile receives that full request payload and the connection
+// c; it must forward the request to the application client, read file-data packets from that
+// client, and write each to c via c.WritePacket (4-byte header prefix + payload) until an empty
+// packet signals EOF. The final OK or ERR from the upstream server is read and returned.
 //
-// If relayFile returns an error the connection is resynchronized before the error is returned so
-// the connection can be reused.
+// On success, relayFile must send all file-data packets and the terminal empty packet before
+// returning nil. On error, relayFile may return after forwarding partial data; the empty packet
+// is then sent by cleanupLocalInfileAfterRelayError so the connection can be resynchronized and
+// reused. The original relay error is still returned to the caller.
 //
 // This is the proxy-friendly counterpart to the local-file reading in client/auth.go. It does not
 // access the filesystem; ownership of the file transfer is delegated entirely to the caller.
-func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfileRequestPayload []byte) error) (*mysql.Result, error) {
+func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfileRequestPayload []byte, c *Conn) error) (*mysql.Result, error) {
 	if err := c.execSend(query); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -445,7 +447,7 @@ func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfil
 	case mysql.ERR_HEADER:
 		return nil, c.handleErrorPacket(data)
 	case mysql.LocalInFile_HEADER:
-		if err := relayFile(data); err != nil {
+		if err := relayFile(data, c); err != nil {
 			if cleanupErr := c.cleanupLocalInfileAfterRelayError(); cleanupErr != nil {
 				return nil, errors.Errorf("local infile relay failed: %v; cleanup failed: %v", err, cleanupErr)
 			}

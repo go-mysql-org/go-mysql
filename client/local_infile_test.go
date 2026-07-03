@@ -64,7 +64,7 @@ func TestExecQueryRelayLocalInfile_DirectOK(t *testing.T) {
 
 	c := newLocalInfileTestConn(clientConn)
 	relayCalled := false
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte) error {
+	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte, *Conn) error {
 		relayCalled = true
 		return nil
 	})
@@ -86,7 +86,7 @@ func TestExecQueryRelayLocalInfile_DirectErr(t *testing.T) {
 
 	c := newLocalInfileTestConn(clientConn)
 	relayCalled := false
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte) error {
+	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte, *Conn) error {
 		relayCalled = true
 		return nil
 	})
@@ -118,7 +118,7 @@ func TestExecQueryRelayLocalInfile_RelaySuccess(t *testing.T) {
 
 	c := newLocalInfileTestConn(clientConn)
 	var requestPayload []byte
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func(payload []byte) error {
+	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func(payload []byte, c *Conn) error {
 		requestPayload = append([]byte(nil), payload...)
 		chunk := make([]byte, 4+len("row1\n"))
 		copy(chunk[4:], []byte("row1\n"))
@@ -153,7 +153,7 @@ func TestExecQueryRelayLocalInfile_RelayError(t *testing.T) {
 	}()
 
 	c := newLocalInfileTestConn(clientConn)
-	_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte) error {
+	_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte, *Conn) error {
 		return relayErr
 	})
 	require.ErrorIs(t, err, relayErr)
