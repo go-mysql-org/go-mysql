@@ -1,7 +1,9 @@
 package client
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net"
 	"testing"
 
@@ -64,9 +66,9 @@ func TestExecQueryRelayLocalInfile_DirectOK(t *testing.T) {
 
 	c := newLocalInfileTestConn(clientConn)
 	relayCalled := false
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte, *Conn) error {
+	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte) (io.Reader, error) {
 		relayCalled = true
-		return nil
+		return nil, nil
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -86,9 +88,9 @@ func TestExecQueryRelayLocalInfile_DirectErr(t *testing.T) {
 
 	c := newLocalInfileTestConn(clientConn)
 	relayCalled := false
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte, *Conn) error {
+	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte) (io.Reader, error) {
 		relayCalled = true
-		return nil
+		return nil, nil
 	})
 	require.Error(t, err)
 	require.Nil(t, result)
@@ -118,14 +120,9 @@ func TestExecQueryRelayLocalInfile_RelaySuccess(t *testing.T) {
 
 	c := newLocalInfileTestConn(clientConn)
 	var requestPayload []byte
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func(payload []byte, c *Conn) error {
+	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func(payload []byte) (io.Reader, error) {
 		requestPayload = append([]byte(nil), payload...)
-		chunk := make([]byte, 4+len("row1\n"))
-		copy(chunk[4:], []byte("row1\n"))
-		if err := c.WritePacket(chunk); err != nil {
-			return err
-		}
-		return c.WritePacket(make([]byte, 4))
+		return bytes.NewReader([]byte("row1\n")), nil
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -153,8 +150,8 @@ func TestExecQueryRelayLocalInfile_RelayError(t *testing.T) {
 	}()
 
 	c := newLocalInfileTestConn(clientConn)
-	_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte, *Conn) error {
-		return relayErr
+	_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte) (io.Reader, error) {
+		return nil, relayErr
 	})
 	require.ErrorIs(t, err, relayErr)
 }
