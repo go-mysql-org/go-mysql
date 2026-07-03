@@ -177,8 +177,8 @@ func validateUserConfigurableCapability(capability uint32) error {
 	if capability == 0 {
 		return fmt.Errorf("capability must not be zero")
 	}
-	if capability&^userConfigurableServerCapabilities != 0 {
-		return fmt.Errorf("server capability %#x is not user-configurable; only CLIENT_LOCAL_FILES, CLIENT_MULTI_RESULTS, and CLIENT_PS_MULTI_RESULTS are supported", capability)
+	if invalid := capability &^ userConfigurableServerCapabilities; invalid != 0 {
+		return fmt.Errorf("server capability %#x contains non-user-configurable flags %#x; only CLIENT_LOCAL_FILES, CLIENT_MULTI_RESULTS, and CLIENT_PS_MULTI_RESULTS are supported", capability, invalid)
 	}
 	return nil
 }

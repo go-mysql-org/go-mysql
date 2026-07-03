@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -196,8 +197,14 @@ func TestSetCapabilityRejectsUnsafeFlags(t *testing.T) {
 
 	err := svr.SetCapability(mysql.CLIENT_SSL)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "not user-configurable")
+	require.Contains(t, err.Error(), "non-user-configurable flags")
+	require.Contains(t, err.Error(), fmt.Sprintf("%#x", mysql.CLIENT_SSL))
 	require.False(t, svr.Capability()&mysql.CLIENT_SSL != 0)
+
+	err = svr.SetCapability(mysql.CLIENT_LOCAL_FILES | mysql.CLIENT_SSL)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), fmt.Sprintf("%#x", mysql.CLIENT_SSL))
+	require.False(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
 
 	err = svr.UnsetCapability(mysql.CLIENT_PROTOCOL_41)
 	require.Error(t, err)
