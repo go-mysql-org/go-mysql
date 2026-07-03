@@ -28,8 +28,10 @@ type SessionTrackingInfo struct {
 	Characteristics  string
 }
 
-// AppendOKSessionTrackSuffix appends the OK-packet session tracking suffix:
-// [statusMessageLen][statusMessage][sessionTrackBlockLen][sessionTrackBlock].
+// AppendOKSessionTrackSuffix appends the OK-packet session tracking suffix when
+// CLIENT_SESSION_TRACK is negotiated: [statusMessageLen][statusMessage], and
+// when SERVER_SESSION_STATE_CHANGED is set in r.Status, also
+// [sessionTrackBlockLen][sessionTrackBlock].
 func AppendOKSessionTrackSuffix(data []byte, r *Result) []byte {
 	if r == nil {
 		return data
@@ -39,6 +41,10 @@ func AppendOKSessionTrackSuffix(data []byte, r *Result) []byte {
 	data = append(data, PutLengthEncodedInt(uint64(len(statusMessage)))...)
 	if len(statusMessage) > 0 {
 		data = append(data, statusMessage...)
+	}
+
+	if r.Status&SERVER_SESSION_STATE_CHANGED == 0 {
+		return data
 	}
 
 	block := encodeSessionTracking(r.SessionTracking)

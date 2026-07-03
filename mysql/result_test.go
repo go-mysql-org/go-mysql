@@ -53,6 +53,7 @@ func TestEncodeSessionTrackingRoundTrip(t *testing.T) {
 
 func TestAppendOKSessionTrackSuffix(t *testing.T) {
 	result := &Result{
+		Status:        SERVER_SESSION_STATE_CHANGED,
 		StatusMessage: "Records: 3  Duplicates: 0  Warnings: 0",
 		SessionTracking: &SessionTrackingInfo{
 			GTID: "f4993c5e-d353-11f0-9b5f-eede6d5626c8:1-241:xmas:1-29",
@@ -64,4 +65,16 @@ func TestAppendOKSessionTrackSuffix(t *testing.T) {
 	require.Equal(t, result.StatusMessage, string(data[1:1+len(result.StatusMessage)]))
 	blockLenPos := 1 + len(result.StatusMessage)
 	require.Equal(t, byte(len(data)-blockLenPos-1), data[blockLenPos])
+}
+
+func TestAppendOKSessionTrackSuffixWithoutStateChange(t *testing.T) {
+	result := &Result{
+		StatusMessage: "hello",
+		SessionTracking: &SessionTrackingInfo{
+			Schema: "mysql",
+		},
+	}
+
+	data := AppendOKSessionTrackSuffix(nil, result)
+	require.Equal(t, []byte{0x05, 'h', 'e', 'l', 'l', 'o'}, data)
 }
