@@ -457,6 +457,29 @@ func (c *Conn) sendLocalInfileContent(r io.Reader) error {
 //
 // This is the proxy-friendly counterpart to the local-file reading in client/auth.go. It does not
 // access the filesystem; ownership of the file transfer is delegated entirely to the caller.
+//
+// Example (MySQL proxy relaying LOAD DATA LOCAL INFILE from an application client to upstream):
+//
+//	result, err := upstream.ExecQueryRelayLocalInfile(query, func(requestPayload []byte) (io.Reader, error) {
+//	    // requestPayload[0] is 0xfb; filename/path bytes follow (not null-terminated).
+//	    if err := downstream.WritePacket(wrapPacket(requestPayload)); err != nil {
+//	        return nil, err
+//	    }
+//	    var buf bytes.Buffer
+//	    for {
+//	        pkt, err := downstream.ReadPacket()
+//	        if err != nil {
+//	            return nil, err
+//	        }
+//	        if len(pkt) == 0 {
+//	            break // empty packet = end of file from client
+//	        }
+//	        if _, err := buf.Write(pkt); err != nil {
+//	            return nil, err
+//	        }
+//	    }
+//	    return bytes.NewReader(buf.Bytes()), nil
+//	})
 func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfileRequestPayload []byte) (io.Reader, error)) (*mysql.Result, error) {
 	if err := c.execSend(query); err != nil {
 		return nil, errors.Trace(err)
