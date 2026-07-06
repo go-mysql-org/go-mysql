@@ -155,3 +155,47 @@ func TestExecQueryRelayLocalInfile_RelayError(t *testing.T) {
 	})
 	require.ErrorIs(t, err, relayErr)
 }
+
+type failingLocalInfileReader struct {
+	data []byte
+	pos  int
+	err  error
+}
+
+func (r *failingLocalInfileReader) Read(p []byte) (int, error) {
+	if r.pos >= len(r.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data[r.pos:])
+	r.pos += n
+	if r.pos >= len(r.data) {
+		return n, r.err
+	}
+	return n, nil
+}
+
+func TestExecQueryRelayLocalInfile_RelayReadError(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	readErr := errors.New("read failed mid-transfer")
+
+	serverPC := packet.NewConn(serverConn)
+	go func() {
+		readServerCOMQuery(t, serverPC)
+		require.NoError(t, writeServerLocalInfile(serverPC, "test.csv"))
+
+		pkt, err := serverPC.ReadPacket()
+		require.NoError(t, err)
+		require.Empty(t, pkt, "server must receive only empty terminator, no partial file data")
+
+		require.NoError(t, writeServerOK(serverPC))
+	}()
+
+	c := newLocalInfileTestConn(clientConn)
+	_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte) (io.Reader, error) {
+		return &failingLocalInfileReader{data: []byte("partial"), err: readErr}, nil
+	})
+	require.ErrorIs(t, err, readErr)
+}

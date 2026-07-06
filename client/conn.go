@@ -392,38 +392,35 @@ func (c *Conn) ExecuteSelectStreaming(command string, result *mysql.Result, perR
 	return c.readResultStreaming(false, result, perRowCallback, perResultCallback)
 }
 
-// cancelLocalInfileRequest sends an empty LOCAL INFILE payload packet and reads the server's
-// OK or ERR so the connection can be reused when relayFile failed before any file data was sent.
-func (c *Conn) cancelLocalInfileRequest() error {
-	data := make([]byte, 4)
-	if err := c.WritePacket(data); err != nil {
-		return errors.Trace(err)
+// prepareLocalInfileReader fully validates that r can be read without error before any data is
+// sent upstream, per the LOCAL INFILE protocol requirement that on error the server must see
+// only the terminal empty packet, never a truncated file. If r implements io.Seeker (as returned
+// by callers per the documented example: *bytes.Reader, *os.File) it is drained and seeked back
+// to the start so large files are not fully buffered in memory; otherwise the content is read
+// fully into memory with io.ReadAll.
+func prepareLocalInfileReader(r io.Reader) (io.Reader, error) {
+	if r == nil {
+		return bytes.NewReader(nil), nil
 	}
-	resp, err := c.ReadPacket()
+	if seeker, ok := r.(io.Seeker); ok {
+		if _, err := io.Copy(io.Discard, r); err != nil {
+			return nil, err
+		}
+		if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		}
+		return r, nil
+	}
+	content, err := io.ReadAll(r)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, err
 	}
-	if len(resp) == 0 {
-		return errors.New("unexpected empty packet during local infile cancel")
-	}
-	switch resp[0] {
-	case mysql.OK_HEADER:
-		_, err := c.handleOKPacket(resp)
-		return errors.Trace(err)
-	case mysql.ERR_HEADER:
-		_ = c.handleErrorPacket(resp)
-		return nil
-	default:
-		return errors.Errorf("unexpected packet during local infile cancel: 0x%x", resp[0])
-	}
+	return bytes.NewReader(content), nil
 }
 
-// sendLocalInfileContent reads file bytes from r and sends them as LOCAL INFILE data packets,
+// streamLocalInfileChunks sends already-validated file bytes as LOCAL INFILE data packets,
 // followed by the terminal empty packet.
-func (c *Conn) sendLocalInfileContent(r io.Reader) error {
-	if r == nil {
-		r = bytes.NewReader(nil)
-	}
+func (c *Conn) streamLocalInfileChunks(r io.Reader) error {
 	buf := make([]byte, defaultBufferSize)
 	for {
 		n, err := r.Read(buf)
@@ -447,13 +444,58 @@ func (c *Conn) sendLocalInfileContent(r io.Reader) error {
 	return nil
 }
 
+// sendLocalInfileContentAndAwaitResult validates and sends LOCAL INFILE content, then reads the
+// server's OK or ERR. When relayErr is non-nil, or when reader validation fails, only the empty
+// terminator packet is sent (no file data).
+func (c *Conn) sendLocalInfileContentAndAwaitResult(reader io.Reader, relayErr error) (*mysql.Result, error) {
+	content := io.Reader(bytes.NewReader(nil))
+	if relayErr == nil {
+		validated, err := prepareLocalInfileReader(reader)
+		if err != nil {
+			relayErr = err
+		} else {
+			content = validated
+		}
+	}
+	if err := c.streamLocalInfileChunks(content); err != nil {
+		return nil, errors.Trace(err)
+	}
+	resp, err := c.ReadPacket()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if len(resp) == 0 {
+		return nil, errors.New("unexpected empty packet after LOCAL INFILE")
+	}
+	var result *mysql.Result
+	var respErr error
+	switch resp[0] {
+	case mysql.OK_HEADER:
+		result, respErr = c.handleOKPacket(resp)
+	case mysql.ERR_HEADER:
+		respErr = c.handleErrorPacket(resp)
+	default:
+		respErr = errors.Errorf("unexpected packet after LOCAL INFILE: 0x%x", resp[0])
+	}
+	if relayErr != nil {
+		if respErr != nil {
+			return nil, errors.Errorf("local infile relay failed: %v; server response: %v", relayErr, respErr)
+		}
+		return nil, errors.Trace(relayErr)
+	}
+	return result, errors.Trace(respErr)
+}
+
 // ExecQueryRelayLocalInfile sends COM_QUERY and handles the LOCAL INFILE protocol when the server
 // responds with a 0xfb packet. relayFile receives that full request payload and must return a
-// reader over the complete file content (or nil for an empty file). The library sends the data
-// packets and terminal empty packet; the final OK or ERR from the upstream server is returned.
+// reader over the complete file content (or nil for an empty file). The library validates the
+// reader, sends data packets and the terminal empty packet, then returns the final OK or ERR.
 //
-// If relayFile returns an error, no file data is sent upstream; cancelLocalInfileRequest sends
-// only the empty packet so the connection can be reused.
+// If relayFile returns an error, or the reader cannot be fully read, no file data is sent
+// upstream; only the empty terminator packet is sent so the connection can be reused.
+//
+// OK and ERR responses before the 0xfb packet are handled directly when the server rejects the
+// LOAD DATA statement (e.g. local_infile disabled, missing privileges).
 //
 // This is the proxy-friendly counterpart to the local-file reading in client/auth.go. It does not
 // access the filesystem; ownership of the file transfer is delegated entirely to the caller.
@@ -497,34 +539,11 @@ func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfil
 	case mysql.ERR_HEADER:
 		return nil, c.handleErrorPacket(data)
 	case mysql.LocalInFile_HEADER:
-		reader, err := relayFile(data)
-		if err != nil {
-			if cancelErr := c.cancelLocalInfileRequest(); cancelErr != nil {
-				return nil, errors.Errorf("local infile relay failed: %v; cancel failed: %v", err, cancelErr)
-			}
-			return nil, errors.Trace(err)
-		}
+		reader, relayErr := relayFile(data)
 		if closer, ok := reader.(io.Closer); ok && reader != nil {
 			defer closer.Close()
 		}
-		if err := c.sendLocalInfileContent(reader); err != nil {
-			return nil, errors.Trace(err)
-		}
-		data2, err := c.ReadPacket()
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if len(data2) == 0 {
-			return nil, errors.New("unexpected empty packet after LOCAL INFILE")
-		}
-		switch data2[0] {
-		case mysql.OK_HEADER:
-			return c.handleOKPacket(data2)
-		case mysql.ERR_HEADER:
-			return nil, c.handleErrorPacket(data2)
-		default:
-			return nil, errors.Errorf("unexpected packet after LOCAL INFILE: 0x%x", data2[0])
-		}
+		return c.sendLocalInfileContentAndAwaitResult(reader, relayErr)
 	default:
 		return nil, errors.Errorf("unexpected response to COM_QUERY (expected OK, ERR, or LOCAL INFILE): 0x%x", data[0])
 	}
