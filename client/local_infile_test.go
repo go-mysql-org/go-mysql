@@ -53,107 +53,206 @@ func readServerCOMQuery(t *testing.T, pc *packet.Conn) {
 	require.Equal(t, mysql.COM_QUERY, pkt[0])
 }
 
-func TestExecQueryRelayLocalInfile_DirectOK(t *testing.T) {
-	serverConn, clientConn := net.Pipe()
-	defer serverConn.Close()
-	defer clientConn.Close()
-
-	serverPC := packet.NewConn(serverConn)
-	go func() {
-		readServerCOMQuery(t, serverPC)
-		require.NoError(t, writeServerOK(serverPC))
-	}()
-
-	c := newLocalInfileTestConn(clientConn)
-	relayCalled := false
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte) (io.Reader, error) {
-		relayCalled = true
-		return nil, nil
-	})
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, relayCalled)
+type failOnWriteConn struct {
+	net.Conn
+	writes int
+	failOn int
 }
 
-func TestExecQueryRelayLocalInfile_DirectErr(t *testing.T) {
-	serverConn, clientConn := net.Pipe()
-	defer serverConn.Close()
-	defer clientConn.Close()
-
-	serverPC := packet.NewConn(serverConn)
-	go func() {
-		readServerCOMQuery(t, serverPC)
-		require.NoError(t, writeServerERR(serverPC))
-	}()
-
-	c := newLocalInfileTestConn(clientConn)
-	relayCalled := false
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte) (io.Reader, error) {
-		relayCalled = true
-		return nil, nil
-	})
-	require.Error(t, err)
-	require.Nil(t, result)
-	require.False(t, relayCalled)
+func (c *failOnWriteConn) Write(b []byte) (int, error) {
+	c.writes++
+	if c.writes == c.failOn {
+		return 0, errors.New("write failed")
+	}
+	return c.Conn.Write(b)
 }
 
-func TestExecQueryRelayLocalInfile_RelaySuccess(t *testing.T) {
-	serverConn, clientConn := net.Pipe()
-	defer serverConn.Close()
-	defer clientConn.Close()
-
-	serverPC := packet.NewConn(serverConn)
-	go func() {
-		readServerCOMQuery(t, serverPC)
-		require.NoError(t, writeServerLocalInfile(serverPC, "test.csv"))
-
-		pkt, err := serverPC.ReadPacket()
-		require.NoError(t, err)
-		require.Equal(t, []byte("row1\n"), pkt)
-
-		pkt, err = serverPC.ReadPacket()
-		require.NoError(t, err)
-		require.Empty(t, pkt)
-
-		require.NoError(t, writeServerOK(serverPC))
-	}()
-
-	c := newLocalInfileTestConn(clientConn)
-	var requestPayload []byte
-	result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func(payload []byte) (io.Reader, error) {
-		requestPayload = append([]byte(nil), payload...)
-		return bytes.NewReader([]byte("row1\n")), nil
-	})
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Equal(t, mysql.LocalInFile_HEADER, requestPayload[0])
-	require.Equal(t, "test.csv", string(requestPayload[1:]))
+type twoChunkReader struct {
+	chunks [][]byte
+	i      int
 }
 
-func TestExecQueryRelayLocalInfile_RelayError(t *testing.T) {
-	serverConn, clientConn := net.Pipe()
-	defer serverConn.Close()
-	defer clientConn.Close()
+func (r *twoChunkReader) Read(p []byte) (int, error) {
+	if r.i >= len(r.chunks) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.chunks[r.i])
+	r.i++
+	if r.i >= len(r.chunks) {
+		return n, io.EOF
+	}
+	return n, nil
+}
 
-	relayErr := errors.New("relay failed")
+func (r *twoChunkReader) Seek(offset int64, whence int) (int64, error) {
+	if whence != io.SeekStart || offset != 0 {
+		return 0, errors.New("unsupported seek")
+	}
+	r.i = 0
+	return 0, nil
+}
 
-	serverPC := packet.NewConn(serverConn)
-	go func() {
-		readServerCOMQuery(t, serverPC)
-		require.NoError(t, writeServerLocalInfile(serverPC, "test.csv"))
+func TestExecQueryRelayLocalInfile(t *testing.T) {
+	t.Run("DirectOK", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
 
-		pkt, err := serverPC.ReadPacket()
+		serverPC := packet.NewConn(serverConn)
+		go func() {
+			readServerCOMQuery(t, serverPC)
+			require.NoError(t, writeServerOK(serverPC))
+		}()
+
+		c := newLocalInfileTestConn(clientConn)
+		relayCalled := false
+		result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte) (io.Reader, error) {
+			relayCalled = true
+			return nil, nil
+		})
 		require.NoError(t, err)
-		require.Empty(t, pkt)
-
-		require.NoError(t, writeServerOK(serverPC))
-	}()
-
-	c := newLocalInfileTestConn(clientConn)
-	_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte) (io.Reader, error) {
-		return nil, relayErr
+		require.NotNil(t, result)
+		require.False(t, relayCalled)
 	})
-	require.ErrorIs(t, err, relayErr)
+
+	t.Run("DirectErr", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
+
+		serverPC := packet.NewConn(serverConn)
+		go func() {
+			readServerCOMQuery(t, serverPC)
+			require.NoError(t, writeServerERR(serverPC))
+		}()
+
+		c := newLocalInfileTestConn(clientConn)
+		relayCalled := false
+		result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'f.csv'", func([]byte) (io.Reader, error) {
+			relayCalled = true
+			return nil, nil
+		})
+		require.Error(t, err)
+		require.Nil(t, result)
+		require.False(t, relayCalled)
+	})
+
+	t.Run("RelaySuccess", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
+
+		serverPC := packet.NewConn(serverConn)
+		go func() {
+			readServerCOMQuery(t, serverPC)
+			require.NoError(t, writeServerLocalInfile(serverPC, "test.csv"))
+
+			pkt, err := serverPC.ReadPacket()
+			require.NoError(t, err)
+			require.Equal(t, []byte("row1\n"), pkt)
+
+			pkt, err = serverPC.ReadPacket()
+			require.NoError(t, err)
+			require.Empty(t, pkt)
+
+			require.NoError(t, writeServerOK(serverPC))
+		}()
+
+		c := newLocalInfileTestConn(clientConn)
+		var filename []byte
+		result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func(fn []byte) (io.Reader, error) {
+			filename = append([]byte(nil), fn...)
+			return bytes.NewReader([]byte("row1\n")), nil
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Equal(t, "test.csv", string(filename))
+	})
+
+	t.Run("RelayError", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
+
+		relayErr := errors.New("relay failed")
+
+		serverPC := packet.NewConn(serverConn)
+		go func() {
+			readServerCOMQuery(t, serverPC)
+			require.NoError(t, writeServerLocalInfile(serverPC, "test.csv"))
+
+			pkt, err := serverPC.ReadPacket()
+			require.NoError(t, err)
+			require.Empty(t, pkt)
+
+			require.NoError(t, writeServerOK(serverPC))
+		}()
+
+		c := newLocalInfileTestConn(clientConn)
+		_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte) (io.Reader, error) {
+			return nil, relayErr
+		})
+		require.ErrorIs(t, err, relayErr)
+	})
+
+	t.Run("RelayReadError", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
+
+		readErr := errors.New("read failed mid-transfer")
+
+		serverPC := packet.NewConn(serverConn)
+		go func() {
+			readServerCOMQuery(t, serverPC)
+			require.NoError(t, writeServerLocalInfile(serverPC, "test.csv"))
+
+			pkt, err := serverPC.ReadPacket()
+			require.NoError(t, err)
+			require.Empty(t, pkt, "server must receive only empty terminator, no partial file data")
+
+			require.NoError(t, writeServerOK(serverPC))
+		}()
+
+		c := newLocalInfileTestConn(clientConn)
+		_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte) (io.Reader, error) {
+			return &failingLocalInfileReader{data: []byte("partial"), err: readErr}, nil
+		})
+		require.ErrorIs(t, err, readErr)
+	})
+
+	t.Run("StreamWriteError", func(t *testing.T) {
+		serverConn, rawClientConn := net.Pipe()
+		defer serverConn.Close()
+		defer rawClientConn.Close()
+
+		// COM_QUERY (1), first chunk (2), second chunk fails (3), defensive terminator (4).
+		clientConn := &failOnWriteConn{Conn: rawClientConn, failOn: 3}
+
+		serverPC := packet.NewConn(serverConn)
+		go func() {
+			readServerCOMQuery(t, serverPC)
+			require.NoError(t, writeServerLocalInfile(serverPC, "test.csv"))
+
+			pkt, err := serverPC.ReadPacket()
+			require.NoError(t, err)
+			require.Equal(t, []byte("part1"), pkt)
+
+			pkt, err = serverPC.ReadPacket()
+			require.NoError(t, err)
+			require.Empty(t, pkt, "defensive terminator must be sent after write failure")
+
+			require.NoError(t, writeServerOK(serverPC))
+		}()
+
+		c := newLocalInfileTestConn(clientConn)
+		result, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte) (io.Reader, error) {
+			return &twoChunkReader{chunks: [][]byte{[]byte("part1"), []byte("part2")}}, nil
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "write failed")
+		require.Nil(t, result)
+	})
 }
 
 type failingLocalInfileReader struct {
@@ -172,30 +271,4 @@ func (r *failingLocalInfileReader) Read(p []byte) (int, error) {
 		return n, r.err
 	}
 	return n, nil
-}
-
-func TestExecQueryRelayLocalInfile_RelayReadError(t *testing.T) {
-	serverConn, clientConn := net.Pipe()
-	defer serverConn.Close()
-	defer clientConn.Close()
-
-	readErr := errors.New("read failed mid-transfer")
-
-	serverPC := packet.NewConn(serverConn)
-	go func() {
-		readServerCOMQuery(t, serverPC)
-		require.NoError(t, writeServerLocalInfile(serverPC, "test.csv"))
-
-		pkt, err := serverPC.ReadPacket()
-		require.NoError(t, err)
-		require.Empty(t, pkt, "server must receive only empty terminator, no partial file data")
-
-		require.NoError(t, writeServerOK(serverPC))
-	}()
-
-	c := newLocalInfileTestConn(clientConn)
-	_, err := c.ExecQueryRelayLocalInfile("LOAD DATA LOCAL INFILE 'test.csv'", func([]byte) (io.Reader, error) {
-		return &failingLocalInfileReader{data: []byte("partial"), err: readErr}, nil
-	})
-	require.ErrorIs(t, err, readErr)
 }

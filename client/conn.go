@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
 	"maps"
 	"math/bits"
 	"net"
@@ -418,27 +419,39 @@ func prepareLocalInfileReader(r io.Reader) (io.Reader, error) {
 	return bytes.NewReader(content), nil
 }
 
+func (c *Conn) writeLocalInfileTerminator() error {
+	return c.WritePacket(make([]byte, 4))
+}
+
 // streamLocalInfileChunks sends already-validated file bytes as LOCAL INFILE data packets,
 // followed by the terminal empty packet.
 func (c *Conn) streamLocalInfileChunks(r io.Reader) error {
-	buf := make([]byte, defaultBufferSize)
+	buf := make([]byte, 4+defaultBufferSize)
+	sentData := false
 	for {
-		n, err := r.Read(buf)
+		n, err := r.Read(buf[4:])
 		if n > 0 {
-			pkt := make([]byte, 4+n)
-			copy(pkt[4:], buf[:n])
-			if err := c.WritePacket(pkt); err != nil {
-				return errors.Trace(err)
+			if werr := c.WritePacket(buf[:4+n]); werr != nil {
+				if tErr := c.writeLocalInfileTerminator(); tErr != nil {
+					log.Printf("go-mysql: failed to send LOCAL INFILE terminator after write error: %v", tErr)
+				}
+				return errors.Trace(werr)
 			}
+			sentData = true
 		}
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
+			if sentData {
+				if tErr := c.writeLocalInfileTerminator(); tErr != nil {
+					log.Printf("go-mysql: failed to send LOCAL INFILE terminator after read error: %v", tErr)
+				}
+			}
 			return errors.Trace(err)
 		}
 	}
-	if err := c.WritePacket(make([]byte, 4)); err != nil {
+	if err := c.writeLocalInfileTerminator(); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
@@ -457,8 +470,12 @@ func (c *Conn) sendLocalInfileContentAndAwaitResult(reader io.Reader, relayErr e
 			content = validated
 		}
 	}
+	streamErr := error(nil)
 	if err := c.streamLocalInfileChunks(content); err != nil {
-		return nil, errors.Trace(err)
+		streamErr = err
+	}
+	if relayErr == nil && streamErr != nil {
+		relayErr = streamErr
 	}
 	resp, err := c.ReadPacket()
 	if err != nil {
@@ -487,24 +504,29 @@ func (c *Conn) sendLocalInfileContentAndAwaitResult(reader io.Reader, relayErr e
 }
 
 // ExecQueryRelayLocalInfile sends COM_QUERY and handles the LOCAL INFILE protocol when the server
-// responds with a 0xfb packet. relayFile receives that full request payload and must return a
-// reader over the complete file content (or nil for an empty file). The library validates the
-// reader, sends data packets and the terminal empty packet, then returns the final OK or ERR.
+// responds with a 0xfb packet. relayFile receives the filename bytes from that request (without the
+// 0xfb header) and must return a reader over the complete file content (or nil for an empty file).
+// The library validates the reader, sends data packets and the terminal empty packet, then returns
+// the final OK or ERR.
 //
-// If relayFile returns an error, or the reader cannot be fully read, no file data is sent
-// upstream; only the empty terminator packet is sent so the connection can be reused.
+// If relayFile returns an error, or the reader cannot be fully read, no file data is sent upstream;
+// only the empty terminator packet is sent so the connection can be reused.
 //
-// OK and ERR responses before the 0xfb packet are handled directly when the server rejects the
-// LOAD DATA statement (e.g. local_infile disabled, missing privileges).
+// Notes:
+//   - This function is intended for LOAD DATA LOCAL INFILE queries.
+//   - relayFile is only invoked when the server responds with LocalInFile_HEADER (0xfb).
+//   - Direct OK or ERR (no 0xfb) occurs when the server rejects the statement before requesting a
+//     file — e.g. local_infile disabled, missing privileges, or a syntax error. Handling these
+//     responses keeps the connection usable, consistent with readResultStreaming and
+//     ExecuteMultiple.
 //
 // This is the proxy-friendly counterpart to the local-file reading in client/auth.go. It does not
 // access the filesystem; ownership of the file transfer is delegated entirely to the caller.
 //
 // Example (MySQL proxy relaying LOAD DATA LOCAL INFILE from an application client to upstream):
 //
-//	result, err := upstream.ExecQueryRelayLocalInfile(query, func(requestPayload []byte) (io.Reader, error) {
-//	    // requestPayload[0] is 0xfb; filename/path bytes follow (not null-terminated).
-//	    if err := downstream.WritePacket(wrapPacket(requestPayload)); err != nil {
+//	result, err := upstream.ExecQueryRelayLocalInfile(query, func(filename []byte) (io.Reader, error) {
+//	    if err := downstream.WritePacket(wrapPacket(append([]byte{mysql.LocalInFile_HEADER}, filename...))); err != nil {
 //	        return nil, err
 //	    }
 //	    var buf bytes.Buffer
@@ -522,7 +544,7 @@ func (c *Conn) sendLocalInfileContentAndAwaitResult(reader io.Reader, relayErr e
 //	    }
 //	    return bytes.NewReader(buf.Bytes()), nil
 //	})
-func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfileRequestPayload []byte) (io.Reader, error)) (*mysql.Result, error) {
+func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(filename []byte) (io.Reader, error)) (*mysql.Result, error) {
 	if err := c.execSend(query); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -539,7 +561,7 @@ func (c *Conn) ExecQueryRelayLocalInfile(query string, relayFile func(localInfil
 	case mysql.ERR_HEADER:
 		return nil, c.handleErrorPacket(data)
 	case mysql.LocalInFile_HEADER:
-		reader, relayErr := relayFile(data)
+		reader, relayErr := relayFile(data[1:])
 		if closer, ok := reader.(io.Closer); ok && reader != nil {
 			defer closer.Close()
 		}
