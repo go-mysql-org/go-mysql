@@ -531,7 +531,7 @@ INSERT INTO field_value_test VALUES (
 	}
 }
 
-func (s *clientTestSuite) TestStmt_ExecuteProcedureMultiResults() {
+func (s *clientTestSuite) TestStmt_ProcedureMultiResult() {
 	const procName = "go_mysql_test_multi_result"
 
 	_, err := s.c.Execute("DROP PROCEDURE IF EXISTS " + procName)
@@ -565,7 +565,7 @@ END`)
 	defer stmt.Close()
 
 	var resultSets int
-	result, err := stmt.ExecuteProcedureMultiResults(func(res *mysql.Result, err error) error {
+	err = stmt.ExecuteProcedureMultiResults(func(res *mysql.Result, err error) error {
 		require.NoError(s.T(), err)
 		if res != nil && res.HasResultset() {
 			resultSets++
@@ -577,9 +577,6 @@ END`)
 		return nil
 	})
 	require.NoError(s.T(), err)
-	require.NotNil(s.T(), result)
-	require.True(s.T(), result.StreamingDone)
-	require.Equal(s.T(), mysql.StreamingMultiple, result.Streaming)
 	require.Equal(s.T(), 2, resultSets)
 }
 
@@ -596,8 +593,8 @@ func (s *clientTestSuite) TestLongPassword() {
 	require.NoError(s.T(), err)
 }
 
-func TestExecuteProcedureMultiResults_NilCallback(t *testing.T) {
+func TestStmtProcedureMultiResultNilForward(t *testing.T) {
 	s := &Stmt{conn: &Conn{}}
-	_, err := s.ExecuteProcedureMultiResults(nil)
+	err := s.ExecuteProcedureMultiResults(nil)
 	require.ErrorContains(t, err, "forward callback cannot be nil")
 }
