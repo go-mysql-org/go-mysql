@@ -61,14 +61,13 @@ type StmtProcedureMultiResultForward func(res *mysql.Result, err error) error
 // non-nil, matching ExecuteMultiple semantics so that unread packets do not
 // corrupt the connection state.
 //
-// It returns a synthetic streaming result with StreamingDone=true. If forward
-// returned a non-nil error that error is returned instead.
-func (s *Stmt) ExecuteProcedureMultiResults(forward StmtProcedureMultiResultForward, args ...any) (*mysql.Result, error) {
+// If forward returned a non-nil error that error is returned instead.
+func (s *Stmt) ExecuteProcedureMultiResults(forward StmtProcedureMultiResultForward, args ...any) error {
 	if forward == nil {
-		return nil, errors.New("forward callback cannot be nil")
+		return errors.New("forward callback cannot be nil")
 	}
 	if err := s.write(args...); err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
 	var forwardErr error
 	for {
@@ -88,12 +87,9 @@ func (s *Stmt) ExecuteProcedureMultiResults(forward StmtProcedureMultiResultForw
 		}
 	}
 	if forwardErr != nil {
-		return nil, forwardErr
+		return forwardErr
 	}
-	rs := mysql.NewResultset(0)
-	rs.Streaming = mysql.StreamingMultiple
-	rs.StreamingDone = true
-	return mysql.NewResult(rs), nil
+	return nil
 }
 
 func (s *Stmt) Close() error {
