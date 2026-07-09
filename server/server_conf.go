@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 )
@@ -126,4 +127,29 @@ func isAuthMethodSupported(authMethod string) bool {
 
 func (s *Server) InvalidateCache(username string, host string) {
 	s.cacheShaPassword.Delete(fmt.Sprintf("%s@%s", username, host))
+}
+
+// Capability returns the capability flags advertised in the initial handshake.
+func (s *Server) Capability() uint32 {
+	return atomic.LoadUint32(&s.capability)
+}
+
+// SetCapability enables additional server capabilities advertised in the handshake.
+func (s *Server) SetCapability(capability uint32) {
+	for {
+		old := atomic.LoadUint32(&s.capability)
+		if atomic.CompareAndSwapUint32(&s.capability, old, old|capability) {
+			break
+		}
+	}
+}
+
+// UnsetCapability disables server capabilities advertised in the handshake.
+func (s *Server) UnsetCapability(capability uint32) {
+	for {
+		old := atomic.LoadUint32(&s.capability)
+		if atomic.CompareAndSwapUint32(&s.capability, old, old&^capability) {
+			break
+		}
+	}
 }
