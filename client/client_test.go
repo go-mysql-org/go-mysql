@@ -531,7 +531,7 @@ INSERT INTO field_value_test VALUES (
 	}
 }
 
-func (s *clientTestSuite) TestStmt_ProcedureMultiResult() {
+func (s *clientTestSuite) TestStmtProcedureMultiResult() {
 	const procName = "go_mysql_test_multi_result"
 
 	_, err := s.c.Execute("DROP PROCEDURE IF EXISTS " + procName)
