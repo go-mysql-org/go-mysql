@@ -531,6 +531,55 @@ INSERT INTO field_value_test VALUES (
 	}
 }
 
+func (s *clientTestSuite) TestStmtProcedureMultiResult() {
+	const procName = "go_mysql_test_multi_result"
+
+	_, err := s.c.Execute("DROP PROCEDURE IF EXISTS " + procName)
+	require.NoError(s.T(), err)
+
+	_, err = s.c.Execute(`CREATE PROCEDURE ` + procName + `()
+BEGIN
+  SELECT 1 AS n;
+  SELECT 2 AS n;
+END`)
+	require.NoError(s.T(), err)
+	defer func() {
+		_, dropErr := s.c.Execute("DROP PROCEDURE IF EXISTS " + procName)
+		require.NoError(s.T(), dropErr)
+	}()
+
+	// A dedicated connection with CLIENT_MULTI_RESULTS and CLIENT_PS_MULTI_RESULTS
+	// is required; these are optional capabilities not set on the shared suite conn.
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	mc, err := Connect(addr, *testUser, *testPassword, *testDB, func(conn *Conn) error {
+		if err := conn.SetCapability(mysql.CLIENT_MULTI_RESULTS); err != nil {
+			return err
+		}
+		return conn.SetCapability(mysql.CLIENT_PS_MULTI_RESULTS)
+	})
+	require.NoError(s.T(), err)
+	defer mc.Close()
+
+	stmt, err := mc.Prepare("CALL " + procName + "()")
+	require.NoError(s.T(), err)
+	defer stmt.Close()
+
+	var resultSets int
+	err = stmt.ExecuteProcedureMultiResults(func(res *mysql.Result, err error) error {
+		require.NoError(s.T(), err)
+		if res != nil && res.HasResultset() {
+			resultSets++
+			n, getErr := res.GetInt(0, 0)
+			require.NoError(s.T(), getErr)
+			require.Contains(s.T(), []int64{1, 2}, n)
+			res.Close()
+		}
+		return nil
+	})
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), 2, resultSets)
+}
+
 func (s *clientTestSuite) TestLongPassword() {
 	_, err := s.c.Execute("DROP USER IF EXISTS 'test_long_password'@'%'")
 	require.NoError(s.T(), err)
@@ -542,4 +591,10 @@ func (s *clientTestSuite) TestLongPassword() {
 	require.NoError(s.T(), err)
 	err = c.Close()
 	require.NoError(s.T(), err)
+}
+
+func TestStmtProcedureMultiResultNilForward(t *testing.T) {
+	s := &Stmt{conn: &Conn{}}
+	err := s.ExecuteProcedureMultiResults(nil)
+	require.ErrorContains(t, err, "forward callback cannot be nil")
 }
