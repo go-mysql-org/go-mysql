@@ -92,7 +92,26 @@ func TestConnWriteOKStatusMessageWithoutStateChange(t *testing.T) {
 		byte(len(msg)), // info lenenc length
 	}
 	expectedPayload = append(expectedPayload, msg...)
-	expectedPayload = append(expectedPayload, 0x00) // empty session-state block length
+	expected := append([]byte{byte(len(expectedPayload)), 0, 0, 0}, expectedPayload...)
+	require.Equal(t, expected, clientConn.WriteBuffered)
+}
+
+func TestConnWriteOKSessionTrackWithoutStateChangeOrInfo(t *testing.T) {
+	clientConn := &mockconn.MockConn{}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+	conn.SetCapability(mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK)
+
+	result := mysql.NewResultReserveResultset(0)
+	err := conn.writeOK(result)
+	require.NoError(t, err)
+
+	// Auth-style OK: empty info string only; no session-state block.
+	expectedPayload := []byte{
+		mysql.OK_HEADER, 0, 0,
+		0x00, 0x00, // status
+		0x00, 0x00, // warnings
+		0x00, // empty info string
+	}
 	expected := append([]byte{byte(len(expectedPayload)), 0, 0, 0}, expectedPayload...)
 	require.Equal(t, expected, clientConn.WriteBuffered)
 }

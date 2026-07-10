@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -116,7 +117,7 @@ func TestLocalFilesCapabilityNegotiated(t *testing.T) {
 	defer l.Close()
 
 	svr := NewDefaultServer()
-	svr.SetCapability(mysql.CLIENT_LOCAL_FILES)
+	require.NoError(t, svr.SetCapability(mysql.CLIENT_LOCAL_FILES))
 	authHandler := NewInMemoryAuthenticationHandler()
 	require.NoError(t, authHandler.AddUser("root", ""))
 
@@ -189,4 +190,28 @@ func TestLocalFilesCapabilityCanBeDisabled(t *testing.T) {
 	negotiated := c.CapabilityString()
 	require.NotContains(t, negotiated, "CLIENT_LOCAL_FILES",
 		"CLIENT_LOCAL_FILES must not be negotiated when the server does not advertise it, got: %s", negotiated)
+}
+
+func TestSetCapabilityRejectsUnsafeFlags(t *testing.T) {
+	svr := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil)
+
+	err := svr.SetCapability(mysql.CLIENT_SSL)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "non-user-configurable flags")
+	require.Contains(t, err.Error(), fmt.Sprintf("%#x", mysql.CLIENT_SSL))
+	require.False(t, svr.Capability()&mysql.CLIENT_SSL != 0)
+
+	err = svr.SetCapability(mysql.CLIENT_LOCAL_FILES | mysql.CLIENT_SSL)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), fmt.Sprintf("%#x", mysql.CLIENT_SSL))
+	require.False(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
+
+	err = svr.UnsetCapability(mysql.CLIENT_PROTOCOL_41)
+	require.Error(t, err)
+	require.True(t, svr.Capability()&mysql.CLIENT_PROTOCOL_41 != 0)
+
+	require.NoError(t, svr.SetCapability(mysql.CLIENT_LOCAL_FILES))
+	require.True(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
+	require.NoError(t, svr.UnsetCapability(mysql.CLIENT_LOCAL_FILES))
+	require.False(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
 }

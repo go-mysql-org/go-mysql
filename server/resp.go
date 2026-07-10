@@ -29,12 +29,7 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 	}
 
 	if c.capability&mysql.CLIENT_SESSION_TRACK > 0 {
-		// Always emit the info string; only emit session-state block when flagged.
-		suffix := r
-		if r.Status&mysql.SERVER_SESSION_STATE_CHANGED == 0 {
-			suffix = &mysql.Result{StatusMessage: r.StatusMessage}
-		}
-		data = mysql.AppendOKSessionTrackSuffix(data, suffix)
+		data = mysql.AppendOKSessionTrackSuffix(data, r)
 	}
 
 	return c.WritePacket(data)
