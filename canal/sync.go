@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -304,9 +305,15 @@ func (c *Canal) FlushBinlog() error {
 }
 
 func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
+	return c.WaitUntilPosContext(context.Background(), pos, timeout)
+}
+
+func (c *Canal) WaitUntilPosContext(ctx context.Context, pos mysql.Position, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-timer.C:
 			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
@@ -390,10 +397,14 @@ func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
 }
 
 func (c *Canal) CatchMasterPos(timeout time.Duration) error {
+	return c.CatchMasterPosContext(context.Background(), timeout)
+}
+
+func (c *Canal) CatchMasterPosContext(ctx context.Context, timeout time.Duration) error {
 	pos, err := c.GetMasterPos()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	return c.WaitUntilPos(pos, timeout)
+	return c.WaitUntilPosContext(ctx, pos, timeout)
 }
