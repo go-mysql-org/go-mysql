@@ -22,15 +22,14 @@ func (c *Canal) startSyncer() (*replication.BinlogStreamer, error) {
 		}
 		c.cfg.Logger.Info("start sync binlog at binlog file", slog.Any("pos", pos))
 		return s, nil
-	} else {
-		gsetClone := gset.Clone()
-		s, err := c.syncer.StartSyncGTID(gset)
-		if err != nil {
-			return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
-		}
-		c.cfg.Logger.Info("start sync binlog at GTID set", slog.Any("gset", gsetClone))
-		return s, nil
 	}
+	gsetClone := gset.Clone()
+	s, err := c.syncer.StartSyncGTID(gset)
+	if err != nil {
+		return nil, errors.Errorf("start sync replication at GTID set %v error %v", gset, err)
+	}
+	c.cfg.Logger.Info("start sync binlog at GTID set", slog.Any("gset", gsetClone))
+	return s, nil
 }
 
 func (c *Canal) runSyncBinlog() error {
@@ -146,10 +145,13 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 			c.cfg.Logger.Error("error parsing query, will skip this event", slog.String("query", string(e.Query)), slog.Any("error", err))
 			return nil
 		}
-		if len(stmts) > 0 {
-			savePos = true
-		}
 		for _, stmt := range stmts {
+			switch stmt.(type) {
+			case *ast.BeginStmt, *ast.SavepointStmt:
+				// transaction not yet complete; checkpointing here would skip it on GTID resume
+				continue
+			}
+			savePos = true
 			nodes := parseStmt(stmt)
 			for _, node := range nodes {
 				if node.db == "" {
@@ -277,12 +279,15 @@ func (c *Canal) handleRowsEvent(e *replication.BinlogEvent) error {
 
 	t, err := c.GetTable(schemaName, tableName)
 	if err != nil {
-		e := errors.Cause(err)
+		cause := errors.Cause(err)
 		// ignore errors below
-		if e == ErrExcludedTable || e == schema.ErrTableNotExist || e == schema.ErrMissingTableMeta {
-			err = nil
+		if cause == ErrExcludedTable || cause == schema.ErrMissingTableMeta {
+			return nil
 		}
-
+		// Allow handler to decide what to do when table is missing.
+		if cause == schema.ErrTableNotExist {
+			return c.eventHandler.OnTableNotFound(e.Header, ev)
+		}
 		return err
 	}
 	var action string

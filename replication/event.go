@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -101,11 +102,50 @@ func (h *EventHeader) Decode(data []byte) error {
 	return nil
 }
 
+// headerFlagsString is returning a pipe separated string with flag names
+func headerFlagsString(flags uint16) string {
+	var flagstr []string
+
+	if (flags & LOG_EVENT_BINLOG_IN_USE_F) != 0 {
+		flagstr = append(flagstr, "IN_USE")
+	}
+	if (flags & LOG_EVENT_FORCED_ROTATE_F) != 0 {
+		flagstr = append(flagstr, "ROTATE")
+	}
+	if (flags & LOG_EVENT_THREAD_SPECIFIC_F) != 0 {
+		flagstr = append(flagstr, "THREAD_SPECIFIC")
+	}
+	if (flags & LOG_EVENT_SUPPRESS_USE_F) != 0 {
+		flagstr = append(flagstr, "SUPPRESS_USE")
+	}
+	if (flags & LOG_EVENT_UPDATE_TABLE_MAP_VERSION_F) != 0 {
+		flagstr = append(flagstr, "UPDATE_TABLE_MAP_VERSION")
+	}
+	if (flags & LOG_EVENT_ARTIFICIAL_F) != 0 {
+		flagstr = append(flagstr, "ARTIFICIAL")
+	}
+	if (flags & LOG_EVENT_RELAY_LOG_F) != 0 {
+		flagstr = append(flagstr, "RELAY_LOG")
+	}
+	if (flags & LOG_EVENT_IGNORABLE_F) != 0 {
+		flagstr = append(flagstr, "IGNORABLE")
+	}
+	if (flags & LOG_EVENT_NO_FILTER_F) != 0 {
+		flagstr = append(flagstr, "NO_FILTER")
+	}
+	if (flags & LOG_EVENT_MTS_ISOLATE_F) != 0 {
+		flagstr = append(flagstr, "MTS_ISOLATE")
+	}
+
+	return strings.Join(flagstr, "|")
+}
+
 func (h *EventHeader) Dump(w io.Writer) {
 	fmt.Fprintf(w, "=== %s ===\n", h.EventType)
 	fmt.Fprintf(w, "Date: %s\n", time.Unix(int64(h.Timestamp), 0).Format(mysql.TimeFormat))
 	fmt.Fprintf(w, "Log position: %d\n", h.LogPos)
 	fmt.Fprintf(w, "Event size: %d\n", h.EventSize)
+	fmt.Fprintf(w, "Header Flags: %s\n", headerFlagsString(h.Flags))
 }
 
 var (
@@ -153,7 +193,7 @@ type FormatDescriptionEvent struct {
 	EventTypeHeaderLengths []byte
 
 	// 0 is off, 1 is for CRC32, 255 is undefined
-	ChecksumAlgorithm byte
+	ChecksumAlgorithm BinlogChecksum
 }
 
 func (e *FormatDescriptionEvent) Decode(data []byte) error {
@@ -188,7 +228,7 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 
 	if calcVersionProduct(e.ServerVersion) >= checksumProduct {
 		// here, the last 5 bytes is 1 byte check sum alg type and 4 byte checksum if exists
-		e.ChecksumAlgorithm = data[len(data)-5]
+		e.ChecksumAlgorithm = BinlogChecksum(data[len(data)-5])
 		e.EventTypeHeaderLengths = data[pos : len(data)-5]
 	} else {
 		e.ChecksumAlgorithm = BINLOG_CHECKSUM_ALG_UNDEF
@@ -202,7 +242,7 @@ func (e *FormatDescriptionEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Version: %d\n", e.Version)
 	fmt.Fprintf(w, "Server version: %s\n", e.ServerVersion)
 	// fmt.Fprintf(w, "Create date: %s\n", time.Unix(int64(e.CreateTimestamp), 0).Format(TimeFormat))
-	fmt.Fprintf(w, "Checksum algorithm: %d\n", e.ChecksumAlgorithm)
+	fmt.Fprintf(w, "Checksum algorithm: %s\n", e.ChecksumAlgorithm)
 	// fmt.Fprintf(w, "Event header lengths: \n%s", hex.Dump(e.EventTypeHeaderLengths))
 	fmt.Fprintln(w)
 }
@@ -229,55 +269,41 @@ type PreviousGTIDsEvent struct {
 	GTIDSets string
 }
 
-type GtidFormat int
-
-const (
-	GtidFormatClassic = iota
-	GtidFormatTagged
-)
-
-// Decode the number of sids (source identifiers) and if it is using
-// tagged GTIDs or classic (non-tagged) GTIDs.
-//
-// Note that each gtid tag increases the sidno here, so a single UUID
-// might turn up multiple times if there are multipl tags.
-//
-// see also:
-// decode_nsids_format in mysql/mysql-server
-// https://github.com/mysql/mysql-server/blob/61a3a1d8ef15512396b4c2af46e922a19bf2b174/sql/rpl_gtid_set.cc#L1363-L1378
-func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
-	if data[7] == 1 {
-		format = GtidFormatTagged
-	}
-
-	if format == GtidFormatTagged {
-		masked := make([]byte, 8)
-		copy(masked, data[1:7])
-		sidnr = binary.LittleEndian.Uint64(masked)
-		return format, sidnr
-	}
-	sidnr = binary.LittleEndian.Uint64(data[:8])
-	return format, sidnr
-}
-
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 	pos := 0
-
-	format, uuidCount := decodeSid(data)
+	format, uuidCount, err := mysql.DecodeSid(data)
+	if err != nil {
+		return err
+	}
+	if uuidCount == 0 {
+		return nil
+	}
+	if uuidCount > math.MaxInt32 {
+		return errors.New("data for PreviousGTIDEvent has an invalid UUID count")
+	}
 	pos += 8
-
-	previousGTIDSets := make([]string, uuidCount)
 
 	currentSetnr := 0
 	var buf strings.Builder
-	for range previousGTIDSets {
-		uuid := e.decodeUuid(data[pos : pos+16])
+	for range uuidCount {
+		if pos+16 > len(data) {
+			return errors.New("data for PreviousGTIDEvent is truncated: missing UUID")
+		}
+		uuid := e.decodeUUID(data[pos : pos+16])
 		pos += 16
 		var tag string
-		if format == GtidFormatTagged {
-			tagLength := int(data[pos]) / 2
-			pos += 1
-			if tagLength > 0 { // 0 == no tag, >0 == tag
+		if format == mysql.GtidFormatTagged {
+			if pos >= len(data) {
+				return errors.New("data for PreviousGTIDEvent is truncated: missing tag length")
+			}
+			tagLength := int(data[pos] >> 1)
+			pos++
+			if tagLength > 32 {
+				return errors.New("tag is longer than expected")
+			} else if tagLength > 0 { // 0 == no tag, >0 == tag
+				if pos+tagLength > len(data) {
+					return errors.New("data for PreviousGTIDEvent is truncated: tag extends beyond data")
+				}
 				tag = string(data[pos : pos+tagLength])
 				pos += tagLength
 			}
@@ -291,11 +317,20 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 				buf.WriteString(",")
 			}
 			buf.WriteString(uuid)
-			currentSetnr += 1
+			currentSetnr++
 		}
 
-		sliceCount := binary.LittleEndian.Uint16(data[pos : pos+8])
+		if pos+8 > len(data) {
+			return errors.New("data for PreviousGTIDEvent is truncated: missing slice count")
+		}
+		sliceCount := binary.LittleEndian.Uint64(data[pos : pos+8])
 		pos += 8
+
+		// Avoid integer overflow: divide instead of multiplying sliceCount by 16.
+		if sliceCount > uint64(len(data)-pos)/16 {
+			return errors.New("slice count is higher than expected")
+		}
+
 		for range sliceCount {
 			buf.WriteString(":")
 
@@ -310,7 +345,7 @@ func (e *PreviousGTIDsEvent) Decode(data []byte) error {
 			}
 		}
 		if len(tag) == 0 {
-			currentSetnr += 1
+			currentSetnr++
 		}
 	}
 	e.GTIDSets = buf.String()
@@ -322,7 +357,7 @@ func (e *PreviousGTIDsEvent) Dump(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
-func (e *PreviousGTIDsEvent) decodeUuid(data []byte) string {
+func (e *PreviousGTIDsEvent) decodeUUID(data []byte) string {
 	return fmt.Sprintf("%s-%s-%s-%s-%s", hex.EncodeToString(data[0:4]), hex.EncodeToString(data[4:6]),
 		hex.EncodeToString(data[6:8]), hex.EncodeToString(data[8:10]), hex.EncodeToString(data[10:]))
 }
@@ -618,7 +653,7 @@ func (e *QueryEvent) GetStatusVars() *QueryStatusVars {
 type GTIDEvent struct {
 	CommitFlag     uint8
 	SID            []byte
-	Tag            string
+	Tag            mysql.Tag
 	GNO            int64
 	LastCommitted  int64
 	SequenceNumber int64
@@ -710,12 +745,8 @@ func (e *GTIDEvent) Dump(w io.Writer) {
 	}
 
 	fmt.Fprintf(w, "Commit flag: %d\n", e.CommitFlag)
-	u, _ := uuid.FromBytes(e.SID)
-	if e.Tag != "" {
-		fmt.Fprintf(w, "GTID_NEXT: %s:%s:%d\n", u.String(), e.Tag, e.GNO)
-	} else {
-		fmt.Fprintf(w, "GTID_NEXT: %s:%d\n", u.String(), e.GNO)
-	}
+	gn, _ := e.GTIDNext()
+	fmt.Fprintf(w, "GTID_NEXT: %s\n", gn.String())
 	fmt.Fprintf(w, "LAST_COMMITTED: %d\n", e.LastCommitted)
 	fmt.Fprintf(w, "SEQUENCE_NUMBER: %d\n", e.SequenceNumber)
 	fmt.Fprintf(w, "Immediate commmit timestamp: %d (%s)\n", e.ImmediateCommitTimestamp, fmtTime(e.ImmediateCommitTime()))
@@ -731,7 +762,27 @@ func (e *GTIDEvent) GTIDNext() (mysql.GTIDSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mysql.ParseMysqlGTIDSet(strings.Join([]string{u.String(), strconv.FormatInt(e.GNO, 10)}, ":"))
+	if e.Tag == mysql.NewTag("") {
+		return mysql.ParseMysqlGTIDSet(
+			strings.Join(
+				[]string{
+					u.String(),
+					strconv.FormatInt(e.GNO, 10),
+				},
+				":",
+			),
+		)
+	}
+	return mysql.ParseMysqlGTIDSet(
+		strings.Join(
+			[]string{
+				u.String(),
+				e.Tag.String(),
+				strconv.FormatInt(e.GNO, 10),
+			},
+			":",
+		),
+	)
 }
 
 // ImmediateCommitTime returns the commit time of this trx on the immediate server
@@ -854,7 +905,7 @@ func (e *GtidTaggedLogEvent) Decode(data []byte) error {
 		return err
 	}
 	if v, ok := f.Type.(*serialization.FieldString); ok {
-		e.Tag = v.Value
+		e.Tag = mysql.NewTag(v.Value)
 	} else {
 		return errors.New("failed to get tag field")
 	}
@@ -1077,7 +1128,7 @@ func (e *MariadbGTIDEvent) Decode(data []byte) error {
 	e.GTID.DomainID = binary.LittleEndian.Uint32(data[pos:])
 	pos += 4
 	e.Flags = data[pos]
-	pos += 1
+	pos++
 
 	if (e.Flags & BINLOG_MARIADB_FL_GROUP_COMMIT_ID) > 0 {
 		e.CommitID = binary.LittleEndian.Uint64(data[pos:])
@@ -1110,7 +1161,7 @@ func (e *MariadbGTIDListEvent) Decode(data []byte) error {
 
 	e.GTIDs = make([]mysql.MariadbGTID, count)
 
-	for i := uint32(0); i < count; i++ {
+	for i := range count {
 		e.GTIDs[i].DomainID = binary.LittleEndian.Uint32(data[pos:])
 		pos += 4
 		e.GTIDs[i].ServerID = binary.LittleEndian.Uint32(data[pos:])

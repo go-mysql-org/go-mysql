@@ -28,7 +28,9 @@ func (c *Conn) readHandshakeResponse() error {
 		return err
 	}
 
-	pos = c.readPluginName(data, pos)
+	if pos, err = c.readPluginName(data, pos); err != nil {
+		return err
+	}
 
 	cont, err := c.handleAuthMatch()
 	if err != nil {
@@ -109,9 +111,16 @@ func (c *Conn) decodeFirstPart(data []byte) (newData []byte, pos int, err error)
 }
 
 func (c *Conn) readUserName(data []byte, pos int) (int, error) {
+	if pos > len(data) {
+		return 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+	}
+	idx := bytes.IndexByte(data[pos:], 0x00)
+	if idx < 0 {
+		return 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+	}
 	// user name
-	user := string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
-	pos += len(user) + 1
+	user := string(data[pos : pos+idx])
+	pos += idx + 1
 	c.user = user
 	return pos, nil
 }
@@ -122,8 +131,12 @@ func (c *Conn) readDb(data []byte, pos int) (int, error) {
 			return pos, nil
 		}
 
-		db := string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
-		pos += len(db) + 1
+		idx := bytes.IndexByte(data[pos:], 0x00)
+		if idx < 0 {
+			return 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+		}
+		db := string(data[pos : pos+idx])
+		pos += idx + 1
 
 		if err := c.h.UseDB(db); err != nil {
 			return 0, err
@@ -132,16 +145,25 @@ func (c *Conn) readDb(data []byte, pos int) (int, error) {
 	return pos, nil
 }
 
-func (c *Conn) readPluginName(data []byte, pos int) int {
+func (c *Conn) readPluginName(data []byte, pos int) (int, error) {
 	if c.capability&mysql.CLIENT_PLUGIN_AUTH != 0 {
-		c.authPluginName = string(data[pos : pos+bytes.IndexByte(data[pos:], 0x00)])
-		pos += len(c.authPluginName) + 1
+		if pos > len(data) {
+			return 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+		}
+		idx := bytes.IndexByte(data[pos:], 0x00)
+		if idx < 0 {
+			// malformed: CLIENT_PLUGIN_AUTH set but auth plugin name
+			// is not NUL-terminated
+			return 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+		}
+		c.authPluginName = string(data[pos : pos+idx])
+		pos += idx + 1
 	} else {
 		// The method used is Native Authentication if both CLIENT_PROTOCOL_41 and CLIENT_SECURE_CONNECTION are set,
 		// but CLIENT_PLUGIN_AUTH is not set, so we fallback to 'mysql_native_password'
 		c.authPluginName = mysql.AUTH_NATIVE_PASSWORD
 	}
-	return pos
+	return pos, nil
 }
 
 func (c *Conn) readAuthData(data []byte, pos int) (auth []byte, authLen int, newPos int, err error) {

@@ -799,9 +799,11 @@ func (e *TableMapEvent) IsNumericColumn(i int) bool {
 		mysql.MYSQL_TYPE_INT24,
 		mysql.MYSQL_TYPE_LONG,
 		mysql.MYSQL_TYPE_LONGLONG,
+		mysql.MYSQL_TYPE_DECIMAL,
 		mysql.MYSQL_TYPE_NEWDECIMAL,
 		mysql.MYSQL_TYPE_FLOAT,
-		mysql.MYSQL_TYPE_DOUBLE:
+		mysql.MYSQL_TYPE_DOUBLE,
+		mysql.MYSQL_TYPE_YEAR:
 		return true
 
 	default:
@@ -849,6 +851,8 @@ func (e *TableMapEvent) IsEnumOrSetColumn(i int) bool {
 }
 
 // JsonColumnCount returns the number of JSON columns in this table
+//
+//nolint:revive // exported method renamed would be a breaking API change
 func (e *TableMapEvent) JsonColumnCount() uint64 {
 	count := uint64(0)
 	for _, t := range e.ColumnType {
@@ -919,8 +923,8 @@ type RowsEvent struct {
 	NdbFormat byte
 	NdbData   []byte
 
-	PartitionId       uint16
-	SourcePartitionId uint16
+	PartitionId       uint16 //nolint:revive // exported field renamed would be a breaking API change
+	SourcePartitionId uint16 //nolint:revive // exported field renamed would be a breaking API change
 
 	// lenenc_int
 	ColumnCount uint64
@@ -942,13 +946,14 @@ type RowsEvent struct {
 	ColumnBitmap2 []byte
 
 	// rows: all return types from RowsEvent.decodeValue()
-	Rows           [][]interface{}
+	Rows           [][]any
 	SkippedColumns [][]int
 
 	parseTime                bool
 	timestampStringLocation  *time.Location
 	useDecimal               bool
 	useFloatWithTrailingZero bool
+	renderJSONAsMySQLText    bool
 	ignoreJSONDecodeErr      bool
 }
 
@@ -1005,6 +1010,7 @@ func (t EnumRowImageType) String() string {
 // Bits for binlog_row_value_options sysvar
 type EnumBinlogRowValueOptions byte
 
+//nolint:revive // exported constant renamed would be a breaking API change
 const (
 	// Store JSON updates in partial form
 	EnumBinlogRowValueOptionsPartialJsonUpdates = EnumBinlogRowValueOptions(iota + 1)
@@ -1048,9 +1054,8 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 	if !ok {
 		if len(e.tables) > 0 {
 			return 0, errors.Errorf("invalid table id %d, no corresponding table map event", e.TableID)
-		} else {
-			return 0, errors.Annotatef(errMissingTableMapEvent, "table id %d", e.TableID)
 		}
+		return 0, errors.Annotatef(errMissingTableMapEvent, "table id %d", e.TableID)
 	}
 	return pos, nil
 }
@@ -1058,13 +1063,13 @@ func (e *RowsEvent) DecodeHeader(data []byte) (int, error) {
 func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 	pos := 0
 	extraDataType := data[pos]
-	pos += 1
+	pos++
 	switch extraDataType {
 	case ENUM_EXTRA_ROW_INFO_TYPECODE_NDB:
 		ndbLength := int(data[pos])
-		pos += 1
+		pos++
 		e.NdbFormat = data[pos]
-		pos += 1
+		pos++
 		e.NdbData = data[pos : pos+ndbLength-2]
 	case ENUM_EXTRA_ROW_INFO_TYPECODE_PARTITION:
 		if e.eventType == UPDATE_ROWS_EVENTv1 || e.eventType == UPDATE_ROWS_EVENTv2 || e.eventType == PARTIAL_UPDATE_ROWS_EVENT {
@@ -1106,7 +1111,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 		rowsLen++
 	}
 	e.SkippedColumns = make([][]int, 0, rowsLen)
-	e.Rows = make([][]interface{}, 0, rowsLen)
+	e.Rows = make([][]any, 0, rowsLen)
 
 	var rowImageType EnumRowImageType
 	switch e.eventType {
@@ -1173,21 +1178,22 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 
 	pos := 0
 
-	var isPartialJsonUpdate bool
+	var isPartialJSONUpdate bool
 
 	var partialBitmap []byte
 	if e.eventType == PARTIAL_UPDATE_ROWS_EVENT && rowImageType == EnumRowImageTypeUpdateAI {
 		binlogRowValueOptions, _, n := mysql.LengthEncodedInt(data[pos:]) // binlog_row_value_options
 		pos += n
-		isPartialJsonUpdate = EnumBinlogRowValueOptions(binlogRowValueOptions)&EnumBinlogRowValueOptionsPartialJsonUpdates != 0
-		if isPartialJsonUpdate {
+		isPartialJSONUpdate = EnumBinlogRowValueOptions(binlogRowValueOptions)&EnumBinlogRowValueOptionsPartialJsonUpdates != 0
+		if isPartialJSONUpdate {
 			byteCount := bitmapByteSize(int(e.Table.JsonColumnCount()))
 			partialBitmap = data[pos : pos+byteCount]
 			pos += byteCount
 		}
 	}
 
-	row := make([]interface{}, e.ColumnCount)
+	row := make([]any, e.ColumnCount)
+	unsignedMap := e.Table.UnsignedMap()
 
 	// refer: https://github.com/alibaba/canal/blob/c3e38e50e269adafdd38a48c63a1740cde304c67/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogBuffer.java#L63
 	count := 0
@@ -1213,7 +1219,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 		   the partial_bits bitmap has a bit for every JSON column
 		   regardless of whether it is included in the bitmap or not.
 		*/
-		isPartial := isPartialJsonUpdate &&
+		isPartial := isPartialJSONUpdate &&
 			(rowImageType == EnumRowImageTypeUpdateAI) &&
 			(e.Table.ColumnType[i] == mysql.MYSQL_TYPE_JSON) &&
 			isBitSetIncr(partialBitmap, &partialBitmapIndex)
@@ -1230,7 +1236,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 
 		var n int
 		var err error
-		row[i], n, err = e.decodeValue(data[pos:], e.Table.ColumnType[i], e.Table.ColumnMeta[i], isPartial)
+		row[i], n, err = e.decodeValue(data[pos:], e.Table.ColumnType[i], e.Table.ColumnMeta[i], isPartial, unsignedMap[i])
 		if err != nil {
 			return 0, err
 		}
@@ -1242,7 +1248,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 	return pos, nil
 }
 
-func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
+func (e *RowsEvent) parseFracTime(t any) any {
 	v, ok := t.(fracTime)
 	if !ok {
 		return t
@@ -1258,7 +1264,7 @@ func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
 }
 
 // see mysql sql/log_event.cc log_event_print_value
-func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool) (v interface{}, n int, err error) {
+func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool, isUnsigned bool) (v any, n int, err error) {
 	length := 0
 
 	if tp == mysql.MYSQL_TYPE_STRING {
@@ -1283,19 +1289,39 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 		return nil, 0, nil
 	case mysql.MYSQL_TYPE_LONG:
 		n = 4
-		v = mysql.ParseBinaryInt32(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint32(data)
+		} else {
+			v = mysql.ParseBinaryInt32(data)
+		}
 	case mysql.MYSQL_TYPE_TINY:
 		n = 1
-		v = mysql.ParseBinaryInt8(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint8(data)
+		} else {
+			v = mysql.ParseBinaryInt8(data)
+		}
 	case mysql.MYSQL_TYPE_SHORT:
 		n = 2
-		v = mysql.ParseBinaryInt16(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint16(data)
+		} else {
+			v = mysql.ParseBinaryInt16(data)
+		}
 	case mysql.MYSQL_TYPE_INT24:
 		n = 3
-		v = mysql.ParseBinaryInt24(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint24(data)
+		} else {
+			v = mysql.ParseBinaryInt24(data)
+		}
 	case mysql.MYSQL_TYPE_LONGLONG:
 		n = 8
-		v = mysql.ParseBinaryInt64(data)
+		if isUnsigned {
+			v = mysql.ParseBinaryUint64(data)
+		} else {
+			v = mysql.ParseBinaryInt64(data)
+		}
 	case mysql.MYSQL_TYPE_NEWDECIMAL:
 		prec := uint8(meta >> 8)
 		scale := uint8(meta & 0xFF)
@@ -1437,15 +1463,15 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 		} else {
 			if isPartial {
 				var diff *JsonDiff
-				diff, err = e.decodeJsonPartialBinary(data[meta:n])
+				diff, err = e.decodeJSONPartialBinary(data[meta:n])
 				if err == nil {
 					v = diff
 				} else {
-					fmt.Printf("decodeJsonPartialBinary(%q) fail: %s\n", data[meta:n], err)
+					fmt.Printf("decodeJSONPartialBinary(%q) fail: %s\n", data[meta:n], err)
 				}
 			} else {
 				var d []byte
-				d, err = e.decodeJsonBinary(data[meta:n])
+				d, err = e.decodeJSONBinary(data[meta:n])
 				if err == nil {
 					v = utils.ByteSliceToString(d)
 				}
@@ -1506,7 +1532,7 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 
 var zeros = [digitsPerInteger]byte{48, 48, 48, 48, 48, 48, 48, 48, 48}
 
-func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (interface{}, int, error) {
+func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (any, int, error) {
 	// see python mysql replication and https://github.com/jeremycole/mysql_binlog
 	integral := precision - decimals
 	uncompIntegral := integral / digitsPerInteger
@@ -1529,7 +1555,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 	value := uint32(data[0])
 	var res strings.Builder
 	res.Grow(precision + 2)
-	var mask uint32 = 0
+	var mask uint32
 	if value&0x80 == 0 {
 		mask = uint32((1 << 32) - 1)
 		res.WriteString("-")
@@ -1546,7 +1572,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 		res.WriteString(strconv.FormatUint(uint64(value), 10))
 	}
 
-	for i := 0; i < uncompIntegral; i++ {
+	for range uncompIntegral {
 		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 		pos += 4
 		if zeroLeading {
@@ -1568,7 +1594,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 	if pos < len(data) {
 		res.WriteString(".")
 
-		for i := 0; i < uncompFractional; i++ {
+		for range uncompFractional {
 			value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 			pos += 4
 			toWrite := strconv.FormatUint(uint64(value), 10)
@@ -1659,7 +1685,7 @@ func littleDecodeBit(data []byte, nbits int, length int) (value int64, err error
 	return value, err
 }
 
-func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Location) (interface{}, int, error) {
+func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Location) (any, int, error) {
 	// get timestamp binary length
 	n := int(4 + (dec+1)/2)
 	sec := int64(binary.BigEndian.Uint32(data[0:4]))
@@ -1684,14 +1710,15 @@ func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Loc
 	}, n, nil
 }
 
+//nolint:revive // DATETIMEF_INT_OFS mirrors the upstream MySQL temporal-encoding constant
 const DATETIMEF_INT_OFS int64 = 0x8000000000
 
-func decodeDatetime2(data []byte, dec uint16, parseTime bool) (interface{}, int, error) {
+func decodeDatetime2(data []byte, dec uint16, parseTime bool) (any, int, error) {
 	// get datetime binary length
 	n := int(5 + (dec+1)/2)
 
 	intPart := int64(mysql.BFixedLengthInt(data[0:5])) - DATETIMEF_INT_OFS
-	var frac int64 = 0
+	var frac int64
 
 	switch dec {
 	case 1, 2:
@@ -1746,6 +1773,7 @@ func decodeDatetime2(data []byte, dec uint16, parseTime bool) (interface{}, int,
 	}, n, nil
 }
 
+//nolint:revive // TIMEF_* mirror the upstream MySQL temporal-encoding constants
 const (
 	TIMEF_OFS     int64 = 0x800000000000
 	TIMEF_INT_OFS int64 = 0x800000

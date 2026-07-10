@@ -61,12 +61,51 @@ func TestDecodeSessionTracking(t *testing.T) {
 	}
 }
 
+// TestDecodeSessionTrackingLargeValues verifies that fields longer than 250
+// bytes are decoded correctly (requires length-encoded integers, not raw bytes).
+func TestDecodeSessionTrackingLargeValues(t *testing.T) {
+	longVar := string(make([]byte, 300)) // 300 zero bytes — > 250 so lenenc is 3 bytes
+	longGTID := string(make([]byte, 260))
+
+	info := &mysql.SessionTrackingInfo{
+		Variables: map[string]string{"long_var": longVar},
+		GTID:      longGTID,
+	}
+
+	encoded := mysql.EncodeSessionTracking(info)
+	decoded, err := decodeSessionTracking(encoded)
+	require.NoError(t, err)
+	require.Equal(t, longVar, decoded.Variables["long_var"])
+	require.Equal(t, longGTID, decoded.GTID)
+}
+
 func TestHandleOKPacket(t *testing.T) {
+	// CLIENT_SESSION_TRACK + SERVER_SESSION_STATE_CHANGED: reads info string then session tracking.
 	c := Conn{
 		capability: mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK,
-		status:     mysql.SERVER_SESSION_STATE_CHANGED,
 	}
 	data := []byte{0x0, 0x3, 0x0, 0x2, 0x40, 0x0, 0x0, 0x26, 0x52, 0x65, 0x63, 0x6f, 0x72, 0x64, 0x73, 0x3a, 0x20, 0x33, 0x20, 0x20, 0x44, 0x75, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65, 0x73, 0x3a, 0x20, 0x30, 0x20, 0x20, 0x57, 0x61, 0x72, 0x6e, 0x69, 0x6e, 0x67, 0x73, 0x3a, 0x20, 0x30, 0x38, 0x3, 0x36, 0x0, 0x34, 0x66, 0x34, 0x39, 0x39, 0x33, 0x63, 0x35, 0x65, 0x2d, 0x64, 0x33, 0x35, 0x33, 0x2d, 0x31, 0x31, 0x66, 0x30, 0x2d, 0x39, 0x62, 0x35, 0x66, 0x2d, 0x65, 0x65, 0x64, 0x65, 0x36, 0x64, 0x35, 0x36, 0x32, 0x36, 0x63, 0x38, 0x3a, 0x31, 0x2d, 0x32, 0x34, 0x31, 0x3a, 0x78, 0x6d, 0x61, 0x73, 0x3a, 0x31, 0x2d, 0x32, 0x39}
-	_, err := c.handleOKPacket(data)
+	r, err := c.handleOKPacket(data)
 	require.NoError(t, err)
+	require.Equal(t, "Records: 3  Duplicates: 0  Warnings: 0", r.StatusMessage)
+	require.NotNil(t, r.SessionTracking)
+
+	// CLIENT_SESSION_TRACK without SERVER_SESSION_STATE_CHANGED: reads only the info string.
+	c2 := Conn{
+		capability: mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK,
+	}
+	// OK: affected=0, insert_id=0, status=SERVER_STATUS_AUTOCOMMIT (0x0002, no SESSION_STATE_CHANGED),
+	// warnings=0, info="hello" (lenenc 5 + "hello")
+	data2 := []byte{
+		0x00,       // OK_HEADER
+		0x00,       // affected_rows = 0
+		0x00,       // insert_id = 0
+		0x02, 0x00, // status = SERVER_STATUS_AUTOCOMMIT
+		0x00, 0x00, // warnings = 0
+		0x05, 'h', 'e', 'l', 'l', 'o', // info = "hello"
+	}
+	r2, err := c2.handleOKPacket(data2)
+	require.NoError(t, err)
+	require.Equal(t, "hello", r2.StatusMessage)
+	require.Nil(t, r2.SessionTracking)
 }

@@ -20,12 +20,12 @@ func (c *Conn) writeInitialHandshake() error {
 	// filter 0x00 byte, terminating the first part of a scramble
 	data = append(data, 0x00)
 
-	defaultFlag := c.serverConf.capability
+	defaultFlag := c.serverConf.Capability()
 	// capability flag lower 2 bytes, using default capability here
 	data = append(data, byte(defaultFlag), byte(defaultFlag>>8))
 
 	// charset
-	data = append(data, c.serverConf.collationId)
+	data = append(data, c.serverConf.collationID)
 
 	// status
 	data = append(data, byte(c.status), byte(c.status>>8))

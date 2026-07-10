@@ -119,10 +119,55 @@ func (s *schemaTestSuite) TestSchema() {
 	require.Equal(s.T(), uint(12), ta.Columns[14].MaxSize)
 	require.Equal(s.T(), uint(0), ta.Columns[14].FixedSize)
 
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_test")
 	require.NoError(s.T(), err)
 
-	require.Equal(s.T(), ta, taSqlDb)
+	require.Equal(s.T(), ta, taSQLDb)
+}
+
+func (s *schemaTestSuite) TestSchemaColumnExtraFlags() {
+	_, err := s.conn.Execute(`DROP TABLE IF EXISTS schema_column_extra_flags_test`)
+	require.NoError(s.T(), err)
+
+	// DEFAULT (expr) is supported since MySQL 8.0.13. If the server is older,
+	// fallback to a table that only validates the ON UPDATE parsing.
+	create := `
+        CREATE TABLE IF NOT EXISTS schema_column_extra_flags_test (
+            id INT PRIMARY KEY,
+            ts TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            expr INT DEFAULT (1+1)
+        ) ENGINE = INNODB;
+    `
+	_, err = s.conn.Execute(create)
+	if err != nil {
+		createFallback := `
+            CREATE TABLE IF NOT EXISTS schema_column_extra_flags_test (
+                id INT PRIMARY KEY,
+                ts TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE = INNODB;
+        `
+		_, err = s.conn.Execute(createFallback)
+		require.NoError(s.T(), err)
+	}
+
+	ta, err := NewTable(s.conn, *schema, "schema_column_extra_flags_test")
+	require.NoError(s.T(), err)
+
+	tsIdx := ta.FindColumn("ts")
+	require.GreaterOrEqual(s.T(), tsIdx, 0)
+	require.True(s.T(), ta.Columns[tsIdx].IsAutoUpdating)
+	require.False(s.T(), ta.Columns[tsIdx].IsDefaultExpr)
+
+	exprIdx := ta.FindColumn("expr")
+	if exprIdx >= 0 {
+		require.True(s.T(), ta.Columns[exprIdx].IsDefaultExpr)
+		require.False(s.T(), ta.Columns[exprIdx].IsAutoUpdating)
+	}
+
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "schema_column_extra_flags_test")
+	require.NoError(s.T(), err)
+
+	require.Equal(s.T(), ta, taSQLDb)
 }
 
 func (s *schemaTestSuite) TestQuoteSchema() {
@@ -169,10 +214,10 @@ func (s *schemaTestSuite) TestSchemaWithMultiValueIndex() {
 	require.Len(s.T(), ta.Indexes[1].Columns, 1)
 	require.Equal(s.T(), "", ta.Indexes[1].Columns[0])
 
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "multi_value_idx_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "multi_value_idx_test")
 	require.NoError(s.T(), err)
 
-	require.Equal(s.T(), ta, taSqlDb)
+	require.Equal(s.T(), ta, taSQLDb)
 }
 
 func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
@@ -238,10 +283,10 @@ func (s *schemaTestSuite) TestSchemaWithInvisibleIndex() {
 		require.True(s.T(), nameIdx.Visible, "name_idx should be visible when database doesn't support invisible indexes")
 	}
 
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "invisible_idx_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "invisible_idx_test")
 	require.NoError(s.T(), err)
 
-	require.Equal(s.T(), ta, taSqlDb)
+	require.Equal(s.T(), ta, taSQLDb)
 }
 
 func (s *schemaTestSuite) TestInvisibleIndexColumnDetection() {
@@ -339,10 +384,10 @@ func (s *schemaTestSuite) TestVisibleFieldInSchema() {
 	}
 
 	// Test with SQL DB connection as well
-	taSqlDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "visible_field_test")
+	taSQLDb, err := NewTableFromSqlDB(s.sqlDB, *schema, "visible_field_test")
 	require.NoError(s.T(), err)
 
-	for _, idx := range taSqlDb.Indexes {
+	for _, idx := range taSQLDb.Indexes {
 		require.True(s.T(), idx.Visible, "Index %s should be visible by default (SQL DB)", idx.Name)
 	}
 }

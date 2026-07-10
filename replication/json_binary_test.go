@@ -193,7 +193,7 @@ func TestJsonBinaryDecoder_decodeValue_JSONB_DOUBLE(t *testing.T) {
 		name                     string
 		useFloatWithTrailingZero bool
 		value                    float64
-		expectedType             interface{}
+		expectedType             any
 		expectedJSONString       string
 	}{
 		{

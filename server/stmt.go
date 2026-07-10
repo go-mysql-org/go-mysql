@@ -18,15 +18,15 @@ var (
 
 type Stmt struct {
 	Query string
-	Args  []interface{}
+	Args  []any
 
-	Context interface{}
+	Context any
 
 	// PreparedStmt contains common fields shared with client.Stmt for proxy passthrough
 	stmt.PreparedStmt
 }
 
-func (s *Stmt) Rest(params int, columns int, context interface{}) {
+func (s *Stmt) Rest(params int, columns int, context any) {
 	s.Params = params
 	s.Columns = columns
 	s.Context = context
@@ -34,7 +34,7 @@ func (s *Stmt) Rest(params int, columns int, context interface{}) {
 }
 
 func (s *Stmt) ResetParams() {
-	s.Args = make([]interface{}, s.Params)
+	s.Args = make([]any, s.Params)
 }
 
 func (c *Conn) writePrepare(s *Stmt) error {
@@ -302,10 +302,9 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			if !isNull {
 				args[i] = mysql.TypedBytes{Type: tp, Bytes: v}
 				continue
-			} else {
-				args[i] = nil
-				continue
 			}
+			args[i] = nil
+			continue
 		default:
 			return errors.Errorf("Stmt Unknown FieldType %d", tp)
 		}
@@ -326,17 +325,17 @@ func (c *Conn) handleStmtSendLongData(data []byte) error {
 		return nil
 	}
 
-	paramId := binary.LittleEndian.Uint16(data[4:6])
-	if paramId >= uint16(s.Params) {
+	paramID := binary.LittleEndian.Uint16(data[4:6])
+	if paramID >= uint16(s.Params) {
 		return nil
 	}
 
-	if s.Args[paramId] == nil {
-		s.Args[paramId] = data[6:]
+	if s.Args[paramID] == nil {
+		s.Args[paramID] = data[6:]
 	} else {
-		if b, ok := s.Args[paramId].([]byte); ok {
+		if b, ok := s.Args[paramID].([]byte); ok {
 			b = append(b, data[6:]...)
-			s.Args[paramId] = b
+			s.Args[paramID] = b
 		} else {
 			return nil
 		}

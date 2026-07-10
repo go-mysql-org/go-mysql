@@ -3,6 +3,7 @@ package canal
 import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/schema"
 )
 
 type EventHandler interface {
@@ -23,6 +24,9 @@ type EventHandler interface {
 	OnRowsQueryEvent(e *replication.RowsQueryEvent) error
 	OnQueryEvent(header *replication.EventHeader, e *replication.QueryEvent, ddl bool) error
 	OnUserVar(*replication.UserVarEvent) error
+	// OnTableNotFound is called when a Rows Event references a table object
+	// that no longer exists.
+	OnTableNotFound(*replication.EventHeader, *replication.RowsEvent) error
 	String() string
 }
 
@@ -59,6 +63,11 @@ func (h *DummyEventHandler) OnQueryEvent(header *replication.EventHeader, e *rep
 
 func (h *DummyEventHandler) OnUserVar(*replication.UserVarEvent) error {
 	return nil
+}
+
+// OnTableNotFound is called for row events for reference tables that are not found
+func (h *DummyEventHandler) OnTableNotFound(header *replication.EventHeader, e *replication.RowsEvent) error {
+	return schema.ErrTableNotExist
 }
 
 func (h *DummyEventHandler) String() string { return "DummyEventHandler" }

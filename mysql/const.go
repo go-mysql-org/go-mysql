@@ -1,3 +1,4 @@
+//nolint:revive // legacy MySQL wire-protocol constants (OK_HEADER, COM_*, CLIENT_*, MYSQL_TYPE_*, AUTH_*, etc.) are kept verbatim from the upstream protocol for backward compatibility
 package mysql
 
 const (
@@ -269,4 +270,11 @@ const (
 	SESSION_TRACK_GTIDS
 	SESSION_TRACK_TRANSACTION_CHARACTERISTICS
 	SESSION_TRACK_TRANSACTION_STATE
+)
+
+type GtidFormat int
+
+const (
+	GtidFormatClassic GtidFormat = iota
+	GtidFormatTagged
 )

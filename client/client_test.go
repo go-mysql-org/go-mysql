@@ -22,8 +22,8 @@ type clientTestSuite struct {
 }
 
 func TestClientSuite(t *testing.T) {
-	segs := strings.Split(*test_util.MysqlPort, ",")
-	for _, seg := range segs {
+	segs := strings.SplitSeq(*test_util.MysqlPort, ",")
+	for seg := range segs {
 		suite.Run(t, &clientTestSuite{port: seg})
 	}
 }
@@ -46,8 +46,8 @@ func (s *clientTestSuite) SetupSuite() {
 	_, err = s.c.Execute("USE " + *testDB)
 	require.NoError(s.T(), err)
 
-	s.testConn_CreateTable()
-	s.testStmt_CreateTable()
+	s.testConnCreateTable()
+	s.testStmtCreateTable()
 }
 
 func (s *clientTestSuite) TearDownSuite() {
@@ -55,20 +55,20 @@ func (s *clientTestSuite) TearDownSuite() {
 		return
 	}
 
-	s.testConn_DropTable()
-	s.testStmt_DropTable()
+	s.testConnDropTable()
+	s.testStmtDropTable()
 
 	if s.c != nil {
 		s.c.Close()
 	}
 }
 
-func (s *clientTestSuite) testConn_DropTable() {
+func (s *clientTestSuite) testConnDropTable() {
 	_, err := s.c.Execute("drop table if exists mixer_test_conn")
 	require.NoError(s.T(), err)
 }
 
-func (s *clientTestSuite) testConn_CreateTable() {
+func (s *clientTestSuite) testConnCreateTable() {
 	str := `CREATE TABLE IF NOT EXISTS mixer_test_conn (
           id BIGINT(64) UNSIGNED  NOT NULL,
           str VARCHAR(256),
@@ -193,7 +193,7 @@ func (s *clientTestSuite) TestConn_Insert() {
 func (s *clientTestSuite) TestConn_Insert2() {
 	str := `insert into mixer_test_conn (id, j) values(?, ?)`
 	j := json.RawMessage(`[]`)
-	pkg, err := s.c.Execute(str, []interface{}{2, j}...)
+	pkg, err := s.c.Execute(str, []any{2, j}...)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), uint64(1), pkg.AffectedRows)
 }
@@ -266,7 +266,7 @@ func (s *clientTestSuite) TestConn_SetCollation() {
 	require.Error(s.T(), err)
 }
 
-func (s *clientTestSuite) testStmt_DropTable() {
+func (s *clientTestSuite) testStmtDropTable() {
 	str := `drop table if exists mixer_test_stmt`
 
 	stmt, err := s.c.Prepare(str)
@@ -279,7 +279,7 @@ func (s *clientTestSuite) testStmt_DropTable() {
 	require.NoError(s.T(), err)
 }
 
-func (s *clientTestSuite) testStmt_CreateTable() {
+func (s *clientTestSuite) testStmtCreateTable() {
 	str := `CREATE TABLE IF NOT EXISTS mixer_test_stmt (
           id BIGINT(64) UNSIGNED  NOT NULL,
           str VARCHAR(256),
@@ -531,6 +531,55 @@ INSERT INTO field_value_test VALUES (
 	}
 }
 
+func (s *clientTestSuite) TestStmtProcedureMultiResult() {
+	const procName = "go_mysql_test_multi_result"
+
+	_, err := s.c.Execute("DROP PROCEDURE IF EXISTS " + procName)
+	require.NoError(s.T(), err)
+
+	_, err = s.c.Execute(`CREATE PROCEDURE ` + procName + `()
+BEGIN
+  SELECT 1 AS n;
+  SELECT 2 AS n;
+END`)
+	require.NoError(s.T(), err)
+	defer func() {
+		_, dropErr := s.c.Execute("DROP PROCEDURE IF EXISTS " + procName)
+		require.NoError(s.T(), dropErr)
+	}()
+
+	// A dedicated connection with CLIENT_MULTI_RESULTS and CLIENT_PS_MULTI_RESULTS
+	// is required; these are optional capabilities not set on the shared suite conn.
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	mc, err := Connect(addr, *testUser, *testPassword, *testDB, func(conn *Conn) error {
+		if err := conn.SetCapability(mysql.CLIENT_MULTI_RESULTS); err != nil {
+			return err
+		}
+		return conn.SetCapability(mysql.CLIENT_PS_MULTI_RESULTS)
+	})
+	require.NoError(s.T(), err)
+	defer mc.Close()
+
+	stmt, err := mc.Prepare("CALL " + procName + "()")
+	require.NoError(s.T(), err)
+	defer stmt.Close()
+
+	var resultSets int
+	err = stmt.ExecuteProcedureMultiResults(func(res *mysql.Result, err error) error {
+		require.NoError(s.T(), err)
+		if res != nil && res.HasResultset() {
+			resultSets++
+			n, getErr := res.GetInt(0, 0)
+			require.NoError(s.T(), getErr)
+			require.Contains(s.T(), []int64{1, 2}, n)
+			res.Close()
+		}
+		return nil
+	})
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), 2, resultSets)
+}
+
 func (s *clientTestSuite) TestLongPassword() {
 	_, err := s.c.Execute("DROP USER IF EXISTS 'test_long_password'@'%'")
 	require.NoError(s.T(), err)
@@ -542,4 +591,10 @@ func (s *clientTestSuite) TestLongPassword() {
 	require.NoError(s.T(), err)
 	err = c.Close()
 	require.NoError(s.T(), err)
+}
+
+func TestStmtProcedureMultiResultNilForward(t *testing.T) {
+	s := &Stmt{conn: &Conn{}}
+	err := s.ExecuteProcedureMultiResults(nil)
+	require.ErrorContains(t, err, "forward callback cannot be nil")
 }

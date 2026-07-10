@@ -54,10 +54,7 @@ func (t *testSyncerSuite) testExecute(query string) {
 }
 
 func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
-	t.wg.Add(1)
-	go func() {
-		defer t.wg.Done()
-
+	t.wg.Go(func() {
 		if s == nil {
 			return
 		}
@@ -78,7 +75,7 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 				os.Stdout.Sync()
 			}
 		}
-	}()
+	})
 
 	// use mixed format
 	t.testExecute("SET SESSION binlog_format = 'MIXED'")
@@ -360,13 +357,13 @@ func (t *testSyncerSuite) TestMysqlGTIDSync() {
 	r, err = t.c.Execute("SHOW GLOBAL VARIABLES LIKE 'SERVER_UUID'")
 	require.NoError(t.T(), err)
 
-	var masterUuid uuid.UUID
+	var masterUUID uuid.UUID
 	if s, _ := r.GetString(0, 1); len(s) > 0 && s != "NONE" {
-		masterUuid, err = uuid.Parse(s)
+		masterUUID, err = uuid.Parse(s)
 		require.NoError(t.T(), err)
 	}
 
-	set, _ := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d-%d", masterUuid.String(), 1, 2))
+	set, _ := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d-%d", masterUUID.String(), 1, 2))
 
 	s, err := t.b.StartSyncGTID(set)
 	require.NoError(t.T(), err)

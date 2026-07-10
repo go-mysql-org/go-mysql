@@ -145,16 +145,16 @@ func (c *Conn) Capability() uint32 {
 	return c.capability
 }
 
-func (c *Conn) SetCapability(cap uint32) {
-	c.capability |= cap
+func (c *Conn) SetCapability(capability uint32) {
+	c.capability |= capability
 }
 
-func (c *Conn) UnsetCapability(cap uint32) {
-	c.capability &= ^cap
+func (c *Conn) UnsetCapability(capability uint32) {
+	c.capability &= ^capability
 }
 
-func (c *Conn) HasCapability(cap uint32) bool {
-	return c.capability&cap > 0
+func (c *Conn) HasCapability(capability uint32) bool {
+	return c.capability&capability > 0
 }
 
 func (c *Conn) Charset() uint8 {

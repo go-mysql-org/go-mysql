@@ -27,7 +27,7 @@ Usage:
 type (
 	Timestamp int64
 
-	LogFunc func(format string, args ...interface{})
+	LogFunc func(format string, args ...any)
 
 	Pool struct {
 		logger           *slog.Logger
@@ -442,7 +442,7 @@ func (pool *Pool) recheckConnections(connections []Connection) {
 
 	var wg sync.WaitGroup
 	wg.Add(workerCnt)
-	for worker := 0; worker < workerCnt; worker++ {
+	for range workerCnt {
 		go func() {
 			defer wg.Done()
 			for connection := range queue {
@@ -505,11 +505,9 @@ func (pool *Pool) closeIdleConnectionsIfCan() {
 		return
 	}
 
-	closeFromIdx := idleCnt - canCloseCnt
-	if closeFromIdx < 0 {
+	closeFromIdx := max(idleCnt-canCloseCnt,
 		// If there are enough requests in the "flight" now, then we can close all unnecessary
-		closeFromIdx = 0
-	}
+		0)
 
 	toClose := append([]Connection{}, pool.synchro.idleConnections[closeFromIdx:]...)
 
@@ -538,7 +536,7 @@ func (pool *Pool) startNewConnections(count int) {
 	pool.logger.Info("Pool: Setup new connections (minimal pool size)", slog.Int("count", count))
 
 	connections := make([]Connection, 0, count)
-	for i := 0; i < count; i++ {
+	for range count {
 		if conn, err := pool.createNewConnection(); err == nil {
 			pool.synchro.Lock()
 			pool.synchro.stats.TotalCount++

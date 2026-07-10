@@ -100,7 +100,7 @@ func (f *Field) Parse(p FieldData) (err error) {
 	pos += n
 
 	// skip oc
-	pos += 1
+	pos++
 
 	// charset
 	f.Charset = binary.LittleEndian.Uint16(p[pos:])
@@ -207,7 +207,7 @@ func (fv *FieldValue) AsString() []byte {
 	return fv.str
 }
 
-func (fv *FieldValue) Value() interface{} {
+func (fv *FieldValue) Value() any {
 	switch fv.Type {
 	case FieldValueTypeUnsigned:
 		return fv.AsUint64()

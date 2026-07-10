@@ -76,7 +76,7 @@ Connect to MySQL failed: %v`, err)
 		for colnum, val := range row {
 			fmt.Printf("\tColumn number %d\n", colnum)
 
-			ival := val.Value() // interface{}
+			ival := val.Value() // any
 			fmt.Printf("\t\tvalue (type: %d): %#v\n", val.Type, ival)
 
 			if val.Type == mysql.FieldValueTypeSigned {

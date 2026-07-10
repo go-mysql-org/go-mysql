@@ -7,6 +7,7 @@ package schema
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,6 +23,8 @@ var (
 )
 
 // Different column type
+//
+//nolint:revive // exported column-type constants kept for backward compatibility
 const (
 	TYPE_NUMBER    = iota + 1 // tinyint, smallint, int, bigint, year
 	TYPE_FLOAT                // float, double
@@ -41,18 +44,20 @@ const (
 )
 
 type TableColumn struct {
-	Name       string
-	Type       int
-	Collation  string
-	RawType    string
-	IsAuto     bool
-	IsUnsigned bool
-	IsVirtual  bool
-	IsStored   bool
-	EnumValues []string
-	SetValues  []string
-	FixedSize  uint
-	MaxSize    uint
+	Name           string
+	Type           int
+	Collation      string
+	RawType        string
+	IsAuto         bool
+	IsUnsigned     bool
+	IsVirtual      bool
+	IsStored       bool
+	IsDefaultExpr  bool
+	IsAutoUpdating bool
+	EnumValues     []string
+	SetValues      []string
+	FixedSize      uint
+	MaxSize        uint
 }
 
 type Index struct {
@@ -155,6 +160,16 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 	case "STORED GENERATED":
 		ta.Columns[index].IsStored = true
 	}
+
+	if strings.Contains(extra, "DEFAULT_GENERATED") {
+		ta.Columns[index].IsDefaultExpr = true
+	}
+	if ta.Columns[index].Type == TYPE_DATETIME ||
+		ta.Columns[index].Type == TYPE_TIMESTAMP {
+		if strings.Contains(extra, "on update CURRENT_TIMESTAMP") {
+			ta.Columns[index].IsAutoUpdating = true
+		}
+	}
 }
 
 func getSizeFromColumnType(columnType string) uint {
@@ -196,12 +211,7 @@ func (ta *Table) GetPKColumn(index int) *TableColumn {
 }
 
 func (ta *Table) IsPrimaryKey(colIndex int) bool {
-	for _, i := range ta.PKColumns {
-		if i == colIndex {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ta.PKColumns, colIndex)
 }
 
 func (ta *Table) AddIndex(name string) (index *Index) {
@@ -241,6 +251,7 @@ func IsTableExist(conn mysql.Executer, schema string, name string) (bool, error)
 	return r.RowNumber() == 1, nil
 }
 
+//nolint:revive // exported function renamed would be a breaking API change
 func NewTableFromSqlDB(conn *sql.DB, schema string, name string) (*Table, error) {
 	ta := &Table{
 		Schema:  schema,
@@ -249,11 +260,11 @@ func NewTableFromSqlDB(conn *sql.DB, schema string, name string) (*Table, error)
 		Indexes: make([]*Index, 0, 8),
 	}
 
-	if err := ta.fetchColumnsViaSqlDB(conn); err != nil {
+	if err := ta.fetchColumnsViaSQLDB(conn); err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if err := ta.fetchIndexesViaSqlDB(conn); err != nil {
+	if err := ta.fetchIndexesViaSQLDB(conn); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -297,7 +308,7 @@ func (ta *Table) fetchColumns(conn mysql.Executer) error {
 	return nil
 }
 
-func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
+func (ta *Table) fetchColumnsViaSQLDB(conn *sql.DB) error {
 	r, err := conn.Query(fmt.Sprintf("show full columns from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
 		return errors.Trace(err)
@@ -305,7 +316,7 @@ func (ta *Table) fetchColumnsViaSqlDB(conn *sql.DB) error {
 
 	defer r.Close()
 
-	var unusedVal interface{}
+	var unusedVal any
 	unused := &unusedVal
 
 	for r.Next() {
@@ -374,7 +385,7 @@ func (ta *Table) fetchIndexes(conn mysql.Executer) error {
 	return ta.fetchPrimaryKeyColumns()
 }
 
-func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
+func (ta *Table) fetchIndexesViaSQLDB(conn *sql.DB) error {
 	r, err := conn.Query(fmt.Sprintf("show index from `%s`.`%s`", ta.Schema, ta.Name))
 	if err != nil {
 		return errors.Trace(err)
@@ -385,21 +396,21 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 	var currentIndex *Index
 	currentName := ""
 
-	var unusedVal interface{}
+	var unusedVal any
 
 	for r.Next() {
 		var indexName string
 		var colName sql.NullString
 		var noneUnique uint64
-		var cardinality interface{}
+		var cardinality any
 		var visible sql.NullString
 		cols, err := r.Columns()
 		if err != nil {
 			return errors.Trace(err)
 		}
 		hasInvisibleIndex := hasInvisibleIndexSupportFromColumns(cols)
-		values := make([]interface{}, len(cols))
-		for i := 0; i < len(cols); i++ {
+		values := make([]any, len(cols))
+		for i := range cols {
 			switch i {
 			case 1:
 				values[i] = &noneUnique
@@ -444,7 +455,7 @@ func (ta *Table) fetchIndexesViaSqlDB(conn *sql.DB) error {
 	return ta.fetchPrimaryKeyColumns()
 }
 
-func toUint64(i interface{}) uint64 {
+func toUint64(i any) uint64 {
 	switch i := i.(type) {
 	case int:
 		return uint64(i)
@@ -491,7 +502,7 @@ func (ta *Table) fetchPrimaryKeyColumns() error {
 }
 
 // GetPKValues gets primary keys in one row for a table, a table may use multi fields as the PK
-func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
+func (ta *Table) GetPKValues(row []any) ([]any, error) {
 	indexes := ta.PKColumns
 	if len(indexes) == 0 {
 		return nil, errors.Errorf("table %s has no PK", ta)
@@ -500,7 +511,7 @@ func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 			len(ta.Columns), row, len(row))
 	}
 
-	values := make([]interface{}, 0, len(indexes))
+	values := make([]any, 0, len(indexes))
 
 	for _, index := range indexes {
 		values = append(values, row[index])
@@ -510,7 +521,7 @@ func (ta *Table) GetPKValues(row []interface{}) ([]interface{}, error) {
 }
 
 // GetColumnValue gets term column's value
-func (ta *Table) GetColumnValue(column string, row []interface{}) (interface{}, error) {
+func (ta *Table) GetColumnValue(column string, row []any) (any, error) {
 	index := ta.FindColumn(column)
 	if index == -1 {
 		return nil, errors.Errorf("table %s has no column name %s", ta, column)

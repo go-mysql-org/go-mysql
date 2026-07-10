@@ -117,7 +117,7 @@ func (s *canalTestSuite) TearDownSuite() {
 	}
 }
 
-func (s *canalTestSuite) execute(query string, args ...interface{}) *mysql.Result {
+func (s *canalTestSuite) execute(query string, args ...any) *mysql.Result {
 	r, err := s.c.Execute(query, args...)
 	require.NoError(s.T(), err)
 	return r

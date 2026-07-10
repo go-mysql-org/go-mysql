@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -25,6 +26,10 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 	if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, byte(r.Status), byte(r.Status>>8))
 		data = append(data, byte(r.Warnings), byte(r.Warnings>>8))
+	}
+
+	if c.capability&mysql.CLIENT_SESSION_TRACK > 0 {
+		data = mysql.AppendOKSessionTrackSuffix(data, r)
 	}
 
 	return c.WritePacket(data)
@@ -94,9 +99,12 @@ func (c *Conn) readAuthSwitchRequestResponse() ([]byte, error) {
 }
 
 func (c *Conn) writeAuthMoreDataPubkey() error {
+	if len(c.serverConf.rsaPublicKeyBytes) == 0 {
+		return errors.New("RSA key not configured; non-TLS connections are not supported for this authentication method")
+	}
 	data := make([]byte, 4)
 	data = append(data, mysql.MORE_DATE_HEADER)
-	data = append(data, c.serverConf.pubKey...)
+	data = append(data, c.serverConf.rsaPublicKeyBytes...)
 	return c.WritePacket(data)
 }
 
@@ -323,7 +331,7 @@ type (
 	eofResponse struct{}
 )
 
-func (c *Conn) WriteValue(value interface{}) error {
+func (c *Conn) WriteValue(value any) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
@@ -338,9 +346,8 @@ func (c *Conn) WriteValue(value interface{}) error {
 			return c.writeStreamResultset(v.StreamResult)
 		} else if v != nil && v.HasResultset() {
 			return c.writeResultset(v.Resultset)
-		} else {
-			return c.writeOK(v)
 		}
+		return c.writeOK(v)
 	case []*mysql.Field:
 		return c.writeFieldList(v, nil)
 	case []mysql.FieldValue:

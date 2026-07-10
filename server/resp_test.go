@@ -2,7 +2,10 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -31,6 +34,85 @@ func TestConnWriteOK(t *testing.T) {
 	err = conn.writeOK(result)
 	require.NoError(t, err)
 	expected = []byte{7, 0, 0, 1, mysql.OK_HEADER, 1, 2, 0, 8, 0, 0}
+	require.Equal(t, expected, clientConn.WriteBuffered)
+}
+
+func TestConnWriteOKWithSessionTrack(t *testing.T) {
+	clientConn := &mockconn.MockConn{}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+	conn.SetCapability(mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK)
+
+	result := mysql.NewResultReserveResultset(0)
+	result.AffectedRows = 1
+	result.InsertId = 2
+	result.Status = mysql.SERVER_SESSION_STATE_CHANGED
+	result.SessionTracking = &mysql.SessionTrackingInfo{
+		Schema: "mysql",
+		State:  "1",
+	}
+
+	err := conn.writeOK(result)
+	require.NoError(t, err)
+
+	sessionTrackBlock := []byte{
+		mysql.SESSION_TRACK_SCHEMA, 0x6, 0x5, 'm', 'y', 's', 'q', 'l',
+		mysql.SESSION_TRACK_STATE_CHANGE, 0x1, '1',
+	}
+	expectedPayload := []byte{
+		mysql.OK_HEADER, 1, 2,
+		0x00, 0x40, // SERVER_SESSION_STATE_CHANGED
+		0x00, 0x00, // warnings
+		0x00, // status message length
+		byte(len(sessionTrackBlock)),
+	}
+	expectedPayload = append(expectedPayload, sessionTrackBlock...)
+	expected := append([]byte{byte(len(expectedPayload)), 0, 0, 0}, expectedPayload...)
+	require.Equal(t, expected, clientConn.WriteBuffered)
+}
+
+func TestConnWriteOKStatusMessageWithoutStateChange(t *testing.T) {
+	clientConn := &mockconn.MockConn{}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+	conn.SetCapability(mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK)
+
+	result := mysql.NewResultReserveResultset(0)
+	result.AffectedRows = 1
+	result.InsertId = 2
+	result.StatusMessage = "hello"
+	// No SERVER_SESSION_STATE_CHANGED — only the info string should be emitted.
+
+	err := conn.writeOK(result)
+	require.NoError(t, err)
+
+	msg := []byte("hello")
+	expectedPayload := []byte{
+		mysql.OK_HEADER, 1, 2,
+		0x00, 0x00, // status flags (no SESSION_STATE_CHANGED)
+		0x00, 0x00, // warnings
+		byte(len(msg)), // info lenenc length
+	}
+	expectedPayload = append(expectedPayload, msg...)
+	expected := append([]byte{byte(len(expectedPayload)), 0, 0, 0}, expectedPayload...)
+	require.Equal(t, expected, clientConn.WriteBuffered)
+}
+
+func TestConnWriteOKSessionTrackWithoutStateChangeOrInfo(t *testing.T) {
+	clientConn := &mockconn.MockConn{}
+	conn := &Conn{Conn: packet.NewConn(clientConn)}
+	conn.SetCapability(mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_SESSION_TRACK)
+
+	result := mysql.NewResultReserveResultset(0)
+	err := conn.writeOK(result)
+	require.NoError(t, err)
+
+	// Auth-style OK: empty info string only; no session-state block.
+	expectedPayload := []byte{
+		mysql.OK_HEADER, 0, 0,
+		0x00, 0x00, // status
+		0x00, 0x00, // warnings
+		0x00, // empty info string
+	}
+	expected := append([]byte{byte(len(expectedPayload)), 0, 0, 0}, expectedPayload...)
 	require.Equal(t, expected, clientConn.WriteBuffered)
 }
 
@@ -111,17 +193,23 @@ func TestConnReadAuthSwitchRequestResponse(t *testing.T) {
 
 func TestConnWriteAuthMoreDataPubkey(t *testing.T) {
 	clientConn := &mockconn.MockConn{}
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
 	conn := &Conn{
 		Conn: packet.NewConn(clientConn),
 		serverConf: &Server{
-			pubKey: []byte{1, 2, 3, 4},
+			rsaPrivateKey:     rsaKey,
+			rsaPublicKeyBytes: rsaPublicKeyBytes(rsaKey),
 		},
 	}
 
-	err := conn.writeAuthMoreDataPubkey()
+	err = conn.writeAuthMoreDataPubkey()
 	require.NoError(t, err)
-	expected := []byte{5, 0, 0, 0, mysql.MORE_DATE_HEADER, 1, 2, 3, 4}
-	require.Equal(t, expected, clientConn.WriteBuffered)
+	// Check that the packet starts with the expected header
+	require.Equal(t, mysql.MORE_DATE_HEADER, clientConn.WriteBuffered[4])
+	// Check that the public key PEM is included (starts after the 5-byte header)
+	require.Contains(t, string(clientConn.WriteBuffered[5:]), "BEGIN PUBLIC KEY")
 }
 
 func TestConnWriteAuthMoreDataFullAuth(t *testing.T) {
@@ -162,7 +250,7 @@ func TestConnWriteResultset(t *testing.T) {
 
 	// reset write buffer and fill up the resultset with (little) data
 	clientConn.WriteBuffered = []byte{}
-	r, err = mysql.BuildSimpleTextResultset([]string{"a"}, [][]interface{}{{"b"}})
+	r, err = mysql.BuildSimpleTextResultset([]string{"a"}, [][]any{{"b"}})
 	require.NoError(t, err)
 	err = conn.writeResultset(r)
 	require.NoError(t, err)
@@ -180,7 +268,7 @@ func TestConnWriteFieldList(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]interface{}{{"d"}})
+	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]any{{"d"}})
 	require.NoError(t, err)
 	err = conn.writeFieldList(r.Fields, nil)
 	require.NoError(t, err)
@@ -194,7 +282,7 @@ func TestConnWriteFieldValues(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
-	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]interface{}{
+	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]any{
 		{"d"},
 		{nil},
 	})
@@ -400,13 +488,7 @@ func TestConnWriteStreamResultsetWithNullValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify output contains NULL marker (0xfb)
-	found := false
-	for _, b := range clientConn.WriteBuffered {
-		if b == 0xfb {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(clientConn.WriteBuffered, 0xfb)
 	require.True(t, found, "NULL marker (0xfb) should be present in output")
 }
 

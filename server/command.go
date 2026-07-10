@@ -22,13 +22,13 @@ type Handler interface {
 	HandleFieldList(table string, fieldWildcard string) ([]*mysql.Field, error)
 	// handle COM_STMT_PREPARE, params is the param number for this statement, columns is the column number
 	// context will be used later for statement execute
-	HandleStmtPrepare(query string) (params int, columns int, context interface{}, err error)
+	HandleStmtPrepare(query string) (params int, columns int, context any, err error)
 	// handle COM_STMT_EXECUTE, context is the previous one set in prepare
 	// query is the statement prepare query, and args is the params for this statement
-	HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error)
+	HandleStmtExecute(context any, query string, args []any) (*mysql.Result, error)
 	// handle COM_STMT_CLOSE, context is the previous one set in prepare
 	// this handler has no response
-	HandleStmtClose(context interface{}) error
+	HandleStmtClose(context any) error
 	// handle any other command that is not currently handled by the library,
 	// default implementation for this method will return an ER_UNKNOWN_ERROR
 	HandleOtherCommand(cmd byte, data []byte) error
@@ -71,7 +71,7 @@ func (c *Conn) HandleCommand() error {
 	return err
 }
 
-func (c *Conn) dispatch(data []byte) interface{} {
+func (c *Conn) dispatch(data []byte) any {
 	cmd := data[0]
 	data = data[1:]
 
@@ -81,29 +81,28 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		c.Conn = nil
 		return noResponse{}
 	case mysql.COM_QUERY:
-		if r, err := c.h.HandleQuery(utils.ByteSliceToString(data)); err != nil {
+		r, err := c.h.HandleQuery(utils.ByteSliceToString(data))
+		if err != nil {
 			return err
-		} else {
-			return r
 		}
+		return r
 	case mysql.COM_PING:
 		return nil
 	case mysql.COM_INIT_DB:
 		if err := c.h.UseDB(utils.ByteSliceToString(data)); err != nil {
 			return err
-		} else {
-			return nil
 		}
+		return nil
 	case mysql.COM_FIELD_LIST:
-		index := bytes.IndexByte(data, 0x00)
-		table := utils.ByteSliceToString(data[0:index])
-		wildcard := utils.ByteSliceToString(data[index+1:])
+		before, after, _ := bytes.Cut(data, []byte{0x00})
+		table := utils.ByteSliceToString(before)
+		wildcard := utils.ByteSliceToString(after)
 
-		if fs, err := c.h.HandleFieldList(table, wildcard); err != nil {
+		fs, err := c.h.HandleFieldList(table, wildcard)
+		if err != nil {
 			return err
-		} else {
-			return fs
 		}
+		return fs
 	case mysql.COM_STMT_PREPARE:
 		c.stmtID++
 		st := new(Stmt)
@@ -112,21 +111,20 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		var err error
 		if st.Params, st.Columns, st.Context, err = c.h.HandleStmtPrepare(st.Query); err != nil {
 			return err
-		} else {
-			if provider, ok := st.Context.(*stmt.PreparedStmt); ok {
-				st.RawParamFields = provider.RawParamFields
-				st.RawColumnFields = provider.RawColumnFields
-			}
-			st.ResetParams()
-			c.stmts[c.stmtID] = st
-			return st
 		}
+		if provider, ok := st.Context.(*stmt.PreparedStmt); ok {
+			st.RawParamFields = provider.RawParamFields
+			st.RawColumnFields = provider.RawColumnFields
+		}
+		st.ResetParams()
+		c.stmts[c.stmtID] = st
+		return st
 	case mysql.COM_STMT_EXECUTE:
-		if r, err := c.handleStmtExecute(data); err != nil {
+		r, err := c.handleStmtExecute(data)
+		if err != nil {
 			return err
-		} else {
-			return r
 		}
+		return r
 	case mysql.COM_STMT_CLOSE:
 		if err := c.handleStmtClose(data); err != nil {
 			return err
@@ -138,11 +136,11 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		}
 		return noResponse{}
 	case mysql.COM_STMT_RESET:
-		if r, err := c.handleStmtReset(data); err != nil {
+		r, err := c.handleStmtReset(data)
+		if err != nil {
 			return err
-		} else {
-			return r
 		}
+		return r
 	case mysql.COM_SET_OPTION:
 		if err := c.h.HandleOtherCommand(cmd, data); err != nil {
 			return err
@@ -152,37 +150,34 @@ func (c *Conn) dispatch(data []byte) interface{} {
 	case mysql.COM_REGISTER_SLAVE:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			return h.HandleRegisterSlave(data)
-		} else {
-			return c.h.HandleOtherCommand(cmd, data)
 		}
+		return c.h.HandleOtherCommand(cmd, data)
 	case mysql.COM_BINLOG_DUMP:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			pos, err := parseBinlogDump(data)
 			if err != nil {
 				return err
 			}
-			if s, err := h.HandleBinlogDump(pos); err != nil {
+			s, err := h.HandleBinlogDump(pos)
+			if err != nil {
 				return err
-			} else {
-				return s
 			}
-		} else {
-			return c.h.HandleOtherCommand(cmd, data)
+			return s
 		}
+		return c.h.HandleOtherCommand(cmd, data)
 	case mysql.COM_BINLOG_DUMP_GTID:
 		if h, ok := c.h.(ReplicationHandler); ok {
 			gtidSet, err := parseBinlogDumpGTID(data)
 			if err != nil {
 				return err
 			}
-			if s, err := h.HandleBinlogDumpGTID(gtidSet); err != nil {
+			s, err := h.HandleBinlogDumpGTID(gtidSet)
+			if err != nil {
 				return err
-			} else {
-				return s
 			}
-		} else {
-			return c.h.HandleOtherCommand(cmd, data)
+			return s
 		}
+		return c.h.HandleOtherCommand(cmd, data)
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}
@@ -211,7 +206,7 @@ func (h EmptyHandler) HandleQuery(query string) (*mysql.Result, error) {
 		return nil, nil
 	}
 	if query == `select concat(@@version, ' ', @@version_comment)` {
-		r, err := mysql.BuildSimpleResultset([]string{"concat(@@version, ' ', @@version_comment)"}, [][]interface{}{
+		r, err := mysql.BuildSimpleResultset([]string{"concat(@@version, ' ', @@version_comment)"}, [][]any{
 			{"8.0.11"},
 		}, false)
 		if err != nil {
@@ -232,7 +227,7 @@ func (h EmptyHandler) HandleFieldList(table string, fieldWildcard string) ([]*my
 }
 
 // HandleStmtPrepare is called for COM_STMT_PREPARE
-func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, error) {
+func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, any, error) {
 	log.Printf("Received: StmtPrepare: %s", query)
 	return 0, 0, nil, fmt.Errorf("not supported now")
 }
@@ -242,13 +237,13 @@ func (h EmptyHandler) HandleStmtPrepare(query string) (int, int, interface{}, er
 //revive:disable:unused-parameter
 
 // HandleStmtExecute is called for COM_STMT_EXECUTE
-func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args []interface{}) (*mysql.Result, error) {
+func (h EmptyHandler) HandleStmtExecute(context any, query string, args []any) (*mysql.Result, error) {
 	log.Printf("Received: StmtExecute: %s (args: %v)", query, args)
 	return nil, fmt.Errorf("not supported now")
 }
 
 // HandleStmtClose is called for COM_STMT_CLOSE
-func (h EmptyHandler) HandleStmtClose(context interface{}) error {
+func (h EmptyHandler) HandleStmtClose(context any) error {
 	log.Println("Received: StmtClose")
 	return nil
 }
