@@ -269,7 +269,9 @@ func (c *Canal) Close() {
 	}
 	c.connLock.Unlock()
 
-	_ = c.eventHandler.OnPosSynced(nil, c.master.Position(), c.master.GTIDSet(), true)
+	if !c.cfg.TransactionalPosSync {
+		_ = c.eventHandler.OnPosSynced(nil, c.master.Position(), c.master.GTIDSet(), true)
+	}
 }
 
 func (c *Canal) WaitDumpDone() <-chan struct{} {
