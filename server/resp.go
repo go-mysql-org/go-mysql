@@ -212,7 +212,7 @@ func (c *Conn) writeStreamTextRows(sr *mysql.StreamResult) error {
 	}
 
 	if err := sr.Err(); err != nil {
-		return err
+		return c.writeError(err)
 	}
 
 	return c.writeEOF()
@@ -259,7 +259,7 @@ func (c *Conn) writeStreamBinaryRows(sr *mysql.StreamResult) error {
 	}
 
 	if err := sr.Err(); err != nil {
-		return err
+		return c.writeError(err)
 	}
 
 	return c.writeEOF()

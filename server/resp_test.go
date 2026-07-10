@@ -387,10 +387,12 @@ func TestConnWriteStreamResultsetWithError(t *testing.T) {
 		sr.Close()
 	}()
 
-	// write stream resultset should return the error
+	// write stream resultset should write the error packet
+	// but leave the connection usable
 	err := conn.WriteValue(sr.AsResult())
-	require.Error(t, err)
-	require.Equal(t, testErr, err)
+	require.NoError(t, err)
+	require.Contains(t, clientConn.WriteBuffered, byte(mysql.ERR_HEADER))
+	require.Contains(t, string(clientConn.WriteBuffered), testErr.Error())
 }
 
 func TestConnWriteStreamResultsetWithNullValue(t *testing.T) {
