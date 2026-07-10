@@ -310,6 +310,8 @@ func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
 
 func (c *Canal) WaitUntilPosContext(ctx context.Context, pos mysql.Position, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
