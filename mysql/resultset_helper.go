@@ -138,6 +138,8 @@ func toBinaryDate(t time.Time) ([]byte, error) {
 		return []byte{0}, nil
 	}
 	year := t.Year()
+	// MySQL DATE/DATETIME cap at year 9999 and the wire year is a 2-byte
+	// unsigned int. https://dev.mysql.com/doc/refman/8.0/en/datetime.html
 	if year < 0 || year > 9999 {
 		return nil, errors.Errorf("year %d out of range (0-9999)", year)
 	}
@@ -145,7 +147,8 @@ func toBinaryDate(t time.Time) ([]byte, error) {
 }
 
 // toBinaryTime encodes a time.Time as a length-prefixed packed binary TIME.
-// For negative or >23h values, pass a string instead.
+// A time.Time is always non-negative and under 24h; negative or >=24h TIME
+// values arrive as strings and go through parseTimeString instead.
 func toBinaryTime(t time.Time) ([]byte, error) {
 	if t.IsZero() {
 		return []byte{0}, nil
@@ -211,15 +214,19 @@ func parseDateTimeString(s string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "invalid DATETIME %q", s)
 	}
-	var hour, minute, sec uint8
+	var hour uint32
+	var minute, sec uint8
 	var micro uint32
 	if timePart != "" {
 		hour, minute, sec, micro, err = parseHMSFraction(timePart)
 		if err != nil {
 			return nil, errors.Wrapf(err, "invalid DATETIME %q", s)
 		}
+		if hour > 23 {
+			return nil, errors.Errorf("invalid DATETIME %q: hour %d out of range", s, hour)
+		}
 	}
-	return packDateTime(year, month, day, hour, minute, sec, micro), nil
+	return packDateTime(year, month, day, uint8(hour), minute, sec, micro), nil
 }
 
 // parseTimeString re-packs a "[-]H+:MM:SS[.ffffff]" TIME string into the
@@ -238,46 +245,15 @@ func parseTimeString(s string) ([]byte, error) {
 	if negative {
 		s = s[1:]
 	}
-	hms, frac, hasDot := strings.Cut(s, ".")
-	if hasDot && frac == "" {
-		return nil, errors.Errorf("invalid TIME %q: trailing dot without fractional digits", s)
-	}
-	parts := strings.Split(hms, ":")
-	if len(parts) != 3 {
-		return nil, errors.Errorf("invalid TIME %q", s)
-	}
-	totalHours, err := strconv.ParseUint(parts[0], 10, 32)
+	hour, minute, sec, micro, err := parseHMSFraction(s)
 	if err != nil {
 		return nil, errors.Wrapf(err, "invalid TIME %q", s)
 	}
-	if totalHours > 838 {
+	if hour > 838 {
 		// MySQL TIME range is -838:59:59 to 838:59:59.
-		return nil, errors.Errorf("invalid TIME %q: hours %d exceed MySQL TIME maximum of 838", s, totalHours)
+		return nil, errors.Errorf("invalid TIME %q: hours %d exceed MySQL TIME maximum of 838", s, hour)
 	}
-	minute, err := strconv.ParseUint(parts[1], 10, 8)
-	if err != nil {
-		return nil, errors.Wrapf(err, "invalid TIME %q: minute", s)
-	}
-	if minute > 59 {
-		return nil, errors.Errorf("invalid TIME %q: minute %d out of range", s, minute)
-	}
-	sec, err := strconv.ParseUint(parts[2], 10, 8)
-	if err != nil {
-		return nil, errors.Wrapf(err, "invalid TIME %q: second", s)
-	}
-	if sec > 59 {
-		return nil, errors.Errorf("invalid TIME %q: second %d out of range", s, sec)
-	}
-	var micro uint32
-	if frac != "" {
-		micro, err = parseMicroseconds(frac)
-		if err != nil {
-			return nil, errors.Wrapf(err, "invalid TIME %q", s)
-		}
-	}
-	days := uint32(totalHours / 24)
-	hour := uint8(totalHours % 24)
-	return packTime(negative, days, hour, uint8(minute), uint8(sec), micro), nil
+	return packTime(negative, hour/24, uint8(hour%24), minute, sec, micro), nil
 }
 
 func parseYMD(s string) (uint16, uint8, uint8, error) {
@@ -299,7 +275,9 @@ func parseYMD(s string) (uint16, uint8, uint8, error) {
 	return uint16(year), uint8(month), uint8(day), nil
 }
 
-func parseHMSFraction(s string) (uint8, uint8, uint8, uint32, error) {
+// parseHMSFraction parses "HH:MM:SS[.ffffff]". The hour is returned unbounded
+// so each caller can apply its own maximum: 23 for DATETIME, 838 for TIME.
+func parseHMSFraction(s string) (uint32, uint8, uint8, uint32, error) {
 	hms, frac, hasDot := strings.Cut(s, ".")
 	if hasDot && frac == "" {
 		return 0, 0, 0, 0, errors.Errorf("trailing dot without fractional digits")
@@ -308,12 +286,9 @@ func parseHMSFraction(s string) (uint8, uint8, uint8, uint32, error) {
 	if len(parts) != 3 {
 		return 0, 0, 0, 0, errors.Errorf("expected HH:MM:SS")
 	}
-	hour, err := strconv.ParseUint(parts[0], 10, 8)
+	hour, err := strconv.ParseUint(parts[0], 10, 32)
 	if err != nil {
 		return 0, 0, 0, 0, errors.Wrap(err, "hour")
-	}
-	if hour > 23 {
-		return 0, 0, 0, 0, errors.Errorf("hour %d out of range", hour)
 	}
 	minute, err := strconv.ParseUint(parts[1], 10, 8)
 	if err != nil {
@@ -336,7 +311,7 @@ func parseHMSFraction(s string) (uint8, uint8, uint8, uint32, error) {
 			return 0, 0, 0, 0, err
 		}
 	}
-	return uint8(hour), uint8(minute), uint8(sec), micro, nil
+	return uint32(hour), uint8(minute), uint8(sec), micro, nil
 }
 
 func parseMicroseconds(s string) (uint32, error) {
@@ -344,12 +319,13 @@ func parseMicroseconds(s string) (uint32, error) {
 		// MySQL fractional seconds top out at 6 digits.
 		return 0, errors.Errorf("invalid microseconds %q: more than 6 digits", s)
 	}
-	for len(s) < 6 {
-		s += "0"
-	}
 	n, err := strconv.ParseUint(s, 10, 32)
 	if err != nil {
 		return 0, errors.Wrapf(err, "invalid microseconds %q", s)
+	}
+	// Left-align the fraction to microseconds: ".5" is 500000 µs, not 5.
+	for i := len(s); i < 6; i++ {
+		n *= 10
 	}
 	return uint32(n), nil
 }
@@ -586,11 +562,9 @@ func EncodeBinaryFieldValue(field *Field, value any) ([]byte, error) {
 		MYSQL_TYPE_VECTOR, MYSQL_TYPE_GEOMETRY, MYSQL_TYPE_JSON:
 		switch v := value.(type) {
 		case []byte:
-			if v == nil {
-				// Typed-nil []byte → NULL. The top-level nil check doesn't
-				// catch typed nils inside an interface.
-				return nil, nil
-			}
+			// ParseBinary yields []byte(nil) for empty strings, so a nil []byte
+			// is an empty string here, not NULL; NULLs are caught by the
+			// value == nil check at the top of the function.
 			return PutLengthEncodedString(v), nil
 		case string:
 			return PutLengthEncodedString(utils.StringToByteSlice(v)), nil
