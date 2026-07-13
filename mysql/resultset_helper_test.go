@@ -266,6 +266,32 @@ func TestEncodeBinaryFieldValueNullables(t *testing.T) {
 	})
 }
 
+// TestEncodeBinaryFieldValueEmptyStringNotNull regresses the empty-string vs
+// NULL confusion: RowData.ParseBinary yields []byte(nil) for an empty
+// length-encoded string, so a nil []byte for a string column must encode as a
+// length-0 string, not NULL. Genuine NULLs come from the literal-nil path.
+func TestEncodeBinaryFieldValueEmptyStringNotNull(t *testing.T) {
+	f := &Field{Type: MYSQL_TYPE_VARCHAR}
+
+	// A length-encoded empty string is a single length byte of 0x00.
+	for _, v := range []any{[]byte(nil), []byte{}, ""} {
+		b, err := EncodeBinaryFieldValue(f, v)
+		require.NoError(t, err)
+		require.Equal(t, []byte{0x00}, b, "empty value %#v must encode as a length-0 string, not NULL", v)
+	}
+
+	b, err := EncodeBinaryFieldValue(f, nil)
+	require.NoError(t, err)
+	require.Nil(t, b)
+
+	// Proxy flow: an empty string parsed off the wire comes back as []byte(nil),
+	// and re-encoding it must stay an empty string rather than flip to NULL.
+	row := roundTrip(t, []*Field{f}, []any{""})
+	reencoded, err := EncodeBinaryFieldValue(f, row[0].Value())
+	require.NoError(t, err)
+	require.Equal(t, []byte{0x00}, reencoded)
+}
+
 // TestEncodeBinaryFieldValueNullableRowAlignment regresses the NULL-bitmap
 // alignment bug: a Null wrapper with Valid:false is non-nil, so a row
 // builder that only checks `v == nil` skips the bit and shifts subsequent
@@ -511,21 +537,13 @@ func TestEncodeBinaryFieldValueValidationErrors(t *testing.T) {
 }
 
 // TestEncodeBinaryFieldValueTypedNilSlice verifies a typed-nil []byte
-// (e.g. var b []byte) encodes as NULL, not an empty length-encoded string.
-// The interface holding the typed nil is itself non-nil, so the top-level
-// nil check misses it; each []byte branch handles it explicitly.
+// (e.g. var b []byte) for temporal columns encodes as NULL: a nil temporal has
+// no meaningful empty value. String-like columns instead treat it as an empty
+// string (see TestEncodeBinaryFieldValueEmptyStringNotNull). The interface
+// holding the typed nil is itself non-nil, so the top-level nil check misses
+// it; each []byte branch handles it explicitly.
 func TestEncodeBinaryFieldValueTypedNilSlice(t *testing.T) {
 	var b []byte
-
-	t.Run("VARCHAR typed-nil []byte → NULL, next column intact", func(t *testing.T) {
-		fields := []*Field{
-			{Name: []byte("c_first"), Type: MYSQL_TYPE_VARCHAR},
-			{Name: []byte("c_second"), Type: MYSQL_TYPE_VARCHAR},
-		}
-		row := roundTrip(t, fields, []any{b, "after"})
-		require.Nil(t, row[0].Value(), "typed-nil []byte must encode as NULL")
-		require.Equal(t, "after", string(row[1].AsString()))
-	})
 
 	t.Run("DATE typed-nil []byte → NULL", func(t *testing.T) {
 		fields := []*Field{{Name: []byte("c_date"), Type: MYSQL_TYPE_DATE}}
