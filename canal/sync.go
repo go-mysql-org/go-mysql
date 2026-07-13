@@ -148,6 +148,10 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		for _, stmt := range stmts {
 			switch stmt.(type) {
 			case *ast.BeginStmt, *ast.SavepointStmt:
+				if err = c.eventHandler.OnQueryEvent(ev.Header, e, false); err != nil {
+					return errors.Trace(err)
+				}
+
 				// transaction not yet complete; checkpointing here would skip it on GTID resume
 				continue
 			}
