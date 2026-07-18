@@ -481,3 +481,39 @@ func TestIncludeExcludeTableRegex(t *testing.T) {
 	require.False(t, c.checkTableMatch("test.canal_test_inner"))
 	require.False(t, c.checkTableMatch("mysql.canal_test_inner"))
 }
+
+func TestSplitDBTable(t *testing.T) {
+	cases := []struct {
+		in    string
+		db    string
+		table string
+		ok    bool
+	}{
+		{"db.table", "db", "table", true},
+		{"`db`.`table`", "db", "table", true},
+		{"`db`.table", "db", "table", true},
+		{"db.`table`", "db", "table", true},
+		// Quoted identifiers may contain dots and other special characters.
+		{"`my.db`.`my.table`", "my.db", "my.table", true},
+		{"`db with space`.`tbl`", "db with space", "tbl", true},
+		{"`a-b`.`c-d`", "a-b", "c-d", true},
+		// `` inside a quoted identifier is an escaped backtick.
+		{"`db``x`.`tbl`", "db`x", "tbl", true},
+		// Unicode in quoted identifier.
+		{"`数据库`.`表`", "数据库", "表", true},
+		// Invalid inputs.
+		{"db", "", "", false},
+		{"db.table.extra", "", "", false},
+		{".table", "", "", false},
+		{"db.", "", "", false},
+		{"`db.table", "", "", false},
+		{"`db`tbl", "", "", false},
+		{"", "", "", false},
+	}
+	for _, tc := range cases {
+		db, table, ok := splitDBTable(tc.in)
+		require.Equal(t, tc.ok, ok, "input=%q", tc.in)
+		require.Equal(t, tc.db, db, "input=%q", tc.in)
+		require.Equal(t, tc.table, table, "input=%q", tc.in)
+	}
+}
