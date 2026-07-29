@@ -28,6 +28,10 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 		data = append(data, byte(r.Warnings), byte(r.Warnings>>8))
 	}
 
+	if c.capability&mysql.CLIENT_SESSION_TRACK > 0 {
+		data = mysql.AppendOKSessionTrackSuffix(data, r)
+	}
+
 	return c.WritePacket(data)
 }
 
@@ -212,7 +216,7 @@ func (c *Conn) writeStreamTextRows(sr *mysql.StreamResult) error {
 	}
 
 	if err := sr.Err(); err != nil {
-		return err
+		return c.writeError(err)
 	}
 
 	return c.writeEOF()
@@ -262,7 +266,7 @@ func (c *Conn) writeStreamBinaryRows(sr *mysql.StreamResult) error {
 	}
 
 	if err := sr.Err(); err != nil {
-		return err
+		return c.writeError(err)
 	}
 
 	return c.writeEOF()

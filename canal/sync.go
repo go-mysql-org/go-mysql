@@ -1,6 +1,7 @@
 package canal
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -145,10 +146,13 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 			c.cfg.Logger.Error("error parsing query, will skip this event", slog.String("query", string(e.Query)), slog.Any("error", err))
 			return nil
 		}
-		if len(stmts) > 0 {
-			savePos = true
-		}
 		for _, stmt := range stmts {
+			switch stmt.(type) {
+			case *ast.BeginStmt, *ast.SavepointStmt:
+				// transaction not yet complete; checkpointing here would skip it on GTID resume
+				continue
+			}
+			savePos = true
 			nodes := parseStmt(stmt)
 			for _, node := range nodes {
 				if node.db == "" {
@@ -301,9 +305,17 @@ func (c *Canal) FlushBinlog() error {
 }
 
 func (c *Canal) WaitUntilPos(pos mysql.Position, timeout time.Duration) error {
+	return c.WaitUntilPosContext(context.Background(), pos, timeout)
+}
+
+func (c *Canal) WaitUntilPosContext(ctx context.Context, pos mysql.Position, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-timer.C:
 			return errors.Errorf("wait position %v too long > %s", pos, timeout)
 		default:
@@ -387,10 +399,14 @@ func (c *Canal) GetMasterGTIDSet() (mysql.GTIDSet, error) {
 }
 
 func (c *Canal) CatchMasterPos(timeout time.Duration) error {
+	return c.CatchMasterPosContext(context.Background(), timeout)
+}
+
+func (c *Canal) CatchMasterPosContext(ctx context.Context, timeout time.Duration) error {
 	pos, err := c.GetMasterPos()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	return c.WaitUntilPos(pos, timeout)
+	return c.WaitUntilPosContext(ctx, pos, timeout)
 }

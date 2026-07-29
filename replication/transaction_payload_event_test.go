@@ -2,9 +2,63 @@ package replication
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+// TestBinlogParserCloneForPayloadDecode verifies that the inner parser
+// used for decompressed transaction payloads inherits user-settable
+// decode options from its parent. Without this, JSON columns in
+// compressed transactions would silently fall back to legacy rendering
+// even when RenderJSONAsMySQLText (and friends) are configured on the
+// outer parser.
+func TestBinlogParserCloneForPayloadDecode(t *testing.T) {
+	loc, err := time.LoadLocation("UTC")
+	require.NoError(t, err)
+
+	outer := NewBinlogParser()
+	outer.SetFlavor("mariadb")
+	outer.SetRawMode(true)
+	outer.SetParseTime(true)
+	outer.SetTimestampStringLocation(loc)
+	outer.SetUseDecimal(true)
+	outer.SetUseFloatWithTrailingZero(true)
+	outer.SetRenderJSONAsMySQLText(true)
+	outer.SetIgnoreJSONDecodeError(true)
+	outer.SetVerifyChecksum(true) // intentionally not propagated
+	outer.SetPayloadDecoderConcurrency(7)
+
+	inner := outer.cloneForPayloadDecode()
+
+	require.Equal(t, "mariadb", inner.flavor)
+	require.True(t, inner.rawMode)
+	require.True(t, inner.parseTime)
+	require.Same(t, loc, inner.timestampStringLocation)
+	require.True(t, inner.useDecimal)
+	require.True(t, inner.useFloatWithTrailingZero)
+	require.True(t, inner.renderJSONAsMySQLText)
+	require.True(t, inner.ignoreJSONDecodeErr)
+	require.Equal(t, 7, inner.payloadDecoderConcurrency)
+	// Checksum verification must be off: nested events do not carry
+	// their own checksum trailers.
+	require.False(t, inner.verifyChecksum)
+	// tables must be a fresh map, not shared with the outer parser.
+	require.NotNil(t, inner.tables)
+	require.NotSame(t, &outer.tables, &inner.tables)
+}
+
+// TestNewTransactionPayloadEventInheritsParent verifies that events
+// created via the parser path carry a reference to it, so that
+// decodePayload picks up the parser options.
+func TestNewTransactionPayloadEventInheritsParent(t *testing.T) {
+	p := NewBinlogParser()
+	p.format = &FormatDescriptionEvent{} // newTransactionPayloadEvent dereferences this
+	p.SetRenderJSONAsMySQLText(true)
+
+	e := p.newTransactionPayloadEvent()
+	require.Same(t, p, e.parent)
+}
 
 func TestTransactionPayloadEventDecode(t *testing.T) {
 	e := &TransactionPayloadEvent{
@@ -93,4 +147,41 @@ func TestTransactionPayloadEventDecode(t *testing.T) {
 	devent, ok := e.Events[6].Event.(*RowsEvent)
 	require.True(t, ok)
 	require.Equal(t, devent.Type(), EnumRowsEventTypeDelete)
+
+	// MySQL writes inner events with LogPos=0 (copied from transaction cache
+	// before position fixup); parser must stamp usable positions, see
+	// stampInnerEventPositions
+	for _, inner := range e.Events {
+		require.Equal(t, uint32(0), inner.Header.LogPos)
+	}
+}
+
+func TestTransactionPayloadEventStampInnerEventPositions(t *testing.T) {
+	mk := func(types ...EventType) *TransactionPayloadEvent {
+		e := &TransactionPayloadEvent{}
+		for _, typ := range types {
+			e.Events = append(e.Events, &BinlogEvent{Header: &EventHeader{EventType: typ}})
+		}
+		return e
+	}
+
+	e := mk(QUERY_EVENT, TABLE_MAP_EVENT, WRITE_ROWS_EVENTv2, XID_EVENT)
+	e.stampInnerEventPositions(&EventHeader{LogPos: 5000, EventSize: 1200})
+	// mid-transaction events point at payload start so resume replays
+	// whole transaction
+	for _, inner := range e.Events[:3] {
+		require.Equal(t, uint32(3800), inner.Header.LogPos)
+	}
+	// final event (XID) points past payload so resume skips transaction
+	require.Equal(t, uint32(5000), e.Events[3].Header.LogPos)
+
+	// outer LogPos=0 (eg artificial event), leave inner events untouched
+	e = mk(QUERY_EVENT, XID_EVENT)
+	e.stampInnerEventPositions(&EventHeader{LogPos: 0, EventSize: 1200})
+	for _, inner := range e.Events {
+		require.Equal(t, uint32(0), inner.Header.LogPos)
+	}
+
+	// no events, must not panic
+	mk().stampInnerEventPositions(&EventHeader{LogPos: 5000, EventSize: 1200})
 }

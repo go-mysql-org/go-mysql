@@ -1,3 +1,23 @@
+### Tag v1.16.0 (2026-07-13)
+
+* Keep the connection open when a streamed resultset errors. [#1170](https://github.com/go-mysql-org/go-mysql/pull/1170) ([ramnes](https://github.com/ramnes))
+* Add context-aware versions of `WaitUntilPos()` and `CatchMasterPos()`. [#1168](https://github.com/go-mysql-org/go-mysql/pull/1168) ([dbnski](https://github.com/dbnski))
+* Server: fix OK session-track suffix and validate `SetCapability`. [#1167](https://github.com/go-mysql-org/go-mysql/pull/1167) ([nzin-alayacare](https://github.com/nzin-alayacare))
+* Client: add `Stmt.ExecuteProcedureMultiResults` for multi-result stored procedures. [#1165](https://github.com/go-mysql-org/go-mysql/pull/1165) ([nzin-alayacare](https://github.com/nzin-alayacare))
+* Client: add ExecQueryRelayLocalInfile for proxy-friendly `LOAD DATA LOCAL INFILE`. [#1164](https://github.com/go-mysql-org/go-mysql/pull/1164) ([nzin-alayacare](https://github.com/nzin-alayacare))
+* Fix and test out of range. [#1166](https://github.com/go-mysql-org/go-mysql/pull/1166) ([desdic](https://github.com/desdic))
+* Server: Remove `CLIENT_LOCAL_FILES` from default server capabilities so upgrades do not enable `LOAD DATA LOCAL INFILE` unless explicitly requested via SetCapability. [#1163](https://github.com/go-mysql-org/go-mysql/pull/1163) ([nzin-alayacare](https://github.com/nzin-alayacare))
+* Add server-side session tracking support. [#1158](https://github.com/go-mysql-org/go-mysql/pull/1158) ([nzin-alayacare](https://github.com/nzin-alayacare))
+* Server: advertise `CLIENT_MULTI_RESULTS`, `CLIENT_PS_MULTI_RESULTS` in default capabilities. [#1155](https://github.com/go-mysql-org/go-mysql/pull/1155) ([nzin-alayacare](https://github.com/nzin-alayacare))
+* Fix: make compressed transaction payloads checkpointable. [#1153](https://github.com/go-mysql-org/go-mysql/pull/1153) ([serprex](https://github.com/serprex))
+* Packet: bound uncompressed compressed-protocol frames to the frame length. [#1151](https://github.com/go-mysql-org/go-mysql/pull/1151) ([dtunikov](https://github.com/dtunikov))
+* Feat(cmd): support gtid subscription. [#1152](https://github.com/go-mysql-org/go-mysql/pull/1152) ([fansehep](https://github.com/fansehep))
+* Compress: return Reset error from pooled zlib reader. [#1150](https://github.com/go-mysql-org/go-mysql/pull/1150) ([dtunikov](https://github.com/dtunikov))
+* Refactor: replace `interface{}` with `any` (Go 1.18+). [#1148](https://github.com/go-mysql-org/go-mysql/pull/1148) ([MD-Mushfiqur123](https://github.com/MD-Mushfiqur123))
+* Add option `RenderJSONAsMySQLText`. [#1147](https://github.com/go-mysql-org/go-mysql/pull/1147) ([morgo](https://github.com/morgo))
+* Replication: support MySQL 8.4 semi-sync variable names. [#1138](https://github.com/go-mysql-org/go-mysql/pull/1138) ([dveeden](https://github.com/dveeden))
+* CI: Remove `mysql_ssl_rsa_setup`. [#1139](https://github.com/go-mysql-org/go-mysql/pull/1139) ([dveeden](https://github.com/dveeden))
+
 ### Tag v1.15.0 (2026-05-05)
 
 #### Breaking Changes

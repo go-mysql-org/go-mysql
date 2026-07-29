@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
 )
 
@@ -121,4 +122,28 @@ func TestCloseUnblocksWhenSetReadDeadlineFails(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Close hung when SetReadDeadline refused a deadline")
 	}
+}
+
+// TestHandleEventAndACKPayloadInnerGSet verifies XID/Query events decoded from
+// a compressed transaction payload get the current GTID set attached, same as
+// their uncompressed counterparts, so consumers (eg canal) can checkpoint GTID
+// progress
+func TestHandleEventAndACKPayloadInnerGSet(t *testing.T) {
+	b := NewBinlogSyncer(BinlogSyncerConfig{ServerID: 1})
+	defer b.Close()
+
+	gset, err := mysql.ParseGTIDSet(mysql.MySQLFlavor, "de278ad0-2106-11e4-9f8e-6edd0ca20947:1-2")
+	require.NoError(t, err)
+	b.currGset = gset
+
+	innerQuery := &BinlogEvent{Header: &EventHeader{EventType: QUERY_EVENT}, Event: &QueryEvent{}}
+	innerXID := &BinlogEvent{Header: &EventHeader{EventType: XID_EVENT}, Event: &XIDEvent{}}
+	ev := &BinlogEvent{
+		Header: &EventHeader{EventType: TRANSACTION_PAYLOAD_EVENT, LogPos: 5000, EventSize: 1200},
+		Event:  &TransactionPayloadEvent{Events: []*BinlogEvent{innerQuery, innerXID}},
+	}
+
+	require.NoError(t, b.handleEventAndACK(NewBinlogStreamer(), ev, false))
+	require.Equal(t, gset.String(), innerQuery.Event.(*QueryEvent).GSet.String())
+	require.Equal(t, gset.String(), innerXID.Event.(*XIDEvent).GSet.String())
 }
