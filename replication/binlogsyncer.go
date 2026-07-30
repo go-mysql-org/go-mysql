@@ -937,9 +937,14 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 	// Handle event types to update positions and GTID sets
 	switch event := e.Event.(type) {
 	case *RotateEvent:
-		b.nextPos.Name = string(event.NextLogName)
-		b.nextPos.Pos = uint32(event.Position)
-		b.cfg.Logger.Info("rotate to next binlog", slog.String("file", b.nextPos.Name), slog.Uint64("position", uint64(b.nextPos.Pos)))
+		newPos := mysql.Position{Name: string(event.NextLogName), Pos: uint32(event.Position)}
+		// At each rotation the server sends the rotate event from the binlog
+		// followed by an artificial one carrying the same position, so log
+		// only on change to avoid duplicate lines.
+		if b.nextPos != newPos {
+			b.cfg.Logger.Info("rotate to next binlog", slog.String("file", newPos.Name), slog.Uint64("position", uint64(newPos.Pos)))
+		}
+		b.nextPos = newPos
 
 	case *GTIDEvent:
 		if b.prevGset == nil {
