@@ -38,14 +38,14 @@ func TestFormatMySQLDouble(t *testing.T) {
 		{0.0, "0.0"},
 		{-3.0, "-3.0"},
 		{1e10, "10000000000.0"},
-		// Non-integer values: shortest round-trippable form. Note that
-		// Go's 'g' emits "1.5e-05" where MySQL's my_gcvt emits "1.5e-5";
-		// the float64 value (and therefore the re-stored JSONB) is
-		// identical, only the visible text differs.
+		// Non-integer values use MySQL's spelling, not Go's: 1.5e-5 is
+		// fixed-point ("0.000015"), where Go emits "1.5e-05".
 		{3.14, "3.14"},
 		{-2.5, "-2.5"},
 		{0.1, "0.1"},
-		{1.5e-5, "1.5e-05"},
+		{1.5e-5, "0.000015"},
+		// Signed zero survives.
+		{math.Copysign(0, -1), "-0.0"},
 	}
 	for _, c := range cases {
 		require.Equal(t, c.want, formatMySQLDouble(c.in), "in=%v", c.in)
@@ -54,6 +54,128 @@ func TestFormatMySQLDouble(t *testing.T) {
 	require.Equal(t, "null", formatMySQLDouble(math.NaN()))
 	require.Equal(t, "null", formatMySQLDouble(math.Inf(1)))
 	require.Equal(t, "null", formatMySQLDouble(math.Inf(-1)))
+}
+
+// mysqlDoubleParityVectors holds output captured from MySQL 8.0.45 via
+//
+//	SELECT CAST(JSON_ARRAY(CAST('<strconv e-form>' AS DOUBLE)) AS CHAR)
+//
+// CAST of a string to DOUBLE is correctly rounded, so this renders
+// exactly the given float64 while bypassing MySQL's lossy JSON text
+// parser. The vectors bracket both sides of every format boundary, so
+// the contract stays enforced without a live server.
+var mysqlDoubleParityVectors = []struct {
+	in   float64
+	want string
+}{
+	// Anchors.
+	{1, "1.0"},
+	{0.1, "0.1"},
+	{169.09, "169.09"},
+	{1.08822770526e+11, "108822770526.0"},
+	{9.007199254740992e+15, "9.007199254740992e15"}, // 2^53: decpt 16, nd 16 -> sci
+	{1e+16, "1e16"},
+	{1e-05, "0.00001"},
+	{1.5e-05, "0.000015"},
+	{5e-324, "5e-324"}, // smallest subnormal
+	{0.6000000000000001, "0.6000000000000001"},
+	{3.14, "3.14"},
+	{-2.5, "-2.5"},
+	// Upper fixed/sci boundary ladder.
+	{9.99999999999998e+14, "999999999999998.0"},
+	{9.99999999999999e+14, "999999999999999.0"},
+	{9.999999999999999e+14, "999999999999999.9"}, // decpt 15, nd 16 -> fixed
+	{1e+15, "1e15"}, // decpt 16, nd 1 -> sci
+	{1.000000000002048e+15, "1.000000000002048e15"},
+	{1.125899906842624e+15, "1.125899906842624e15"}, // 2^50
+	{4.503599627370496e+15, "4.503599627370496e15"}, // 2^52
+	{9.99e+15, "9.99e15"},
+	{1.5e+16, "1.5e16"},
+	{1.2345678901234568e+15, "1234567890123456.8"}, // decpt 16, nd 17 -> the lone fixed cell
+	{1.0000000000000001e+15, "1000000000000000.1"}, // decpt 16, nd 17 -> fixed
+	{9.999999999999998e+15, "9.999999999999998e15"},
+	{1.2345678901234568e+16, "1.2345678901234568e16"}, // decpt 17, nd 17 -> sci
+	{1.2345678901234567e+14, "123456789012345.67"},
+	{9.876543210987654e+16, "9.876543210987654e16"},
+	{1e+17, "1e17"},
+	{1e+18, "1e18"},
+	{1e+21, "1e21"},
+	{1e+25, "1e25"}, // start of the rapidjson re-parse corruption class
+	{1.2676506002282294e+30, "1.2676506002282294e30"}, // 2^100
+	{3.402823669209385e+38, "3.402823669209385e38"},   // 2^128
+	{1e+308, "1e308"},
+	{1.7976931348623157e+308, "1.7976931348623157e308"}, // DBL_MAX
+	{1.7976931348623155e+308, "1.7976931348623155e308"},
+	// Lower fixed/sci boundary ladder.
+	{0.001, "0.001"},
+	{0.000123, "0.000123"},
+	{0.0001, "0.0001"},
+	{1e-06, "0.000001"},
+	{1.5e-06, "0.0000015"},
+	{1e-07, "0.0000001"},
+	{1e-09, "0.000000001"},
+	{1e-13, "0.0000000000001"},
+	{1e-14, "0.00000000000001"},
+	{1e-15, "0.000000000000001"}, // decpt -14 -> still fixed
+	{1.5e-15, "0.0000000000000015"},
+	{1.2345678901234567e-14, "0.000000000000012345678901234567"},
+	{1e-16, "1e-16"}, // decpt -15 -> sci
+	{1.5e-16, "1.5e-16"},
+	{9.876543210987654e-15, "0.000000000000009876543210987654"},
+	{2.2250738585072014e-308, "2.2250738585072014e-308"}, // smallest normal
+	{1e-300, "1e-300"},
+	// Mid-range probes.
+	{1.2345675e+06, "1234567.5"},
+	{1.0000005e+06, "1000000.5"},
+	{123456.789, "123456.789"},
+	{42, "42.0"},
+	{-42, "-42.0"},
+	{1e+10, "10000000000.0"},
+	{-1e+10, "-10000000000.0"},
+	{0.5, "0.5"},
+	{-0.5, "-0.5"},
+	{2.5, "2.5"},
+	{100, "100.0"},
+	{1e+14, "100000000000000.0"},
+	{9.9e+14, "990000000000000.0"},
+	{0.6, "0.6"},
+	{0.30000000000000004, "0.30000000000000004"},
+	{0.7071067811865476, "0.7071067811865476"},
+	{6.283185307179586, "6.283185307179586"},
+	{2.718281828459045, "2.718281828459045"},
+	{2.99792458e+08, "299792458.0"},
+	{9.80665, "9.80665"},
+	{6.62607015e-34, "6.62607015e-34"},
+	{6.02214076e+23, "6.02214076e23"},
+	// Negative mirrors across the boundaries (selection ignores sign).
+	{-9.007199254740992e+15, "-9.007199254740992e15"},
+	{-1.2345678901234568e+15, "-1234567890123456.8"},
+	{-1.2345678901234568e+16, "-1.2345678901234568e16"},
+	{-1e+15, "-1e15"},
+	{-1e+16, "-1e16"},
+	{-9.99999999999999e+14, "-999999999999999.0"},
+	{-1e-05, "-0.00001"},
+	{-1.5e-05, "-0.000015"},
+	{-1e-15, "-0.000000000000001"},
+	{-1e-16, "-1e-16"},
+	{-5e-324, "-5e-324"},
+	{-1e+308, "-1e308"},
+	{-1.7976931348623157e+308, "-1.7976931348623157e308"},
+	{-0.6000000000000001, "-0.6000000000000001"},
+	{-1e+25, "-1e25"},
+}
+
+// TestFormatMySQLDoublePinnedVectors checks byte identity with MySQL
+// without needing a live server.
+func TestFormatMySQLDoublePinnedVectors(t *testing.T) {
+	for _, c := range mysqlDoubleParityVectors {
+		require.Equal(t, c.want, formatMySQLDouble(c.in),
+			"in=%v bits=%016x", c.in, math.Float64bits(c.in))
+		// The rendering must still parse back to the identical bits.
+		back, err := strconv.ParseFloat(c.want, 64)
+		require.NoError(t, err)
+		require.Equal(t, math.Float64bits(c.in), math.Float64bits(back), "in=%v", c.in)
+	}
 }
 
 func TestWriteJSONString(t *testing.T) {
