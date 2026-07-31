@@ -2,13 +2,19 @@ package replication
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -558,6 +564,31 @@ func TestRenderJSONAsMySQLTextOpaqueTime(t *testing.T) {
 	require.Equal(t, `"10:30:45.123456"`, string(out))
 }
 
+// TestRenderJSONAsMySQLTextOpaqueZeroTemporals covers the zero values.
+// MySQL renders zero TIME/DATETIME/TIMESTAMP with the same 6-digit
+// fractional field as every other value; zero DATE stays fraction-free.
+func TestRenderJSONAsMySQLTextOpaqueZeroTemporals(t *testing.T) {
+	zero := make([]byte, 8)
+	cases := []struct {
+		name      string
+		want      string
+		innerType byte
+	}{
+		{"TIME", `"00:00:00.000000"`, mysql.MYSQL_TYPE_TIME},
+		{"DATETIME", `"0000-00-00 00:00:00.000000"`, mysql.MYSQL_TYPE_DATETIME},
+		{"TIMESTAMP", `"0000-00-00 00:00:00.000000"`, mysql.MYSQL_TYPE_TIMESTAMP},
+		{"DATE", `"0000-00-00"`, mysql.MYSQL_TYPE_DATE},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			data := append([]byte{JSONB_OPAQUE, c.innerType, 0x08}, zero...)
+			out, err := renderJSONAsMySQLText(data, false)
+			require.NoError(t, err)
+			require.Equal(t, c.want, string(out))
+		})
+	}
+}
+
 // TestRenderJSONAsMySQLTextIgnoreDecodeError verifies that with
 // ignoreDecodeErr=true the renderer returns a *valid* JSON document
 // ("null") rather than the half-written buffer it accumulated before
@@ -696,4 +727,196 @@ func TestRenderJSONAsMySQLTextOpaqueDispatch(t *testing.T) {
 			require.Equal(t, want, string(out))
 		})
 	}
+}
+
+// temporalParityRows are inserted into a JSON column and then read back
+// two ways: through the binlog with RenderJSONAsMySQLText, and through
+// the server's own JSON-to-text conversion. The two must agree.
+//
+// Zero values are the interesting ones. MySQL gives them the same 6-digit
+// fractional field as every other value, so a decoder that special-cases
+// zero renders text the server would never emit, and a consumer writing
+// that text back stores a different value than the server had.
+var temporalParityRows = []string{
+	`CAST(CAST('00:00:00' AS TIME) AS JSON)`,
+	`CAST(CAST('01:02:03' AS TIME) AS JSON)`,
+	`CAST(CAST('0000-00-00 00:00:00' AS DATETIME) AS JSON)`,
+	`CAST(CAST('2015-01-15 23:24:25' AS DATETIME) AS JSON)`,
+	`CAST(CAST('0000-00-00' AS DATE) AS JSON)`,
+	`CAST(CAST('2015-01-15' AS DATE) AS JSON)`,
+	`JSON_OBJECT('t', CAST('00:00:00' AS TIME), 'd', CAST('0000-00-00' AS DATE))`,
+	`JSON_ARRAY(CAST('00:00:00' AS TIME), CAST('0000-00-00 00:00:00' AS DATETIME))`,
+}
+
+// TestJSONTemporalServerParity checks that the MySQL-text rendering of a
+// JSON column read from the binlog matches what the server itself returns
+// for the same row. Skips unless a row-based binlog is reachable.
+func TestJSONTemporalServerParity(t *testing.T) {
+	host, port := *test_util.MysqlHost, *test_util.MysqlPort
+	password := os.Getenv("MYSQL_PASSWORD")
+
+	c, err := client.Connect(fmt.Sprintf("%s:%s", host, port), "root", password, "")
+	if err != nil {
+		t.Skip(err.Error())
+	}
+	defer c.Close()
+
+	res, err := c.Execute("SELECT VERSION(), @@log_bin, @@binlog_format")
+	require.NoError(t, err)
+	version, err := res.GetString(0, 0)
+	require.NoError(t, err)
+	logBin, err := res.GetInt(0, 1)
+	require.NoError(t, err)
+	format, err := res.GetString(0, 2)
+	require.NoError(t, err)
+	if logBin != 1 || format != "ROW" {
+		t.Skipf("need a row-based binlog, got log_bin=%d binlog_format=%s", logBin, format)
+	}
+
+	for _, q := range []string{
+		"CREATE DATABASE IF NOT EXISTS test",
+		"USE test",
+		// Zero dates are only insertable with the strict modes off.
+		"SET SESSION sql_mode=''",
+		"DROP TABLE IF EXISTS test_json_temporal",
+		"CREATE TABLE test_json_temporal (id INT PRIMARY KEY, c JSON) ENGINE=InnoDB",
+	} {
+		_, err = c.Execute(q)
+		require.NoError(t, err, q)
+	}
+
+	// Record the position before the inserts so the syncer sees them all.
+	pos, err := binlogPosition(c)
+	require.NoError(t, err)
+
+	for i, expr := range temporalParityRows {
+		_, err = c.Execute(fmt.Sprintf(
+			"INSERT INTO test_json_temporal VALUES (%d, %s)", i, expr))
+		require.NoError(t, err, expr)
+	}
+
+	// What the server itself renders for each row.
+	want := make([]string, len(temporalParityRows))
+	res, err = c.Execute("SELECT id, CAST(c AS CHAR) FROM test_json_temporal ORDER BY id")
+	require.NoError(t, err)
+	require.Equal(t, len(temporalParityRows), res.RowNumber())
+	for i := range res.Values {
+		id, err := res.GetInt(i, 0)
+		require.NoError(t, err)
+		s, err := res.GetString(i, 1)
+		require.NoError(t, err)
+		want[id] = s
+	}
+
+	// What we render from the binlog's JSONB.
+	got := readJSONColumnFromBinlog(t, host, port, password, pos, len(temporalParityRows))
+
+	t.Logf("comparing %d JSON temporal rows against %s", len(temporalParityRows), version)
+	for i, expr := range temporalParityRows {
+		// MySQL puts a space after ',' and ':' in its own text form and the
+		// renderer is deliberately compact, so compare with those removed
+		// rather than reproducing MySQL's whitespace.
+		require.Equal(t, stripJSONSpacing(want[i]), stripJSONSpacing(got[i]),
+			"row %d: %s", i, expr)
+	}
+}
+
+// binlogPosition returns the server's current binlog file and offset.
+func binlogPosition(c *client.Conn) (mysql.Position, error) {
+	query := "SHOW BINARY LOG STATUS"
+	if eq, err := c.CompareServerVersion("8.4.0"); err == nil && eq < 0 {
+		query = "SHOW MASTER STATUS"
+	}
+	res, err := c.Execute(query)
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	file, err := res.GetStringByName(0, "File")
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	offset, err := res.GetIntByName(0, "Position")
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	return mysql.Position{Name: file, Pos: uint32(offset)}, nil
+}
+
+// readJSONColumnFromBinlog streams from pos and returns the rendered JSON
+// column of the next wantRows inserts into test_json_temporal, indexed by
+// the row's id.
+func readJSONColumnFromBinlog(
+	t *testing.T, host, port, password string, pos mysql.Position, wantRows int,
+) []string {
+	t.Helper()
+
+	portNum, err := strconv.ParseUint(port, 10, 16)
+	require.NoError(t, err)
+
+	syncer := NewBinlogSyncer(BinlogSyncerConfig{
+		ServerID:              1001,
+		Flavor:                mysql.MySQLFlavor,
+		Host:                  host,
+		Port:                  uint16(portNum),
+		User:                  "root",
+		Password:              password,
+		RenderJSONAsMySQLText: true,
+	})
+	defer syncer.Close()
+
+	streamer, err := syncer.StartSync(pos)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	out := make([]string, wantRows)
+	for seen := 0; seen < wantRows; {
+		ev, err := streamer.GetEvent(ctx)
+		require.NoError(t, err, "only saw %d/%d rows", seen, wantRows)
+
+		switch ev.Header.EventType {
+		case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2:
+		default:
+			continue
+		}
+		re, ok := ev.Event.(*RowsEvent)
+		if !ok || string(re.Table.Table) != "test_json_temporal" {
+			continue
+		}
+		for _, row := range re.Rows {
+			require.Len(t, row, 2)
+			id, ok := row[0].(int32)
+			require.True(t, ok, "id column is %T", row[0])
+			require.Less(t, int(id), wantRows)
+			s, ok := row[1].(string)
+			require.True(t, ok, "JSON column is %T", row[1])
+			out[id] = s
+			seen++
+		}
+	}
+	return out
+}
+
+// stripJSONSpacing removes the inter-token spaces MySQL puts after ',' and
+// ':' so the compact renderer can be compared against it. It is not a JSON
+// parser: it only skips spaces outside string literals.
+func stripJSONSpacing(s string) string {
+	out := make([]byte, 0, len(s))
+	inStr := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case inStr && ch == '\\' && i+1 < len(s):
+			out = append(out, ch, s[i+1])
+			i++
+			continue
+		case ch == '"':
+			inStr = !inStr
+		case !inStr && ch == ' ':
+			continue
+		}
+		out = append(out, ch)
+	}
+	return string(out)
 }

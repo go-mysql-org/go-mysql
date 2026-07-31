@@ -535,10 +535,6 @@ func (d *jsonBinaryDecoder) decodeDecimal(data []byte) any {
 func (d *jsonBinaryDecoder) decodeTime(data []byte) any {
 	v := d.decodeInt64(data)
 
-	if v == 0 {
-		return "00:00:00"
-	}
-
 	sign := ""
 	if v < 0 {
 		sign = "-"
@@ -556,12 +552,6 @@ func (d *jsonBinaryDecoder) decodeTime(data []byte) any {
 
 func (d *jsonBinaryDecoder) decodeDateTime(data []byte, isDate bool) any {
 	v := d.decodeInt64(data)
-	if v == 0 {
-		if isDate {
-			return "0000-00-00"
-		}
-		return "0000-00-00 00:00:00"
-	}
 
 	// handle negative?
 	if v < 0 {
