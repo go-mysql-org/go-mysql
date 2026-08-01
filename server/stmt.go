@@ -71,8 +71,12 @@ func (c *Conn) writePrepare(s *Stmt) error {
 			}
 		}
 
-		if err := c.writeEOF(); err != nil {
-			return err
+		// with CLIENT_DEPRECATE_EOF the parameter definitions have no
+		// trailing EOF separator
+		if !c.deprecateEOF() {
+			if err := c.writeEOF(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -90,8 +94,12 @@ func (c *Conn) writePrepare(s *Stmt) error {
 			}
 		}
 
-		if err := c.writeEOF(); err != nil {
-			return err
+		// with CLIENT_DEPRECATE_EOF the column definitions have no trailing
+		// EOF separator
+		if !c.deprecateEOF() {
+			if err := c.writeEOF(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
