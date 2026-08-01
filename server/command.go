@@ -59,6 +59,10 @@ func (c *Conn) HandleCommand() error {
 	v := c.dispatch(data)
 
 	err = c.WriteValue(v)
+	if err == nil && c.Conn != nil {
+		// Push the buffered response out before blocking on the next command.
+		err = c.Flush()
+	}
 
 	if c.Conn != nil {
 		c.ResetSequence()

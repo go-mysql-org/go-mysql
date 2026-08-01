@@ -96,6 +96,10 @@ func (s *Server) NewCustomizedConn(conn net.Conn, authHandler AuthenticationHand
 	// to TLS), so reads can be buffered from here on.
 	c.EnableReadBuffering(packet.DefaultReadBufferSize)
 
+	// Batch response packets into one write(2) per response. HandleCommand
+	// flushes at each response boundary; streaming paths flush per event/row.
+	c.EnableWriteBuffering(packet.DefaultBufferSize)
+
 	return c, nil
 }
 

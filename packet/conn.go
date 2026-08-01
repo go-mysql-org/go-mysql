@@ -40,6 +40,9 @@ type Conn struct {
 	br     *bufio.Reader
 	reader io.Reader
 
+	// Buffered writer, enabled via EnableWriteBuffering.
+	bw *bufio.Writer
+
 	copyNBuf []byte
 
 	header [4]byte
@@ -109,6 +112,39 @@ func (c *Conn) EnableReadBuffering(bufferSize int) {
 	c.reader = c.br
 }
 
+// connWriter adapts the deadline-setting write path to io.Writer so a
+// bufio.Writer can sit on top of it.
+type connWriter struct{ c *Conn }
+
+func (w connWriter) Write(b []byte) (int, error) {
+	return w.c.writeDirect(b)
+}
+
+// EnableWriteBuffering makes WritePacket accumulate packets in a buffer of the
+// given size instead of issuing one write(2) each. Buffered data reaches the
+// wire when the buffer fills, on Flush, or before any ReadPacket* call (so
+// request/response flows cannot deadlock). Callers that stream packets without
+// reading must Flush after each logical unit; Close does not flush. No-op if
+// already enabled or bufferSize is not positive.
+func (c *Conn) EnableWriteBuffering(bufferSize int) {
+	if c.bw != nil || bufferSize <= 0 {
+		return
+	}
+	c.bw = bufio.NewWriterSize(connWriter{c}, bufferSize)
+}
+
+// Flush writes any buffered packets to the underlying connection. It is a
+// no-op when write buffering is not enabled.
+func (c *Conn) Flush() error {
+	if c.bw == nil {
+		return nil
+	}
+	if err := c.bw.Flush(); err != nil {
+		return errors.Wrapf(mysql.ErrBadConn, "Flush failed. err %v", err)
+	}
+	return nil
+}
+
 func (c *Conn) ReadPacket() ([]byte, error) {
 	return c.ReadPacketReuseMem(nil)
 }
@@ -161,6 +197,10 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 
 // newCompressedPacketReader creates a new compressed packet reader.
 func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
+	// The peer may be waiting on our buffered output before it sends more.
+	if err := c.Flush(); err != nil {
+		return nil, err
+	}
 	if c.readTimeout != 0 {
 		if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 			return nil, err
@@ -259,6 +299,11 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 }
 
 func (c *Conn) ReadPacketTo(w io.Writer) error {
+	// The peer may be waiting on our buffered output before it sends more.
+	if err := c.Flush(); err != nil {
+		return err
+	}
+
 	b := utils.BytesBufferGet()
 	defer func() {
 		utils.BytesBufferPut(b)
@@ -361,6 +406,13 @@ func (c *Conn) WritePacket(data []byte) error {
 }
 
 func (c *Conn) writeWithTimeout(b []byte) (n int, err error) {
+	if c.bw != nil {
+		return c.bw.Write(b)
+	}
+	return c.writeDirect(b)
+}
+
+func (c *Conn) writeDirect(b []byte) (n int, err error) {
 	if c.writeTimeout != 0 {
 		if err := c.SetWriteDeadline(utils.Now().Add(c.writeTimeout)); err != nil {
 			return n, err
