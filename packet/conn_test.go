@@ -1,7 +1,9 @@
 package packet
 
 import (
+	"bufio"
 	"bytes"
+	"net"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/compress"
@@ -165,3 +167,54 @@ func TestReadPacketSingleUncompressedFrame(t *testing.T) {
 		t.Fatalf("payload mismatch:\n got  %q\n want %q", got, payload)
 	}
 }
+
+// benchmarkReadPacket measures the read path over loopback TCP: unbuffered is
+// what a conn from NewTLSConn pays without EnableReadBuffering (two read(2)
+// calls per packet), buffered is the same conn after EnableReadBuffering.
+func benchmarkReadPacket(b *testing.B, buffered bool) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer ln.Close()
+
+	const payloadSize = 64
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		w := bufio.NewWriterSize(conn, DefaultBufferSize)
+		frame := make([]byte, 4+payloadSize)
+		frame[0] = payloadSize
+		for seq := byte(0); ; seq++ {
+			frame[3] = seq
+			if _, err := w.Write(frame); err != nil {
+				return
+			}
+		}
+	}()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer conn.Close()
+
+	c := NewTLSConn(conn)
+	if buffered {
+		c.EnableReadBuffering(DefaultReadBufferSize)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := c.ReadPacket(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkReadPacketUnbuffered(b *testing.B) { benchmarkReadPacket(b, false) }
+
+func BenchmarkReadPacketBuffered(b *testing.B) { benchmarkReadPacket(b, true) }
