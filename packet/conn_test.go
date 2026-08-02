@@ -3,6 +3,7 @@ package packet
 import (
 	"bufio"
 	"bytes"
+	"io"
 	"net"
 	"testing"
 
@@ -218,3 +219,54 @@ func benchmarkReadPacket(b *testing.B, buffered bool) {
 func BenchmarkReadPacketUnbuffered(b *testing.B) { benchmarkReadPacket(b, false) }
 
 func BenchmarkReadPacketBuffered(b *testing.B) { benchmarkReadPacket(b, true) }
+
+// benchmarkWriteResultset measures writing a point-SELECT-shaped response (22
+// packets: column count, 17 column definitions, row, EOF/OK framing) followed
+// by one Flush. Unbuffered issues one write(2) per packet, buffered one per
+// response.
+func benchmarkWriteResultset(b *testing.B, buffered bool) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer conn.Close()
+
+	c := NewTLSConn(conn)
+	if buffered {
+		c.EnableWriteBuffering(DefaultBufferSize)
+	}
+
+	const packetsPerResponse = 22
+	frame := make([]byte, 4+64)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for range packetsPerResponse {
+			if err := c.WritePacket(frame); err != nil {
+				b.Fatal(err)
+			}
+		}
+		if err := c.Flush(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkWriteResultsetUnbuffered(b *testing.B) { benchmarkWriteResultset(b, false) }
+
+func BenchmarkWriteResultsetBuffered(b *testing.B) { benchmarkWriteResultset(b, true) }
