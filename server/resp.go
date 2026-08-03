@@ -213,6 +213,10 @@ func (c *Conn) writeStreamTextRows(sr *mysql.StreamResult) error {
 		if err := c.WritePacket(data); err != nil {
 			return err
 		}
+		// Deliver each streamed row immediately; RowsChan may block indefinitely.
+		if err := c.Flush(); err != nil {
+			return err
+		}
 	}
 
 	if err := sr.Err(); err != nil {
@@ -261,6 +265,10 @@ func (c *Conn) writeStreamBinaryRows(sr *mysql.StreamResult) error {
 		copy(data[5:], nullBitmap)
 
 		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+		// Deliver each streamed row immediately; RowsChan may block indefinitely.
+		if err := c.Flush(); err != nil {
 			return err
 		}
 	}
@@ -321,6 +329,11 @@ func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
 
 		data = append(data, ev.RawData...)
 		if err := c.WritePacket(data); err != nil {
+			return err
+		}
+		// Deliver each event immediately (heartbeat/semi-sync timing); GetEvent
+		// may block indefinitely.
+		if err := c.Flush(); err != nil {
 			return err
 		}
 	}
