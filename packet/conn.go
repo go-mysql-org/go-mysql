@@ -23,6 +23,9 @@ import (
 const (
 	MinCompressionLength = 50
 	DefaultBufferSize    = 16 * 1024
+	// DefaultReadBufferSize is the bufio.Reader size used by NewConn and
+	// EnableReadBuffering.
+	DefaultReadBufferSize = 64 * 1024
 )
 
 // Conn is the base class to handle MySQL protocol.
@@ -53,7 +56,7 @@ type Conn struct {
 }
 
 func NewConn(conn net.Conn) *Conn {
-	return NewBufferedConn(conn, 65536) // 64kb
+	return NewBufferedConn(conn, DefaultReadBufferSize)
 }
 
 func NewBufferedConn(conn net.Conn, bufferSize int) *Conn {
@@ -91,6 +94,19 @@ func NewTLSConnWithTimeout(conn net.Conn, readTimeout, writeTimeout time.Duratio
 	c.readTimeout = readTimeout
 	c.writeTimeout = writeTimeout
 	return c
+}
+
+// EnableReadBuffering wraps subsequent reads in a bufio.Reader of the given
+// size. Conns created via NewTLSConn start unbuffered because the peer may
+// still upgrade the transport to TLS during the handshake; call this once the
+// handshake completes, and only between packets. No-op if reads are already
+// buffered or bufferSize is not positive.
+func (c *Conn) EnableReadBuffering(bufferSize int) {
+	if c.br != nil || bufferSize <= 0 {
+		return
+	}
+	c.br = bufio.NewReaderSize(c, bufferSize)
+	c.reader = c.br
 }
 
 func (c *Conn) ReadPacket() ([]byte, error) {

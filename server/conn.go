@@ -92,6 +92,10 @@ func (s *Server) NewCustomizedConn(conn net.Conn, authHandler AuthenticationHand
 		return nil, err
 	}
 
+	// The handshake settled the final transport (the client may have upgraded
+	// to TLS), so reads can be buffered from here on.
+	c.EnableReadBuffering(packet.DefaultReadBufferSize)
+
 	return c, nil
 }
 
