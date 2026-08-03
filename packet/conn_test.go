@@ -270,3 +270,21 @@ func benchmarkWriteResultset(b *testing.B, buffered bool) {
 func BenchmarkWriteResultsetUnbuffered(b *testing.B) { benchmarkWriteResultset(b, false) }
 
 func BenchmarkWriteResultsetBuffered(b *testing.B) { benchmarkWriteResultset(b, true) }
+
+// TestReadPacketSequenceMismatchIsBadConn covers a desynced stream: once a packet
+// arrives with an unexpected sequence, nothing after it can be interpreted, so the
+// connection must be reported as bad rather than merely as a failed read. A server
+// closing an idle connection queues its ERR packet outside any command cycle, so it
+// carries sequence 0 and the next command reads it while expecting 1.
+func TestReadPacketSequenceMismatchIsBadConn(t *testing.T) {
+	c := newReadTestConn(mysqlPacket(0, []byte("out of band")), mysql.MYSQL_COMPRESS_NONE)
+	c.Sequence = 1
+
+	_, err := c.ReadPacket()
+	if err == nil {
+		t.Fatal("ReadPacket succeeded on a mismatched sequence, want an error")
+	}
+	if !mysql.ErrorEqual(err, mysql.ErrBadConn) {
+		t.Errorf("err = %v, want an error equal to mysql.ErrBadConn", err)
+	}
+}

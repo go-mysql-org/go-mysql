@@ -323,7 +323,10 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	sequence := c.header[3]
 
 	if sequence != c.Sequence {
-		return errors.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
+		// A mismatched sequence leaves the stream desynced beyond recovery, so the
+		// connection is unusable: report it as bad, like the read failures above, so
+		// callers discard it instead of retrying on it.
+		return errors.Wrapf(mysql.ErrBadConn, "invalid sequence %d != %d", sequence, c.Sequence)
 	}
 
 	c.Sequence++
