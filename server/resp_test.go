@@ -264,13 +264,39 @@ func TestConnWriteResultset(t *testing.T) {
 	require.Equal(t, []byte{1, 0, 0, 7, mysql.EOF_HEADER}, clientConn.WriteBuffered[43:])
 }
 
+func TestConnWriteResultsetDeprecateEOF(t *testing.T) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	conn := &Conn{
+		Conn:       packet.NewConn(clientConn),
+		serverConf: &Server{capability: mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_DEPRECATE_EOF},
+		capability: mysql.CLIENT_PROTOCOL_41 | mysql.CLIENT_DEPRECATE_EOF,
+	}
+
+	r, err := mysql.BuildSimpleTextResultset([]string{"a"}, [][]any{{"b"}})
+	require.NoError(t, err)
+	err = conn.writeResultset(r)
+	require.NoError(t, err)
+
+	// column count
+	require.Equal(t, []byte{1, 0, 0, 0, 1}, clientConn.WriteBuffered[:5])
+	// field packet, with no EOF separator following it
+	require.Equal(t, []byte{23, 0, 0, 1, 3, 100, 101, 102, 0, 0, 0, 1, 'a', 0, 12, 33, 0, 0, 0, 0, 0, 253, 0, 0, 0, 0, 0}, clientConn.WriteBuffered[5:32])
+	// rowdata directly after the fields
+	require.Equal(t, []byte{2, 0, 0, 2, 1, 'b'}, clientConn.WriteBuffered[32:38])
+	// terminating OK packet with an EOF header:
+	// 0xFE, affected rows (0), last insert id (0), status (2), warnings (2)
+	require.Equal(t, []byte{7, 0, 0, 3, mysql.EOF_HEADER, 0, 0, 0, 0, 0, 0}, clientConn.WriteBuffered[38:])
+}
+
 func TestConnWriteFieldList(t *testing.T) {
 	clientConn := &mockconn.MockConn{MultiWrite: true}
 	conn := &Conn{Conn: packet.NewConn(clientConn)}
 
 	r, err := mysql.BuildSimpleTextResultset([]string{"c"}, [][]any{{"d"}})
 	require.NoError(t, err)
-	err = conn.writeFieldList(r.Fields, nil)
+	// COM_FIELD_LIST response path: column definitions followed by a
+	// terminator (writeFieldList itself writes none).
+	err = conn.WriteValue(r.Fields)
 	require.NoError(t, err)
 
 	// column length 1
@@ -289,6 +315,10 @@ func TestConnWriteFieldValues(t *testing.T) {
 
 	require.NoError(t, err)
 	err = conn.writeFieldList(r.Fields, nil)
+	require.NoError(t, err)
+	// writeFieldList writes no terminator anymore; append it as the
+	// resultset path does for pre-DEPRECATE_EOF clients
+	err = conn.writeEOF()
 	require.NoError(t, err)
 
 	// fields and EOF
