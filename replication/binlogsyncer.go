@@ -53,7 +53,7 @@ type BinlogSyncerConfig struct {
 	RawModeEnabled bool
 
 	// If not nil, use the provided tls.Config to connect to the database using TLS/SSL.
-	TLSConfig *tls.Config
+	TLSConfig *tls.Config `json:"-"`
 
 	// Use replication.Time structure for timestamp and datetime.
 	// We will use Local location for timestamp and UTC location for datetime.
@@ -143,17 +143,17 @@ type BinlogSyncerConfig struct {
 
 	// Option function is used to set outside of BinlogSyncerConfig， between mysql connection and COM_REGISTER_SLAVE
 	// For MariaDB: slave_gtid_ignore_duplicates、skip_replication、slave_until_gtid
-	Option func(*client.Conn) error
+	Option func(*client.Conn) error `json:"-"`
 
 	// Set Logger
 	Logger *slog.Logger
 
 	// Set Dialer
-	Dialer client.Dialer
+	Dialer client.Dialer `json:"-"`
 
-	RowsEventDecodeFunc func(*RowsEvent, []byte) error
+	RowsEventDecodeFunc func(*RowsEvent, []byte) error `json:"-"`
 
-	TableMapOptionalMetaDecodeFunc func([]byte) error
+	TableMapOptionalMetaDecodeFunc func([]byte) error `json:"-"`
 
 	DiscardGTIDSet bool
 
@@ -172,7 +172,7 @@ type BinlogSyncerConfig struct {
 	// SynchronousEventHandler is used for synchronous event handling.
 	// This should not be used together with StartBackupWithHandler.
 	// If this is not nil, GetEvent does not need to be called.
-	SynchronousEventHandler EventHandler
+	SynchronousEventHandler EventHandler `json:"-"`
 }
 
 // EventHandler defines the interface for processing binlog events.
