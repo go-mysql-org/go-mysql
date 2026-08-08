@@ -117,7 +117,10 @@ func TestToBinaryDateTime(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			if len(got) == 0 {
+			// A zero time.Time encodes as a single zero length byte (the
+			// MySQL "0000-00-00 00:00:00" sentinel).
+			if test.Data.IsZero() {
+				require.Equal(t, []byte{0}, got)
 				return
 			}
 			tmp := test.Expect(int(got[0]), got[1:])
