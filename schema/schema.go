@@ -152,21 +152,22 @@ func (ta *Table) AddColumn(name string, columnType string, collation string, ext
 		ta.UnsignedColumns = append(ta.UnsignedColumns, index)
 	}
 
-	switch extra {
+	normalizedExtra := strings.ToLower(extra)
+	switch normalizedExtra {
 	case "auto_increment":
 		ta.Columns[index].IsAuto = true
-	case "VIRTUAL GENERATED":
+	case "virtual generated":
 		ta.Columns[index].IsVirtual = true
-	case "STORED GENERATED":
+	case "stored generated":
 		ta.Columns[index].IsStored = true
 	}
 
-	if strings.Contains(extra, "DEFAULT_GENERATED") {
+	if strings.Contains(normalizedExtra, "default_generated") {
 		ta.Columns[index].IsDefaultExpr = true
 	}
 	if ta.Columns[index].Type == TYPE_DATETIME ||
 		ta.Columns[index].Type == TYPE_TIMESTAMP {
-		if strings.Contains(extra, "on update CURRENT_TIMESTAMP") {
+		if strings.Contains(normalizedExtra, "on update current_timestamp") {
 			ta.Columns[index].IsAutoUpdating = true
 		}
 	}
@@ -423,6 +424,8 @@ func (ta *Table) fetchIndexesViaSQLDB(conn *sql.DB) error {
 			case 13:
 				if hasInvisibleIndex {
 					values[i] = &visible
+				} else {
+					values[i] = &unusedVal
 				}
 			default:
 				values[i] = &unusedVal
