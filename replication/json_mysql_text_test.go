@@ -765,6 +765,9 @@ func TestJSONTemporalServerParity(t *testing.T) {
 	require.NoError(t, err)
 	version, err := res.GetString(0, 0)
 	require.NoError(t, err)
+	if strings.Contains(version, "MariaDB") {
+		t.Skip("requires MySQL binary JSON")
+	}
 	logBin, err := res.GetInt(0, 1)
 	require.NoError(t, err)
 	format, err := res.GetString(0, 2)
