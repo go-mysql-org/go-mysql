@@ -212,17 +212,17 @@ func BuildSimpleTextResultset(names []string, values [][]any) (*Resultset, error
 					return nil, errors.Errorf("row types aren't consistent")
 				}
 			}
+			if typ == MYSQL_TYPE_NULL {
+				// NULL value is encoded as 0xfb here (without additional info about length)
+				row = append(row, 0xfb)
+				continue
+			}
+
 			b, err = FormatTextValue(value)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-
-			if b == nil {
-				// NULL value is encoded as 0xfb here (without additional info about length)
-				row = append(row, 0xfb)
-			} else {
-				row = append(row, PutLengthEncodedString(b)...)
-			}
+			row = append(row, PutLengthEncodedString(b)...)
 		}
 
 		r.RowDatas = append(r.RowDatas, row)
