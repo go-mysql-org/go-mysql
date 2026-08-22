@@ -134,7 +134,9 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          # v2.13.1's goimports and gofumpt disagree on mysql/errname.go when
+          # the linter is built with Go 1.27, so no formatting satisfies both.
+          version: v2.12.2
           args: --timeout=3m
 
   platforms:
