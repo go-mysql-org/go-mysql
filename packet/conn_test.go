@@ -1,7 +1,10 @@
 package packet
 
 import (
+	"bufio"
 	"bytes"
+	"io"
+	"net"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/compress"
@@ -163,5 +166,125 @@ func TestReadPacketSingleUncompressedFrame(t *testing.T) {
 	}
 	if !bytes.Equal(got, payload) {
 		t.Fatalf("payload mismatch:\n got  %q\n want %q", got, payload)
+	}
+}
+
+// benchmarkReadPacket measures the read path over loopback TCP: unbuffered is
+// what a conn from NewTLSConn pays without EnableReadBuffering (two read(2)
+// calls per packet), buffered is the same conn after EnableReadBuffering.
+func benchmarkReadPacket(b *testing.B, buffered bool) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer ln.Close()
+
+	const payloadSize = 64
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		w := bufio.NewWriterSize(conn, DefaultBufferSize)
+		frame := make([]byte, 4+payloadSize)
+		frame[0] = payloadSize
+		for seq := byte(0); ; seq++ {
+			frame[3] = seq
+			if _, err := w.Write(frame); err != nil {
+				return
+			}
+		}
+	}()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer conn.Close()
+
+	c := NewTLSConn(conn)
+	if buffered {
+		c.EnableReadBuffering(DefaultReadBufferSize)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := c.ReadPacket(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkReadPacketUnbuffered(b *testing.B) { benchmarkReadPacket(b, false) }
+
+func BenchmarkReadPacketBuffered(b *testing.B) { benchmarkReadPacket(b, true) }
+
+// benchmarkWriteResultset measures writing a point-SELECT-shaped response (22
+// packets: column count, 17 column definitions, row, EOF/OK framing) followed
+// by one Flush. Unbuffered issues one write(2) per packet, buffered one per
+// response.
+func benchmarkWriteResultset(b *testing.B, buffered bool) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer conn.Close()
+
+	c := NewTLSConn(conn)
+	if buffered {
+		c.EnableWriteBuffering(DefaultBufferSize)
+	}
+
+	const packetsPerResponse = 22
+	frame := make([]byte, 4+64)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for range packetsPerResponse {
+			if err := c.WritePacket(frame); err != nil {
+				b.Fatal(err)
+			}
+		}
+		if err := c.Flush(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkWriteResultsetUnbuffered(b *testing.B) { benchmarkWriteResultset(b, false) }
+
+func BenchmarkWriteResultsetBuffered(b *testing.B) { benchmarkWriteResultset(b, true) }
+
+// TestReadPacketSequenceMismatchIsBadConn covers a desynced stream: once a packet
+// arrives with an unexpected sequence, nothing after it can be interpreted, so the
+// connection must be reported as bad rather than merely as a failed read. A server
+// closing an idle connection queues its ERR packet outside any command cycle, so it
+// carries sequence 0 and the next command reads it while expecting 1.
+func TestReadPacketSequenceMismatchIsBadConn(t *testing.T) {
+	c := newReadTestConn(mysqlPacket(0, []byte("out of band")), mysql.MYSQL_COMPRESS_NONE)
+	c.Sequence = 1
+
+	_, err := c.ReadPacket()
+	if err == nil {
+		t.Fatal("ReadPacket succeeded on a mismatched sequence, want an error")
+	}
+	if !mysql.ErrorEqual(err, mysql.ErrBadConn) {
+		t.Errorf("err = %v, want an error equal to mysql.ErrBadConn", err)
 	}
 }

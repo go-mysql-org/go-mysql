@@ -92,6 +92,14 @@ func (s *Server) NewCustomizedConn(conn net.Conn, authHandler AuthenticationHand
 		return nil, err
 	}
 
+	// The handshake settled the final transport (the client may have upgraded
+	// to TLS), so reads can be buffered from here on.
+	c.EnableReadBuffering(packet.DefaultReadBufferSize)
+
+	// Batch response packets into one write(2) per response. HandleCommand
+	// flushes at each response boundary; streaming paths flush per event/row.
+	c.EnableWriteBuffering(packet.DefaultBufferSize)
+
 	return c, nil
 }
 
@@ -155,6 +163,14 @@ func (c *Conn) UnsetCapability(capability uint32) {
 
 func (c *Conn) HasCapability(capability uint32) bool {
 	return c.capability&capability > 0
+}
+
+// deprecateEOF reports whether both sides negotiated CLIENT_DEPRECATE_EOF:
+// resultsets are then OK-terminated (with an EOF 0xFE header) and the EOF
+// separator after the column definitions is omitted.
+func (c *Conn) deprecateEOF() bool {
+	return c.capability&mysql.CLIENT_DEPRECATE_EOF > 0 &&
+		c.serverConf.Capability()&mysql.CLIENT_DEPRECATE_EOF > 0
 }
 
 func (c *Conn) Charset() uint8 {

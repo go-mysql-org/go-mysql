@@ -1834,6 +1834,9 @@ func decodeTime2(data []byte, dec uint16) (string, int, error) {
 	}
 
 	if intPart == 0 && frac == 0 {
+		if dec > 0 {
+			return timeFormat(0, dec, n)
+		}
 		return "00:00:00", n, nil
 	}
 
@@ -1855,7 +1858,7 @@ func timeFormat(tmp int64, dec uint16, n int) (string, int, error) {
 	second := hms % (1 << 6)        /* 6 bits starting at 0th   */
 	secPart := tmp % (1 << 24)
 
-	if secPart != 0 {
+	if dec > 0 {
 		s := fmt.Sprintf("%s%02d:%02d:%02d.%06d", sign, hour, minute, second, secPart)
 		return s[0 : len(s)-(6-int(dec))], n, nil
 	}

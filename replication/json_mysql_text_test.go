@@ -2,13 +2,19 @@ package replication
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,14 +44,14 @@ func TestFormatMySQLDouble(t *testing.T) {
 		{0.0, "0.0"},
 		{-3.0, "-3.0"},
 		{1e10, "10000000000.0"},
-		// Non-integer values: shortest round-trippable form. Note that
-		// Go's 'g' emits "1.5e-05" where MySQL's my_gcvt emits "1.5e-5";
-		// the float64 value (and therefore the re-stored JSONB) is
-		// identical, only the visible text differs.
+		// Non-integer values use MySQL's spelling, not Go's: 1.5e-5 is
+		// fixed-point ("0.000015"), where Go emits "1.5e-05".
 		{3.14, "3.14"},
 		{-2.5, "-2.5"},
 		{0.1, "0.1"},
-		{1.5e-5, "1.5e-05"},
+		{1.5e-5, "0.000015"},
+		// Signed zero survives.
+		{math.Copysign(0, -1), "-0.0"},
 	}
 	for _, c := range cases {
 		require.Equal(t, c.want, formatMySQLDouble(c.in), "in=%v", c.in)
@@ -54,6 +60,128 @@ func TestFormatMySQLDouble(t *testing.T) {
 	require.Equal(t, "null", formatMySQLDouble(math.NaN()))
 	require.Equal(t, "null", formatMySQLDouble(math.Inf(1)))
 	require.Equal(t, "null", formatMySQLDouble(math.Inf(-1)))
+}
+
+// mysqlDoubleParityVectors holds output captured from MySQL 8.0.45 via
+//
+//	SELECT CAST(JSON_ARRAY(CAST('<strconv e-form>' AS DOUBLE)) AS CHAR)
+//
+// CAST of a string to DOUBLE is correctly rounded, so this renders
+// exactly the given float64 while bypassing MySQL's lossy JSON text
+// parser. The vectors bracket both sides of every format boundary, so
+// the contract stays enforced without a live server.
+var mysqlDoubleParityVectors = []struct {
+	in   float64
+	want string
+}{
+	// Anchors.
+	{1, "1.0"},
+	{0.1, "0.1"},
+	{169.09, "169.09"},
+	{1.08822770526e+11, "108822770526.0"},
+	{9.007199254740992e+15, "9.007199254740992e15"}, // 2^53: decpt 16, nd 16 -> sci
+	{1e+16, "1e16"},
+	{1e-05, "0.00001"},
+	{1.5e-05, "0.000015"},
+	{5e-324, "5e-324"}, // smallest subnormal
+	{0.6000000000000001, "0.6000000000000001"},
+	{3.14, "3.14"},
+	{-2.5, "-2.5"},
+	// Upper fixed/sci boundary ladder.
+	{9.99999999999998e+14, "999999999999998.0"},
+	{9.99999999999999e+14, "999999999999999.0"},
+	{9.999999999999999e+14, "999999999999999.9"}, // decpt 15, nd 16 -> fixed
+	{1e+15, "1e15"}, // decpt 16, nd 1 -> sci
+	{1.000000000002048e+15, "1.000000000002048e15"},
+	{1.125899906842624e+15, "1.125899906842624e15"}, // 2^50
+	{4.503599627370496e+15, "4.503599627370496e15"}, // 2^52
+	{9.99e+15, "9.99e15"},
+	{1.5e+16, "1.5e16"},
+	{1.2345678901234568e+15, "1234567890123456.8"}, // decpt 16, nd 17 -> the lone fixed cell
+	{1.0000000000000001e+15, "1000000000000000.1"}, // decpt 16, nd 17 -> fixed
+	{9.999999999999998e+15, "9.999999999999998e15"},
+	{1.2345678901234568e+16, "1.2345678901234568e16"}, // decpt 17, nd 17 -> sci
+	{1.2345678901234567e+14, "123456789012345.67"},
+	{9.876543210987654e+16, "9.876543210987654e16"},
+	{1e+17, "1e17"},
+	{1e+18, "1e18"},
+	{1e+21, "1e21"},
+	{1e+25, "1e25"}, // start of the rapidjson re-parse corruption class
+	{1.2676506002282294e+30, "1.2676506002282294e30"}, // 2^100
+	{3.402823669209385e+38, "3.402823669209385e38"},   // 2^128
+	{1e+308, "1e308"},
+	{1.7976931348623157e+308, "1.7976931348623157e308"}, // DBL_MAX
+	{1.7976931348623155e+308, "1.7976931348623155e308"},
+	// Lower fixed/sci boundary ladder.
+	{0.001, "0.001"},
+	{0.000123, "0.000123"},
+	{0.0001, "0.0001"},
+	{1e-06, "0.000001"},
+	{1.5e-06, "0.0000015"},
+	{1e-07, "0.0000001"},
+	{1e-09, "0.000000001"},
+	{1e-13, "0.0000000000001"},
+	{1e-14, "0.00000000000001"},
+	{1e-15, "0.000000000000001"}, // decpt -14 -> still fixed
+	{1.5e-15, "0.0000000000000015"},
+	{1.2345678901234567e-14, "0.000000000000012345678901234567"},
+	{1e-16, "1e-16"}, // decpt -15 -> sci
+	{1.5e-16, "1.5e-16"},
+	{9.876543210987654e-15, "0.000000000000009876543210987654"},
+	{2.2250738585072014e-308, "2.2250738585072014e-308"}, // smallest normal
+	{1e-300, "1e-300"},
+	// Mid-range probes.
+	{1.2345675e+06, "1234567.5"},
+	{1.0000005e+06, "1000000.5"},
+	{123456.789, "123456.789"},
+	{42, "42.0"},
+	{-42, "-42.0"},
+	{1e+10, "10000000000.0"},
+	{-1e+10, "-10000000000.0"},
+	{0.5, "0.5"},
+	{-0.5, "-0.5"},
+	{2.5, "2.5"},
+	{100, "100.0"},
+	{1e+14, "100000000000000.0"},
+	{9.9e+14, "990000000000000.0"},
+	{0.6, "0.6"},
+	{0.30000000000000004, "0.30000000000000004"},
+	{0.7071067811865476, "0.7071067811865476"},
+	{6.283185307179586, "6.283185307179586"},
+	{2.718281828459045, "2.718281828459045"},
+	{2.99792458e+08, "299792458.0"},
+	{9.80665, "9.80665"},
+	{6.62607015e-34, "6.62607015e-34"},
+	{6.02214076e+23, "6.02214076e23"},
+	// Negative mirrors across the boundaries (selection ignores sign).
+	{-9.007199254740992e+15, "-9.007199254740992e15"},
+	{-1.2345678901234568e+15, "-1234567890123456.8"},
+	{-1.2345678901234568e+16, "-1.2345678901234568e16"},
+	{-1e+15, "-1e15"},
+	{-1e+16, "-1e16"},
+	{-9.99999999999999e+14, "-999999999999999.0"},
+	{-1e-05, "-0.00001"},
+	{-1.5e-05, "-0.000015"},
+	{-1e-15, "-0.000000000000001"},
+	{-1e-16, "-1e-16"},
+	{-5e-324, "-5e-324"},
+	{-1e+308, "-1e308"},
+	{-1.7976931348623157e+308, "-1.7976931348623157e308"},
+	{-0.6000000000000001, "-0.6000000000000001"},
+	{-1e+25, "-1e25"},
+}
+
+// TestFormatMySQLDoublePinnedVectors checks byte identity with MySQL
+// without needing a live server.
+func TestFormatMySQLDoublePinnedVectors(t *testing.T) {
+	for _, c := range mysqlDoubleParityVectors {
+		require.Equal(t, c.want, formatMySQLDouble(c.in),
+			"in=%v bits=%016x", c.in, math.Float64bits(c.in))
+		// The rendering must still parse back to the identical bits.
+		back, err := strconv.ParseFloat(c.want, 64)
+		require.NoError(t, err)
+		require.Equal(t, math.Float64bits(c.in), math.Float64bits(back), "in=%v", c.in)
+	}
 }
 
 func TestWriteJSONString(t *testing.T) {
@@ -436,6 +564,31 @@ func TestRenderJSONAsMySQLTextOpaqueTime(t *testing.T) {
 	require.Equal(t, `"10:30:45.123456"`, string(out))
 }
 
+// TestRenderJSONAsMySQLTextOpaqueZeroTemporals covers the zero values.
+// MySQL renders zero TIME/DATETIME/TIMESTAMP with the same 6-digit
+// fractional field as every other value; zero DATE stays fraction-free.
+func TestRenderJSONAsMySQLTextOpaqueZeroTemporals(t *testing.T) {
+	zero := make([]byte, 8)
+	cases := []struct {
+		name      string
+		want      string
+		innerType byte
+	}{
+		{"TIME", `"00:00:00.000000"`, mysql.MYSQL_TYPE_TIME},
+		{"DATETIME", `"0000-00-00 00:00:00.000000"`, mysql.MYSQL_TYPE_DATETIME},
+		{"TIMESTAMP", `"0000-00-00 00:00:00.000000"`, mysql.MYSQL_TYPE_TIMESTAMP},
+		{"DATE", `"0000-00-00"`, mysql.MYSQL_TYPE_DATE},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			data := append([]byte{JSONB_OPAQUE, c.innerType, 0x08}, zero...)
+			out, err := renderJSONAsMySQLText(data, false)
+			require.NoError(t, err)
+			require.Equal(t, c.want, string(out))
+		})
+	}
+}
+
 // TestRenderJSONAsMySQLTextIgnoreDecodeError verifies that with
 // ignoreDecodeErr=true the renderer returns a *valid* JSON document
 // ("null") rather than the half-written buffer it accumulated before
@@ -574,4 +727,199 @@ func TestRenderJSONAsMySQLTextOpaqueDispatch(t *testing.T) {
 			require.Equal(t, want, string(out))
 		})
 	}
+}
+
+// temporalParityRows are inserted into a JSON column and then read back
+// two ways: through the binlog with RenderJSONAsMySQLText, and through
+// the server's own JSON-to-text conversion. The two must agree.
+//
+// Zero values are the interesting ones. MySQL gives them the same 6-digit
+// fractional field as every other value, so a decoder that special-cases
+// zero renders text the server would never emit, and a consumer writing
+// that text back stores a different value than the server had.
+var temporalParityRows = []string{
+	`CAST(CAST('00:00:00' AS TIME) AS JSON)`,
+	`CAST(CAST('01:02:03' AS TIME) AS JSON)`,
+	`CAST(CAST('0000-00-00 00:00:00' AS DATETIME) AS JSON)`,
+	`CAST(CAST('2015-01-15 23:24:25' AS DATETIME) AS JSON)`,
+	`CAST(CAST('0000-00-00' AS DATE) AS JSON)`,
+	`CAST(CAST('2015-01-15' AS DATE) AS JSON)`,
+	`JSON_OBJECT('t', CAST('00:00:00' AS TIME), 'd', CAST('0000-00-00' AS DATE))`,
+	`JSON_ARRAY(CAST('00:00:00' AS TIME), CAST('0000-00-00 00:00:00' AS DATETIME))`,
+}
+
+// TestJSONTemporalServerParity checks that the MySQL-text rendering of a
+// JSON column read from the binlog matches what the server itself returns
+// for the same row. Skips unless a row-based binlog is reachable.
+func TestJSONTemporalServerParity(t *testing.T) {
+	host, port := *test_util.MysqlHost, *test_util.MysqlPort
+	password := os.Getenv("MYSQL_PASSWORD")
+
+	c, err := client.Connect(fmt.Sprintf("%s:%s", host, port), "root", password, "")
+	if err != nil {
+		t.Skip(err.Error())
+	}
+	defer c.Close()
+
+	res, err := c.Execute("SELECT VERSION(), @@log_bin, @@binlog_format")
+	require.NoError(t, err)
+	version, err := res.GetString(0, 0)
+	require.NoError(t, err)
+	if strings.Contains(version, "MariaDB") {
+		t.Skip("requires MySQL binary JSON")
+	}
+	logBin, err := res.GetInt(0, 1)
+	require.NoError(t, err)
+	format, err := res.GetString(0, 2)
+	require.NoError(t, err)
+	if logBin != 1 || format != "ROW" {
+		t.Skipf("need a row-based binlog, got log_bin=%d binlog_format=%s", logBin, format)
+	}
+
+	for _, q := range []string{
+		"CREATE DATABASE IF NOT EXISTS test",
+		"USE test",
+		// Zero dates are only insertable with the strict modes off.
+		"SET SESSION sql_mode=''",
+		"DROP TABLE IF EXISTS test_json_temporal",
+		"CREATE TABLE test_json_temporal (id INT PRIMARY KEY, c JSON) ENGINE=InnoDB",
+	} {
+		_, err = c.Execute(q)
+		require.NoError(t, err, q)
+	}
+
+	// Record the position before the inserts so the syncer sees them all.
+	pos, err := binlogPosition(c)
+	require.NoError(t, err)
+
+	for i, expr := range temporalParityRows {
+		_, err = c.Execute(fmt.Sprintf(
+			"INSERT INTO test_json_temporal VALUES (%d, %s)", i, expr))
+		require.NoError(t, err, expr)
+	}
+
+	// What the server itself renders for each row.
+	want := make([]string, len(temporalParityRows))
+	res, err = c.Execute("SELECT id, CAST(c AS CHAR) FROM test_json_temporal ORDER BY id")
+	require.NoError(t, err)
+	require.Equal(t, len(temporalParityRows), res.RowNumber())
+	for i := range res.Values {
+		id, err := res.GetInt(i, 0)
+		require.NoError(t, err)
+		s, err := res.GetString(i, 1)
+		require.NoError(t, err)
+		want[id] = s
+	}
+
+	// What we render from the binlog's JSONB.
+	got := readJSONColumnFromBinlog(t, host, port, password, pos, len(temporalParityRows))
+
+	t.Logf("comparing %d JSON temporal rows against %s", len(temporalParityRows), version)
+	for i, expr := range temporalParityRows {
+		// MySQL puts a space after ',' and ':' in its own text form and the
+		// renderer is deliberately compact, so compare with those removed
+		// rather than reproducing MySQL's whitespace.
+		require.Equal(t, stripJSONSpacing(want[i]), stripJSONSpacing(got[i]),
+			"row %d: %s", i, expr)
+	}
+}
+
+// binlogPosition returns the server's current binlog file and offset.
+func binlogPosition(c *client.Conn) (mysql.Position, error) {
+	query := "SHOW BINARY LOG STATUS"
+	if eq, err := c.CompareServerVersion("8.4.0"); err == nil && eq < 0 {
+		query = "SHOW MASTER STATUS"
+	}
+	res, err := c.Execute(query)
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	file, err := res.GetStringByName(0, "File")
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	offset, err := res.GetIntByName(0, "Position")
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	return mysql.Position{Name: file, Pos: uint32(offset)}, nil
+}
+
+// readJSONColumnFromBinlog streams from pos and returns the rendered JSON
+// column of the next wantRows inserts into test_json_temporal, indexed by
+// the row's id.
+func readJSONColumnFromBinlog(
+	t *testing.T, host, port, password string, pos mysql.Position, wantRows int,
+) []string {
+	t.Helper()
+
+	portNum, err := strconv.ParseUint(port, 10, 16)
+	require.NoError(t, err)
+
+	syncer := NewBinlogSyncer(BinlogSyncerConfig{
+		ServerID:              1001,
+		Flavor:                mysql.MySQLFlavor,
+		Host:                  host,
+		Port:                  uint16(portNum),
+		User:                  "root",
+		Password:              password,
+		RenderJSONAsMySQLText: true,
+	})
+	defer syncer.Close()
+
+	streamer, err := syncer.StartSync(pos)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	out := make([]string, wantRows)
+	for seen := 0; seen < wantRows; {
+		ev, err := streamer.GetEvent(ctx)
+		require.NoError(t, err, "only saw %d/%d rows", seen, wantRows)
+
+		switch ev.Header.EventType {
+		case WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2:
+		default:
+			continue
+		}
+		re, ok := ev.Event.(*RowsEvent)
+		if !ok || string(re.Table.Table) != "test_json_temporal" {
+			continue
+		}
+		for _, row := range re.Rows {
+			require.Len(t, row, 2)
+			id, ok := row[0].(int32)
+			require.True(t, ok, "id column is %T", row[0])
+			require.Less(t, int(id), wantRows)
+			s, ok := row[1].(string)
+			require.True(t, ok, "JSON column is %T", row[1])
+			out[id] = s
+			seen++
+		}
+	}
+	return out
+}
+
+// stripJSONSpacing removes the inter-token spaces MySQL puts after ',' and
+// ':' so the compact renderer can be compared against it. It is not a JSON
+// parser: it only skips spaces outside string literals.
+func stripJSONSpacing(s string) string {
+	out := make([]byte, 0, len(s))
+	inStr := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case inStr && ch == '\\' && i+1 < len(s):
+			out = append(out, ch, s[i+1])
+			i++
+			continue
+		case ch == '"':
+			inStr = !inStr
+		case !inStr && ch == ' ':
+			continue
+		}
+		out = append(out, ch)
+	}
+	return string(out)
 }

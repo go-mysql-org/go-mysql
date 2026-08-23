@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -160,7 +161,13 @@ func (s *schemaTestSuite) TestSchemaColumnExtraFlags() {
 
 	exprIdx := ta.FindColumn("expr")
 	if exprIdx >= 0 {
-		require.True(s.T(), ta.Columns[exprIdx].IsDefaultExpr)
+		// MariaDB reports the expression in Default but leaves Extra empty,
+		// whereas MySQL marks it as DEFAULT_GENERATED in Extra.
+		if strings.Contains(s.conn.GetServerVersion(), "MariaDB") {
+			require.False(s.T(), ta.Columns[exprIdx].IsDefaultExpr)
+		} else {
+			require.True(s.T(), ta.Columns[exprIdx].IsDefaultExpr)
+		}
 		require.False(s.T(), ta.Columns[exprIdx].IsAutoUpdating)
 	}
 
@@ -183,6 +190,10 @@ func (s *schemaTestSuite) TestQuoteSchema() {
 }
 
 func (s *schemaTestSuite) TestSchemaWithMultiValueIndex() {
+	if strings.Contains(s.conn.GetServerVersion(), "MariaDB") {
+		s.T().Skip("multi-valued indexes are not supported by MariaDB")
+	}
+
 	_, err := s.conn.Execute(`DROP TABLE IF EXISTS multi_value_idx_test`)
 	require.NoError(s.T(), err)
 
