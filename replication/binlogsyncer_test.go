@@ -88,6 +88,7 @@ func (c *deadlinelessConn) Close() error {
 func (*deadlinelessConn) LocalAddr() net.Addr         { return &net.TCPAddr{} }
 func (*deadlinelessConn) RemoteAddr() net.Addr        { return &net.TCPAddr{} }
 func (*deadlinelessConn) SetDeadline(time.Time) error { return errors.New("deadline not supported") }
+
 func (*deadlinelessConn) SetReadDeadline(time.Time) error {
 	return errors.New("deadline not supported")
 }
