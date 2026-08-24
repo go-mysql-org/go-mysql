@@ -26,15 +26,19 @@ type RowsEvent struct {
 	Rows [][]any
 	// Header can be used to inspect the event
 	Header *replication.EventHeader
+	Flags  uint16
 }
 
-func newRowsEvent(table *schema.Table, action string, rows [][]any, header *replication.EventHeader) *RowsEvent {
+func newRowsEvent(table *schema.Table, action string, rows [][]any, header *replication.EventHeader, ev *replication.RowsEvent) *RowsEvent {
 	e := new(RowsEvent)
 
 	e.Table = table
 	e.Action = action
 	e.Rows = rows
 	e.Header = header
+	if ev != nil {
+		e.Flags = ev.Flags
+	}
 
 	e.handleUnsigned()
 

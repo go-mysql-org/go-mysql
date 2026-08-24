@@ -54,6 +54,9 @@ const (
 func (s *canalTestSuite) SetupSuite() {
 	cfg := NewDefaultConfig()
 	cfg.Addr = fmt.Sprintf("%s:%s", *test_util.MysqlHost, *test_util.MysqlPort)
+	if test_util.ServerFlavor != "" {
+		cfg.Flavor = test_util.ServerFlavor
+	}
 	if s.addr != "" {
 		cfg.Addr = s.addr
 	}
@@ -100,7 +103,7 @@ func (s *canalTestSuite) SetupSuite() {
 
 	s.c.SetEventHandler(&testEventHandler{T: s.T()})
 	go func() {
-		set, _ := mysql.ParseGTIDSet("mysql", "")
+		set, _ := mysql.ParseGTIDSet(cfg.Flavor, "")
 		err = s.c.StartFromGTID(set)
 		require.NoError(s.T(), err)
 	}()

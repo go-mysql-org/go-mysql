@@ -1,8 +1,11 @@
 package replication
 
 import (
+	"bytes"
+	"crypto/tls"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -85,6 +88,7 @@ func (c *deadlinelessConn) Close() error {
 func (*deadlinelessConn) LocalAddr() net.Addr         { return &net.TCPAddr{} }
 func (*deadlinelessConn) RemoteAddr() net.Addr        { return &net.TCPAddr{} }
 func (*deadlinelessConn) SetDeadline(time.Time) error { return errors.New("deadline not supported") }
+
 func (*deadlinelessConn) SetReadDeadline(time.Time) error {
 	return errors.New("deadline not supported")
 }
@@ -146,4 +150,58 @@ func TestHandleEventAndACKPayloadInnerGSet(t *testing.T) {
 	require.NoError(t, b.handleEventAndACK(NewBinlogStreamer(), ev, false))
 	require.Equal(t, gset.String(), innerQuery.Event.(*QueryEvent).GSet.String())
 	require.Equal(t, gset.String(), innerXID.Event.(*XIDEvent).GSet.String())
+}
+
+// TestHandleEventAndACKRotateLogDedup verifies the artificial rotate event the
+// server sends right after the real one at each rotation does not produce a
+// second "rotate to next binlog" log line.
+func TestHandleEventAndACKRotateLogDedup(t *testing.T) {
+	var buf bytes.Buffer
+	b := NewBinlogSyncer(BinlogSyncerConfig{
+		ServerID: 1,
+		Logger:   slog.New(slog.NewTextHandler(&buf, nil)),
+	})
+	defer b.Close()
+
+	rotate := func(logPos uint32, flags uint16, name string) *BinlogEvent {
+		return &BinlogEvent{
+			Header: &EventHeader{EventType: ROTATE_EVENT, LogPos: logPos, Flags: flags},
+			Event:  &RotateEvent{NextLogName: []byte(name), Position: 4},
+		}
+	}
+
+	s := NewBinlogStreamer()
+	// Artificial rotate sent at dump start.
+	require.NoError(t, b.handleEventAndACK(s, rotate(0, LOG_EVENT_ARTIFICIAL_F, "mysql-bin.000001"), false))
+	// Real rotate at the end of the old file, then the artificial duplicate.
+	require.NoError(t, b.handleEventAndACK(s, rotate(1234, 0, "mysql-bin.000002"), false))
+	require.NoError(t, b.handleEventAndACK(s, rotate(0, LOG_EVENT_ARTIFICIAL_F, "mysql-bin.000002"), false))
+
+	require.Equal(t, mysql.Position{Name: "mysql-bin.000002", Pos: 4}, b.GetNextPosition())
+	require.Equal(t, 2, strings.Count(buf.String(), "rotate to next binlog"))
+}
+
+func TestBinlogSyncerConfigLogsAsJSON(t *testing.T) {
+	var buf bytes.Buffer
+
+	cfg := BinlogSyncerConfig{
+		ServerID:                       100,
+		Host:                           "127.0.0.1",
+		Port:                           3306,
+		User:                           "root",
+		Password:                       "hunter2",
+		Logger:                         slog.New(slog.NewJSONHandler(&buf, nil)),
+		TLSConfig:                      &tls.Config{},
+		Option:                         func(*client.Conn) error { return nil },
+		Dialer:                         (&net.Dialer{}).DialContext,
+		RowsEventDecodeFunc:            func(*RowsEvent, []byte) error { return nil },
+		TableMapOptionalMetaDecodeFunc: func([]byte) error { return nil },
+		SynchronousEventHandler:        NewBackupEventHandler(nil),
+	}
+	NewBinlogSyncer(cfg).Close()
+
+	require.NotContains(t, buf.String(), "!ERROR")
+	require.NotContains(t, buf.String(), "hunter2")
+	require.Contains(t, buf.String(), `"ServerID":100`)
+	require.Contains(t, buf.String(), `"Port":3306`)
 }

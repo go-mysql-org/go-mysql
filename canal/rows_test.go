@@ -62,3 +62,15 @@ func TestRowsEvent_handleUnsigned(t *testing.T) {
 		})
 	}
 }
+
+// TestRowsEvent_flags checks if Flags from replication's RowsEvent propagate to canal's RowsEvent.
+func TestRowsEvent_flags(t *testing.T) {
+	replEvent := &replication.RowsEvent{
+		Flags: 0x15,
+	}
+
+	var table schema.Table
+	canalEvent := newRowsEvent(&table, "update", nil, nil, replEvent)
+
+	require.Equal(t, canalEvent.Flags, replEvent.Flags)
+}

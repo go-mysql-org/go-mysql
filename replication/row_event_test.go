@@ -1499,6 +1499,10 @@ func TestDecodeTime2(t *testing.T) {
 		{[]byte("\x7f\xff\xff\xff\xff\xff"), 6, true, "-00:00:00.000001"},
 		{[]byte("\x7f\x0e\xfa\xfe\x1d\xc0"), 6, true, "-15:04:05.123456"},
 		{[]byte("\x4b\x91\x05\xfe\x1d\xc0"), 6, true, "-838:59:58.123456"},
+		// A zero fraction with fsp > 0 must still render the fractional digits.
+		{[]byte("\x80\xf1\x05\x00"), 2, true, "15:04:05.00"},
+		{[]byte("\x80\xf1\x05\x00\x00\x00"), 6, true, "15:04:05.000000"},
+		{[]byte("\x80\x00\x00\x00\x00"), 3, true, "00:00:00.000"},
 	}
 	for _, tc := range testcases {
 		value, _, err := decodeTime2(tc.data, tc.dec)

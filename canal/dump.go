@@ -111,7 +111,7 @@ func (h *dumpParseHandler) Data(db string, table string, values []string) error 
 		}
 	}
 
-	events := newRowsEvent(tableInfo, InsertAction, [][]any{vs}, nil)
+	events := newRowsEvent(tableInfo, InsertAction, [][]any{vs}, nil, nil)
 	return h.c.eventHandler.OnRow(events)
 }
 

@@ -69,6 +69,26 @@ func (c *Conn) writeEOF() error {
 	return c.WritePacket(data)
 }
 
+// writeEOFOrOK terminates a packet sequence: a classic EOF packet, or an
+// EOF-headered (0xFE) OK packet when CLIENT_DEPRECATE_EOF is negotiated, as
+// MySQL 5.7.5+ sends. No session-state suffix: the packet must stay under the
+// 9-byte threshold clients use to recognize EOF packets.
+func (c *Conn) writeEOFOrOK() error {
+	if !c.deprecateEOF() {
+		return c.writeEOF()
+	}
+
+	data := make([]byte, 4, 16)
+
+	data = append(data, mysql.EOF_HEADER)
+	data = append(data, mysql.PutLengthEncodedInt(0)...) // affected rows
+	data = append(data, mysql.PutLengthEncodedInt(0)...) // last insert id
+	data = append(data, byte(c.status), byte(c.status>>8))
+	data = append(data, byte(c.warnings), byte(c.warnings>>8))
+
+	return c.WritePacket(data)
+}
+
 // see: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_auth_switch_request.html
 func (c *Conn) writeAuthSwitchRequest(newAuthPluginName string) error {
 	c.authPluginName = newAuthPluginName
@@ -133,7 +153,7 @@ func (c *Conn) writeResultset(r *mysql.Resultset) error {
 		case mysql.StreamingMultiple:
 			return nil
 		case mysql.StreamingSelect:
-			return c.writeEOF()
+			return c.writeEOFOrOK()
 		}
 	}
 
@@ -150,6 +170,13 @@ func (c *Conn) writeResultset(r *mysql.Resultset) error {
 		return err
 	}
 
+	// no separator between column definitions and rows under CLIENT_DEPRECATE_EOF
+	if !c.deprecateEOF() {
+		if err := c.writeEOF(); err != nil {
+			return err
+		}
+	}
+
 	// streaming select resultsets handle rowdata in a separate callback of type
 	// SelectPerRowCallback so we're done here
 	if r.Streaming == mysql.StreamingSelect {
@@ -164,7 +191,7 @@ func (c *Conn) writeResultset(r *mysql.Resultset) error {
 		}
 	}
 
-	if err := c.writeEOF(); err != nil {
+	if err := c.writeEOFOrOK(); err != nil {
 		return err
 	}
 
@@ -186,6 +213,13 @@ func (c *Conn) writeStreamResultset(sr *mysql.StreamResult) error {
 
 	if err := c.writeFieldList(sr.Fields, data); err != nil {
 		return err
+	}
+
+	// no separator between column definitions and rows under CLIENT_DEPRECATE_EOF
+	if !c.deprecateEOF() {
+		if err := c.writeEOF(); err != nil {
+			return err
+		}
 	}
 
 	if sr.Binary {
@@ -213,13 +247,17 @@ func (c *Conn) writeStreamTextRows(sr *mysql.StreamResult) error {
 		if err := c.WritePacket(data); err != nil {
 			return err
 		}
+		// Deliver each streamed row immediately; RowsChan may block indefinitely.
+		if err := c.Flush(); err != nil {
+			return err
+		}
 	}
 
 	if err := sr.Err(); err != nil {
 		return c.writeError(err)
 	}
 
-	return c.writeEOF()
+	return c.writeEOFOrOK()
 }
 
 // writeStreamBinaryRows writes rows using binary protocol.
@@ -263,15 +301,21 @@ func (c *Conn) writeStreamBinaryRows(sr *mysql.StreamResult) error {
 		if err := c.WritePacket(data); err != nil {
 			return err
 		}
+		// Deliver each streamed row immediately; RowsChan may block indefinitely.
+		if err := c.Flush(); err != nil {
+			return err
+		}
 	}
 
 	if err := sr.Err(); err != nil {
 		return c.writeError(err)
 	}
 
-	return c.writeEOF()
+	return c.writeEOFOrOK()
 }
 
+// writeFieldList writes one packet per column definition and no terminator;
+// the caller appends an EOF packet, an EOF-headered OK, or nothing.
 func (c *Conn) writeFieldList(fs []*mysql.Field, data []byte) error {
 	if data == nil {
 		data = make([]byte, 4, 1024)
@@ -285,9 +329,6 @@ func (c *Conn) writeFieldList(fs []*mysql.Field, data []byte) error {
 		}
 	}
 
-	if err := c.writeEOF(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -323,6 +364,11 @@ func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
 		if err := c.WritePacket(data); err != nil {
 			return err
 		}
+		// Deliver each event immediately (heartbeat/semi-sync timing); GetEvent
+		// may block indefinitely.
+		if err := c.Flush(); err != nil {
+			return err
+		}
 	}
 }
 
@@ -336,7 +382,7 @@ func (c *Conn) WriteValue(value any) error {
 	case noResponse:
 		return nil
 	case eofResponse:
-		return c.writeEOF()
+		return c.writeEOFOrOK()
 	case error:
 		return c.writeError(v)
 	case nil:
@@ -349,7 +395,11 @@ func (c *Conn) WriteValue(value any) error {
 		}
 		return c.writeOK(v)
 	case []*mysql.Field:
-		return c.writeFieldList(v, nil)
+		// COM_FIELD_LIST response: column definitions, then a terminator.
+		if err := c.writeFieldList(v, nil); err != nil {
+			return err
+		}
+		return c.writeEOFOrOK()
 	case []mysql.FieldValue:
 		return c.writeFieldValues(v)
 	case *replication.BinlogStreamer:
