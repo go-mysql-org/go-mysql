@@ -34,5 +34,4 @@ func BoolToByteSlice(b bool) []byte {
 		return StringToByteSlice("true")
 	}
 	return StringToByteSlice("false")
-
 }
