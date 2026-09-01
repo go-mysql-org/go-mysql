@@ -25,12 +25,13 @@ func TestGetIntNeg(t *testing.T) {
 
 func TestBuildSimpleTextResultsetDistinguishesEmptyValuesFromNull(t *testing.T) {
 	r, err := BuildSimpleTextResultset(
-		[]string{"empty_string", "empty_bytes", "null"},
-		[][]any{{"", []byte{}, nil}},
+		[]string{"empty_string", "empty_bytes", "null", "bool"},
+		[][]any{{"", []byte{}, nil, false}},
 	)
 	require.NoError(t, err)
-	require.Equal(t, RowData{0x00, 0x00, 0xfb}, r.RowDatas[0])
+	require.Equal(t, RowData{0x00, 0x00, 0xfb, 0x5, 0x66, 0x61, 0x6c, 0x73, 0x65}, r.RowDatas[0])
 	require.Equal(t, MYSQL_TYPE_VAR_STRING, r.Fields[0].Type)
 	require.Equal(t, MYSQL_TYPE_VAR_STRING, r.Fields[1].Type)
 	require.Equal(t, MYSQL_TYPE_NULL, r.Fields[2].Type)
+	require.Equal(t, MYSQL_TYPE_TINY, r.Fields[3].Type)
 }
