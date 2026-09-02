@@ -44,6 +44,8 @@ func FormatTextValue(value any) ([]byte, error) {
 		return utils.StringToByteSlice(v), nil
 	case time.Time:
 		return utils.StringToByteSlice(v.Format(time.DateTime)), nil
+	case bool:
+		return utils.BoolToByteSlice(v), nil
 	case nil:
 		return nil, nil
 	default:
@@ -623,6 +625,13 @@ func EncodeBinaryFieldValue(field *Field, value any) ([]byte, error) {
 	}
 }
 
+func toBinaryBool(b bool) ([]byte, error) {
+	if b {
+		return []byte{1}, nil
+	}
+	return []byte{0}, nil
+}
+
 // FormatBinaryValue formats a value for binary protocol.
 //
 // Deprecated: use EncodeBinaryFieldValue, which honors the column's declared
@@ -665,6 +674,8 @@ func FormatBinaryValue(value any) ([]byte, error) {
 			return nil, nil
 		}
 		return toBinaryDateTime(v)
+	case bool:
+		return toBinaryBool(v)
 	default:
 		return nil, errors.Errorf("invalid type %T", value)
 	}
@@ -682,6 +693,8 @@ func fieldType(value any) (typ uint8, err error) {
 		typ = MYSQL_TYPE_VAR_STRING
 	case time.Time:
 		typ = MYSQL_TYPE_DATETIME
+	case bool:
+		typ = MYSQL_TYPE_TINY
 	case nil:
 		typ = MYSQL_TYPE_NULL
 	default:
@@ -703,6 +716,9 @@ func formatField(field *Field, value any) error {
 		field.Flag = BINARY_FLAG | NOT_NULL_FLAG
 	case string, []byte, time.Time:
 		field.Charset = 33
+	case bool:
+		field.Charset = 63
+		field.Flag = BINARY_FLAG | NOT_NULL_FLAG
 	case nil:
 		field.Charset = 33
 	default:
