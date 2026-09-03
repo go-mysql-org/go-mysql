@@ -178,8 +178,10 @@ func (c *Canal) prepareDumper() error {
 	c.dumper.SetHexBlob(true)
 
 	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
-		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
-			c.dumper.AddIgnoreTables(seps[0], seps[1])
+		if db, table, ok := splitDBTable(ignoreTable); ok {
+			c.dumper.AddIgnoreTables(db, table)
+		} else {
+			c.cfg.Logger.Warn("failed to parse ignored tables", "ignoreTable", ignoreTable)
 		}
 	}
 
@@ -190,6 +192,50 @@ func (c *Canal) prepareDumper() error {
 	}
 
 	return nil
+}
+
+// splitDBTable parses an entry from DumpConfig.IgnoreTables into a database
+// and table name. Both the plain `db.table` form and the MySQL-quoted form
+// `db`.`table` (or any mix) are accepted.
+func splitDBTable(s string) (db, table string, ok bool) {
+	db, rest, ok := parseIdent(s)
+	if !ok || !strings.HasPrefix(rest, ".") {
+		return "", "", false
+	}
+	table, rest, ok = parseIdent(rest[1:])
+	if !ok || rest != "" || db == "" || table == "" {
+		return "", "", false
+	}
+	return db, table, true
+}
+
+// parseIdent consumes one MySQL identifier from the start of s and returns
+// the identifier value and any unconsumed remainder.
+func parseIdent(s string) (ident, rest string, ok bool) {
+	if s == "" {
+		return "", s, false
+	}
+	if s[0] != '`' {
+		if i := strings.IndexByte(s, '.'); i >= 0 {
+			return s[:i], s[i:], true
+		}
+		return s, "", true
+	}
+	var buf strings.Builder
+	buf.Grow(len(s))
+	for i := 1; i < len(s); i++ {
+		if s[i] != '`' {
+			buf.WriteByte(s[i])
+			continue
+		}
+		if i+1 < len(s) && s[i+1] == '`' {
+			buf.WriteByte('`')
+			i++
+			continue
+		}
+		return buf.String(), s[i+1:], true
+	}
+	return "", s, false
 }
 
 func (c *Canal) GetDelay() uint32 {
