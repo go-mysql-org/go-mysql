@@ -13,7 +13,8 @@ import (
 // userConfigurableServerCapabilities lists handshake flags that may be toggled
 // via SetCapability / UnsetCapability. Other flags (e.g. CLIENT_SSL) are derived
 // from server construction and must not be changed independently.
-const userConfigurableServerCapabilities = mysql.CLIENT_LOCAL_FILES |
+const userConfigurableServerCapabilities = mysql.CLIENT_FOUND_ROWS |
+	mysql.CLIENT_LOCAL_FILES |
 	mysql.CLIENT_MULTI_RESULTS |
 	mysql.CLIENT_PS_MULTI_RESULTS |
 	mysql.CLIENT_DEPRECATE_EOF
@@ -143,9 +144,15 @@ func (s *Server) Capability() uint32 {
 }
 
 // SetCapability enables additional server capabilities advertised in the handshake.
-// Only CLIENT_LOCAL_FILES, CLIENT_MULTI_RESULTS, CLIENT_PS_MULTI_RESULTS, and
-// CLIENT_DEPRECATE_EOF may be set; other flags are managed by server construction
-// (e.g. CLIENT_SSL requires TLS).
+// Only CLIENT_FOUND_ROWS, CLIENT_LOCAL_FILES, CLIENT_MULTI_RESULTS,
+// CLIENT_PS_MULTI_RESULTS, and CLIENT_DEPRECATE_EOF may be set; other flags are
+// managed by server construction (e.g. CLIENT_SSL requires TLS).
+//
+// Advertising a capability does not implement it. CLIENT_FOUND_ROWS, which makes an
+// UPDATE report rows matched instead of rows changed, is up to the Handler: this
+// package never computes affected rows. A Handler honoring it must check
+// (*Conn).HasCapability(mysql.CLIENT_FOUND_ROWS) and set AffectedRows on the
+// mysql.Result it returns accordingly.
 func (s *Server) SetCapability(capability uint32) error {
 	if err := validateUserConfigurableCapability(capability); err != nil {
 		return err
@@ -160,8 +167,8 @@ func (s *Server) SetCapability(capability uint32) error {
 }
 
 // UnsetCapability disables server capabilities advertised in the handshake.
-// Only CLIENT_LOCAL_FILES, CLIENT_MULTI_RESULTS, CLIENT_PS_MULTI_RESULTS, and
-// CLIENT_DEPRECATE_EOF may be cleared via this API.
+// Only CLIENT_FOUND_ROWS, CLIENT_LOCAL_FILES, CLIENT_MULTI_RESULTS,
+// CLIENT_PS_MULTI_RESULTS, and CLIENT_DEPRECATE_EOF may be cleared via this API.
 func (s *Server) UnsetCapability(capability uint32) error {
 	if err := validateUserConfigurableCapability(capability); err != nil {
 		return err
@@ -180,7 +187,7 @@ func validateUserConfigurableCapability(capability uint32) error {
 		return fmt.Errorf("capability must not be zero")
 	}
 	if invalid := capability &^ userConfigurableServerCapabilities; invalid != 0 {
-		return fmt.Errorf("server capability %#x contains non-user-configurable flags %#x; only CLIENT_LOCAL_FILES, CLIENT_MULTI_RESULTS, CLIENT_PS_MULTI_RESULTS, and CLIENT_DEPRECATE_EOF are supported", capability, invalid)
+		return fmt.Errorf("server capability %#x contains non-user-configurable flags %#x; only CLIENT_FOUND_ROWS, CLIENT_LOCAL_FILES, CLIENT_MULTI_RESULTS, CLIENT_PS_MULTI_RESULTS, and CLIENT_DEPRECATE_EOF are supported", capability, invalid)
 	}
 	return nil
 }

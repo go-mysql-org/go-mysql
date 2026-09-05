@@ -192,6 +192,92 @@ func TestLocalFilesCapabilityCanBeDisabled(t *testing.T) {
 		"CLIENT_LOCAL_FILES must not be negotiated when the server does not advertise it, got: %s", negotiated)
 }
 
+// TestFoundRowsCapabilityNegotiated verifies that CLIENT_FOUND_ROWS survives handshake
+// negotiation once the server opts in via SetCapability. Clients that mask their
+// requested capabilities against the server's advertised set are otherwise silently
+// downgraded to changed-row UPDATE counts.
+func TestFoundRowsCapabilityNegotiated(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	svr := NewDefaultServer()
+	require.NoError(t, svr.SetCapability(mysql.CLIENT_FOUND_ROWS))
+	authHandler := NewInMemoryAuthenticationHandler()
+	require.NoError(t, authHandler.AddUser("root", ""))
+
+	go func() {
+		conn, acceptErr := l.Accept()
+		if acceptErr != nil {
+			return
+		}
+		sConn, connErr := svr.NewCustomizedConn(conn, authHandler, EmptyHandler{})
+		if connErr != nil {
+			return
+		}
+		for {
+			if handleErr := sConn.HandleCommand(); handleErr != nil {
+				return
+			}
+		}
+	}()
+
+	c, err := client.Connect(l.Addr().String(), "root", "", "",
+		func(conn *client.Conn) error {
+			return conn.SetCapability(mysql.CLIENT_FOUND_ROWS)
+		},
+	)
+	require.NoError(t, err)
+	defer c.Close()
+
+	negotiated := c.CapabilityString()
+	require.Contains(t, negotiated, "CLIENT_FOUND_ROWS",
+		"CLIENT_FOUND_ROWS must be negotiated for matched-row UPDATE counts, got: %s", negotiated)
+}
+
+// TestFoundRowsCapabilityCanBeDisabled verifies that CLIENT_FOUND_ROWS is not advertised
+// by default and is not negotiated unless explicitly enabled via SetCapability. It stays
+// opt-in because honoring it is the Handler's job.
+func TestFoundRowsCapabilityCanBeDisabled(t *testing.T) {
+	svr := NewDefaultServer()
+	require.False(t, svr.Capability()&mysql.CLIENT_FOUND_ROWS != 0)
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	authHandler := NewInMemoryAuthenticationHandler()
+	require.NoError(t, authHandler.AddUser("root", ""))
+
+	go func() {
+		conn, acceptErr := l.Accept()
+		if acceptErr != nil {
+			return
+		}
+		sConn, connErr := svr.NewCustomizedConn(conn, authHandler, EmptyHandler{})
+		if connErr != nil {
+			return
+		}
+		for {
+			if handleErr := sConn.HandleCommand(); handleErr != nil {
+				return
+			}
+		}
+	}()
+
+	c, err := client.Connect(l.Addr().String(), "root", "", "",
+		func(conn *client.Conn) error {
+			return conn.SetCapability(mysql.CLIENT_FOUND_ROWS)
+		},
+	)
+	require.NoError(t, err)
+	defer c.Close()
+
+	negotiated := c.CapabilityString()
+	require.NotContains(t, negotiated, "CLIENT_FOUND_ROWS",
+		"CLIENT_FOUND_ROWS must not be negotiated when the server does not advertise it, got: %s", negotiated)
+}
+
 func TestSetCapabilityRejectsUnsafeFlags(t *testing.T) {
 	svr := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil)
 
@@ -214,4 +300,9 @@ func TestSetCapabilityRejectsUnsafeFlags(t *testing.T) {
 	require.True(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
 	require.NoError(t, svr.UnsetCapability(mysql.CLIENT_LOCAL_FILES))
 	require.False(t, svr.Capability()&mysql.CLIENT_LOCAL_FILES != 0)
+
+	require.NoError(t, svr.SetCapability(mysql.CLIENT_FOUND_ROWS))
+	require.True(t, svr.Capability()&mysql.CLIENT_FOUND_ROWS != 0)
+	require.NoError(t, svr.UnsetCapability(mysql.CLIENT_FOUND_ROWS))
+	require.False(t, svr.Capability()&mysql.CLIENT_FOUND_ROWS != 0)
 }
