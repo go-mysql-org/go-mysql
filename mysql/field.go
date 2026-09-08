@@ -203,7 +203,11 @@ func (fv *FieldValue) AsFloat64() float64 {
 	return utils.Uint64ToFloat64(fv.value)
 }
 
+// AsString returns the string value as bytes, or nil for NULL.
 func (fv *FieldValue) AsString() []byte {
+	if fv.Type == FieldValueTypeNull {
+		return nil
+	}
 	return fv.str
 }
 
