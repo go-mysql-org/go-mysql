@@ -715,7 +715,7 @@ func (c *Conn) exec(query string) (*mysql.Result, error) {
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html
 func (c *Conn) execSend(query string) error {
 	var buf bytes.Buffer
-	defer clear(c.queryAttributes)
+	defer func() { c.queryAttributes = nil }()
 
 	if c.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 {
 		if c.includeLine >= 0 {

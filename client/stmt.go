@@ -102,7 +102,7 @@ func (s *Stmt) Close() error {
 
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html
 func (s *Stmt) write(args ...any) error {
-	defer clear(s.conn.queryAttributes)
+	defer func() { s.conn.queryAttributes = nil }()
 	paramsNum := s.Params
 
 	if len(args) != paramsNum {
@@ -121,6 +121,9 @@ func (s *Stmt) write(args ...any) error {
 	}
 
 	qaLen := len(s.conn.queryAttributes)
+	if s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES == 0 {
+		qaLen = 0
+	}
 	paramTypes := make([][]byte, paramsNum+qaLen)
 	paramFlags := make([][]byte, paramsNum+qaLen)
 	paramValues := make([][]byte, paramsNum+qaLen)
@@ -215,12 +218,13 @@ func (s *Stmt) write(args ...any) error {
 
 		length += len(paramValues[i])
 	}
-	for i, qa := range s.conn.queryAttributes {
+	for i, qa := range s.conn.queryAttributes[:qaLen] {
 		tf := qa.TypeAndFlag()
 		paramTypes[(i + paramsNum)] = []byte{tf[0]}
 		paramFlags[i+paramsNum] = []byte{tf[1]}
 		paramValues[i+paramsNum] = qa.ValueBytes()
 		paramNames[i+paramsNum] = mysql.PutLengthEncodedString([]byte(qa.Name))
+		newParamBoundFlag = 1
 	}
 
 	data := utils.BytesBufferGet()
@@ -236,7 +240,7 @@ func (s *Stmt) write(args ...any) error {
 	data.Write([]byte{byte(s.ID), byte(s.ID >> 8), byte(s.ID >> 16), byte(s.ID >> 24)})
 
 	flags := mysql.CURSOR_TYPE_NO_CURSOR
-	if paramsNum > 0 {
+	if s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 && paramsNum+qaLen > 0 {
 		flags |= mysql.PARAMETER_COUNT_AVAILABLE
 	}
 	data.WriteByte(flags)
@@ -246,7 +250,7 @@ func (s *Stmt) write(args ...any) error {
 
 	if paramsNum > 0 || (s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 && (flags&mysql.PARAMETER_COUNT_AVAILABLE > 0)) {
 		if s.conn.capability&mysql.CLIENT_QUERY_ATTRIBUTES > 0 {
-			paramsNum += len(s.conn.queryAttributes)
+			paramsNum += qaLen
 			data.Write(mysql.PutLengthEncodedInt(uint64(paramsNum)))
 		}
 		if paramsNum > 0 {
