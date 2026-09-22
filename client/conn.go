@@ -824,7 +824,8 @@ func (c *Conn) StatusString() string {
 
 // SetQueryAttributes sets the query attributes to be send along with the next query
 func (c *Conn) SetQueryAttributes(attrs ...mysql.QueryAttribute) error {
-	c.queryAttributes = attrs
+	// Automatic attributes may be appended later; never reuse caller-owned capacity.
+	c.queryAttributes = slices.Clone(attrs)
 	return nil
 }
 

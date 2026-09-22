@@ -105,3 +105,17 @@ func TestQueryAttributeUnsupportedCapability(t *testing.T) {
 		t.Fatal("attributes encoded without negotiated support")
 	}
 }
+
+func TestQueryAttributeLineDoesNotOverwriteCallerCapacity(t *testing.T) {
+	c, p := attributeConnection(t)
+	c.IncludeLine(0)
+	attrs := []mysql.QueryAttribute{{Name: "trace", Value: "marker"}, {Name: "reserved", Value: "unchanged"}}
+	c.SetQueryAttributes(attrs[:1]...)
+	data := captureAttributeRequest(t, c, p, func() error { _, err := c.Execute("SELECT 1"); return err })
+	if attrs[1].Name != "reserved" || attrs[1].Value != "unchanged" {
+		t.Fatal("automatic line attribute overwrote caller-owned backing array")
+	}
+	if data[1] != 2 || !bytes.Contains(data, []byte("_line")) {
+		t.Fatal("automatic line attribute was not sent alongside the caller attribute")
+	}
+}
