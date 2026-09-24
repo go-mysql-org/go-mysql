@@ -38,7 +38,9 @@ func attributeConnection(t *testing.T) (*Conn, *packet.Conn) {
 
 func TestQueryAttributeAttributesConsumed(t *testing.T) {
 	c, p := attributeConnection(t)
-	c.SetQueryAttributes(mysql.QueryAttribute{Name: "trace", Value: "first"})
+	if err := c.SetQueryAttributes(mysql.QueryAttribute{Name: "trace", Value: "first"}); err != nil {
+		t.Fatal(err)
+	}
 	first := captureAttributeRequest(t, c, p, func() error { _, err := c.Execute("SELECT 1"); return err })
 	second := captureAttributeRequest(t, c, p, func() error { _, err := c.Execute("SELECT 2"); return err })
 	t.Logf("first=%x second=%x", first, second)
@@ -49,7 +51,9 @@ func TestQueryAttributeAttributesConsumed(t *testing.T) {
 
 func TestQueryAttributeZeroParameterAttributes(t *testing.T) {
 	c, p := attributeConnection(t)
-	c.SetQueryAttributes(mysql.QueryAttribute{Name: "trace", Value: "marker"})
+	if err := c.SetQueryAttributes(mysql.QueryAttribute{Name: "trace", Value: "marker"}); err != nil {
+		t.Fatal(err)
+	}
 	s := &Stmt{conn: c}
 	data := captureAttributeRequest(t, c, p, func() error { _, err := s.Execute(); return err })
 	t.Logf("execute=%x", data)
@@ -60,7 +64,9 @@ func TestQueryAttributeZeroParameterAttributes(t *testing.T) {
 
 func TestQueryAttributeNullParameterAttributes(t *testing.T) {
 	c, p := attributeConnection(t)
-	c.SetQueryAttributes(mysql.QueryAttribute{Name: "trace", Value: "marker"})
+	if err := c.SetQueryAttributes(mysql.QueryAttribute{Name: "trace", Value: "marker"}); err != nil {
+		t.Fatal(err)
+	}
 	s := &Stmt{conn: c}
 	s.Params = 1
 	data := captureAttributeRequest(t, c, p, func() error { _, err := s.Execute(nil); return err })
@@ -73,7 +79,9 @@ func TestQueryAttributeNullParameterAttributes(t *testing.T) {
 func TestQueryAttributeCallerAttributesReusable(t *testing.T) {
 	c, p := attributeConnection(t)
 	attrs := []mysql.QueryAttribute{{Name: "trace", Value: "marker"}}
-	c.SetQueryAttributes(attrs...)
+	if err := c.SetQueryAttributes(attrs...); err != nil {
+		t.Fatal(err)
+	}
 	captureAttributeRequest(t, c, p, func() error { _, err := c.Execute("SELECT 1"); return err })
 	if attrs[0].Name != "trace" || attrs[0].Value != "marker" {
 		t.Fatal("sending query mutated caller attribute slice")
@@ -83,7 +91,7 @@ func TestQueryAttributeCallerAttributesReusable(t *testing.T) {
 func TestQueryAttributeLineAttributeDoesNotAccumulate(t *testing.T) {
 	c, p := attributeConnection(t)
 	c.IncludeLine(0)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		data := captureAttributeRequest(t, c, p, func() error { _, err := c.Execute("SELECT 1"); return err })
 		if data[1] != 1 {
 			t.Fatalf("query %d has %d attributes; want one line attribute", i, data[1])
@@ -94,7 +102,9 @@ func TestQueryAttributeLineAttributeDoesNotAccumulate(t *testing.T) {
 func TestQueryAttributeUnsupportedCapability(t *testing.T) {
 	c, p := attributeConnection(t)
 	c.capability = 0
-	c.SetQueryAttributes(mysql.QueryAttribute{Name: "trace", Value: "marker"})
+	if err := c.SetQueryAttributes(mysql.QueryAttribute{Name: "trace", Value: "marker"}); err != nil {
+		t.Fatal(err)
+	}
 	s := &Stmt{conn: c}
 	s.Params = 1
 	data := captureAttributeRequest(t, c, p, func() error { _, err := s.Execute(7); return err })
@@ -110,7 +120,9 @@ func TestQueryAttributeLineDoesNotOverwriteCallerCapacity(t *testing.T) {
 	c, p := attributeConnection(t)
 	c.IncludeLine(0)
 	attrs := []mysql.QueryAttribute{{Name: "trace", Value: "marker"}, {Name: "reserved", Value: "unchanged"}}
-	c.SetQueryAttributes(attrs[:1]...)
+	if err := c.SetQueryAttributes(attrs[:1]...); err != nil {
+		t.Fatal(err)
+	}
 	data := captureAttributeRequest(t, c, p, func() error { _, err := c.Execute("SELECT 1"); return err })
 	if attrs[1].Name != "reserved" || attrs[1].Value != "unchanged" {
 		t.Fatal("automatic line attribute overwrote caller-owned backing array")

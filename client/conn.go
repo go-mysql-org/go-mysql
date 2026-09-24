@@ -822,9 +822,10 @@ func (c *Conn) StatusString() string {
 	return strings.Join(stats, "|")
 }
 
-// SetQueryAttributes sets the query attributes to be send along with the next query
+// SetQueryAttributes sets the query attributes to be sent along with the next query.
+// It copies the attribute slice so subsequent additions and resets do not modify
+// the caller's slice. Attribute values themselves are not deep-copied.
 func (c *Conn) SetQueryAttributes(attrs ...mysql.QueryAttribute) error {
-	// Automatic attributes may be appended later; never reuse caller-owned capacity.
 	c.queryAttributes = slices.Clone(attrs)
 	return nil
 }
