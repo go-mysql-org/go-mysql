@@ -177,10 +177,8 @@ func (c *Canal) prepareDumper() error {
 	// Use hex blob for mysqldump
 	c.dumper.SetHexBlob(true)
 
-	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
-		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
-			c.dumper.AddIgnoreTables(seps[0], seps[1])
-		}
+	for db, tables := range c.cfg.Dump.IgnoreTables {
+		c.dumper.AddIgnoreTables(db, tables...)
 	}
 
 	if c.cfg.Dump.DiscardErr {
