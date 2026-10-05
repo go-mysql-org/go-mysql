@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/go-mysql-org/go-mysql/stmt"
+	mockconn "github.com/go-mysql-org/go-mysql/test_util/conn"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,6 +49,42 @@ func TestHandleStmtExecute(t *testing.T) {
 			require.ErrorContains(t, err, tc.errtext)
 		}
 	}
+}
+
+type dupEntryExecHandler struct {
+	EmptyHandler
+}
+
+func (h dupEntryExecHandler) HandleStmtExecute(any, string, []any) (*mysql.Result, error) {
+	return nil, mysql.NewError(mysql.ER_DUP_ENTRY, "Duplicate entry '1' for key 'PRIMARY'")
+}
+
+// errors.Trace around HandleStmtExecute must not turn ER_DUP_ENTRY into ER_UNKNOWN_ERROR.
+func TestHandleStmtExecuteDupEntryOnWire(t *testing.T) {
+	const msg = "Duplicate entry '1' for key 'PRIMARY'"
+	c := &Conn{
+		h: dupEntryExecHandler{},
+		stmts: map[uint32]*Stmt{
+			1: {},
+		},
+	}
+	// COM_STMT_EXECUTE: stmt id 1, flags 0, iteration count 1, no params.
+	_, err := c.handleStmtExecute([]byte{1, 0, 0, 0, 0, 1, 0, 0, 0})
+	require.Error(t, err)
+
+	clientConn := &mockconn.MockConn{}
+	out := &Conn{Conn: packet.NewConn(clientConn)}
+	out.SetCapability(mysql.CLIENT_PROTOCOL_41)
+	require.NoError(t, out.writeError(err))
+
+	payload := append([]byte{
+		mysql.ERR_HEADER,
+		0x26, 0x04, // 1062
+		'#',
+		'2', '3', '0', '0', '0',
+	}, msg...)
+	expected := append([]byte{byte(len(payload)), 0, 0, 0}, payload...)
+	require.Equal(t, expected, clientConn.WriteBuffered)
 }
 
 type mockPrepareHandler struct {
