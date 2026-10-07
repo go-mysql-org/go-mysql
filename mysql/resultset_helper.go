@@ -729,6 +729,9 @@ func formatField(field *Field, value any) error {
 
 func BuildSimpleTextResultset(names []string, values [][]any) (*Resultset, error) {
 	r := NewResultset(len(names))
+	// A pooled Resultset keeps the previous result's *Field pointers, and the
+	// loop below only creates a Field for a nil slot.
+	clear(r.Fields)
 
 	var b []byte
 
