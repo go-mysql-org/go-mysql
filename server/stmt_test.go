@@ -148,3 +148,51 @@ func TestBindStmtArgsTypedBytes(t *testing.T) {
 		})
 	}
 }
+
+type recordingStmtHandler struct {
+	EmptyHandler
+	args [][]any
+}
+
+func (h *recordingStmtHandler) HandleStmtExecute(context any, query string, args []any) (*mysql.Result, error) {
+	h.args = append(h.args, append([]any(nil), args...))
+	return nil, nil
+}
+
+// Clients only send the parameter types (new-params-bound = 1) when they change,
+// so later executions must decode their values with the previously sent types.
+func TestHandleStmtExecuteReusesParamTypes(t *testing.T) {
+	h := &recordingStmtHandler{}
+	s := &Stmt{}
+	s.Rest(1, 0, nil)
+	c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+	header := []byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0} // stmt id, flags, iteration count
+	execute := func(nullBitmap, newParamsBound byte, rest ...byte) error {
+		data := append(append([]byte(nil), header...), nullBitmap, newParamsBound)
+		_, err := c.handleStmtExecute(append(data, rest...))
+		return err
+	}
+
+	// Types sent: LONGLONG, value 2.
+	require.NoError(t, execute(0x0, 0x1, mysql.MYSQL_TYPE_LONGLONG, 0x0, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0))
+	// Types not sent again, value 7.
+	require.NoError(t, execute(0x0, 0x0, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0))
+	// Types not sent again, NULL value.
+	require.NoError(t, execute(0x1, 0x0))
+
+	require.Equal(t, [][]any{{int64(2)}, {int64(7)}, {nil}}, h.args)
+}
+
+func TestHandleStmtExecuteWithoutParamTypes(t *testing.T) {
+	h := &recordingStmtHandler{}
+	s := &Stmt{}
+	s.Rest(1, 0, nil)
+	c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+	// The first execution doesn't send the types, so the value can't be decoded.
+	data := []byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
+	_, err := c.handleStmtExecute(data)
+	require.ErrorContains(t, err, "Incorrect arguments to mysqld_stmt_execute")
+	require.Empty(t, h.args)
+}

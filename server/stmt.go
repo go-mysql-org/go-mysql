@@ -22,6 +22,10 @@ type Stmt struct {
 
 	Context any
 
+	// paramTypes holds the parameter types from the last execution that sent them.
+	// Clients only send them again when they change (new-params-bound flag).
+	paramTypes []byte
+
 	// PreparedStmt contains common fields shared with client.Stmt for proxy passthrough
 	stmt.PreparedStmt
 }
@@ -146,7 +150,6 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 	pos += 4
 
 	var nullBitmaps []byte
-	var paramTypes []byte
 	var paramValues []byte
 
 	paramNum := s.Params
@@ -160,20 +163,25 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 		pos += nullBitmapLen
 
 		// new param bound flag
-		if data[pos] == 1 {
-			pos++
+		newParamsBound := data[pos] == 1
+		pos++
+		if newParamsBound {
 			if len(data) < (pos + (paramNum << 1)) {
 				return nil, mysql.ErrMalformPacket
 			}
 
-			paramTypes = data[pos : pos+(paramNum<<1)]
+			// copy the types, the packet buffer is reused
+			s.paramTypes = append(s.paramTypes[:0], data[pos:pos+(paramNum<<1)]...)
 			pos += paramNum << 1
+		} else if s.paramTypes == nil {
+			// the values can't be decoded without the types of a previous execution
+			return nil, mysql.NewDefaultError(mysql.ER_WRONG_ARGUMENTS, "mysqld_stmt_execute")
+		}
 
-			paramValues = data[pos:]
+		paramValues = data[pos:]
 
-			if err := c.bindStmtArgs(s, nullBitmaps, paramTypes, paramValues); err != nil {
-				return nil, errors.Trace(err)
-			}
+		if err := c.bindStmtArgs(s, nullBitmaps, s.paramTypes, paramValues); err != nil {
+			return nil, errors.Trace(err)
 		}
 	}
 
