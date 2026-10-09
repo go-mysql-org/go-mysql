@@ -278,6 +278,9 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 		e = p.format
 	} else {
 		if p.format != nil && p.format.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
+			if len(data) < BinlogChecksumLength {
+				return nil, fmt.Errorf("invalid event %v, log pos %d: body is %d bytes, too short for the %d-byte checksum", h.EventType, h.LogPos, len(data), BinlogChecksumLength)
+			}
 			err := p.verifyCrc32Checksum(rawData)
 			if err != nil {
 				return nil, fmt.Errorf("failed checksum for %v, log pos %d: %v", h.EventType, h.LogPos, err)
