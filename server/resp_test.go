@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
 	mockconn "github.com/go-mysql-org/go-mysql/test_util/conn"
+	perrors "github.com/pingcap/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -159,6 +161,39 @@ func TestConnWriteError(t *testing.T) {
 	require.NoError(t, err)
 	expected = []byte{13, 0, 0, 2, mysql.ERR_HEADER, 81, 4, 35, 72, 89, 48, 48, 48, 116, 101, 115, 116}
 	require.Equal(t, expected, clientConn.WriteBuffered)
+}
+
+// Wrapped *mysql.MyError values must keep their code, SQLSTATE, and message.
+// 1062 is 0x0426; the ERR payload is 0xff, code LE, '#', 5-byte state, message.
+func TestConnWriteErrorWrappedMyError(t *testing.T) {
+	const msg = "Duplicate entry '1' for key 'PRIMARY'"
+	merr := mysql.NewError(mysql.ER_DUP_ENTRY, msg)
+
+	payload := append([]byte{
+		mysql.ERR_HEADER,
+		0x26, 0x04,
+		'#',
+		'2', '3', '0', '0', '0',
+	}, msg...)
+	expected := append([]byte{byte(len(payload)), 0, 0, 0}, payload...)
+
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{name: "pingcap Trace", err: perrors.Trace(merr)},
+		{name: "fmt wrap", err: fmt.Errorf("stmt execute: %w", merr)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clientConn := &mockconn.MockConn{}
+			conn := &Conn{Conn: packet.NewConn(clientConn)}
+			conn.SetCapability(mysql.CLIENT_PROTOCOL_41)
+
+			require.NoError(t, conn.writeError(tc.err))
+			require.Equal(t, expected, clientConn.WriteBuffered)
+		})
+	}
 }
 
 func TestConnWriteAuthSwitchRequest(t *testing.T) {
