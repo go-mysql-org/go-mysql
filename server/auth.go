@@ -41,14 +41,14 @@ func (c *Conn) compareAuthData(authPluginName string, clientAuthData []byte) err
 }
 
 func (c *Conn) acquireCredential() error {
-	if len(c.credential.Passwords) > 0 {
+	if c.credential.hasAnyCredential() {
 		return nil
 	}
 	credential, found, err := c.authHandler.GetCredential(c.user)
 	if err != nil {
 		return err
 	}
-	if !found || len(credential.Passwords) == 0 {
+	if !found || !credential.hasAnyCredential() {
 		return mysql.NewDefaultError(mysql.ER_NO_SUCH_USER, c.user, c.RemoteAddr().String())
 	}
 	c.credential = credential
@@ -81,6 +81,15 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential C
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
+	}
+
+	// Pre-computed hashes are checked first: they let callers configure
+	// credentials when only the server-side hash is available (no plaintext),
+	// and they're cheaper per connect because we skip the SHA1(SHA1(...)) step.
+	for _, hp := range credential.HashedPasswords {
+		if mysql.CompareNativePassword(clientAuthData, hp.data, c.salt) {
+			return nil
+		}
 	}
 
 	for _, password := range credential.Passwords {
@@ -130,6 +139,27 @@ func (c *Conn) compareSha256PasswordAuthData(clientAuthData []byte, credential C
 			clientAuthData = clientAuthData[:l-1]
 		}
 	}
+	// Pre-computed hashes are checked first: callers can configure
+	// credentials when only the server-side stored hash is available
+	// (e.g. mirroring `mysql.user.authentication_string`), and we skip
+	// the per-connect hashPassword work.
+	for _, hp := range credential.HashedPasswords {
+		check, err := mysql.Check256HashingPassword(hp.data, string(clientAuthData))
+		if err != nil {
+			// Stored hashes are shape-checked at construction time
+			// (validateHashedPassword via NewHashedPassword), so reaching
+			// this branch implies the upstream verifier changed format
+			// expectations. Log via the configurable logger so the silent
+			// skip is auditable; auth still falls through to the plaintext
+			// loop and ultimately ErrAccessDenied if nothing matches.
+			c.serverConf.logger().Error("sha256_password hash compare error", "user", c.user, "error", err)
+			continue
+		}
+		if check {
+			return nil
+		}
+	}
+
 	for _, password := range credential.Passwords {
 		hash, err := credential.hashPassword(password)
 		if err != nil {
