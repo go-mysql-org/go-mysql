@@ -37,8 +37,7 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 
 func (c *Conn) writeError(e error) error {
 	var m *mysql.MyError
-	var ok bool
-	if m, ok = e.(*mysql.MyError); !ok {
+	if !errors.As(e, &m) {
 		m = mysql.NewError(mysql.ER_UNKNOWN_ERROR, e.Error())
 	}
 
