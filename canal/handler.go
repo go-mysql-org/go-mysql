@@ -22,6 +22,8 @@ type EventHandler interface {
 	// You'll get the original executed query, with comments if present.
 	// It will be called before OnRow.
 	OnRowsQueryEvent(e *replication.RowsQueryEvent) error
+	OnQueryEvent(header *replication.EventHeader, e *replication.QueryEvent, ddl bool) error
+	OnUserVar(*replication.UserVarEvent) error
 	// OnTableNotFound is called when a Rows Event references a table object
 	// that no longer exists.
 	OnTableNotFound(*replication.EventHeader, *replication.RowsEvent) error
@@ -52,6 +54,14 @@ func (h *DummyEventHandler) OnPosSynced(*replication.EventHeader, mysql.Position
 }
 
 func (h *DummyEventHandler) OnRowsQueryEvent(*replication.RowsQueryEvent) error {
+	return nil
+}
+
+func (h *DummyEventHandler) OnQueryEvent(header *replication.EventHeader, e *replication.QueryEvent, ddl bool) error {
+	return nil
+}
+
+func (h *DummyEventHandler) OnUserVar(*replication.UserVarEvent) error {
 	return nil
 }
 
