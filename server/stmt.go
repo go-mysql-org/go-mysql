@@ -173,15 +173,19 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 			// copy the types, the packet buffer is reused
 			s.paramTypes = append(s.paramTypes[:0], data[pos:pos+(paramNum<<1)]...)
 			pos += paramNum << 1
-		} else if s.paramTypes == nil {
+		} else if s.paramTypes == nil && !allParamsNull(nullBitmaps, paramNum) {
 			// the values can't be decoded without the types of a previous execution
 			return nil, mysql.NewDefaultError(mysql.ER_WRONG_ARGUMENTS, "mysqld_stmt_execute")
 		}
 
 		paramValues = data[pos:]
 
-		if err := c.bindStmtArgs(s, nullBitmaps, s.paramTypes, paramValues); err != nil {
-			return nil, errors.Trace(err)
+		// Without types every value is NULL (the client sends none for Execute(nil)),
+		// and s.Args is already all nil.
+		if s.paramTypes != nil {
+			if err := c.bindStmtArgs(s, nullBitmaps, s.paramTypes, paramValues); err != nil {
+				return nil, errors.Trace(err)
+			}
 		}
 	}
 
@@ -398,4 +402,14 @@ func (c *Conn) handleStmtClose(data []byte) error {
 	delete(c.stmts, id)
 
 	return nil
+}
+
+// allParamsNull reports whether the NULL bitmap marks all n parameters as NULL.
+func allParamsNull(nullBitmap []byte, n int) bool {
+	for i := range n {
+		if nullBitmap[i>>3]&(1<<(uint(i)%8)) == 0 {
+			return false
+		}
+	}
+	return true
 }
