@@ -22,6 +22,14 @@ type Stmt struct {
 
 	Context any
 
+	// paramTypes holds the parameter types from the last execution that sent them.
+	// Clients only send them again when they change (new-params-bound flag).
+	paramTypes []byte
+
+	// longData marks the parameters sent with COM_STMT_SEND_LONG_DATA since the last
+	// execution. COM_STMT_EXECUTE carries no inline value for them.
+	longData []bool
+
 	// PreparedStmt contains common fields shared with client.Stmt for proxy passthrough
 	stmt.PreparedStmt
 }
@@ -35,6 +43,7 @@ func (s *Stmt) Rest(params int, columns int, context any) {
 
 func (s *Stmt) ResetParams() {
 	s.Args = make([]any, s.Params)
+	s.longData = make([]bool, s.Params)
 }
 
 func (c *Conn) writePrepare(s *Stmt) error {
@@ -146,7 +155,6 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 	pos += 4
 
 	var nullBitmaps []byte
-	var paramTypes []byte
 	var paramValues []byte
 
 	paramNum := s.Params
@@ -160,18 +168,27 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 		pos += nullBitmapLen
 
 		// new param bound flag
-		if data[pos] == 1 {
-			pos++
+		newParamsBound := data[pos] == 1
+		pos++
+		if newParamsBound {
 			if len(data) < (pos + (paramNum << 1)) {
 				return nil, mysql.ErrMalformPacket
 			}
 
-			paramTypes = data[pos : pos+(paramNum<<1)]
+			// copy the types, the packet buffer is reused
+			s.paramTypes = append(s.paramTypes[:0], data[pos:pos+(paramNum<<1)]...)
 			pos += paramNum << 1
+		} else if s.paramTypes == nil && s.needsParamTypes(nullBitmaps) {
+			// the values can't be decoded without the types of a previous execution
+			return nil, mysql.NewDefaultError(mysql.ER_WRONG_ARGUMENTS, "mysqld_stmt_execute")
+		}
 
-			paramValues = data[pos:]
+		paramValues = data[pos:]
 
-			if err := c.bindStmtArgs(s, nullBitmaps, paramTypes, paramValues); err != nil {
+		// Without types every value is NULL or long data (the client sends no types
+		// for Execute(nil)), and s.Args already holds them.
+		if s.paramTypes != nil {
+			if err := c.bindStmtArgs(s, nullBitmaps, s.paramTypes, paramValues); err != nil {
 				return nil, errors.Trace(err)
 			}
 		}
@@ -207,6 +224,11 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 	var err error
 
 	for i := 0; i < s.Params; i++ {
+		if s.isLongData(i) {
+			// no inline value, args[i] holds the data sent in advance
+			continue
+		}
+
 		if nullBitmap[i>>3]&(1<<(uint(i)%8)) > 0 {
 			args[i] = nil
 			continue
@@ -338,6 +360,11 @@ func (c *Conn) handleStmtSendLongData(data []byte) error {
 		return nil
 	}
 
+	if s.longData == nil {
+		s.longData = make([]bool, s.Params)
+	}
+	s.longData[paramID] = true
+
 	if s.Args[paramID] == nil {
 		s.Args[paramID] = data[6:]
 	} else {
@@ -390,4 +417,19 @@ func (c *Conn) handleStmtClose(data []byte) error {
 	delete(c.stmts, id)
 
 	return nil
+}
+
+func (s *Stmt) isLongData(i int) bool {
+	return i < len(s.longData) && s.longData[i]
+}
+
+// needsParamTypes reports whether a parameter that is neither NULL nor long data
+// is set, so its inline value can't be decoded without the parameter types.
+func (s *Stmt) needsParamTypes(nullBitmap []byte) bool {
+	for i := range s.Params {
+		if !s.isLongData(i) && nullBitmap[i>>3]&(1<<(uint(i)%8)) == 0 {
+			return true
+		}
+	}
+	return false
 }

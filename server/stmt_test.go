@@ -1,8 +1,10 @@
 package server
 
 import (
+	"net"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/go-mysql-org/go-mysql/stmt"
@@ -185,4 +187,197 @@ func TestBindStmtArgsTypedBytes(t *testing.T) {
 			require.Equal(t, tc.expectBytes, tv.Bytes)
 		})
 	}
+}
+
+type recordingStmtHandler struct {
+	EmptyHandler
+	args [][]any
+}
+
+func (h *recordingStmtHandler) HandleStmtExecute(context any, query string, args []any) (*mysql.Result, error) {
+	h.args = append(h.args, append([]any(nil), args...))
+	return nil, nil
+}
+
+// Clients only send the parameter types (new-params-bound = 1) when they change,
+// so later executions must decode their values with the previously sent types.
+func TestHandleStmtExecuteReusesParamTypes(t *testing.T) {
+	h := &recordingStmtHandler{}
+	s := &Stmt{}
+	s.Rest(1, 0, nil)
+	c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+	header := []byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0} // stmt id, flags, iteration count
+	execute := func(nullBitmap, newParamsBound byte, rest ...byte) error {
+		data := append(append([]byte(nil), header...), nullBitmap, newParamsBound)
+		_, err := c.handleStmtExecute(append(data, rest...))
+		return err
+	}
+
+	// Types sent: LONGLONG, value 2.
+	require.NoError(t, execute(0x0, 0x1, mysql.MYSQL_TYPE_LONGLONG, 0x0, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0))
+	// Types not sent again, value 7.
+	require.NoError(t, execute(0x0, 0x0, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0))
+	// Types not sent again, NULL value.
+	require.NoError(t, execute(0x1, 0x0))
+
+	require.Equal(t, [][]any{{int64(2)}, {int64(7)}, {nil}}, h.args)
+}
+
+func TestHandleStmtExecuteWithoutParamTypes(t *testing.T) {
+	h := &recordingStmtHandler{}
+	s := &Stmt{}
+	s.Rest(1, 0, nil)
+	c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+	// The first execution doesn't send the types, so the value can't be decoded.
+	data := []byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
+	_, err := c.handleStmtExecute(data)
+	require.ErrorContains(t, err, "Incorrect arguments to mysqld_stmt_execute")
+	require.Empty(t, h.args)
+}
+
+// A first execution whose parameters are all NULL needs no types, and the go-mysql
+// client sends none for it (new-params-bound = 0).
+func TestHandleStmtExecuteFirstAllNullWithoutParamTypes(t *testing.T) {
+	for _, params := range []int{1, 2, 9} {
+		h := &recordingStmtHandler{}
+		s := &Stmt{}
+		s.Rest(params, 0, nil)
+		c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+		nullBitmap := make([]byte, (params+7)>>3)
+		for i := range params {
+			nullBitmap[i>>3] |= 1 << (uint(i) % 8)
+		}
+		data := append([]byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0}, nullBitmap...)
+		_, err := c.handleStmtExecute(append(data, 0x0))
+		require.NoError(t, err)
+		require.Equal(t, [][]any{make([]any, params)}, h.args)
+	}
+}
+
+func TestHandleStmtExecuteMixedNullWithoutParamTypes(t *testing.T) {
+	h := &recordingStmtHandler{}
+	s := &Stmt{}
+	s.Rest(2, 0, nil)
+	c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+	// The first parameter is NULL, the second can't be decoded without its type.
+	data := []byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
+	_, err := c.handleStmtExecute(data)
+	require.ErrorContains(t, err, "Incorrect arguments to mysqld_stmt_execute")
+	require.Empty(t, h.args)
+}
+
+func TestHandleStmtExecuteAllNullThenReusesParamTypes(t *testing.T) {
+	h := &recordingStmtHandler{}
+	s := &Stmt{}
+	s.Rest(1, 0, nil)
+	c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+	header := []byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0} // stmt id, flags, iteration count
+	execute := func(nullBitmap, newParamsBound byte, rest ...byte) error {
+		data := append(append([]byte(nil), header...), nullBitmap, newParamsBound)
+		_, err := c.handleStmtExecute(append(data, rest...))
+		return err
+	}
+
+	// NULL value, no types sent.
+	require.NoError(t, execute(0x1, 0x0))
+	// Types sent: LONGLONG, value 5.
+	require.NoError(t, execute(0x0, 0x1, mysql.MYSQL_TYPE_LONGLONG, 0x0, 0x5, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0))
+	// Types not sent again, value 7.
+	require.NoError(t, execute(0x0, 0x0, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0))
+
+	require.Equal(t, [][]any{{nil}, {int64(5)}, {int64(7)}}, h.args)
+}
+
+// Long-data parameters have no inline value in COM_STMT_EXECUTE, also when the
+// types sent by an earlier execution are reused (new-params-bound = 0).
+func TestHandleStmtExecuteLongDataReusesParamTypes(t *testing.T) {
+	h := &recordingStmtHandler{}
+	s := &Stmt{}
+	s.Rest(1, 0, nil)
+	c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+	header := []byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0} // stmt id, flags, iteration count
+	execute := func(nullBitmap, newParamsBound byte, rest ...byte) error {
+		data := append(append([]byte(nil), header...), nullBitmap, newParamsBound)
+		_, err := c.handleStmtExecute(append(data, rest...))
+		return err
+	}
+	sendLongData := func(chunk string) {
+		data := append([]byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x0}, chunk...) // stmt id, param id
+		require.NoError(t, c.handleStmtSendLongData(data))
+	}
+
+	// Types sent: BLOB, inline value "x".
+	require.NoError(t, execute(0x0, 0x1, mysql.MYSQL_TYPE_BLOB, 0x0, 0x1, 'x'))
+	// Types not sent again, no inline value for the long-data parameter.
+	sendLongData("lo")
+	sendLongData("ng")
+	require.NoError(t, execute(0x0, 0x0))
+	// The long data is consumed by the execution above.
+	require.NoError(t, execute(0x0, 0x0, 0x1, 'y'))
+	// Types sent again, still no inline value for the long-data parameter.
+	sendLongData("again")
+	require.NoError(t, execute(0x0, 0x1, mysql.MYSQL_TYPE_BLOB, 0x0))
+
+	require.Equal(t, [][]any{
+		{mysql.TypedBytes{Type: mysql.MYSQL_TYPE_BLOB, Bytes: []byte("x")}},
+		{[]byte("long")},
+		{mysql.TypedBytes{Type: mysql.MYSQL_TYPE_BLOB, Bytes: []byte("y")}},
+		{[]byte("again")},
+	}, h.args)
+}
+
+type prepareStmtHandler struct {
+	recordingStmtHandler
+}
+
+func (h *prepareStmtHandler) HandleStmtPrepare(query string) (int, int, any, error) {
+	return 1, 0, nil, nil
+}
+
+func (h *prepareStmtHandler) HandleStmtExecute(context any, query string, args []any) (*mysql.Result, error) {
+	h.args = append(h.args, append([]any(nil), args...))
+	return &mysql.Result{}, nil
+}
+
+func TestClientStmtExecuteNullFirst(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	h := &prepareStmtHandler{}
+	go func() {
+		conn, err := l.Accept()
+		if err != nil {
+			return
+		}
+		co, _ := NewConn(conn, "root", "", h)
+		if co != nil {
+			//nolint:revive // loop drains commands; work is in the condition
+			for co.HandleCommand() == nil {
+			}
+		}
+	}()
+
+	conn, err := client.Connect(l.Addr().String(), "root", "", "")
+	require.NoError(t, err)
+	defer conn.Close()
+
+	st, err := conn.Prepare("SELECT ?")
+	require.NoError(t, err)
+	defer st.Close()
+
+	_, err = st.Execute(nil)
+	require.NoError(t, err)
+	_, err = st.Execute(int64(5))
+	require.NoError(t, err)
+	_, err = st.Execute(nil)
+	require.NoError(t, err)
+
+	require.Equal(t, [][]any{{nil}, {int64(5)}, {nil}}, h.args)
 }
