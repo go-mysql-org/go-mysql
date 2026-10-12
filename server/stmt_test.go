@@ -255,6 +255,45 @@ func TestHandleStmtExecuteAllNullThenReusesParamTypes(t *testing.T) {
 	require.Equal(t, [][]any{{nil}, {int64(5)}, {int64(7)}}, h.args)
 }
 
+// Long-data parameters have no inline value in COM_STMT_EXECUTE, also when the
+// types sent by an earlier execution are reused (new-params-bound = 0).
+func TestHandleStmtExecuteLongDataReusesParamTypes(t *testing.T) {
+	h := &recordingStmtHandler{}
+	s := &Stmt{}
+	s.Rest(1, 0, nil)
+	c := Conn{h: h, stmts: map[uint32]*Stmt{1: s}}
+
+	header := []byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0} // stmt id, flags, iteration count
+	execute := func(nullBitmap, newParamsBound byte, rest ...byte) error {
+		data := append(append([]byte(nil), header...), nullBitmap, newParamsBound)
+		_, err := c.handleStmtExecute(append(data, rest...))
+		return err
+	}
+	sendLongData := func(chunk string) {
+		data := append([]byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x0}, chunk...) // stmt id, param id
+		require.NoError(t, c.handleStmtSendLongData(data))
+	}
+
+	// Types sent: BLOB, inline value "x".
+	require.NoError(t, execute(0x0, 0x1, mysql.MYSQL_TYPE_BLOB, 0x0, 0x1, 'x'))
+	// Types not sent again, no inline value for the long-data parameter.
+	sendLongData("lo")
+	sendLongData("ng")
+	require.NoError(t, execute(0x0, 0x0))
+	// The long data is consumed by the execution above.
+	require.NoError(t, execute(0x0, 0x0, 0x1, 'y'))
+	// Types sent again, still no inline value for the long-data parameter.
+	sendLongData("again")
+	require.NoError(t, execute(0x0, 0x1, mysql.MYSQL_TYPE_BLOB, 0x0))
+
+	require.Equal(t, [][]any{
+		{mysql.TypedBytes{Type: mysql.MYSQL_TYPE_BLOB, Bytes: []byte("x")}},
+		{[]byte("long")},
+		{mysql.TypedBytes{Type: mysql.MYSQL_TYPE_BLOB, Bytes: []byte("y")}},
+		{[]byte("again")},
+	}, h.args)
+}
+
 type prepareStmtHandler struct {
 	recordingStmtHandler
 }
