@@ -74,3 +74,39 @@ func TestRowsEvent_flags(t *testing.T) {
 
 	require.Equal(t, canalEvent.Flags, replEvent.Flags)
 }
+
+// TestRowsEvent_skippedColumns checks if SkippedColumns from replication's RowsEvent
+// propagate to canal's RowsEvent, aligned with Rows.
+func TestRowsEvent_skippedColumns(t *testing.T) {
+	var table schema.Table
+
+	t.Run("partial row image", func(t *testing.T) {
+		replEvent := &replication.RowsEvent{
+			// update with binlog_row_image=MINIMAL: before image has the key only,
+			// after image has the changed column only.
+			SkippedColumns: [][]int{{1, 2}, {0, 2}},
+		}
+		rows := [][]any{{1, nil, nil}, {nil, "a2", nil}}
+
+		canalEvent := newRowsEvent(&table, UpdateAction, rows, nil, replEvent)
+
+		require.Equal(t, replEvent.SkippedColumns, canalEvent.SkippedColumns)
+		require.Len(t, canalEvent.SkippedColumns, len(canalEvent.Rows))
+	})
+
+	t.Run("full row image", func(t *testing.T) {
+		replEvent := &replication.RowsEvent{
+			SkippedColumns: [][]int{{}},
+		}
+
+		canalEvent := newRowsEvent(&table, InsertAction, [][]any{{1, "a", nil}}, nil, replEvent)
+
+		require.Equal(t, [][]int{{}}, canalEvent.SkippedColumns)
+	})
+
+	t.Run("no replication event", func(t *testing.T) {
+		canalEvent := newRowsEvent(&table, InsertAction, [][]any{{1, "a", nil}}, nil, nil)
+
+		require.Nil(t, canalEvent.SkippedColumns)
+	})
+}
