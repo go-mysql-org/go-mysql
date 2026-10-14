@@ -259,3 +259,47 @@ func BenchmarkTransactionPayloadEventDecode(b *testing.B) {
 		}
 	}
 }
+
+// The pair below isolates the decoder lifecycle change in decodePayload:
+// the split/parse of inner events is shared by both sides, so the delta
+// is the cost of a fresh zstd decoder per event versus a pooled one.
+// Concurrency 0 applies zstd's default (GOMAXPROCS), matching parsers
+// that never call SetPayloadDecoderConcurrency.
+
+// BenchmarkPayloadDecoderPerCall measures the decodePayload behavior
+// before the pooling change: a fresh zstd decoder is built and closed
+// for every event.
+func BenchmarkPayloadDecoderPerCall(b *testing.B) {
+	payload := newTestTransactionPayloadEvent().Payload
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err := decoder.DecodeAll(payload, nil); err != nil {
+			b.Fatal(err)
+		}
+		decoder.Close()
+	}
+}
+
+// BenchmarkPayloadDecoderPooled measures the decodePayload behavior
+// after the pooling change: decoders come from a sync.Pool and are
+// returned after use.
+func BenchmarkPayloadDecoderPooled(b *testing.B) {
+	payload := newTestTransactionPayloadEvent().Payload
+	pool := newPayloadDecoderPool(0)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		decoder := pool.Get().(*zstd.Decoder)
+		if _, err := decoder.DecodeAll(payload, nil); err != nil {
+			b.Fatal(err)
+		}
+		pool.Put(decoder)
+	}
+}
