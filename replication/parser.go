@@ -7,9 +7,11 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/pingcap/errors"
 
 	"github.com/go-mysql-org/go-mysql/utils"
@@ -42,6 +44,16 @@ type BinlogParser struct {
 	verifyChecksum           bool
 
 	payloadDecoderConcurrency int
+
+	// decoderPool recycles zstd decoders used to decompress
+	// TransactionPayloadEvent payloads. decodePayload runs on the
+	// parser's single stream goroutine, so the pool holds at most one
+	// decoder; keeping it here instead of a package variable scopes its
+	// buffers to the parser. The pool is created lazily on first payload
+	// decode with payloadDecoderConcurrency, and its decoders are never
+	// Closed: DecodeAll starts no background goroutines, buffers are
+	// reclaimed by GC once the parser is unreachable.
+	decoderPool *sync.Pool
 
 	rowsEventDecodeFunc func(*RowsEvent, []byte) error
 
@@ -222,6 +234,17 @@ func (p *BinlogParser) SetVerifyChecksum(verify bool) {
 
 func (p *BinlogParser) SetFlavor(flavor string) {
 	p.flavor = flavor
+}
+
+// newPayloadDecoderPool returns a sync.Pool of zstd decoders built with
+// the given concurrency.
+func newPayloadDecoderPool(concurrency int) *sync.Pool {
+	return &sync.Pool{
+		New: func() any {
+			d, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(concurrency))
+			return d
+		},
+	}
 }
 
 func (p *BinlogParser) SetPayloadDecoderConcurrency(concurrency int) {
@@ -515,7 +538,6 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 func (p *BinlogParser) newTransactionPayloadEvent() *TransactionPayloadEvent {
 	e := &TransactionPayloadEvent{}
 	e.format = *p.format
-	e.concurrency = p.payloadDecoderConcurrency
 	e.parent = p
 
 	return e

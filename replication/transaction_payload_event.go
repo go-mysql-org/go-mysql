@@ -29,14 +29,13 @@ const (
 )
 
 type TransactionPayloadEvent struct {
-	format      FormatDescriptionEvent
-	concurrency int
+	format FormatDescriptionEvent
 	// parent is the BinlogParser that produced this event. The inner
 	// parser used to decode the decompressed payload inherits its
 	// user-settable options (UseDecimal, RenderJSONAsMySQLText, ...) so
-	// that compressed and uncompressed rows decode identically. nil when
-	// the event is constructed outside of BinlogParser, in which case
-	// decodePayload falls back to default parser options.
+	// that compressed and uncompressed rows decode identically. The
+	// parent also owns the decoder pool used by decodePayload, so it
+	// must be set before decoding.
 	parent           *BinlogParser
 	Size             uint64
 	UncompressedSize uint64
@@ -129,16 +128,21 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 			e.CompressionType, e.compressionType())
 	}
 
-	decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(e.concurrency))
-	if err != nil {
-		return err
+	// The parser's decoder pool is created on the first payload and
+	// reused for every following one, instead of building a new decoder
+	// per event.
+	if e.parent.decoderPool == nil {
+		e.parent.decoderPool = newPayloadDecoderPool(e.parent.payloadDecoderConcurrency)
 	}
-	defer decoder.Close()
 
+	decoder := e.parent.decoderPool.Get().(*zstd.Decoder)
 	payloadUncompressed, err := decoder.DecodeAll(e.Payload, nil)
 	if err != nil {
+		// Be conservative and drop the decoder instead of returning it
+		// to the pool.
 		return err
 	}
+	e.parent.decoderPool.Put(decoder)
 
 	// The uncompressed data needs to be split up into individual events for Parse()
 	// to work on them. We can't use the parent parser directly as we need to disable
