@@ -184,8 +184,10 @@ func TestTransactionPayloadEventDecode(t *testing.T) {
 		require.Equal(t, uint32(0), inner.Header.LogPos)
 	}
 
-	// The pooled decoder was returned after decoding and is reused for
-	// the next event with correct results
+	// decodePayload hands the decoder back to the pool; a following Get
+	// yields a usable decoder and the next event decodes correctly from
+	// it. sync.Pool does not guarantee Get returns the same pointer, so
+	// identity is not asserted.
 	decoder := p.decoderPool.Get().(*zstd.Decoder)
 	require.NotNil(t, decoder)
 	p.decoderPool.Put(decoder)
@@ -193,7 +195,6 @@ func TestTransactionPayloadEventDecode(t *testing.T) {
 	e = newEvent()
 	require.NoError(t, e.decodePayload())
 	require.Len(t, e.Events, 8)
-	require.Same(t, decoder, p.decoderPool.Get().(*zstd.Decoder))
 }
 
 func TestTransactionPayloadEventDecodeInvalidPayload(t *testing.T) {
