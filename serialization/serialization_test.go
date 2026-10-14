@@ -128,7 +128,7 @@ func TestDecodeVar(t *testing.T) {
 	testcases := []struct {
 		input    []byte
 		unsigned bool
-		result   interface{}
+		result   any
 		err      string
 	}{
 		{

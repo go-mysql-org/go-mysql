@@ -27,9 +27,9 @@ var (
 	valuesExp = regexp.MustCompile("^INSERT INTO `(.+?)` VALUES \\((.+)\\);$")
 
 	// The pattern will only match MySQL GTID, as you know SET GLOBAL gtid_slave_pos='0-1-4' is used for MariaDB.
-	// SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150';
-	// https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-concepts.html
-	gtidExp = regexp.MustCompile(`(\w{8}(-\w{4}){3}-\w{12}(:\d+(-\d+)?)+)`)
+	// SET @@GLOBAL.GTID_PURGED='1638041a-0457-11e9-bb9f-00505690b730:1-429405150:foo:1-4';
+	// https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-concepts.html
+	gtidExp = regexp.MustCompile(`(\w{8}(-\w{4}){3}-\w{12}(:\d+(-\d+)?|:[a-z_][a-z0-9_]{0,31})+)`)
 )
 
 // Parse the dump data with Dumper generate.
@@ -113,7 +113,8 @@ func parseValues(str string) ([]string, error) {
 		if str[i] != '\'' {
 			// no string, read until comma
 			j := i + 1
-			for ; j < len(str) && str[j] != ','; j++ {
+			for j < len(str) && str[j] != ',' {
+				j++
 			}
 			values = append(values, str[i:j])
 			// skip ,
@@ -131,9 +132,8 @@ func parseValues(str string) ([]string, error) {
 					continue
 				} else if str[j] == '\'' {
 					break
-				} else {
-					j++
 				}
+				j++
 			}
 
 			if j >= len(str) {

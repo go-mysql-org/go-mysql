@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 
 	"github.com/go-mysql-org/go-mysql/utils"
@@ -33,18 +34,29 @@ func NewServerTLSConfig(caPem, certPem, keyPem []byte, authType tls.ClientAuthTy
 	return config
 }
 
-// extract RSA public key from certificate
-func getPublicKeyFromCert(certPem []byte) []byte {
-	block, _ := pem.Decode(certPem)
-	crt, err := x509.ParseCertificate(block.Bytes)
+// rsaPublicKeyBytes returns the PEM-encoded public key for an RSA private key
+func rsaPublicKeyBytes(privKey *rsa.PrivateKey) []byte {
+	if privKey == nil {
+		return nil
+	}
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(&privKey.PublicKey)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal RSA public key: %v", err))
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubKeyBytes})
+}
+
+// getRSAKeyPairFromPEM extracts the RSA private key and PEM-encoded public key from a PEM-encoded private key
+func getRSAKeyPairFromPEM(keyPem []byte) (*rsa.PrivateKey, []byte) {
+	block, _ := pem.Decode(keyPem)
+	if block == nil {
+		panic("failed to decode PEM block")
+	}
+	privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
 		panic(err)
 	}
-	pubKey, err := x509.MarshalPKIXPublicKey(crt.PublicKey.(*rsa.PublicKey))
-	if err != nil {
-		panic(err)
-	}
-	return pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubKey})
+	return privKey, rsaPublicKeyBytes(privKey)
 }
 
 // generate and sign RSA certificates with given CA
@@ -85,11 +97,11 @@ func generateAndSignRSACerts(caPem, caKey []byte) ([]byte, []byte) {
 	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
 
 	// sign the certificate
-	cert_b, err := x509.CreateCertificate(rand.Reader, ca, cert, &priv.PublicKey, catls.PrivateKey)
+	certB, err := x509.CreateCertificate(rand.Reader, ca, cert, &priv.PublicKey, catls.PrivateKey)
 	if err != nil {
 		panic(err)
 	}
-	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert_b})
+	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certB})
 	keyPem := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 
 	return certPem, keyPem

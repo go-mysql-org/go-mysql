@@ -23,6 +23,9 @@ import (
 const (
 	MinCompressionLength = 50
 	DefaultBufferSize    = 16 * 1024
+	// DefaultReadBufferSize is the bufio.Reader size used by NewConn and
+	// EnableReadBuffering.
+	DefaultReadBufferSize = 64 * 1024
 )
 
 // Conn is the base class to handle MySQL protocol.
@@ -37,6 +40,9 @@ type Conn struct {
 	br     *bufio.Reader
 	reader io.Reader
 
+	// Buffered writer, enabled via EnableWriteBuffering.
+	bw *bufio.Writer
+
 	copyNBuf []byte
 
 	header [4]byte
@@ -50,12 +56,10 @@ type Conn struct {
 	compressedHeader [7]byte
 
 	compressedReader io.Reader
-
-	compressedReaderActive bool
 }
 
 func NewConn(conn net.Conn) *Conn {
-	return NewBufferedConn(conn, 65536) // 64kb
+	return NewBufferedConn(conn, DefaultReadBufferSize)
 }
 
 func NewBufferedConn(conn net.Conn, bufferSize int) *Conn {
@@ -95,6 +99,52 @@ func NewTLSConnWithTimeout(conn net.Conn, readTimeout, writeTimeout time.Duratio
 	return c
 }
 
+// EnableReadBuffering wraps subsequent reads in a bufio.Reader of the given
+// size. Conns created via NewTLSConn start unbuffered because the peer may
+// still upgrade the transport to TLS during the handshake; call this once the
+// handshake completes, and only between packets. No-op if reads are already
+// buffered or bufferSize is not positive.
+func (c *Conn) EnableReadBuffering(bufferSize int) {
+	if c.br != nil || bufferSize <= 0 {
+		return
+	}
+	c.br = bufio.NewReaderSize(c, bufferSize)
+	c.reader = c.br
+}
+
+// connWriter adapts the deadline-setting write path to io.Writer so a
+// bufio.Writer can sit on top of it.
+type connWriter struct{ c *Conn }
+
+func (w connWriter) Write(b []byte) (int, error) {
+	return w.c.writeDirect(b)
+}
+
+// EnableWriteBuffering makes WritePacket accumulate packets in a buffer of the
+// given size instead of issuing one write(2) each. Buffered data reaches the
+// wire when the buffer fills, on Flush, or before any ReadPacket* call (so
+// request/response flows cannot deadlock). Callers that stream packets without
+// reading must Flush after each logical unit; Close does not flush. No-op if
+// already enabled or bufferSize is not positive.
+func (c *Conn) EnableWriteBuffering(bufferSize int) {
+	if c.bw != nil || bufferSize <= 0 {
+		return
+	}
+	c.bw = bufio.NewWriterSize(connWriter{c}, bufferSize)
+}
+
+// Flush writes any buffered packets to the underlying connection. It is a
+// no-op when write buffering is not enabled.
+func (c *Conn) Flush() error {
+	if c.bw == nil {
+		return nil
+	}
+	if err := c.bw.Flush(); err != nil {
+		return errors.Wrapf(mysql.ErrBadConn, "Flush failed. err %v", err)
+	}
+	return nil
+}
+
 func (c *Conn) ReadPacket() ([]byte, error) {
 	return c.ReadPacketReuseMem(nil)
 }
@@ -106,20 +156,16 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 		utils.BytesBufferPut(buf)
 	}()
 
-	if c.Compression != mysql.MYSQL_COMPRESS_NONE {
-		// it's possible that we're using compression but the server response with a compressed
-		// packet with uncompressed length of 0. In this case we leave compressedReader nil. The
-		// compressedReaderActive flag is important to track the state of the reader, allowing
-		// for the compressedReader to be reset after a packet write. Without this flag, when a
-		// compressed packet with uncompressed length of 0 is read, the compressedReader would
-		// be nil, and we'd incorrectly attempt to read the next packet as compressed.
-		if !c.compressedReaderActive {
-			var err error
-			c.compressedReader, err = c.newCompressedPacketReader()
-			if err != nil {
-				return nil, err
-			}
-			c.compressedReaderActive = true
+	// compressedReader is reset to nil after each WritePacket, so a nil reader here means
+	// we're at the start of a new compressed frame and need to read its header. While a
+	// frame still has buffered packets to hand out, we reuse the existing reader rather
+	// than consuming another frame header. (newCompressedPacketReader never returns a nil
+	// reader, so its nilness fully tracks whether a frame read is in progress.)
+	if c.Compression != mysql.MYSQL_COMPRESS_NONE && c.compressedReader == nil {
+		var err error
+		c.compressedReader, err = c.newCompressedPacketReader()
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -151,6 +197,10 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 
 // newCompressedPacketReader creates a new compressed packet reader.
 func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
+	// The peer may be waiting on our buffered output before it sends more.
+	if err := c.Flush(); err != nil {
+		return nil, err
+	}
 	if c.readTimeout != 0 {
 		if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 			return nil, err
@@ -168,8 +218,12 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 
 	compressedLength := int(uint32(c.compressedHeader[0]) | uint32(c.compressedHeader[1])<<8 | uint32(c.compressedHeader[2])<<16)
 	uncompressedLength := int(uint32(c.compressedHeader[4]) | uint32(c.compressedHeader[5])<<8 | uint32(c.compressedHeader[6])<<16)
+
+	// Always bound reads to this frame's payload (compressedLength bytes on the wire).
+	// copyN relies on hitting EOF at the frame boundary to advance CompressedSequence
+	// and move on to the next compressed packet.
+	limitedReader := io.LimitReader(c.reader, int64(compressedLength))
 	if uncompressedLength > 0 {
-		limitedReader := io.LimitReader(c.reader, int64(compressedLength))
 		switch c.Compression {
 		case mysql.MYSQL_COMPRESS_ZLIB:
 			return compress.GetPooledZlibReader(limitedReader)
@@ -178,15 +232,19 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 		}
 	}
 
-	return nil, nil
+	// uncompressedLength == 0 means the payload was sent verbatim (compression wasn't
+	// worthwhile for this chunk). It must still be bounded to the frame: returning the
+	// raw, unbounded connection here lets a packet that spans into the following frame
+	// read straight through that frame's header, desyncing the compressed stream and
+	// surfacing later as "invalid compressed sequence" / "zlib: invalid header".
+	return limitedReader, nil
 }
 
 func (c *Conn) currentPacketReader() io.Reader {
 	if c.Compression == mysql.MYSQL_COMPRESS_NONE || c.compressedReader == nil {
 		return c.reader
-	} else {
-		return c.compressedReader
 	}
+	return c.compressedReader
 }
 
 func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
@@ -241,6 +299,11 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 }
 
 func (c *Conn) ReadPacketTo(w io.Writer) error {
+	// The peer may be waiting on our buffered output before it sends more.
+	if err := c.Flush(); err != nil {
+		return err
+	}
+
 	b := utils.BytesBufferGet()
 	defer func() {
 		utils.BytesBufferPut(b)
@@ -252,16 +315,18 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 	// packet and updating the Conn state with a new compressedReader.
 	if _, err := c.copyN(b, 4); err != nil {
 		return errors.Wrapf(mysql.ErrBadConn, "io.ReadFull(header) failed. err %v", err)
-	} else {
-		// copy was successful so copy the 4 bytes from the buffer to the header
-		copy(c.header[:4], b.Bytes()[:4])
 	}
+	// copy was successful so copy the 4 bytes from the buffer to the header
+	copy(c.header[:4], b.Bytes()[:4])
 
 	length := int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16)
 	sequence := c.header[3]
 
 	if sequence != c.Sequence {
-		return errors.Errorf("invalid sequence %d != %d", sequence, c.Sequence)
+		// A mismatched sequence leaves the stream desynced beyond recovery, so the
+		// connection is unusable: report it as bad, like the read failures above, so
+		// callers discard it instead of retrying on it.
+		return errors.Wrapf(mysql.ErrBadConn, "invalid sequence %d != %d", sequence, c.Sequence)
 	}
 
 	c.Sequence++
@@ -275,14 +340,13 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, n, length)
 	} else if n != int64(length) {
 		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", n, length)
-	} else {
-		if length < mysql.MaxPayloadLen {
-			return nil
-		}
+	}
+	if length < mysql.MaxPayloadLen {
+		return nil
+	}
 
-		if err = c.ReadPacketTo(w); err != nil {
-			return errors.Wrap(err, "ReadPacketTo failed")
-		}
+	if err := c.ReadPacketTo(w); err != nil {
+		return errors.Wrap(err, "ReadPacketTo failed")
 	}
 
 	return nil
@@ -305,11 +369,10 @@ func (c *Conn) WritePacket(data []byte) error {
 		} else if n != (4 + mysql.MaxPayloadLen) {
 			return errors.Wrapf(mysql.ErrBadConn,
 				"Write(payload portion) failed. only %v bytes written, while %v expected", n, 4+mysql.MaxPayloadLen)
-		} else {
-			c.Sequence++
-			length -= mysql.MaxPayloadLen
-			data = data[mysql.MaxPayloadLen:]
 		}
+		c.Sequence++
+		length -= mysql.MaxPayloadLen
+		data = data[mysql.MaxPayloadLen:]
 	}
 
 	data[0] = byte(length)
@@ -331,7 +394,6 @@ func (c *Conn) WritePacket(data []byte) error {
 			return errors.Wrapf(mysql.ErrBadConn, "Write failed. only %v bytes written, while %v expected", n, len(data))
 		}
 
-		c.compressedReaderActive = false
 		if c.compressedReader != nil {
 			if _, ok := c.compressedReader.(io.ReadCloser); ok {
 				_ = c.compressedReader.(io.ReadCloser).Close()
@@ -347,6 +409,13 @@ func (c *Conn) WritePacket(data []byte) error {
 }
 
 func (c *Conn) writeWithTimeout(b []byte) (n int, err error) {
+	if c.bw != nil {
+		return c.bw.Write(b)
+	}
+	return c.writeDirect(b)
+}
+
+func (c *Conn) writeDirect(b []byte) (n int, err error) {
 	if c.writeTimeout != 0 {
 		if err := c.SetWriteDeadline(utils.Now().Add(c.writeTimeout)); err != nil {
 			return n, err

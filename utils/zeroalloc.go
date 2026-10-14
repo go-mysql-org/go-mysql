@@ -28,3 +28,10 @@ func Int64ToUint64(val int64) uint64 {
 func Float64ToUint64(val float64) uint64 {
 	return math.Float64bits(val)
 }
+
+func BoolToByteSlice(b bool) []byte {
+	if b {
+		return StringToByteSlice("true")
+	}
+	return StringToByteSlice("false")
+}

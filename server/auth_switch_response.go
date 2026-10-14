@@ -24,7 +24,7 @@ func (c *Conn) handleAuthSwitchResponse() error {
 }
 
 func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
-	if err := c.acquirePassword(); err != nil {
+	if err := c.acquireCredential(); err != nil {
 		return err
 	}
 	if tlsConn, ok := c.Conn.Conn.(*tls.Conn); ok {
@@ -51,7 +51,10 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 		}
 		// the encrypted password
 		// decrypt
-		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, (c.serverConf.tlsConfig.Certificates[0].PrivateKey).(*rsa.PrivateKey), authData, nil)
+		if c.serverConf.rsaPrivateKey == nil {
+			return errors.New("RSA key not configured; non-TLS connections are not supported for this authentication method")
+		}
+		dbytes, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, c.serverConf.rsaPrivateKey, authData, nil)
 		if err != nil {
 			return err
 		}
@@ -71,16 +74,22 @@ func (c *Conn) handleCachingSha2PasswordFullAuth(authData []byte) error {
 }
 
 func (c *Conn) checkSha2CacheCredentials(clientAuthData []byte, credential Credential) error {
-	if len(clientAuthData) == 0 {
-		if credential.Password == "" {
+	if isEmptyPassword(clientAuthData) {
+		if credential.hasEmptyPassword() {
 			return nil
 		}
 		return ErrAccessDeniedNoPassword
 	}
 
-	match, err := auth.CheckHashingPassword([]byte(credential.Password), string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
-	if match && err == nil {
-		return nil
+	for _, password := range credential.Passwords {
+		hash, err := credential.hashPassword(password)
+		if err != nil {
+			continue
+		}
+		match, err := auth.CheckHashingPassword([]byte(hash), string(clientAuthData), mysql.AUTH_CACHING_SHA2_PASSWORD)
+		if match && err == nil {
+			return nil
+		}
 	}
 	return ErrAccessDenied
 }

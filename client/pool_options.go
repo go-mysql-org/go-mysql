@@ -18,6 +18,8 @@ type (
 		password string
 		dbName   string
 
+		dialer Dialer
+
 		connOptions []Option
 
 		newPoolPingTimeout time.Duration
@@ -57,5 +59,11 @@ func WithConnOptions(options ...Option) PoolOption {
 func WithNewPoolPingTimeout(timeout time.Duration) PoolOption {
 	return func(o *poolOptions) {
 		o.newPoolPingTimeout = timeout
+	}
+}
+
+func WithDialer(dialer Dialer) PoolOption {
+	return func(o *poolOptions) {
+		o.dialer = dialer
 	}
 }

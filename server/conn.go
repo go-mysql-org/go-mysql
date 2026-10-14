@@ -24,7 +24,7 @@ type Conn struct {
 	warnings       uint16
 	salt           []byte // should be 8 + 12 for auth-plugin-data-part-1 and auth-plugin-data-part-2
 
-	credentialProvider  CredentialProvider
+	authHandler         AuthenticationHandler
 	user                string
 	credential          Credential
 	cachingSha2FullAuth bool
@@ -54,21 +54,21 @@ func NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, err
 // NewCustomizedConn: create connection with customized server settings
 //
 // Deprecated: Use [Server.NewCustomizedConn] instead.
-func NewCustomizedConn(conn net.Conn, serverConf *Server, p CredentialProvider, h Handler) (*Conn, error) {
-	return serverConf.NewCustomizedConn(conn, p, h)
+func NewCustomizedConn(conn net.Conn, serverConf *Server, authHandler AuthenticationHandler, h Handler) (*Conn, error) {
+	return serverConf.NewCustomizedConn(conn, authHandler, h)
 }
 
 // NewConn: create connection with default server settings
 func (s *Server) NewConn(conn net.Conn, user string, password string, h Handler) (*Conn, error) {
-	p := NewInMemoryProvider()
-	if err := p.AddUser(user, password); err != nil {
+	authHandler := NewInMemoryAuthenticationHandler()
+	if err := authHandler.AddUser(user, password); err != nil {
 		return nil, err
 	}
 
-	return s.NewCustomizedConn(conn, p, h)
+	return s.NewCustomizedConn(conn, authHandler, h)
 }
 
-func (s *Server) NewCustomizedConn(conn net.Conn, p CredentialProvider, h Handler) (*Conn, error) {
+func (s *Server) NewCustomizedConn(conn net.Conn, authHandler AuthenticationHandler, h Handler) (*Conn, error) {
 	var packetConn *packet.Conn
 	if s.tlsConfig != nil {
 		packetConn = packet.NewTLSConn(conn)
@@ -77,13 +77,13 @@ func (s *Server) NewCustomizedConn(conn net.Conn, p CredentialProvider, h Handle
 	}
 
 	c := &Conn{
-		Conn:               packetConn,
-		serverConf:         s,
-		credentialProvider: p,
-		h:                  h,
-		connectionID:       atomic.AddUint32(&baseConnID, 1),
-		stmts:              make(map[uint32]*Stmt),
-		salt:               mysql.RandomBuf(20),
+		Conn:         packetConn,
+		serverConf:   s,
+		authHandler:  authHandler,
+		h:            h,
+		connectionID: atomic.AddUint32(&baseConnID, 1),
+		stmts:        make(map[uint32]*Stmt),
+		salt:         mysql.RandomBuf(20),
 	}
 	c.closed.Store(false)
 
@@ -91,6 +91,14 @@ func (s *Server) NewCustomizedConn(conn net.Conn, p CredentialProvider, h Handle
 		c.Close()
 		return nil, err
 	}
+
+	// The handshake settled the final transport (the client may have upgraded
+	// to TLS), so reads can be buffered from here on.
+	c.EnableReadBuffering(packet.DefaultReadBufferSize)
+
+	// Batch response packets into one write(2) per response. HandleCommand
+	// flushes at each response boundary; streaming paths flush per event/row.
+	c.EnableWriteBuffering(packet.DefaultBufferSize)
 
 	return c, nil
 }
@@ -109,6 +117,12 @@ func (c *Conn) handshake() error {
 			err = mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.user,
 				c.RemoteAddr().String(), mysql.MySQLErrName[usingPasswd])
 		}
+		c.authHandler.OnAuthFailure(c, err)
+		_ = c.writeError(err)
+		return err
+	}
+
+	if err := c.authHandler.OnAuthSuccess(c); err != nil {
 		_ = c.writeError(err)
 		return err
 	}
@@ -139,16 +153,24 @@ func (c *Conn) Capability() uint32 {
 	return c.capability
 }
 
-func (c *Conn) SetCapability(cap uint32) {
-	c.capability |= cap
+func (c *Conn) SetCapability(capability uint32) {
+	c.capability |= capability
 }
 
-func (c *Conn) UnsetCapability(cap uint32) {
-	c.capability &= ^cap
+func (c *Conn) UnsetCapability(capability uint32) {
+	c.capability &= ^capability
 }
 
-func (c *Conn) HasCapability(cap uint32) bool {
-	return c.capability&cap > 0
+func (c *Conn) HasCapability(capability uint32) bool {
+	return c.capability&capability > 0
+}
+
+// deprecateEOF reports whether both sides negotiated CLIENT_DEPRECATE_EOF:
+// resultsets are then OK-terminated (with an EOF 0xFE header) and the EOF
+// separator after the column definitions is omitted.
+func (c *Conn) deprecateEOF() bool {
+	return c.capability&mysql.CLIENT_DEPRECATE_EOF > 0 &&
+		c.serverConf.Capability()&mysql.CLIENT_DEPRECATE_EOF > 0
 }
 
 func (c *Conn) Charset() uint8 {

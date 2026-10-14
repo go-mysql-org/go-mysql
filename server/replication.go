@@ -18,13 +18,33 @@ func parseBinlogDump(data []byte) (mysql.Position, error) {
 }
 
 func parseBinlogDumpGTID(data []byte) (*mysql.MysqlGTIDSet, error) {
-	if len(data) < 15 {
-		return nil, mysql.ErrMalformPacket
-	}
-	lenPosName := binary.LittleEndian.Uint32(data[11:15])
-	if len(data) < 22+int(lenPosName) {
+	if len(data) < 22 {
 		return nil, mysql.ErrMalformPacket
 	}
 
-	return mysql.DecodeMysqlGTIDSet(data[22+lenPosName:])
+	pos := 0
+	pos += 2 // flags
+	pos += 4 // server_id
+
+	// binlog filename length (at offset 6)
+	nameSize := int(binary.LittleEndian.Uint32(data[pos : pos+4]))
+	pos += 4
+
+	if len(data) < pos+nameSize+8+4 {
+		return nil, mysql.ErrMalformPacket
+	}
+
+	pos += nameSize // binlog filename
+	pos += 8        // binlog position
+
+	// GTID data length
+	dataSize := int(binary.LittleEndian.Uint32(data[pos : pos+4]))
+	pos += 4
+
+	if len(data) < pos+dataSize {
+		return nil, mysql.ErrMalformPacket
+	}
+
+	// parse GTID set
+	return mysql.DecodeMysqlGTIDSet(data[pos : pos+dataSize])
 }

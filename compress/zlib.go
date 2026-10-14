@@ -12,12 +12,12 @@ const DefaultCompressionLevel = 6
 
 var (
 	zlibReaderPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return nil
 		},
 	}
 	zlibWriterPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			w, err := zlib.NewWriterLevel(new(bytes.Buffer), DefaultCompressionLevel)
 			if err != nil {
 				panic(err)
@@ -57,7 +57,7 @@ func GetPooledZlibReader(src io.Reader) (io.ReadCloser, error) {
 
 	if r := zlibReaderPool.Get(); r != nil {
 		rc = r.(io.ReadCloser)
-		if rc.(zlib.Resetter).Reset(src, nil) != nil {
+		if err = rc.(zlib.Resetter).Reset(src, nil); err != nil {
 			return nil, err
 		}
 	} else {

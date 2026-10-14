@@ -12,13 +12,13 @@ func TestRowsEvent_handleUnsigned(t *testing.T) {
 	type fields struct {
 		Table  *schema.Table
 		Action string
-		Rows   [][]interface{}
+		Rows   [][]any
 		Header *replication.EventHeader
 	}
 	tests := []struct {
 		name     string
 		fields   fields
-		wantRows [][]interface{}
+		wantRows [][]any
 	}{
 		{
 			name: "rows_event_handle_unsigned",
@@ -28,7 +28,7 @@ func TestRowsEvent_handleUnsigned(t *testing.T) {
 					// column 10 is out of range and should be ignored, don't panic.
 					UnsignedColumns: []int{1, 3, 5, 7, 9, 10},
 				},
-				Rows: [][]interface{}{
+				Rows: [][]any{
 					{
 						int8(8), int8(8),
 						int16(16), int16(16),
@@ -38,7 +38,7 @@ func TestRowsEvent_handleUnsigned(t *testing.T) {
 					},
 				},
 			},
-			wantRows: [][]interface{}{
+			wantRows: [][]any{
 				{
 					int8(8), uint8(8),
 					int16(16), uint16(16),
@@ -61,4 +61,16 @@ func TestRowsEvent_handleUnsigned(t *testing.T) {
 			require.Equal(t, tt.fields.Rows, tt.wantRows)
 		})
 	}
+}
+
+// TestRowsEvent_flags checks if Flags from replication's RowsEvent propagate to canal's RowsEvent.
+func TestRowsEvent_flags(t *testing.T) {
+	replEvent := &replication.RowsEvent{
+		Flags: 0x15,
+	}
+
+	var table schema.Table
+	canalEvent := newRowsEvent(&table, "update", nil, nil, replEvent)
+
+	require.Equal(t, canalEvent.Flags, replEvent.Flags)
 }

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-mysql-org/go-mysql/driver"
 	"github.com/pingcap/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -25,50 +25,50 @@ import (
 // than the second connection (cache hit). Remember to set the password for MySQL user otherwise it won't cache empty password.
 func TestCachingSha2Cache(t *testing.T) {
 	remoteProvider := &RemoteThrottleProvider{
-		InMemoryProvider: NewInMemoryProvider(),
+		InMemoryAuthenticationHandler: NewInMemoryAuthenticationHandler(),
 	}
 	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), tlsConf)
 
 	// no TLS
 	suite.Run(t, &cacheTestSuite{
-		server:       cacheServer,
-		credProvider: remoteProvider,
-		tlsPara:      "false",
+		server:      cacheServer,
+		authHandler: remoteProvider,
+		tlsPara:     "false",
 	})
 }
 
 func TestCachingSha2CacheTLS(t *testing.T) {
 	remoteProvider := &RemoteThrottleProvider{
-		InMemoryProvider: NewInMemoryProvider(),
+		InMemoryAuthenticationHandler: NewInMemoryAuthenticationHandler(),
 	}
 	require.NoError(t, remoteProvider.AddUser(*testUser, *testPassword))
-	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.PubPem, tlsConf)
+	cacheServer := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), tlsConf)
 
 	// TLS
 	suite.Run(t, &cacheTestSuite{
-		server:       cacheServer,
-		credProvider: remoteProvider,
-		tlsPara:      "skip-verify",
+		server:      cacheServer,
+		authHandler: remoteProvider,
+		tlsPara:     "skip-verify",
 	})
 }
 
 type RemoteThrottleProvider struct {
-	*InMemoryProvider
+	*InMemoryAuthenticationHandler
 	getCredCallCount atomic.Int64
 }
 
 func (m *RemoteThrottleProvider) GetCredential(username string) (credential Credential, found bool, err error) {
 	m.getCredCallCount.Add(1)
-	return m.InMemoryProvider.GetCredential(username)
+	return m.InMemoryAuthenticationHandler.GetCredential(username)
 }
 
 type cacheTestSuite struct {
 	suite.Suite
-	server       *Server
-	serverAddr   string
-	credProvider CredentialProvider
-	tlsPara      string
+	server      *Server
+	serverAddr  string
+	authHandler AuthenticationHandler
+	tlsPara     string
 
 	db *sql.DB
 
@@ -107,7 +107,7 @@ func (s *cacheTestSuite) onAccept() {
 
 func (s *cacheTestSuite) onConn(conn net.Conn) {
 	// co, err := NewConn(conn, *testUser, *testPassword, &testHandler{s})
-	co, err := s.server.NewCustomizedConn(conn, s.credProvider, &testCacheHandler{s})
+	co, err := s.server.NewCustomizedConn(conn, s.authHandler, &testCacheHandler{s})
 	require.NoError(s.T(), err)
 	for {
 		err = co.HandleCommand()
@@ -134,7 +134,7 @@ func (s *cacheTestSuite) TestCache() {
 	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
-	got := s.credProvider.(*RemoteThrottleProvider).getCredCallCount.Load()
+	got := s.authHandler.(*RemoteThrottleProvider).getCredCallCount.Load()
 	require.Equal(s.T(), int64(1), got)
 
 	if s.db != nil {
@@ -146,7 +146,7 @@ func (s *cacheTestSuite) TestCache() {
 	require.NoError(s.T(), err)
 	s.db.SetMaxIdleConns(4)
 	s.runSelect()
-	got = s.credProvider.(*RemoteThrottleProvider).getCredCallCount.Load()
+	got = s.authHandler.(*RemoteThrottleProvider).getCredCallCount.Load()
 	require.Equal(s.T(), int64(2), got)
 
 	if s.db != nil {
@@ -172,26 +172,25 @@ func (h *testCacheHandler) handleQuery(query string, binary bool) (*mysql.Result
 		var err error
 		// for handle go mysql driver select @@max_allowed_packet
 		if strings.Contains(strings.ToLower(query), "max_allowed_packet") {
-			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"@@max_allowed_packet"}, [][]any{
 				{mysql.MaxPayloadLen},
 			}, binary)
 		} else {
-			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]interface{}{
+			r, err = mysql.BuildSimpleResultset([]string{"a", "b"}, [][]any{
 				{1, "hello world"},
 			}, binary)
 		}
 
 		if err != nil {
 			return nil, errors.Trace(err)
-		} else {
-			return &mysql.Result{
-				Status:       0,
-				Warnings:     0,
-				InsertId:     0,
-				AffectedRows: 0,
-				Resultset:    r,
-			}, nil
 		}
+		return &mysql.Result{
+			Status:       0,
+			Warnings:     0,
+			InsertId:     0,
+			AffectedRows: 0,
+			Resultset:    r,
+		}, nil
 	case "insert":
 		return &mysql.Result{
 			Status:       0,
@@ -221,15 +220,15 @@ func (h *testCacheHandler) HandleFieldList(table string, fieldWildcard string) (
 	return nil, nil
 }
 
-func (h *testCacheHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx interface{}, err error) {
+func (h *testCacheHandler) HandleStmtPrepare(sql string) (params int, columns int, ctx any, err error) {
 	return 0, 0, nil, nil
 }
 
-func (h *testCacheHandler) HandleStmtClose(context interface{}) error {
+func (h *testCacheHandler) HandleStmtClose(context any) error {
 	return nil
 }
 
-func (h *testCacheHandler) HandleStmtExecute(ctx interface{}, query string, args []interface{}) (*mysql.Result, error) {
+func (h *testCacheHandler) HandleStmtExecute(ctx any, query string, args []any) (*mysql.Result, error) {
 	return h.handleQuery(query, true)
 }
 

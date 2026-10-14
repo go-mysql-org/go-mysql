@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -54,10 +55,7 @@ func (t *testSyncerSuite) testExecute(query string) {
 }
 
 func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
-	t.wg.Add(1)
-	go func() {
-		defer t.wg.Done()
-
+	t.wg.Go(func() {
 		if s == nil {
 			return
 		}
@@ -78,7 +76,7 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 				os.Stdout.Sync()
 			}
 		}
-	}()
+	})
 
 	// use mixed format
 	t.testExecute("SET SESSION binlog_format = 'MIXED'")
@@ -168,7 +166,6 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 			`INSERT INTO test_json_v2 VALUES (7, 'false')`,
 			`INSERT INTO test_json_v2 VALUES (8, 'null')`,
 			`INSERT INTO test_json_v2 VALUES (9, '-1')`,
-			`INSERT INTO test_json_v2 VALUES (10, CAST(CAST(1 AS UNSIGNED) AS JSON))`,
 			`INSERT INTO test_json_v2 VALUES (11, '32767')`,
 			`INSERT INTO test_json_v2 VALUES (12, '32768')`,
 			`INSERT INTO test_json_v2 VALUES (13, '-32768')`,
@@ -182,21 +179,26 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 			`INSERT INTO test_json_v2 VALUES (21, '3.14')`,
 			`INSERT INTO test_json_v2 VALUES (22, '{}')`,
 			`INSERT INTO test_json_v2 VALUES (23, '[]')`,
-			`INSERT INTO test_json_v2 VALUES (24, CAST(CAST('2015-01-15 23:24:25' AS DATETIME) AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (25, CAST(CAST('23:24:25' AS TIME) AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (125, CAST(CAST('23:24:25.12' AS TIME(3)) AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (225, CAST(CAST('23:24:25.0237' AS TIME(3)) AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (26, CAST(CAST('2015-01-15' AS DATE) AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (27, CAST(TIMESTAMP'2015-01-15 23:24:25' AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (127, CAST(TIMESTAMP'2015-01-15 23:24:25.12' AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (227, CAST(TIMESTAMP'2015-01-15 23:24:25.0237' AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (327, CAST(UNIX_TIMESTAMP('2015-01-15 23:24:25') AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (28, CAST(ST_GeomFromText('POINT(1 1)') AS JSON))`,
 			`INSERT INTO test_json_v2 VALUES (29, CAST('[]' AS CHAR CHARACTER SET 'ascii'))`,
-			// TODO: 30 and 31 are BIT type from JSON_TYPE, may support later.
-			`INSERT INTO test_json_v2 VALUES (30, CAST(x'cafe' AS JSON))`,
-			`INSERT INTO test_json_v2 VALUES (31, CAST(x'cafebabe' AS JSON))`,
 			`INSERT INTO test_json_v2 VALUES (100, CONCAT('{\"', REPEAT('a', 64 * 1024 - 1), '\":123}'))`,
+		}
+		if t.flavor == mysql.MySQLFlavor {
+			tbls = append(tbls,
+				`INSERT INTO test_json_v2 VALUES (10, CAST(CAST(1 AS UNSIGNED) AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (24, CAST(CAST('2015-01-15 23:24:25' AS DATETIME) AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (25, CAST(CAST('23:24:25' AS TIME) AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (125, CAST(CAST('23:24:25.12' AS TIME(3)) AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (225, CAST(CAST('23:24:25.0237' AS TIME(3)) AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (26, CAST(CAST('2015-01-15' AS DATE) AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (27, CAST(TIMESTAMP'2015-01-15 23:24:25' AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (127, CAST(TIMESTAMP'2015-01-15 23:24:25.12' AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (227, CAST(TIMESTAMP'2015-01-15 23:24:25.0237' AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (327, CAST(UNIX_TIMESTAMP('2015-01-15 23:24:25') AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (28, CAST(ST_GeomFromText('POINT(1 1)') AS JSON))`,
+				// TODO: 30 and 31 are BIT type from JSON_TYPE, may support later.
+				`INSERT INTO test_json_v2 VALUES (30, CAST(x'cafe' AS JSON))`,
+				`INSERT INTO test_json_v2 VALUES (31, CAST(x'cafebabe' AS JSON))`,
+			)
 		}
 
 		for _, query := range tbls {
@@ -263,8 +265,15 @@ func (t *testSyncerSuite) testSync(s *BinlogStreamer) {
 
 func (t *testSyncerSuite) setupTest(flavor string) {
 	var port uint16 = 3306
-	switch flavor {
-	case mysql.MariaDBFlavor:
+	if test_util.ServerFlavor != "" {
+		if flavor != test_util.ServerFlavor {
+			t.T().Skipf("requires %s server", flavor)
+		}
+
+		configuredPort, err := strconv.ParseUint(*test_util.MysqlPort, 10, 16)
+		require.NoError(t.T(), err)
+		port = uint16(configuredPort)
+	} else if flavor == mysql.MariaDBFlavor {
 		port = 3316
 	}
 
@@ -305,11 +314,19 @@ func (t *testSyncerSuite) setupTest(flavor string) {
 
 func (t *testSyncerSuite) testPositionSync() {
 	// get current master binlog file and position
-	showBinlogStatus := "SHOW BINARY LOG STATUS"
-	showReplicas := "SHOW REPLICAS"
-	if eq, err := t.c.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+	showBinlogStatus := "SHOW BINLOG STATUS"
+	showReplicas := "SHOW SLAVE HOSTS"
+	if t.flavor == mysql.MySQLFlavor {
+		showBinlogStatus = "SHOW BINARY LOG STATUS"
+		showReplicas = "SHOW REPLICAS"
+	}
+	if t.flavor == mysql.MySQLFlavor {
+		if eq, err := t.c.CompareServerVersion("8.4.0"); (err == nil) && (eq < 0) {
+			showBinlogStatus = "SHOW MASTER STATUS"
+			showReplicas = "SHOW SLAVE HOSTS"
+		}
+	} else if eq, err := t.c.CompareServerVersion("10.5.2"); (err == nil) && (eq < 0) {
 		showBinlogStatus = "SHOW MASTER STATUS"
-		showReplicas = "SHOW SLAVE HOSTS"
 	}
 	r, err := t.c.Execute(showBinlogStatus)
 	require.NoError(t.T(), err)
@@ -325,13 +342,15 @@ func (t *testSyncerSuite) testPositionSync() {
 	// List of replicas must not be empty
 	require.Greater(t.T(), len(r.Values), 0)
 
-	// Slave_UUID is empty for mysql 8.0.28+ (8.0.32 still broken)
-	if eq, err := t.c.CompareServerVersion("8.0.28"); (err == nil) && (eq < 0) {
-		// check we have set Slave_UUID
-		slaveUUID, _ := r.GetString(0, 4)
-		require.Len(t.T(), slaveUUID, 36)
-	} else if err != nil {
-		require.NoError(t.T(), err)
+	if t.flavor == mysql.MySQLFlavor {
+		// Slave_UUID is empty for mysql 8.0.28+ (8.0.32 still broken)
+		if eq, err := t.c.CompareServerVersion("8.0.28"); (err == nil) && (eq < 0) {
+			// check we have set Slave_UUID
+			slaveUUID, _ := r.GetString(0, 4)
+			require.Len(t.T(), slaveUUID, 36)
+		} else if err != nil {
+			require.NoError(t.T(), err)
+		}
 	}
 
 	// Test re-sync.
@@ -360,13 +379,13 @@ func (t *testSyncerSuite) TestMysqlGTIDSync() {
 	r, err = t.c.Execute("SHOW GLOBAL VARIABLES LIKE 'SERVER_UUID'")
 	require.NoError(t.T(), err)
 
-	var masterUuid uuid.UUID
+	var masterUUID uuid.UUID
 	if s, _ := r.GetString(0, 1); len(s) > 0 && s != "NONE" {
-		masterUuid, err = uuid.Parse(s)
+		masterUUID, err = uuid.Parse(s)
 		require.NoError(t.T(), err)
 	}
 
-	set, _ := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d-%d", masterUuid.String(), 1, 2))
+	set, _ := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d-%d", masterUUID.String(), 1, 2))
 
 	s, err := t.b.StartSyncGTID(set)
 	require.NoError(t.T(), err)

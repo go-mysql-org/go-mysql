@@ -12,6 +12,8 @@ linters:
     - unconvert
     - unused
     - whitespace
+    - modernize
+    - revive
   settings:
     govet:
       disable:
@@ -22,6 +24,11 @@ linters:
     nolintlint:
       require-specific: true
       allow-unused: false
+    revive:
+      enable-default-rules: true
+      rules:
+        - name: unused-parameter
+          disabled: true
   exclusions:
     generated: lax
     presets:

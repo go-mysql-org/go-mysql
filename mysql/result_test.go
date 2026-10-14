@@ -6,28 +6,75 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHasResultset_false(t *testing.T) {
-	r := NewResultReserveResultset(0)
-	b := r.HasResultset()
-	require.False(t, b)
+func TestEncodeSessionTrackingRoundTrip(t *testing.T) {
+	cases := []struct {
+		name   string
+		input  []byte
+		output *SessionTrackingInfo
+	}{
+		{
+			name:   "schema and state",
+			input:  []byte{0x1, 0x6, 0x5, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x2, 0x1, 0x31},
+			output: &SessionTrackingInfo{Schema: "mysql", State: "1"},
+		},
+		{
+			name: "variables gtid and state",
+			input: []byte{
+				0x0, 0xf, 0xa, 0x61, 0x75, 0x74, 0x6f, 0x63, 0x6f, 0x6d, 0x6d, 0x69, 0x74, 0x3, 0x4f, 0x46, 0x46,
+				0x2, 0x1, 0x31,
+				0x3, 0x36, 0x0, 0x34, 0x66, 0x34, 0x39, 0x39, 0x33, 0x63, 0x35, 0x65, 0x2d, 0x64, 0x33, 0x35, 0x33, 0x2d, 0x31, 0x31, 0x66, 0x30, 0x2d, 0x39, 0x62, 0x35, 0x66, 0x2d, 0x65, 0x65, 0x64, 0x65, 0x36, 0x64, 0x35, 0x36, 0x32, 0x36, 0x63, 0x38, 0x3a, 0x31, 0x2d, 0x32, 0x33, 0x38, 0x3a, 0x78, 0x6d, 0x61, 0x73, 0x3a, 0x31, 0x2d, 0x32, 0x39,
+			},
+			output: &SessionTrackingInfo{
+				Variables: map[string]string{"autocommit": "OFF"},
+				State:     "1",
+				GTID:      "f4993c5e-d353-11f0-9b5f-eede6d5626c8:1-238:xmas:1-29",
+			},
+		},
+		{
+			name: "transaction state and characteristics",
+			input: []byte{
+				0x4, 0x1d, 0x1c, 0x53, 0x54, 0x41, 0x52, 0x54, 0x20, 0x54, 0x52, 0x41, 0x4e, 0x53, 0x41, 0x43, 0x54, 0x49, 0x4f, 0x4e, 0x20, 0x52, 0x45, 0x41, 0x44, 0x20, 0x4f, 0x4e, 0x4c, 0x59, 0x3b,
+				0x5, 0x9, 0x8, 0x54, 0x5f, 0x5f, 0x5f, 0x5f, 0x5f, 0x5f, 0x5f,
+			},
+			output: &SessionTrackingInfo{
+				TransactionState: "T_______",
+				Characteristics:  "START TRANSACTION READ ONLY;",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			encoded := encodeSessionTracking(tc.output)
+			require.Equal(t, tc.input, encoded)
+		})
+	}
 }
 
-func TestHasResultset_true(t *testing.T) {
-	r := NewResultReserveResultset(1)
-	b := r.HasResultset()
-	require.True(t, b)
+func TestAppendOKSessionTrackSuffix(t *testing.T) {
+	result := &Result{
+		Status:        SERVER_SESSION_STATE_CHANGED,
+		StatusMessage: "Records: 3  Duplicates: 0  Warnings: 0",
+		SessionTracking: &SessionTrackingInfo{
+			GTID: "f4993c5e-d353-11f0-9b5f-eede6d5626c8:1-241:xmas:1-29",
+		},
+	}
+
+	data := AppendOKSessionTrackSuffix(nil, result)
+	require.Equal(t, byte(len(result.StatusMessage)), data[0])
+	require.Equal(t, result.StatusMessage, string(data[1:1+len(result.StatusMessage)]))
+	blockLenPos := 1 + len(result.StatusMessage)
+	require.Equal(t, byte(len(data)-blockLenPos-1), data[blockLenPos])
 }
 
-// this shouldn't happen after d02e79a, but test just in case
-func TestHasResultset_nilset(t *testing.T) {
-	r := NewResultReserveResultset(0)
-	r.Resultset = nil
-	b := r.HasResultset()
-	require.False(t, b)
-}
+func TestAppendOKSessionTrackSuffixWithoutStateChange(t *testing.T) {
+	result := &Result{
+		StatusMessage: "hello",
+		SessionTracking: &SessionTrackingInfo{
+			Schema: "mysql",
+		},
+	}
 
-func TestHasResultset_nil(t *testing.T) {
-	var r *Result
-	b := r.HasResultset()
-	require.False(t, b)
+	data := AppendOKSessionTrackSuffix(nil, result)
+	require.Equal(t, []byte{0x05, 'h', 'e', 'l', 'l', 'o'}, data)
 }

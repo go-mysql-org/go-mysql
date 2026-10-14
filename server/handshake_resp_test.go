@@ -131,7 +131,7 @@ func TestReadPluginName(t *testing.T) {
 		c.SetCapability(mysql.CLIENT_PLUGIN_AUTH)
 		pos := 66
 
-		pos = c.readPluginName(mysqlNativePassword, pos)
+		pos, _ = c.readPluginName(mysqlNativePassword, pos)
 		if pos != 88 { // 66 + len("mysql_native_password") + 1
 			t.Fatalf("unexpected pos, got %d", pos)
 		}
@@ -146,7 +146,7 @@ func TestReadPluginName(t *testing.T) {
 		c.SetCapability(mysql.CLIENT_PLUGIN_AUTH)
 		pos := 66
 
-		pos = c.readPluginName(otherPlugin, pos)
+		pos, _ = c.readPluginName(otherPlugin, pos)
 		if pos != 73 { // 66 + len("foobar") + 1
 			t.Fatalf("unexpected pos, got %d", pos)
 		}
@@ -160,7 +160,7 @@ func TestReadPluginName(t *testing.T) {
 		c := &Conn{}
 		pos := 123 // can be anything
 
-		pos = c.readPluginName(mysqlNativePassword, pos)
+		pos, _ = c.readPluginName(mysqlNativePassword, pos)
 		if pos != 123 { // capability not set, so same as initial pos
 			t.Fatalf("unexpected pos, got %d", pos)
 		}
@@ -169,6 +169,39 @@ func TestReadPluginName(t *testing.T) {
 			t.Fatalf("unexpected plugin name, got %s", c.authPluginName)
 		}
 	})
+
+	t.Run("plugin auth set but name not NUL-terminated", func(t *testing.T) {
+		c := &Conn{capability: mysql.CLIENT_PLUGIN_AUTH}
+
+		_, err := c.readPluginName([]byte("mysql_native_password"), 0) // no 0x00
+		if err == nil {
+			t.Fatal("expected error for non-terminated plugin name, got nil")
+		}
+	})
+
+	t.Run("plugin auth set with empty buffer", func(t *testing.T) {
+		c := &Conn{capability: mysql.CLIENT_PLUGIN_AUTH}
+
+		_, err := c.readPluginName([]byte{}, 0)
+		if err == nil {
+			t.Fatal("expected error for empty buffer, got nil")
+		}
+	})
+}
+
+func TestReadUserName_MissingNulTerminator(t *testing.T) {
+	c := &Conn{}
+	if _, err := c.readUserName([]byte("someuser"), 0); err == nil {
+		t.Fatal("expected error for non-terminated username, got nil")
+	}
+}
+
+func TestReadDb_MissingNulTerminator(t *testing.T) {
+	c := &Conn{capability: mysql.CLIENT_CONNECT_WITH_DB}
+	// CLIENT_CONNECT_WITH_DB set, non-empty db field, but no NUL.
+	if _, err := c.readDb([]byte("somedb"), 0); err == nil {
+		t.Fatal("expected error for non-terminated db name, got nil")
+	}
 }
 
 func TestReadAttributes(t *testing.T) {

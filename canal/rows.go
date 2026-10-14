@@ -23,18 +23,22 @@ type RowsEvent struct {
 	// for v1 and v2, the rows number must be even.
 	// Two rows for one event, format is [before update row, after update row]
 	// for update v0, only one row for a event, and we don't support this version.
-	Rows [][]interface{}
+	Rows [][]any
 	// Header can be used to inspect the event
 	Header *replication.EventHeader
+	Flags  uint16
 }
 
-func newRowsEvent(table *schema.Table, action string, rows [][]interface{}, header *replication.EventHeader) *RowsEvent {
+func newRowsEvent(table *schema.Table, action string, rows [][]any, header *replication.EventHeader, ev *replication.RowsEvent) *RowsEvent {
 	e := new(RowsEvent)
 
 	e.Table = table
 	e.Action = action
 	e.Rows = rows
 	e.Header = header
+	if ev != nil {
+		e.Flags = ev.Flags
+	}
 
 	e.handleUnsigned()
 

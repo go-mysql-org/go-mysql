@@ -22,9 +22,8 @@ func (b *BinlogSyncer) StartBackup(backupDir string, p mysql.Position, timeout t
 		return b.StartBackupWithHandler(p, timeout, func(filename string) (io.WriteCloser, error) {
 			return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0o644)
 		})
-	} else {
-		return b.StartSynchronousBackup(p, timeout)
 	}
+	return b.StartSynchronousBackup(p, timeout)
 }
 
 func (b *BinlogSyncer) StartBackupGTID(backupDir string, gset mysql.GTIDSet, timeout time.Duration) error {
@@ -36,9 +35,8 @@ func (b *BinlogSyncer) StartBackupGTID(backupDir string, gset mysql.GTIDSet, tim
 		return b.StartBackupWithHandlerAndGTID(gset, timeout, func(filename string) (io.WriteCloser, error) {
 			return os.OpenFile(path.Join(backupDir, filename), os.O_CREATE|os.O_WRONLY, 0o644)
 		})
-	} else {
-		return b.StartSynchronousBackupWithGTID(gset, timeout)
 	}
+	return b.StartSynchronousBackupWithGTID(gset, timeout)
 }
 
 // StartBackupWithHandler starts the backup process for the binary log using the specified position and handler.
@@ -58,6 +56,7 @@ func (b *BinlogSyncer) StartBackupWithHandler(p mysql.Position, timeout time.Dur
 		timeout = 30 * 3600 * 24 * time.Second
 	}
 	if b.cfg.SynchronousEventHandler != nil {
+		//nolint:revive // leading identifier is a Go function name
 		return errors.New("StartBackupWithHandler cannot be used when SynchronousEventHandler is set. Use StartSynchronousBackup instead.")
 	}
 
@@ -88,6 +87,7 @@ func (b *BinlogSyncer) StartBackupWithHandlerAndGTID(gset mysql.GTIDSet, timeout
 		timeout = 30 * 3600 * 24 * time.Second
 	}
 	if b.cfg.SynchronousEventHandler != nil {
+		//nolint:revive // leading identifier is a Go function name
 		return errors.New("StartBackupWithHandlerAndGTID cannot be used when SynchronousEventHandler is set. Use StartSynchronousBackupWithGTID instead.")
 	}
 
