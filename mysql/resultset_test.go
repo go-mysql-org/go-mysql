@@ -53,3 +53,21 @@ func TestBuildSimpleTextResultsetIgnoresPooledFields(t *testing.T) {
 		(&Result{Resultset: r}).Close()
 	}
 }
+
+func TestBuildSimpleBinaryResultsetEmpty(t *testing.T) {
+	for _, names := range [][]string{nil, {"answer"}, {"id", "name"}} {
+		for _, values := range [][][]any{nil, {}} {
+			r, err := BuildSimpleBinaryResultset(names, values)
+			require.NoError(t, err)
+			require.Len(t, r.Fields, len(names))
+			require.Empty(t, r.RowDatas)
+			for i, name := range names {
+				require.NotNil(t, r.Fields[i])
+				require.Equal(t, name, string(r.Fields[i].Name))
+				require.Equal(t, uint16(33), r.Fields[i].Charset)
+				require.Equal(t, MYSQL_TYPE_NULL, r.Fields[i].Type)
+			}
+			(&Result{Resultset: r}).Close()
+		}
+	}
+}
