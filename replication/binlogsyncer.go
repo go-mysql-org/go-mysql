@@ -855,11 +855,6 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 			continue
 		}
 
-		// set read timeout
-		if b.cfg.ReadTimeout > 0 {
-			_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
-		}
-
 		// Reset retry count on successful packet receieve
 		b.retryCount = 0
 
