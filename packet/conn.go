@@ -259,7 +259,9 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 
 		// Call ReadAtLeast with the currentPacketReader as it may change on every iteration
 		// of this loop.
-		if c.readTimeout != 0 {
+		// Fully buffered uncompressed reads cannot block on the socket.
+		if c.readTimeout != 0 && (c.Compression != mysql.MYSQL_COMPRESS_NONE ||
+			c.br == nil || c.br.Buffered() < bcap) {
 			if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 				return written, err
 			}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/go-mysql-org/go-mysql/compress"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -20,6 +21,71 @@ func newReadTestConn(stream []byte, compression uint8) *Conn {
 	c.copyNBuf = make([]byte, DefaultBufferSize)
 	c.Compression = compression
 	return c
+}
+
+type deadlineCountingConn struct {
+	net.Conn
+	input     *bytes.Reader
+	maxRead   int
+	reads     int
+	deadlines int
+}
+
+func (c *deadlineCountingConn) Read(p []byte) (int, error) {
+	c.reads++
+	if c.maxRead > 0 && len(p) > c.maxRead {
+		p = p[:c.maxRead]
+	}
+	return c.input.Read(p)
+}
+
+func (c *deadlineCountingConn) SetReadDeadline(time.Time) error {
+	c.deadlines++
+	return nil
+}
+
+func TestReadPacketRefreshesDeadlineOnlyBeforeBlockingReads(t *testing.T) {
+	const count = 64
+	var wire []byte
+	for i := range count {
+		wire = append(wire, mysqlPacket(byte(i), []byte{0x42})...)
+	}
+
+	for _, tc := range []struct {
+		name          string
+		maxRead       int
+		buffered      bool
+		wantReads     int
+		wantDeadlines int
+	}{
+		{name: "buffered", buffered: true, wantReads: 1, wantDeadlines: 1},
+		{name: "partial buffer fills", maxRead: 4, buffered: true},
+		{name: "unbuffered", wantReads: 2 * count, wantDeadlines: 2 * count},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := &deadlineCountingConn{input: bytes.NewReader(wire), maxRead: tc.maxRead}
+			var c *Conn
+			if tc.buffered {
+				c = NewConnWithTimeout(conn, time.Minute, 0, DefaultReadBufferSize)
+			} else {
+				c = NewTLSConnWithTimeout(conn, time.Minute, 0)
+			}
+			for range count {
+				got, err := c.ReadPacket()
+				if err != nil || !bytes.Equal(got, []byte{0x42}) {
+					t.Fatalf("ReadPacket() = %v, %v", got, err)
+				}
+			}
+			if tc.maxRead > 0 {
+				if conn.reads <= 1 || conn.deadlines != conn.reads {
+					t.Errorf("partial reads = %d, deadlines = %d", conn.reads, conn.deadlines)
+				}
+			} else if conn.reads != tc.wantReads || conn.deadlines != tc.wantDeadlines {
+				t.Errorf("reads = %d, deadlines = %d; want %d, %d",
+					conn.reads, conn.deadlines, tc.wantReads, tc.wantDeadlines)
+			}
+		})
+	}
 }
 
 // mysqlPacket builds a single MySQL protocol packet (4-byte header + payload).
