@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 
@@ -32,6 +33,34 @@ type Handler interface {
 	// handle any other command that is not currently handled by the library,
 	// default implementation for this method will return an ER_UNKNOWN_ERROR
 	HandleOtherCommand(cmd byte, data []byte) error
+}
+
+// MultiResultHandler is implemented by a Handler that can answer one COM_QUERY
+// with more than one result, as MySQL answers a query of several statements
+// when the client has enabled CLIENT_MULTI_STATEMENTS. When the Handler
+// implements it, COM_QUERY is dispatched to HandleMultiQuery instead of
+// HandleQuery.
+//
+// Deciding whether a query holds several statements, and splitting it, is up
+// to the Handler. MySQL runs the statements in order and stops at the first
+// that fails: every statement before it has its result, and the error ends
+// the response.
+type MultiResultHandler interface {
+	// HandleMultiQuery handles COM_QUERY. It passes every result but the
+	// last to more, which writes that result with SERVER_MORE_RESULTS_EXISTS
+	// set, and returns the last result, or the error that ends the
+	// response, as HandleQuery would. A HandleMultiQuery that never calls
+	// more answers exactly as HandleQuery does.
+	//
+	// The status flags and warning count a result is written with are read
+	// when more is called, so a Handler that tracks them with SetStatus and
+	// SetWarnings updates them for each result before passing it on.
+	//
+	// When more returns an error the response has ended: the result could
+	// not be written, or it was a streamed resultset that failed and has
+	// already been answered with that error. HandleMultiQuery should then
+	// return at once; nothing it returns is written.
+	HandleMultiQuery(query string, more func(*mysql.Result) error) (*mysql.Result, error)
 }
 
 // ReplicationHandler is for handlers that want to implement the replication protocol
@@ -85,6 +114,9 @@ func (c *Conn) dispatch(data []byte) any {
 		c.Conn = nil
 		return noResponse{}
 	case mysql.COM_QUERY:
+		if h, ok := c.h.(MultiResultHandler); ok {
+			return c.handleMultiQuery(h, utils.ByteSliceToString(data))
+		}
 		r, err := c.h.HandleQuery(utils.ByteSliceToString(data))
 		if err != nil {
 			return err
@@ -185,6 +217,29 @@ func (c *Conn) dispatch(data []byte) any {
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}
+}
+
+// handleMultiQuery answers a COM_QUERY through a MultiResultHandler: the
+// results it passes to more are written as they arrive, each announcing that
+// another follows, and the response ends with the result or error it returns.
+func (c *Conn) handleMultiQuery(h MultiResultHandler, query string) any {
+	var ended error
+	r, err := h.HandleMultiQuery(query, func(r *mysql.Result) error {
+		if ended != nil {
+			return ended
+		}
+		ended = c.writeMoreResult(r)
+		return ended
+	})
+	switch {
+	case errors.Is(ended, errStreamAnswered):
+		return noResponse{}
+	case ended != nil:
+		return writeFailed{ended}
+	case err != nil:
+		return err
+	}
+	return r
 }
 
 // EmptyHandler is a mostly empty implementation for demonstration purposes

@@ -371,12 +371,43 @@ func (c *Conn) writeBinlogEvents(s *replication.BinlogStreamer) error {
 type (
 	noResponse  struct{}
 	eofResponse struct{}
+	// writeFailed ends a command whose response could not be written
+	// completely: nothing more is written, and HandleCommand returns err.
+	writeFailed struct{ err error }
 )
+
+// errStreamAnswered reports that a streamed resultset passed to a
+// MultiResultHandler's more failed after its rows began, and that the error
+// packet answering it has ended the response.
+var errStreamAnswered = errors.New("streamed resultset failed; its error ended the response")
+
+// writeMoreResult writes r as a result another result follows: the packet that
+// ends it carries SERVER_MORE_RESULTS_EXISTS.
+func (c *Conn) writeMoreResult(r *mysql.Result) error {
+	had := c.status & mysql.SERVER_MORE_RESULTS_EXISTS
+	c.status |= mysql.SERVER_MORE_RESULTS_EXISTS
+	defer func() {
+		c.status = c.status&^mysql.SERVER_MORE_RESULTS_EXISTS | had
+	}()
+	var stream *mysql.StreamResult
+	if r.IsStreaming() {
+		stream = r.StreamResult
+	}
+	if err := c.WriteValue(r); err != nil {
+		return err
+	}
+	if stream != nil && stream.Err() != nil {
+		return errStreamAnswered
+	}
+	return nil
+}
 
 func (c *Conn) WriteValue(value any) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
+	case writeFailed:
+		return v.err
 	case eofResponse:
 		return c.writeEOFOrOK()
 	case error:
