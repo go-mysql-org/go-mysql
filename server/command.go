@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 
@@ -34,6 +35,17 @@ type Handler interface {
 	// handle any other command that is not currently handled by the library,
 	// default implementation for this method will return an ER_UNKNOWN_ERROR
 	HandleOtherCommand(cmd byte, data []byte) error
+}
+
+// MultiResultHandler is implemented by a Handler that answers one COM_QUERY
+// with several results, e.g. for CLIENT_MULTI_STATEMENTS. COM_QUERY is then
+// dispatched to HandleMultiQuery instead of HandleQuery.
+type MultiResultHandler interface {
+	// HandleMultiQuery passes every result but the last to more, which writes
+	// it with SERVER_MORE_RESULTS_EXISTS, and returns the last result or an
+	// error, as HandleQuery does. Set the status flags and warnings for each
+	// result before passing it to more. If more returns an error, return at once.
+	HandleMultiQuery(query string, more func(*mysql.Result) error) (*mysql.Result, error)
 }
 
 // ReplicationHandler is for handlers that want to implement the replication protocol
@@ -98,6 +110,9 @@ func (c *Conn) dispatch(data []byte) any {
 		c.Conn = nil
 		return noResponse{}
 	case mysql.COM_QUERY:
+		if h, ok := c.h.(MultiResultHandler); ok {
+			return c.handleMultiQuery(h, utils.ByteSliceToString(data))
+		}
 		r, err := c.h.HandleQuery(utils.ByteSliceToString(data))
 		if err != nil {
 			return err
@@ -209,6 +224,28 @@ func (c *Conn) dispatch(data []byte) any {
 	default:
 		return c.h.HandleOtherCommand(cmd, data)
 	}
+}
+
+// handleMultiQuery answers a COM_QUERY through h. Results passed to more are
+// written at once; the returned result or error ends the response.
+func (c *Conn) handleMultiQuery(h MultiResultHandler, query string) any {
+	var ended error
+	r, err := h.HandleMultiQuery(query, func(r *mysql.Result) error {
+		if ended != nil {
+			return ended
+		}
+		ended = c.writeMoreResult(r)
+		return ended
+	})
+	switch {
+	case errors.Is(ended, errStreamAnswered):
+		return noResponse{}
+	case ended != nil:
+		return writeFailed{ended}
+	case err != nil:
+		return err
+	}
+	return r
 }
 
 // EmptyHandler is a mostly empty implementation for demonstration purposes
