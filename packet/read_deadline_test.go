@@ -36,10 +36,12 @@ func (c *deadlineConn) Read(p []byte) (int, error) {
 	}
 	return c.input.Read(p)
 }
+
 func (c *deadlineConn) SetReadDeadline(d time.Time) error {
 	c.deadlines = append(c.deadlines, d)
 	return c.deadlineErr
 }
+
 func deadlinePacket(seq byte, payload []byte) []byte {
 	n := len(payload)
 	return append([]byte{byte(n), byte(n >> 8), byte(n >> 16), seq}, payload...)
@@ -47,12 +49,12 @@ func deadlinePacket(seq byte, payload []byte) []byte {
 
 func TestReadDeadlineBufferedPackets(t *testing.T) {
 	var wire []byte
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		wire = append(wire, deadlinePacket(byte(i), []byte("test"))...)
 	}
 	raw := &deadlineConn{input: bytes.NewReader(wire)}
 	c := NewConnWithTimeout(raw, time.Minute, 0, 4096)
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		got, err := c.ReadPacket()
 		require.NoError(t, err)
 		require.Equal(t, []byte("test"), got)
@@ -187,6 +189,7 @@ func (c *deadlineCountingConn) SetReadDeadline(d time.Time) error {
 	c.deadlines++
 	return c.Conn.SetReadDeadline(d)
 }
+
 func TestReadDeadlineTLS(t *testing.T) {
 	certServer := httptest.NewTLSServer(nil)
 	defer certServer.Close()
@@ -204,7 +207,7 @@ func TestReadDeadlineTLS(t *testing.T) {
 			return
 		}
 		var wire []byte
-		for i := 0; i < 64; i++ {
+		for i := range 64 {
 			wire = append(wire, deadlinePacket(byte(i), []byte("test"))...)
 		}
 		_, err := server.Write(wire)
@@ -213,7 +216,7 @@ func TestReadDeadlineTLS(t *testing.T) {
 	require.NoError(t, client.Handshake())
 	counted := &deadlineCountingConn{Conn: client}
 	c := NewConnWithTimeout(counted, 50*time.Millisecond, 0, 4096)
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		got, err := c.ReadPacket()
 		require.NoError(t, err)
 		require.Equal(t, []byte("test"), got)
