@@ -2,6 +2,8 @@ package replication
 
 import (
 	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -139,4 +141,46 @@ func TestRowsEventDecodeImageWithEmptyJSON(t *testing.T) {
 	require.Equal(t, []byte{}, row[3]) // empty json
 	require.Equal(t, []byte{}, row[4]) // empty json
 	require.Equal(t, int32(4404), row[7])
+}
+
+// An event too short for the CRC32 trailer its FDE declares must be rejected
+// with an error, not panic, whether or not checksums are verified (#1194).
+func TestParseEventTooShortForChecksum(t *testing.T) {
+	event := func(size int) []byte {
+		data := make([]byte, size)
+		data[4] = byte(STOP_EVENT)
+		binary.LittleEndian.PutUint32(data[9:], uint32(size))
+		return data
+	}
+	newParser := func(verify bool) *BinlogParser {
+		p := NewBinlogParser()
+		p.SetVerifyChecksum(verify)
+		p.format = &FormatDescriptionEvent{ChecksumAlgorithm: BINLOG_CHECKSUM_ALG_CRC32}
+		return p
+	}
+	onEvent := func(*BinlogEvent) error { return nil }
+
+	for size := EventHeaderSize; size < EventHeaderSize+BinlogChecksumLength; size++ {
+		for _, verify := range []bool{false, true} {
+			data := event(size)
+
+			_, err := newParser(verify).Parse(data)
+			require.Errorf(t, err, "Parse, size %d, verify %v", size, verify)
+
+			_, err = newParser(verify).ParseSingleEvent(bytes.NewReader(data), onEvent)
+			require.Errorf(t, err, "ParseSingleEvent, size %d, verify %v", size, verify)
+
+			err = newParser(verify).ParseReader(bytes.NewReader(data), onEvent)
+			require.Errorf(t, err, "ParseReader, size %d, verify %v", size, verify)
+		}
+	}
+
+	// A complete event with a valid checksum still parses.
+	data := event(EventHeaderSize + BinlogChecksumLength)
+	binary.LittleEndian.PutUint32(data[EventHeaderSize:], crc32.ChecksumIEEE(data[:EventHeaderSize]))
+	for _, verify := range []bool{false, true} {
+		e, err := newParser(verify).Parse(data)
+		require.NoError(t, err)
+		require.Equal(t, STOP_EVENT, e.Header.EventType)
+	}
 }
