@@ -167,6 +167,7 @@ type BinlogSyncerConfig struct {
 
 	// PayloadDecoderConcurrency is used to control concurrency for decoding TransactionPayloadEvent.
 	// Default 0,  this will be set to GOMAXPROCS.
+	// Negative values are invalid and are treated as 0 (GOMAXPROCS).
 	PayloadDecoderConcurrency int
 
 	// SynchronousEventHandler is used for synchronous event handling.

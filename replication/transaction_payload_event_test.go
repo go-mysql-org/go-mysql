@@ -208,6 +208,42 @@ func TestTransactionPayloadEventDecodeInvalidPayload(t *testing.T) {
 	require.Error(t, e.decodePayload())
 }
 
+// TestPayloadDecoderPoolInvalidConcurrency guards against a nil decoder
+// in the pool: a negative concurrency makes zstd.NewReader return an
+// error, and before the fix newPayloadDecoderPool discarded the error
+// and stored nil, panicking on the first DecodeAll.
+func TestPayloadDecoderPoolInvalidConcurrency(t *testing.T) {
+	payload := newTestTransactionPayloadEvent().Payload
+
+	pool := newPayloadDecoderPool(-1)
+	decoder, ok := pool.Get().(*zstd.Decoder)
+	require.True(t, ok)
+	require.NotNil(t, decoder)
+
+	_, err := decoder.DecodeAll(payload, nil)
+	require.NoError(t, err)
+}
+
+// TestTransactionPayloadEventDecodeNegativeConcurrency exercises the
+// real path: decodePayload creates the parser's pool lazily with the
+// user-provided concurrency, so it must survive a negative value too.
+func TestTransactionPayloadEventDecodeNegativeConcurrency(t *testing.T) {
+	p := NewBinlogParser()
+	p.SetPayloadDecoderConcurrency(-1)
+
+	src := newTestTransactionPayloadEvent()
+	p.format = &src.format
+
+	e := p.newTransactionPayloadEvent()
+	e.Size = src.Size
+	e.UncompressedSize = src.UncompressedSize
+	e.CompressionType = src.CompressionType
+	e.Payload = src.Payload
+
+	require.NoError(t, e.decodePayload())
+	require.Len(t, e.Events, 8)
+}
+
 func TestTransactionPayloadEventStampInnerEventPositions(t *testing.T) {
 	mk := func(types ...EventType) *TransactionPayloadEvent {
 		e := &TransactionPayloadEvent{}

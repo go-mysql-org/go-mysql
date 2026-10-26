@@ -237,16 +237,29 @@ func (p *BinlogParser) SetFlavor(flavor string) {
 }
 
 // newPayloadDecoderPool returns a sync.Pool of zstd decoders built with
-// the given concurrency.
+// the given concurrency. A negative concurrency is invalid and makes
+// zstd.NewReader return a nil decoder, which would panic on first use,
+// so it is normalized to 0, meaning zstd's default (GOMAXPROCS). If
+// NewReader still fails for any other reason, fall back to a decoder
+// built with default options so the pool never hands out nil.
 func newPayloadDecoderPool(concurrency int) *sync.Pool {
+	if concurrency < 0 {
+		concurrency = 0
+	}
 	return &sync.Pool{
 		New: func() any {
-			d, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(concurrency))
+			d, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(concurrency))
+			if err != nil || d == nil {
+				d, _ = zstd.NewReader(nil)
+			}
 			return d
 		},
 	}
 }
 
+// SetPayloadDecoderConcurrency sets the concurrency for zstd decoders
+// used to decompress TransactionPayloadEvent payloads. Zero means the
+// zstd default (GOMAXPROCS); negative values are treated as zero.
 func (p *BinlogParser) SetPayloadDecoderConcurrency(concurrency int) {
 	p.payloadDecoderConcurrency = concurrency
 }
