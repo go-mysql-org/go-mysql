@@ -3,6 +3,7 @@ package replication
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"testing"
 
@@ -146,41 +147,147 @@ func TestRowsEventDecodeImageWithEmptyJSON(t *testing.T) {
 // An event too short for the CRC32 trailer its FDE declares must be rejected
 // with an error, not panic, whether or not checksums are verified (#1194).
 func TestParseEventTooShortForChecksum(t *testing.T) {
-	event := func(size int) []byte {
+	makeEvent := func(eventType EventType, size int, startPos uint32) []byte {
 		data := make([]byte, size)
-		data[4] = byte(STOP_EVENT)
-		binary.LittleEndian.PutUint32(data[9:], uint32(size))
+		data[4] = byte(eventType)
+		binary.LittleEndian.PutUint32(data[5:9], 101)
+		binary.LittleEndian.PutUint32(data[9:13], uint32(size))
+		binary.LittleEndian.PutUint32(data[13:17], startPos+uint32(size))
 		return data
 	}
-	newParser := func(verify bool) *BinlogParser {
-		p := NewBinlogParser()
-		p.SetVerifyChecksum(verify)
-		p.format = &FormatDescriptionEvent{ChecksumAlgorithm: BINLOG_CHECKSUM_ALG_CRC32}
-		return p
+
+	setChecksum := func(data []byte) {
+		pos := len(data) - BinlogChecksumLength
+		binary.LittleEndian.PutUint32(data[pos:], crc32.ChecksumIEEE(data[:pos]))
 	}
-	onEvent := func(*BinlogEvent) error { return nil }
 
-	for size := EventHeaderSize; size < EventHeaderSize+BinlogChecksumLength; size++ {
-		for _, verify := range []bool{false, true} {
-			data := event(size)
-
-			_, err := newParser(verify).Parse(data)
-			require.Errorf(t, err, "Parse, size %d, verify %v", size, verify)
-
-			_, err = newParser(verify).ParseSingleEvent(bytes.NewReader(data), onEvent)
-			require.Errorf(t, err, "ParseSingleEvent, size %d, verify %v", size, verify)
-
-			err = newParser(verify).ParseReader(bytes.NewReader(data), onEvent)
-			require.Errorf(t, err, "ParseReader, size %d, verify %v", size, verify)
+	makeFDE := func(algorithm BinlogChecksum) []byte {
+		// Use the same post-header lengths as TestParseEvent.
+		postHeaderLengths := []byte{
+			0x38, 0xd, 0x0, 0x8, 0x0, 0x12, 0x0, 0x4,
+			0x4, 0x4, 0x4, 0x12, 0x0, 0x0, 0x5c, 0x0,
+			0x4, 0x1a, 0x8, 0x0, 0x0, 0x0, 0x8, 0x8,
+			0x8, 0x2, 0x0, 0x0, 0x0, 0xa, 0xa, 0xa,
+			0x19, 0x19, 0x0, 0x12, 0x34, 0x0, 0xa, 0x28,
+			0x0,
 		}
+
+		// FDE: version(2), server version(50), timestamp(4), common header
+		// length(1), post-header lengths, checksum algorithm(1), checksum(4).
+		bodySize := 2 + 50 + 4 + 1 + len(postHeaderLengths) + 1 + BinlogChecksumLength
+		data := makeEvent(FORMAT_DESCRIPTION_EVENT, EventHeaderSize+bodySize, 4)
+		body := data[EventHeaderSize:]
+		binary.LittleEndian.PutUint16(body[:2], 4)
+		copy(body[2:52], "8.0.11")
+		body[56] = byte(EventHeaderSize)
+		copy(body[57:], postHeaderLengths)
+		body[len(body)-BinlogChecksumLength-1] = byte(algorithm)
+		setChecksum(data)
+		return data
 	}
 
-	// A complete event with a valid checksum still parses.
-	data := event(EventHeaderSize + BinlogChecksumLength)
-	binary.LittleEndian.PutUint32(data[EventHeaderSize:], crc32.ChecksumIEEE(data[:EventHeaderSize]))
-	for _, verify := range []bool{false, true} {
-		e, err := newParser(verify).Parse(data)
-		require.NoError(t, err)
-		require.Equal(t, STOP_EVENT, e.Header.EventType)
+	testCases := []struct {
+		name      string
+		algorithm BinlogChecksum
+		size      int
+		wantError bool
+	}{
+		{"off/header_only", BINLOG_CHECKSUM_ALG_OFF, 19, false},
+		{"crc32/missing_4_bytes", BINLOG_CHECKSUM_ALG_CRC32, 19, true},
+		{"crc32/missing_3_bytes", BINLOG_CHECKSUM_ALG_CRC32, 20, true},
+		{"crc32/missing_2_bytes", BINLOG_CHECKSUM_ALG_CRC32, 21, true},
+		{"crc32/missing_1_byte", BINLOG_CHECKSUM_ALG_CRC32, 22, true},
+		{"crc32/complete", BINLOG_CHECKSUM_ALG_CRC32, 23, false},
+	}
+
+	for _, tc := range testCases {
+		for _, verify := range []bool{false, true} {
+			for _, entry := range []string{"Parse", "ParseSingleEvent", "ParseReader"} {
+				name := fmt.Sprintf("%s/verify=%t/%s", tc.name, verify, entry)
+				t.Run(name, func(t *testing.T) {
+					fde := makeFDE(tc.algorithm)
+					stop := makeEvent(STOP_EVENT, tc.size, 4+uint32(len(fde)))
+					if tc.algorithm == BINLOG_CHECKSUM_ALG_CRC32 && !tc.wantError {
+						setChecksum(stop)
+					}
+
+					parser := NewBinlogParser()
+					parser.SetVerifyChecksum(verify)
+
+					// Collect return values for Parse and actual callbacks for
+					// ParseSingleEvent and ParseReader.
+					var received []*BinlogEvent
+					onEvent := func(event *BinlogEvent) error {
+						received = append(received, event)
+						return nil
+					}
+
+					var parseErr error
+					require.NotPanics(t, func() {
+						switch entry {
+						case "Parse":
+							for _, raw := range [][]byte{fde, stop} {
+								event, err := parser.Parse(raw)
+								if err != nil {
+									require.Nil(t, event)
+									parseErr = err
+									return
+								}
+								received = append(received, event)
+							}
+						case "ParseSingleEvent":
+							reader := bytes.NewReader(bytes.Join([][]byte{fde, stop}, nil))
+							for range 2 {
+								done, err := parser.ParseSingleEvent(reader, onEvent)
+								require.False(t, done, "reading an event must not report EOF")
+								if err != nil {
+									parseErr = err
+									return
+								}
+							}
+							// EOF must not produce another callback.
+							done, err := parser.ParseSingleEvent(reader, onEvent)
+							parseErr = err
+							require.True(t, done)
+						case "ParseReader":
+							reader := bytes.NewReader(bytes.Join([][]byte{fde, stop}, nil))
+							parseErr = parser.ParseReader(reader, onEvent)
+						}
+					})
+
+					if tc.wantError {
+						require.Error(t, parseErr)
+						// Only the valid FDE may have been delivered.
+						require.Len(t, received, 1)
+					} else {
+						require.NoError(t, parseErr)
+						// Deliver the FDE and STOP_EVENT exactly once each.
+						require.Len(t, received, 2)
+					}
+
+					// Initialize the checksum algorithm through the public API,
+					// rather than assigning parser.format directly.
+					require.NotNil(t, received[0])
+					require.NotNil(t, received[0].Header)
+					require.Equal(t, FORMAT_DESCRIPTION_EVENT, received[0].Header.EventType)
+					require.IsType(t, &FormatDescriptionEvent{}, received[0].Event)
+					require.Equal(t, tc.algorithm, received[0].Event.(*FormatDescriptionEvent).ChecksumAlgorithm)
+
+					if tc.wantError {
+						return
+					}
+
+					decoded := received[1]
+					require.NotNil(t, decoded)
+					require.NotNil(t, decoded.Header)
+					require.Equal(t, STOP_EVENT, decoded.Header.EventType)
+					require.Equal(t, uint32(tc.size), decoded.Header.EventSize)
+					require.Equal(t, stop, decoded.RawData)
+					// The STOP_EVENT body is empty after any checksum is removed.
+					require.IsType(t, &GenericEvent{}, decoded.Event)
+					require.Empty(t, decoded.Event.(*GenericEvent).Data)
+				})
+			}
+		}
 	}
 }
