@@ -184,13 +184,14 @@ func TestTransactionPayloadEventDecode(t *testing.T) {
 		require.Equal(t, uint32(0), inner.Header.LogPos)
 	}
 
-	// decodePayload hands the decoder back to the pool; a following Get
-	// yields a usable decoder and the next event decodes correctly from
-	// it. sync.Pool does not guarantee Get returns the same pointer, so
-	// identity is not asserted.
-	decoder := p.decoderPool.Get().(*zstd.Decoder)
+	// decodePayload hands the decoder back to the pool; a following
+	// getPayloadDecoder takes the pool-hit path and the next event decodes
+	// correctly from it. sync.Pool does not guarantee Get returns the same
+	// pointer, so identity is not asserted.
+	decoder, err := p.getPayloadDecoder()
+	require.NoError(t, err)
 	require.NotNil(t, decoder)
-	p.decoderPool.Put(decoder)
+	p.putPayloadDecoder(decoder)
 
 	e = newEvent()
 	require.NoError(t, e.decodePayload())
@@ -208,19 +209,20 @@ func TestTransactionPayloadEventDecodeInvalidPayload(t *testing.T) {
 	require.Error(t, e.decodePayload())
 }
 
-// TestPayloadDecoderPoolInvalidConcurrency guards against a nil decoder
-// in the pool: a negative concurrency makes zstd.NewReader return an
-// error, and before the fix newPayloadDecoderPool discarded the error
-// and stored nil, panicking on the first DecodeAll.
+// TestPayloadDecoderPoolInvalidConcurrency verifies the explicit decoder
+// creation path: a negative concurrency is normalized to zstd's default
+// and the returned decoder is usable. Before the get-function redesign,
+// the pool's New discarded the zstd.NewReader error and stored nil,
+// panicking on the first DecodeAll.
 func TestPayloadDecoderPoolInvalidConcurrency(t *testing.T) {
-	payload := newTestTransactionPayloadEvent().Payload
+	p := NewBinlogParser()
+	p.SetPayloadDecoderConcurrency(-1)
 
-	pool := newPayloadDecoderPool(-1)
-	decoder, ok := pool.Get().(*zstd.Decoder)
-	require.True(t, ok)
+	decoder, err := p.getPayloadDecoder()
+	require.NoError(t, err)
 	require.NotNil(t, decoder)
 
-	_, err := decoder.DecodeAll(payload, nil)
+	_, err = decoder.DecodeAll(newTestTransactionPayloadEvent().Payload, nil)
 	require.NoError(t, err)
 }
 
@@ -324,19 +326,22 @@ func BenchmarkPayloadDecoderPerCall(b *testing.B) {
 }
 
 // BenchmarkPayloadDecoderPooled measures the decodePayload behavior
-// after the pooling change: decoders come from a sync.Pool and are
-// returned after use.
+// after the pooling change: decoders come from the parser's pool via
+// getPayloadDecoder and are returned after use.
 func BenchmarkPayloadDecoderPooled(b *testing.B) {
 	payload := newTestTransactionPayloadEvent().Payload
-	pool := newPayloadDecoderPool(0)
+	p := &BinlogParser{}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		decoder := pool.Get().(*zstd.Decoder)
+		decoder, err := p.getPayloadDecoder()
+		if err != nil {
+			b.Fatal(err)
+		}
 		if _, err := decoder.DecodeAll(payload, nil); err != nil {
 			b.Fatal(err)
 		}
-		pool.Put(decoder)
+		p.putPayloadDecoder(decoder)
 	}
 }

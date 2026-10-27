@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/klauspost/compress/zstd"
 )
 
 // On The Wire: Field Types
@@ -128,21 +127,19 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 			e.CompressionType, e.compressionType())
 	}
 
-	// The parser's decoder pool is created on the first payload and
-	// reused for every following one, instead of building a new decoder
-	// per event.
-	if e.parent.decoderPool == nil {
-		e.parent.decoderPool = newPayloadDecoderPool(e.parent.payloadDecoderConcurrency)
+	// The parser recycles zstd decoders in a pool instead of building a
+	// new decoder per event; getPayloadDecoder reports creation errors.
+	decoder, err := e.parent.getPayloadDecoder()
+	if err != nil {
+		return err
 	}
-
-	decoder := e.parent.decoderPool.Get().(*zstd.Decoder)
 	payloadUncompressed, err := decoder.DecodeAll(e.Payload, nil)
 	if err != nil {
 		// Be conservative and drop the decoder instead of returning it
 		// to the pool.
 		return err
 	}
-	e.parent.decoderPool.Put(decoder)
+	e.parent.putPayloadDecoder(decoder)
 
 	// The uncompressed data needs to be split up into individual events for Parse()
 	// to work on them. We can't use the parent parser directly as we need to disable
