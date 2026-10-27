@@ -339,11 +339,6 @@ func (b *BinlogSyncer) registerSlave() error {
 		}
 	}
 
-	// set read timeout
-	if b.cfg.ReadTimeout > 0 {
-		_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
-	}
-
 	if b.cfg.RecvBufferSize > 0 {
 		if tcp, ok := b.c.Conn.Conn.(*net.TCPConn); ok {
 			_ = tcp.SetReadBuffer(b.cfg.RecvBufferSize)
@@ -853,11 +848,6 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 			// we connect the server and begin to re-sync again.
 			continue
-		}
-
-		// set read timeout
-		if b.cfg.ReadTimeout > 0 {
-			_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
 		}
 
 		// Reset retry count on successful packet receieve

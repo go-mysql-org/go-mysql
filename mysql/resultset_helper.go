@@ -796,6 +796,13 @@ func BuildSimpleTextResultset(names []string, values [][]any) (*Resultset, error
 func BuildSimpleBinaryResultset(names []string, values [][]any) (*Resultset, error) {
 	r := NewResultset(len(names))
 
+	if len(values) == 0 {
+		for i, name := range names {
+			r.Fields[i] = &Field{Name: utils.StringToByteSlice(name), Charset: 33, Type: MYSQL_TYPE_NULL}
+		}
+		return r, nil
+	}
+
 	var b []byte
 
 	bitmapLen := (len(names) + 7 + 2) >> 3
