@@ -258,8 +258,11 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 		buf := c.copyNBuf[:bcap]
 
 		// Call ReadAtLeast with the currentPacketReader as it may change on every iteration
-		// of this loop.
-		if c.readTimeout != 0 {
+		// of this loop. A complete uncompressed chunk already in bufio cannot
+		// block on the connection. Otherwise keep one deadline for the entire
+		// ReadAtLeast, including partial reads; refreshing on every underlying
+		// Read would let a slow peer extend the timeout indefinitely.
+		if c.readTimeout != 0 && (c.Compression != mysql.MYSQL_COMPRESS_NONE || c.br == nil || c.br.Buffered() < bcap) {
 			if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 				return written, err
 			}
