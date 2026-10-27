@@ -256,9 +256,7 @@ func (p *BinlogParser) getPayloadDecoder() (*zstd.Decoder, error) {
 	}
 
 	concurrency := p.payloadDecoderConcurrency
-	if concurrency < 0 {
-		concurrency = 0
-	}
+	concurrency = max(concurrency, 0)
 	d, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(concurrency))
 	if err != nil {
 		return nil, errors.Wrapf(err, "create zstd payload decoder with concurrency %d", concurrency)
