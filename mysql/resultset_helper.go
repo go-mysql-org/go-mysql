@@ -41,6 +41,9 @@ func FormatTextValue(value any) ([]byte, error) {
 	case []byte:
 		return v, nil
 	case string:
+		if v == "" {
+			return []byte{}, nil
+		}
 		return utils.StringToByteSlice(v), nil
 	case time.Time:
 		return utils.StringToByteSlice(v.Format(time.DateTime)), nil
@@ -795,6 +798,13 @@ func BuildSimpleTextResultset(names []string, values [][]any) (*Resultset, error
 
 func BuildSimpleBinaryResultset(names []string, values [][]any) (*Resultset, error) {
 	r := NewResultset(len(names))
+
+	if len(values) == 0 {
+		for i, name := range names {
+			r.Fields[i] = &Field{Name: utils.StringToByteSlice(name), Charset: 33, Type: MYSQL_TYPE_NULL}
+		}
+		return r, nil
+	}
 
 	var b []byte
 
