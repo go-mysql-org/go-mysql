@@ -71,3 +71,33 @@ func TestBuildSimpleBinaryResultsetEmpty(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatTextValueEmptyString(t *testing.T) {
+	strBytes, err := FormatTextValue("")
+	require.NoError(t, err)
+	require.NotNil(t, strBytes)
+	require.Empty(t, strBytes)
+
+	sliceBytes, err := FormatTextValue([]byte{})
+	require.NoError(t, err)
+	require.NotNil(t, sliceBytes)
+	require.Empty(t, sliceBytes)
+
+	require.Equal(t, strBytes, sliceBytes)
+
+	nilBytes, err := FormatTextValue(nil)
+	require.NoError(t, err)
+	require.Nil(t, nilBytes)
+}
+
+func TestBuildSimpleTextResultsetEmptyStringParity(t *testing.T) {
+	r, err := BuildSimpleTextResultset(
+		[]string{"empty_str", "empty_bytes", "null_val"},
+		[][]any{{"", []byte{}, nil}},
+	)
+	require.NoError(t, err)
+	require.Equal(t, RowData{0x00, 0x00, 0xfb}, r.RowDatas[0])
+	require.NotEqual(t, byte(0xfb), r.RowDatas[0][0])
+	require.Equal(t, r.RowDatas[0][0], r.RowDatas[0][1])
+	require.Equal(t, byte(0xfb), r.RowDatas[0][2])
+}

@@ -41,6 +41,9 @@ func FormatTextValue(value any) ([]byte, error) {
 	case []byte:
 		return v, nil
 	case string:
+		if v == "" {
+			return []byte{}, nil
+		}
 		return utils.StringToByteSlice(v), nil
 	case time.Time:
 		return utils.StringToByteSlice(v.Format(time.DateTime)), nil
