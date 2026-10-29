@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -204,12 +205,16 @@ func TestReadAheadSemiSyncFallback(t *testing.T) {
 			c, peer := readAheadTransport(t, encrypted)
 			observed := &readAheadObservedConn{Conn: c}
 			entered, release := make(chan struct{}), make(chan struct{})
+			releaseHandler := sync.OnceFunc(func() { close(release) })
 			b := NewBinlogSyncer(BinlogSyncerConfig{ServerID: 1, SemiSyncEnabled: true, ReadAheadBufferSize: 1024, SynchronousEventHandler: readAheadBlockingHandler{entered, release}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 			b.c = &client.Conn{Conn: packet.NewBufferedConn(observed, 65536)}
 			s := NewBinlogStreamer()
 			b.wg.Add(1)
 			go b.onStream(s)
-			t.Cleanup(b.Close)
+			t.Cleanup(func() {
+				releaseHandler()
+				b.Close()
+			})
 			wire := readAheadHeartbeat(0, 100)
 			wire = append(wire[:5], append([]byte{SemiSyncIndicator, 1}, wire[5:]...)...)
 			wire[0] += 2
@@ -223,7 +228,7 @@ func TestReadAheadSemiSyncFallback(t *testing.T) {
 			reads := observed.reads.Load()
 			time.Sleep(20 * time.Millisecond)
 			require.Equal(t, reads, observed.reads.Load())
-			close(release)
+			releaseHandler()
 			require.NoError(t, peer.SetReadDeadline(time.Now().Add(time.Second)))
 			ackReader := packet.NewConn(peer)
 			ack, err := ackReader.ReadPacket()
