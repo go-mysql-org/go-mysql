@@ -57,6 +57,26 @@ Replication package handles MySQL replication protocol like [python-mysql-replic
 
 You can use it as a MySQL replica to sync binlog from master then do something, like updating cache, etc...
 
+### Optional packet read-ahead
+
+`BinlogSyncerConfig.ReadAheadBufferSize` defaults to zero (disabled). A positive
+value enables the same packet read-ahead implementation for plaintext and TLS
+connections; it does not select a TLS-specific parser or replication path.
+One goroutine reads packets, while the existing consumer parses and delivers
+packets in order. Only already-buffered complete packets are batched; the reader
+does not wait to fill a batch. Reconnection stops and joins the old reader before
+resetting protocol or parser state. Pre-read data does not advance resume state.
+
+The value is a byte budget for the capacities of queued/consumed packet batches,
+not an RSS limit. The producer can hold one pending batch outside that budget;
+an oversized packet is admitted alone for forward progress. Events retained by
+consumers and protocol/TLS buffers are outside the budget. Read-ahead can increase
+CPU and memory use, and is not guaranteed to improve every workload.
+
+Semi-synchronous replication retains synchronous reads even with a positive
+budget, preserving single-owner packet sequence numbers and ACK timing. The
+same compatibility rule applies to plaintext and TLS.
+
 ### Example
 
 ```go
