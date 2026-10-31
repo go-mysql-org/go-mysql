@@ -24,6 +24,14 @@ type RowsEvent struct {
 	// Two rows for one event, format is [before update row, after update row]
 	// for update v0, only one row for a event, and we don't support this version.
 	Rows [][]any
+	// SkippedColumns has one entry per row in Rows, with the indexes of the
+	// columns that were not logged in that row image. It is only non-empty
+	// when the server logs a partial row image (binlog_row_image=MINIMAL or
+	// NOBLOB). A value in Rows at one of these indexes is nil because it was
+	// not logged, not because the column is NULL.
+	// It has the same semantics as replication.RowsEvent.SkippedColumns.
+	// It is nil for rows that come from the initial dump.
+	SkippedColumns [][]int
 	// Header can be used to inspect the event
 	Header *replication.EventHeader
 	Flags  uint16
@@ -38,6 +46,7 @@ func newRowsEvent(table *schema.Table, action string, rows [][]any, header *repl
 	e.Header = header
 	if ev != nil {
 		e.Flags = ev.Flags
+		e.SkippedColumns = ev.SkippedColumns
 	}
 
 	e.handleUnsigned()
