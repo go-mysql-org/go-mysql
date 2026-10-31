@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/klauspost/compress/zstd"
 )
 
 // On The Wire: Field Types
@@ -29,14 +28,13 @@ const (
 )
 
 type TransactionPayloadEvent struct {
-	format      FormatDescriptionEvent
-	concurrency int
+	format FormatDescriptionEvent
 	// parent is the BinlogParser that produced this event. The inner
 	// parser used to decode the decompressed payload inherits its
 	// user-settable options (UseDecimal, RenderJSONAsMySQLText, ...) so
-	// that compressed and uncompressed rows decode identically. nil when
-	// the event is constructed outside of BinlogParser, in which case
-	// decodePayload falls back to default parser options.
+	// that compressed and uncompressed rows decode identically. The
+	// parent also owns the decoder pool used by decodePayload, so it
+	// must be set before decoding.
 	parent           *BinlogParser
 	Size             uint64
 	UncompressedSize uint64
@@ -129,16 +127,20 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 			e.CompressionType, e.compressionType())
 	}
 
-	decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(e.concurrency))
+	// The parser caches one zstd decoder across events instead of
+	// building a new decoder per event; getPayloadDecoder reports
+	// creation errors.
+	decoder, err := e.parent.getPayloadDecoder()
 	if err != nil {
 		return err
 	}
-	defer decoder.Close()
-
 	payloadUncompressed, err := decoder.DecodeAll(e.Payload, nil)
 	if err != nil {
+		// Be conservative and drop the decoder instead of returning it
+		// to the cache.
 		return err
 	}
+	e.parent.putPayloadDecoder(decoder)
 
 	// The uncompressed data needs to be split up into individual events for Parse()
 	// to work on them. We can't use the parent parser directly as we need to disable
