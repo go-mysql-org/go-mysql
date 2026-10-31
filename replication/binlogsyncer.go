@@ -301,6 +301,11 @@ func (b *BinlogSyncer) close() {
 
 	b.wg.Wait()
 
+	// evict the parser's cached zstd decoder
+	if b.parser != nil {
+		b.parser.Close()
+	}
+
 	if b.c != nil {
 		b.c.Close()
 	}

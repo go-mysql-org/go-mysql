@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -184,14 +185,19 @@ func TestTransactionPayloadEventDecode(t *testing.T) {
 		require.Equal(t, uint32(0), inner.Header.LogPos)
 	}
 
-	// decodePayload hands the decoder back to the pool; a following
-	// getPayloadDecoder takes the pool-hit path and the next event decodes
-	// correctly from it. sync.Pool does not guarantee Get returns the same
-	// pointer, so identity is not asserted.
+	// decodePayload hands the decoder back to the cache; a following
+	// getPayloadDecoder takes the cache-hit path and the next event decodes
+	// correctly from it. The capacity-1 channel is deterministic, so the
+	// very same decoder comes back.
 	decoder, err := p.getPayloadDecoder()
 	require.NoError(t, err)
 	require.NotNil(t, decoder)
 	p.putPayloadDecoder(decoder)
+
+	cached, err := p.getPayloadDecoder()
+	require.NoError(t, err)
+	require.Same(t, decoder, cached)
+	p.putPayloadDecoder(cached)
 
 	e = newEvent()
 	require.NoError(t, e.decodePayload())
@@ -224,6 +230,78 @@ func TestPayloadDecoderPoolInvalidConcurrency(t *testing.T) {
 
 	_, err = decoder.DecodeAll(newTestTransactionPayloadEvent().Payload, nil)
 	require.NoError(t, err)
+}
+
+// TestPayloadDecoderParserClose verifies the eviction path: Close closes
+// the cached decoder and clears the slot, and the parser stays usable —
+// the next getPayloadDecoder lazily builds a fresh, working decoder.
+func TestPayloadDecoderParserClose(t *testing.T) {
+	p := NewBinlogParser()
+
+	decoder, err := p.getPayloadDecoder()
+	require.NoError(t, err)
+	p.putPayloadDecoder(decoder)
+
+	p.Close()
+
+	// the evicted decoder must have been closed
+	_, err = decoder.DecodeAll(newTestTransactionPayloadEvent().Payload, nil)
+	require.ErrorIs(t, err, zstd.ErrDecoderClosed)
+
+	// Close is idempotent
+	p.Close()
+
+	// the next get lazily rebuilds
+	fresh, err := p.getPayloadDecoder()
+	require.NoError(t, err)
+	require.NotNil(t, fresh)
+	_, err = fresh.DecodeAll(newTestTransactionPayloadEvent().Payload, nil)
+	require.NoError(t, err)
+	p.putPayloadDecoder(fresh)
+}
+
+// TestPayloadDecoderNoBackgroundGoroutine pins the invariant that makes
+// caching a decoder without closing it per decode safe: decoders are
+// created with a nil reader and driven only through DecodeAll, so zstd
+// never starts its streaming decoder goroutine. If a future change ever
+// routes a pooled decoder through Reset/Read, this test fails instead of
+// leaking goroutines silently.
+func TestPayloadDecoderNoBackgroundGoroutine(t *testing.T) {
+	src := newTestTransactionPayloadEvent()
+	p := NewBinlogParser()
+	p.format = &src.format
+
+	newEvent := func() *TransactionPayloadEvent {
+		e := p.newTransactionPayloadEvent()
+		e.Size = src.Size
+		e.UncompressedSize = src.UncompressedSize
+		e.CompressionType = src.CompressionType
+		e.Payload = src.Payload
+
+		return e
+	}
+
+	goroutinesBefore := runtime.NumGoroutine()
+	for i := 0; i < 10; i++ {
+		require.NoError(t, newEvent().decodePayload())
+	}
+
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	require.NotContains(t, string(buf[:n]), "startStreamDecoder",
+		"zstd streaming decoder goroutine detected; cached decoders are no longer goroutine-free")
+
+	runtime.GC()
+	// Poll from the test goroutine: require.Eventually runs its condition
+	// on an extra goroutine that would skew the count it measures.
+	deadline := time.Now().Add(2 * time.Second)
+	for runtime.NumGoroutine() > goroutinesBefore {
+		if time.Now().After(deadline) {
+			t.Fatalf("goroutine count grew from %d to %d after decoding payload events",
+				goroutinesBefore, runtime.NumGoroutine())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // TestTransactionPayloadEventDecodeNegativeConcurrency exercises the

@@ -7,7 +7,6 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -45,16 +44,18 @@ type BinlogParser struct {
 
 	payloadDecoderConcurrency int
 
-	// decoderPool recycles zstd decoders used to decompress
+	// decoderPool caches the zstd decoder used to decompress
 	// TransactionPayloadEvent payloads. decodePayload runs on the
-	// parser's single stream goroutine, so the pool holds at most one
-	// decoder; keeping it here instead of a package variable scopes its
-	// buffers to the parser. The pool is created empty lazily inside
-	// getPayloadDecoder; decoders are built on demand with
-	// payloadDecoderConcurrency, and are never Closed: DecodeAll starts
-	// no background goroutines, buffers are reclaimed by GC once the
-	// parser is unreachable.
-	decoderPool *sync.Pool
+	// parser's single stream goroutine, so at most one decoder is in
+	// flight and a capacity-1 channel holds the idle one; keeping it
+	// here instead of a package variable scopes its buffers to the
+	// parser. The channel is created lazily inside getPayloadDecoder;
+	// decoders are built on demand with payloadDecoderConcurrency and
+	// are only ever driven through DecodeAll, which starts no
+	// background goroutines. Close evicts the cached decoder; anything
+	// still cached when the parser becomes unreachable is reclaimed by
+	// GC.
+	decoderPool chan *zstd.Decoder
 
 	rowsEventDecodeFunc func(*RowsEvent, []byte) error
 
@@ -79,6 +80,25 @@ func (p *BinlogParser) Resume() {
 
 func (p *BinlogParser) Reset() {
 	p.format = nil
+}
+
+// Close evicts the decoder cached in decoderPool, releasing its buffers
+// immediately instead of keeping them until the parser itself becomes
+// unreachable. The parser stays usable: the next getPayloadDecoder
+// rebuilds a decoder lazily.
+func (p *BinlogParser) Close() {
+	if p.decoderPool == nil {
+		return
+	}
+	for {
+		select {
+		case d := <-p.decoderPool:
+			d.Close()
+		default:
+			p.decoderPool = nil
+			return
+		}
+	}
 }
 
 type OnEventFunc func(*BinlogEvent) error
@@ -237,22 +257,23 @@ func (p *BinlogParser) SetFlavor(flavor string) {
 	p.flavor = flavor
 }
 
-// getPayloadDecoder returns a zstd decoder from the parser's decoder pool,
-// building one on first use. The pool is deliberately kept empty instead
-// of using sync.Pool.New: decoder creation can fail, and a failure hidden
-// inside New would silently put a nil decoder into circulation, panicking
-// far away from the root cause. A negative payloadDecoderConcurrency is
-// normalized to 0, meaning zstd's default (GOMAXPROCS). zstd.NewReader is
-// called on the empty-pool path so that any option rejection — today only
-// a negative concurrency, but future zstd versions may validate more — is
-// returned as an error to the caller instead of being swallowed.
+// getPayloadDecoder returns a zstd decoder from the parser's decoder
+// cache, building one on first use. Decoder creation can fail, so it
+// happens here where the error can be returned to the caller instead of
+// being hidden inside a lazy constructor. A negative
+// payloadDecoderConcurrency is normalized to 0, meaning zstd's default
+// (GOMAXPROCS). Any option rejection — today only a negative
+// concurrency, but future zstd versions may validate more — is returned
+// as an error instead of being swallowed.
 func (p *BinlogParser) getPayloadDecoder() (*zstd.Decoder, error) {
 	if p.decoderPool == nil {
-		p.decoderPool = &sync.Pool{}
+		p.decoderPool = make(chan *zstd.Decoder, 1)
 	}
 
-	if d, ok := p.decoderPool.Get().(*zstd.Decoder); ok && d != nil {
+	select {
+	case d := <-p.decoderPool:
 		return d, nil
+	default:
 	}
 
 	concurrency := p.payloadDecoderConcurrency
@@ -267,15 +288,18 @@ func (p *BinlogParser) getPayloadDecoder() (*zstd.Decoder, error) {
 	return d, nil
 }
 
-// putPayloadDecoder returns a decoder to the parser's decoder pool after a
-// successful decode; it is the counterpart of getPayloadDecoder. On a
+// putPayloadDecoder returns a decoder to the parser's decoder cache after
+// a successful decode; it is the counterpart of getPayloadDecoder. On a
 // decode failure, do not call it: drop the decoder instead, mirroring the
 // conservative handling in decodePayload.
 func (p *BinlogParser) putPayloadDecoder(d *zstd.Decoder) {
 	if d == nil || p.decoderPool == nil {
 		return
 	}
-	p.decoderPool.Put(d)
+	select {
+	case p.decoderPool <- d:
+	default: // slot already holds an idle decoder; drop the extra one
+	}
 }
 
 // SetPayloadDecoderConcurrency sets the concurrency for zstd decoders

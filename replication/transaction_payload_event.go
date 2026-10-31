@@ -127,8 +127,9 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 			e.CompressionType, e.compressionType())
 	}
 
-	// The parser recycles zstd decoders in a pool instead of building a
-	// new decoder per event; getPayloadDecoder reports creation errors.
+	// The parser caches one zstd decoder across events instead of
+	// building a new decoder per event; getPayloadDecoder reports
+	// creation errors.
 	decoder, err := e.parent.getPayloadDecoder()
 	if err != nil {
 		return err
@@ -136,7 +137,7 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 	payloadUncompressed, err := decoder.DecodeAll(e.Payload, nil)
 	if err != nil {
 		// Be conservative and drop the decoder instead of returning it
-		// to the pool.
+		// to the cache.
 		return err
 	}
 	e.parent.putPayloadDecoder(decoder)
