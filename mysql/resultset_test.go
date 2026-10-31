@@ -143,3 +143,33 @@ func TestBuildSimpleTextResultsetEmptyStringParity(t *testing.T) {
 	require.Equal(t, r.RowDatas[0][0], r.RowDatas[0][1])
 	require.Equal(t, byte(0xfb), r.RowDatas[0][2])
 }
+
+// A column whose first value is NULL takes its type from the first non-NULL
+// value, as in BuildSimpleTextResultset.
+func TestBuildSimpleBinaryResultsetNullFirstRow(t *testing.T) {
+	r, err := BuildSimpleBinaryResultset(
+		[]string{"id", "name", "big"},
+		[][]any{{nil, nil, nil}, {int64(7), "abc", uint64(math.MaxUint64)}},
+	)
+	require.NoError(t, err)
+	require.Equal(t, MYSQL_TYPE_LONGLONG, r.Fields[0].Type)
+	require.Equal(t, MYSQL_TYPE_VAR_STRING, r.Fields[1].Type)
+	require.Equal(t, MYSQL_TYPE_LONGLONG, r.Fields[2].Type)
+
+	row, err := r.RowDatas[1].ParseBinary(r.Fields, nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(7), row[0].AsInt64())
+	require.Equal(t, "abc", string(row[1].AsString()))
+	require.EqualValues(t, FieldValueTypeUnsigned, row[2].Type)
+	require.Equal(t, uint64(math.MaxUint64), row[2].AsUint64())
+
+	r, err = BuildSimpleBinaryResultset([]string{"id"}, [][]any{{int64(7)}, {nil}})
+	require.NoError(t, err)
+	require.Equal(t, MYSQL_TYPE_LONGLONG, r.Fields[0].Type)
+	row, err = r.RowDatas[0].ParseBinary(r.Fields, nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(7), row[0].AsInt64())
+
+	_, err = BuildSimpleBinaryResultset([]string{"c"}, [][]any{{int64(1)}, {"abc"}})
+	require.ErrorContains(t, err, "row types aren't consistent")
+}
