@@ -45,7 +45,9 @@ func WithPoolLimits(minAlive, maxAlive, maxIdle int) PoolOption {
 
 func WithLogger(logger *slog.Logger) PoolOption {
 	return func(o *poolOptions) {
-		o.logger = logger
+		if logger != nil {
+			o.logger = logger
+		}
 	}
 }
 
