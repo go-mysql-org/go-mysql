@@ -834,6 +834,16 @@ func BuildSimpleBinaryResultset(names []string, values [][]any) (*Resultset, err
 				if err = formatField(field, value); err != nil {
 					return nil, errors.Trace(err)
 				}
+			} else if typ != r.Fields[j].Type {
+				oldIsNull, newIsNull := r.Fields[j].Type == MYSQL_TYPE_NULL, typ == MYSQL_TYPE_NULL
+				if oldIsNull && !newIsNull {
+					r.Fields[j].Type = typ
+					if err = formatField(r.Fields[j], value); err != nil {
+						return nil, errors.Trace(err)
+					}
+				} else if !oldIsNull && !newIsNull {
+					return nil, errors.Errorf("row types aren't consistent")
+				}
 			}
 			if value == nil {
 				nullBitmap[(j+2)/8] |= 1 << (uint(j+2) % 8)
