@@ -24,6 +24,47 @@ func TestGetIntNeg(t *testing.T) {
 	require.Equal(t, int64(-193), v)
 }
 
+func TestGetIntByName(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		value   FieldValue
+		want    int64
+		wantErr bool
+	}{
+		{"negative string", NewFieldValue(FieldValueTypeString, 0, []byte("-193")), -193, false},
+		{"negative float", NewFieldValue(FieldValueTypeFloat, math.Float64bits(-42.5), nil), -42, false},
+		{"negative integer", NewFieldValue(FieldValueTypeSigned, math.MaxUint64, nil), -1, false},
+		{"positive string", NewFieldValue(FieldValueTypeString, 0, []byte("42")), 42, false},
+		{"minimum integer", NewFieldValue(FieldValueTypeString, 0, []byte("-9223372036854775808")), math.MinInt64, false},
+		{"overflow", NewFieldValue(FieldValueTypeString, 0, []byte("9223372036854775808")), 0, true},
+		{"invalid string", NewFieldValue(FieldValueTypeString, 0, []byte("invalid")), 0, true},
+		{"null", NewFieldValue(FieldValueTypeNull, 0, nil), 0, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewResultset(1)
+			r.FieldNames["value"] = 0
+			r.Values = [][]FieldValue{{tt.value}}
+			want, wantErr := r.GetInt(0, 0)
+			got, err := r.GetIntByName(0, "value")
+			if tt.wantErr {
+				require.Error(t, wantErr)
+				require.EqualError(t, err, wantErr.Error())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, got)
+			}
+			require.Equal(t, want, got)
+		})
+	}
+
+	r := NewResultset(1)
+	r.FieldNames["value"] = 0
+	_, err := r.GetIntByName(0, "missing")
+	require.Error(t, err)
+	_, err = r.GetIntByName(0, "value")
+	require.Error(t, err)
+}
+
 func TestBuildSimpleTextResultsetDistinguishesEmptyValuesFromNull(t *testing.T) {
 	r, err := BuildSimpleTextResultset(
 		[]string{"empty_string", "empty_bytes", "null", "bool"},
