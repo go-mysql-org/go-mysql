@@ -113,6 +113,15 @@ type BinlogSyncerConfig struct {
 	// RecvBufferSize sets the size in bytes of the operating system's receive buffer associated with the connection.
 	RecvBufferSize int
 
+	// ReadAheadBufferSize enables transport-independent packet read-ahead when
+	// positive. Zero (the default) or negative values keep synchronous reads.
+	// TLS and plaintext use the same queue and ordered parser. This limits the
+	// charged packet capacity in queued/consumed batches, not total process RSS:
+	// one pending batch is outside the budget, and an oversized packet is
+	// admitted alone. Parsed events retained downstream are not covered.
+	// Semi-sync keeps synchronous reads to preserve packet sequence/ACK ownership.
+	ReadAheadBufferSize int
+
 	// master heartbeat period
 	HeartbeatPeriod time.Duration
 
@@ -281,7 +290,7 @@ func (b *BinlogSyncer) close() {
 		if err := b.c.SetReadDeadline(utils.Now().Add(100 * time.Millisecond)); err != nil {
 			b.cfg.Logger.Warn("could not set read deadline, closing connection to unblock reader",
 				slog.Any("error", err))
-			if err := b.c.Close(); err != nil {
+			if err := b.c.Conn.Conn.Close(); err != nil {
 				b.cfg.Logger.Warn("could not close connection", slog.Any("error", err))
 			}
 		}
@@ -343,11 +352,6 @@ func (b *BinlogSyncer) registerSlave() error {
 		if err = b.c.SetCharset(b.cfg.Charset); err != nil {
 			return errors.Trace(err)
 		}
-	}
-
-	// set read timeout
-	if b.cfg.ReadTimeout > 0 {
-		_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
 	}
 
 	if b.cfg.RecvBufferSize > 0 {
@@ -804,8 +808,24 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 		b.wg.Done()
 	}()
 
+	var readAhead *packetReadAhead
+	defer func() {
+		if readAhead != nil {
+			readAhead.close()
+		}
+	}()
+
 	for {
-		data, err := b.c.ReadPacket()
+		var data []byte
+		var err error
+		if b.cfg.ReadAheadBufferSize > 0 && !b.cfg.SemiSyncEnabled {
+			if readAhead == nil {
+				readAhead = newPacketReadAhead(b.ctx, replicationPacketSource{b.c}, b.cfg.ReadAheadBufferSize)
+			}
+			data, err = readAhead.readPacket()
+		} else {
+			data, err = b.c.ReadPacket()
+		}
 		select {
 		case <-b.ctx.Done():
 			s.close()
@@ -814,7 +834,17 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 		}
 
 		if err != nil {
+			// Join the old producer before resetting parser/position state or
+			// replacing its connection. Pre-read data is never a resume position.
+			if readAhead != nil {
+				readAhead.close()
+				readAhead = nil
+			}
 			b.cfg.Logger.Error(err.Error())
+			if _, fatal := err.(*packetReadPanic); fatal {
+				s.closeWithError(err)
+				return
+			}
 			// we meet connection error, should re-connect again with
 			// last nextPos or nextGTID we got.
 			if len(b.nextPos.Name) == 0 && b.prevGset == nil {
@@ -859,11 +889,6 @@ func (b *BinlogSyncer) onStream(s *BinlogStreamer) {
 
 			// we connect the server and begin to re-sync again.
 			continue
-		}
-
-		// set read timeout
-		if b.cfg.ReadTimeout > 0 {
-			_ = b.c.SetReadDeadline(utils.Now().Add(b.cfg.ReadTimeout))
 		}
 
 		// Reset retry count on successful packet receieve

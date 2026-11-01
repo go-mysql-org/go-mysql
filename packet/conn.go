@@ -145,6 +145,22 @@ func (c *Conn) Flush() error {
 	return nil
 }
 
+// BufferedPacketSize returns the next complete uncompressed packet's payload
+// size, or -1 if reading it may require network I/O. It never fills the buffer
+// or consumes data, and must only be called by the owner of packet reads.
+// A maximum-length packet may have continuation packets, so it is not eligible.
+func (c *Conn) BufferedPacketSize() int {
+	if c.Compression != mysql.MYSQL_COMPRESS_NONE || c.br == nil || c.br.Buffered() < 4 {
+		return -1
+	}
+	header, _ := c.br.Peek(4)
+	size := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+	if size == mysql.MaxPayloadLen || c.br.Buffered() < 4+size {
+		return -1
+	}
+	return size
+}
+
 func (c *Conn) ReadPacket() ([]byte, error) {
 	return c.ReadPacketReuseMem(nil)
 }
@@ -258,8 +274,11 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 		buf := c.copyNBuf[:bcap]
 
 		// Call ReadAtLeast with the currentPacketReader as it may change on every iteration
-		// of this loop.
-		if c.readTimeout != 0 {
+		// of this loop. A complete uncompressed chunk already in bufio cannot
+		// block on the connection. Otherwise keep one deadline for the entire
+		// ReadAtLeast, including partial reads; refreshing on every underlying
+		// Read would let a slow peer extend the timeout indefinitely.
+		if c.readTimeout != 0 && (c.Compression != mysql.MYSQL_COMPRESS_NONE || c.br == nil || c.br.Buffered() < bcap) {
 			if err := c.SetReadDeadline(utils.Now().Add(c.readTimeout)); err != nil {
 				return written, err
 			}

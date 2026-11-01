@@ -138,6 +138,10 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		if err := c.eventHandler.OnRowsQueryEvent(e); err != nil {
 			return errors.Trace(err)
 		}
+	case *replication.MariadbAnnotateRowsEvent:
+		if err := c.eventHandler.OnRowsQueryEvent(&replication.RowsQueryEvent{Query: e.Query}); err != nil {
+			return errors.Trace(err)
+		}
 	case *replication.QueryEvent:
 		stmts, _, err := c.parser.Parse(string(e.Query), "", "")
 		if err != nil {

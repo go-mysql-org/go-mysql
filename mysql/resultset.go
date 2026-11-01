@@ -224,12 +224,12 @@ func (r *Resultset) GetInt(row, column int) (int64, error) {
 }
 
 func (r *Resultset) GetIntByName(row int, name string) (int64, error) {
-	v, err := r.GetUintByName(row, name)
+	column, err := r.NameIndex(name)
 	if err != nil {
 		return 0, err
 	}
 
-	return int64(v), nil
+	return r.GetInt(row, column)
 }
 
 func (r *Resultset) GetFloat(row, column int) (float64, error) {
