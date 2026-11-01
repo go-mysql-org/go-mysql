@@ -289,16 +289,25 @@ func (p *BinlogParser) getPayloadDecoder() (*zstd.Decoder, error) {
 }
 
 // putPayloadDecoder returns a decoder to the parser's decoder cache after
-// a successful decode; it is the counterpart of getPayloadDecoder. On a
-// decode failure, do not call it: drop the decoder instead, mirroring the
-// conservative handling in decodePayload.
+// a successful decode; it is the counterpart of getPayloadDecoder. A
+// decoder that cannot be cached is closed and dropped, never silently
+// left to the GC. On a decode failure, do not call it: close and drop
+// the decoder instead, mirroring the conservative handling in
+// decodePayload.
 func (p *BinlogParser) putPayloadDecoder(d *zstd.Decoder) {
-	if d == nil || p.decoderPool == nil {
+	if d == nil {
+		return
+	}
+	if p.decoderPool == nil {
+		// cache evicted by Close; close and drop
+		d.Close()
 		return
 	}
 	select {
 	case p.decoderPool <- d:
-	default: // slot already holds an idle decoder; drop the extra one
+	default:
+		// slot already holds an idle decoder; close and drop the extra one
+		d.Close()
 	}
 }
 

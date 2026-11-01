@@ -258,6 +258,16 @@ func TestPayloadDecoderParserClose(t *testing.T) {
 	_, err = fresh.DecodeAll(newTestTransactionPayloadEvent().Payload, nil)
 	require.NoError(t, err)
 	p.putPayloadDecoder(fresh)
+
+	// put on a full cache closes the dropped decoder
+	a, err := p.getPayloadDecoder() // takes fresh out of the cache
+	require.NoError(t, err)
+	b, err := p.getPayloadDecoder() // cache empty, builds a second decoder
+	require.NoError(t, err)
+	p.putPayloadDecoder(a) // cached
+	p.putPayloadDecoder(b) // full: closed and dropped
+	_, err = b.DecodeAll(newTestTransactionPayloadEvent().Payload, nil)
+	require.ErrorIs(t, err, zstd.ErrDecoderClosed)
 }
 
 // TestPayloadDecoderNoBackgroundGoroutine pins the invariant that makes
@@ -282,7 +292,7 @@ func TestPayloadDecoderNoBackgroundGoroutine(t *testing.T) {
 	}
 
 	goroutinesBefore := runtime.NumGoroutine()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		require.NoError(t, newEvent().decodePayload())
 	}
 

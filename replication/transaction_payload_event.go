@@ -136,8 +136,9 @@ func (e *TransactionPayloadEvent) decodePayload() error {
 	}
 	payloadUncompressed, err := decoder.DecodeAll(e.Payload, nil)
 	if err != nil {
-		// Be conservative and drop the decoder instead of returning it
-		// to the cache.
+		// Be conservative: close and drop the decoder instead of
+		// returning it to the cache.
+		decoder.Close()
 		return err
 	}
 	e.parent.putPayloadDecoder(decoder)
