@@ -13,7 +13,6 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/utils"
 )
 
 type DumpConfig struct {
@@ -142,6 +141,9 @@ func NewConfig(data string) (*Config, error) {
 }
 
 // NewDefaultConfig initiates some default config for Canal
+//
+// ServerID is chosen at random from 1001-2000. Random IDs can still collide,
+// so set ServerID explicitly when several replicas connect to the same source.
 func NewDefaultConfig() *Config {
 	c := new(Config)
 
@@ -149,7 +151,7 @@ func NewDefaultConfig() *Config {
 	c.User = mysql.DEFAULT_USER
 	c.Password = mysql.DEFAULT_PASSWORD
 	c.Charset = mysql.DEFAULT_CHARSET
-	c.ServerID = uint32(rand.New(rand.NewSource(utils.Now().Unix())).Intn(1000)) + 1001
+	c.ServerID = uint32(rand.Intn(1000)) + 1001
 	c.Flavor = mysql.DEFAULT_FLAVOR
 
 	c.Dump.ExecutionPath = mysql.DEFAULT_DUMP_EXECUTION_PATH
