@@ -1,6 +1,9 @@
 package mysql
 
 import (
+	"bytes"
+	"encoding/json"
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -642,6 +645,31 @@ func TestMysqlGTIDSet_String(t *testing.T) {
 
 		require.Equal(t, tc.output, g.String())
 	}
+}
+
+func TestMysqlGTIDSet_LogValue(t *testing.T) {
+	for _, gtidStr := range []string{
+		"",
+		"7c42a891-6bd3-4e05-9f28-a1d67e3bc450:1-3:5-8",
+		"7c42a891-6bd3-4e05-9f28-a1d67e3bc450:1-3:mytag:1-5",
+	} {
+		g, err := ParseMysqlGTIDSet(gtidStr)
+		require.NoError(t, err)
+		require.Equal(t, gtidStr, logValueAsJSON(t, g))
+	}
+
+	require.Nil(t, logValueAsJSON(t, (*MysqlGTIDSet)(nil)))
+}
+
+// logValueAsJSON logs v with slog's JSON handler and returns the decoded attribute.
+func logValueAsJSON(t *testing.T, v any) any {
+	t.Helper()
+	var output bytes.Buffer
+	slog.New(slog.NewJSONHandler(&output, nil)).Info("", slog.Any("v", v))
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(output.Bytes(), &entry))
+	require.Contains(t, entry, "v")
+	return entry["v"]
 }
 
 func TestNormalizeTag(t *testing.T) {

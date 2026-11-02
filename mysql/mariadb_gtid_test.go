@@ -420,3 +420,13 @@ func TestMariadbGTIDSetIsEmpty(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, nonEmptyGTIDSet.IsEmpty())
 }
+
+func TestMariadbGTIDSetLogValue(t *testing.T) {
+	for _, gtidStr := range []string{"", "1-2-3,4-5-6"} {
+		gset, err := ParseMariadbGTIDSet(gtidStr)
+		require.NoError(t, err)
+		require.Equal(t, gtidStr, logValueAsJSON(t, gset))
+	}
+
+	require.Nil(t, logValueAsJSON(t, (*MariadbGTIDSet)(nil)))
+}

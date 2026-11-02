@@ -62,8 +62,11 @@ func NewTag(str string) Tag {
 //nolint:revive // Can't use mysql.GTIDSet instead of mysql.MysqlGTIDSet as the former already exists and this is a specific implementation of that.
 type MysqlGTIDSet map[uuid.UUID]map[Tag]IntervalSlice
 
-// This ensures that MysqlGTIDSet implements the GTIDSet interface
-var _ GTIDSet = &MysqlGTIDSet{}
+// This ensures that MysqlGTIDSet implements the GTIDSet and slog.LogValuer interfaces
+var (
+	_ GTIDSet        = &MysqlGTIDSet{}
+	_ slog.LogValuer = &MysqlGTIDSet{}
+)
 
 func NewMysqlGTIDSet() MysqlGTIDSet {
 	return make(map[uuid.UUID]map[Tag]IntervalSlice)
@@ -325,6 +328,14 @@ func (s *MysqlGTIDSet) Equal(o GTIDSet) bool {
 
 func (s *MysqlGTIDSet) IsEmpty() bool {
 	return len(*s) == 0
+}
+
+// LogValue implements slog.LogValuer, rendering the set in its textual form.
+func (s *MysqlGTIDSet) LogValue() slog.Value {
+	if s == nil {
+		return slog.AnyValue(nil)
+	}
+	return slog.StringValue(s.String())
 }
 
 func (s *MysqlGTIDSet) String() string {
