@@ -131,6 +131,12 @@ func (c *Conn) dispatch(data []byte) any {
 			return err
 		}
 		return r
+	case mysql.COM_STMT_FETCH:
+		r, err := c.handleStmtFetch(data)
+		if err != nil {
+			return err
+		}
+		return r
 	case mysql.COM_STMT_CLOSE:
 		if err := c.handleStmtClose(data); err != nil {
 			return err

@@ -30,6 +30,10 @@ type Stmt struct {
 	// execution. COM_STMT_EXECUTE carries no inline value for them.
 	longData []bool
 
+	// cursor holds the result set of an execution that asked for a read-only
+	// cursor. COM_STMT_FETCH sends its rows in batches and drains RowDatas.
+	cursor *mysql.Resultset
+
 	// PreparedStmt contains common fields shared with client.Stmt for proxy passthrough
 	stmt.PreparedStmt
 }
@@ -114,7 +118,7 @@ func (c *Conn) writePrepare(s *Stmt) error {
 	return nil
 }
 
-func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
+func (c *Conn) handleStmtExecute(data []byte) (any, error) {
 	if len(data) < 9 {
 		return nil, mysql.ErrMalformPacket
 	}
@@ -133,6 +137,7 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 	pos++
 	// Supported types:
 	// - CURSOR_TYPE_NO_CURSOR
+	// - CURSOR_TYPE_READ_ONLY
 	// - PARAMETER_COUNT_AVAILABLE
 
 	// Make sure the first 4 bits are 0.
@@ -141,9 +146,6 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 	}
 
 	// Test for unsupported flags in the remaining 4 bits.
-	if flag&mysql.CURSOR_TYPE_READ_ONLY > 0 {
-		return nil, mysql.NewError(mysql.ER_UNKNOWN_ERROR, "unsupported flag CURSOR_TYPE_READ_ONLY")
-	}
 	if flag&mysql.CURSOR_TYPE_FOR_UPDATE > 0 {
 		return nil, mysql.NewError(mysql.ER_UNKNOWN_ERROR, "unsupported flag CURSOR_TYPE_FOR_UPDATE")
 	}
@@ -194,6 +196,11 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 		}
 	}
 
+	// An execution closes the cursor a previous one left open, whether or not
+	// this one succeeds: a stale cursor would answer the next fetch with the
+	// previous execution's rows.
+	c.resetCursor(s)
+
 	var r *mysql.Result
 	var err error
 	if r, err = c.h.HandleStmtExecute(s.Context, s.Query, s.Args); err != nil {
@@ -202,7 +209,61 @@ func (c *Conn) handleStmtExecute(data []byte) (*mysql.Result, error) {
 
 	s.ResetParams()
 
-	return r, nil
+	// A streaming result can't be buffered, so it keeps being sent inline.
+	if flag&mysql.CURSOR_TYPE_READ_ONLY == 0 || r == nil || !r.HasResultset() || r.IsStreaming() {
+		return r, nil
+	}
+
+	// MySQL answers a cursor execution with the column definitions only; the
+	// rows are served by COM_STMT_FETCH, which reads them from s.cursor.
+	s.cursor = r.Resultset
+	c.SetStatus(mysql.SERVER_STATUS_CURSOR_EXISTS)
+
+	return cursorResult{r.Resultset}, nil
+}
+
+// handleStmtFetch serves COM_STMT_FETCH, which asks for the next num_rows rows
+// of the cursor opened by COM_STMT_EXECUTE.
+func (c *Conn) handleStmtFetch(data []byte) (any, error) {
+	if len(data) < 8 {
+		return nil, mysql.ErrMalformPacket
+	}
+
+	id := binary.LittleEndian.Uint32(data[0:4])
+	numRows := binary.LittleEndian.Uint32(data[4:8])
+
+	s, ok := c.stmts[id]
+	if !ok {
+		return nil, mysql.NewDefaultError(mysql.ER_UNKNOWN_STMT_HANDLER, 5,
+			strconv.FormatUint(uint64(id), 10), "stmt_fetch")
+	}
+
+	if s.cursor == nil {
+		return nil, mysql.NewDefaultError(mysql.ER_STMT_HAS_NO_OPEN_CURSOR, id)
+	}
+
+	// num_rows 0 means all remaining rows.
+	if n := uint64(len(s.cursor.RowDatas)); numRows == 0 || uint64(numRows) > n {
+		numRows = uint32(n)
+	}
+
+	rows := s.cursor.RowDatas[:numRows]
+	s.cursor.RowDatas = s.cursor.RowDatas[numRows:]
+
+	if len(s.cursor.RowDatas) == 0 {
+		s.cursor = nil
+		c.UnsetStatus(mysql.SERVER_STATUS_CURSOR_EXISTS)
+		c.SetStatus(mysql.SERVER_STATUS_LAST_ROW_SEND)
+	}
+
+	return cursorRows(rows), nil
+}
+
+// resetCursor closes the cursor of s, if any, and clears its status flags.
+func (c *Conn) resetCursor(s *Stmt) {
+	s.cursor = nil
+	c.UnsetStatus(mysql.SERVER_STATUS_CURSOR_EXISTS)
+	c.UnsetStatus(mysql.SERVER_STATUS_LAST_ROW_SEND)
 }
 
 func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte) error {
@@ -393,6 +454,7 @@ func (c *Conn) handleStmtReset(data []byte) (*mysql.Result, error) {
 	}
 
 	s.ResetParams()
+	c.resetCursor(s)
 
 	return mysql.NewResultReserveResultset(0), nil
 }
@@ -414,6 +476,7 @@ func (c *Conn) handleStmtClose(data []byte) error {
 		return err
 	}
 
+	c.resetCursor(stmt)
 	delete(c.stmts, id)
 
 	return nil
