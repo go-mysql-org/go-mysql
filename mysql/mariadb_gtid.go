@@ -107,6 +107,12 @@ type MariadbGTIDSet struct {
 	Sets map[uint32]*MariadbGTID
 }
 
+// This ensures that MariadbGTIDSet implements the GTIDSet and slog.LogValuer interfaces
+var (
+	_ GTIDSet        = &MariadbGTIDSet{}
+	_ slog.LogValuer = &MariadbGTIDSet{}
+)
+
 // ParseMariadbGTIDSet parses str into mariadb gtid sets
 func ParseMariadbGTIDSet(str string) (GTIDSet, error) {
 	s := new(MariadbGTIDSet)
@@ -155,6 +161,14 @@ func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 		}
 	}
 	return nil
+}
+
+// LogValue implements slog.LogValuer, rendering the set in its textual form.
+func (s *MariadbGTIDSet) LogValue() slog.Value {
+	if s == nil {
+		return slog.AnyValue(nil)
+	}
+	return slog.StringValue(s.String())
 }
 
 func (s *MariadbGTIDSet) String() string {
