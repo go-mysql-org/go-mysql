@@ -434,7 +434,7 @@ func TestStmtCursor(t *testing.T) {
 			}
 			if deprecateEOF {
 				c.SetCapability(mysql.CLIENT_DEPRECATE_EOF)
-				c.serverConf.SetCapability(mysql.CLIENT_DEPRECATE_EOF)
+				require.NoError(t, c.serverConf.SetCapability(mysql.CLIENT_DEPRECATE_EOF))
 			}
 
 			st := &Stmt{}
@@ -488,13 +488,13 @@ func TestStmtCursor(t *testing.T) {
 			// than an empty batch that never ends.
 			packets = fetch(1)
 			require.Len(t, packets, 1)
-			require.Equal(t, byte(mysql.ERR_HEADER), packets[0][0])
+			require.Equal(t, mysql.ERR_HEADER, packets[0][0])
 			require.Equal(t, uint16(mysql.ER_STMT_HAS_NO_OPEN_CURSOR), binary.LittleEndian.Uint16(packets[0][1:3]))
 
 			// An execution without the cursor flag answers inline again, and
 			// closes the cursor left open by the previous one.
 			packets = execute(mysql.CURSOR_TYPE_NO_CURSOR)
-			require.Equal(t, byte(mysql.EOF_HEADER), packets[len(packets)-1][0])
+			require.Equal(t, mysql.EOF_HEADER, packets[len(packets)-1][0])
 			require.False(t, c.HasStatus(mysql.SERVER_STATUS_CURSOR_EXISTS))
 			require.False(t, c.HasStatus(mysql.SERVER_STATUS_LAST_ROW_SEND))
 			require.Nil(t, st.cursor)
@@ -541,6 +541,6 @@ func TestStmtCursorWithoutResultset(t *testing.T) {
 
 	packets := splitPackets(t, clientConn.WriteBuffered)
 	require.Len(t, packets, 1)
-	require.Equal(t, byte(mysql.OK_HEADER), packets[0][0])
+	require.Equal(t, mysql.OK_HEADER, packets[0][0])
 	require.False(t, c.HasStatus(mysql.SERVER_STATUS_CURSOR_EXISTS))
 }
