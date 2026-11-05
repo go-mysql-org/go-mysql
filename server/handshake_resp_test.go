@@ -2,8 +2,10 @@ package server
 
 import (
 	"bytes"
+	"net"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mocks"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/stretchr/testify/mock"
@@ -58,17 +60,8 @@ func TestDecodeFirstPart(t *testing.T) {
 }
 
 func TestReadDB(t *testing.T) {
-	handler := &mocks.Handler{}
-	c := &Conn{
-		h: handler,
-	}
+	c := &Conn{}
 	c.SetCapability(mysql.CLIENT_CONNECT_WITH_DB)
-	var dbName string
-
-	// when handler's UseDB is called, copy dbName to local variable
-	handler.On("UseDB", mock.IsType("")).Return(nil).Once().RunFn = func(args mock.Arguments) {
-		dbName = args[0].(string)
-	}
 
 	// example data from
 	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html#sect_protocol_connection_phase_packets_protocol_handshake_response41
@@ -84,8 +77,7 @@ func TestReadDB(t *testing.T) {
 	}
 	pos := 61
 
-	var err error
-	pos, err = c.readDb(data, pos)
+	dbName, pos, err := c.readDb(data, pos)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err.Error())
 	}
@@ -97,8 +89,42 @@ func TestReadDB(t *testing.T) {
 	if dbName != "test" {
 		t.Fatalf("unexpected db, got %s", dbName)
 	}
+}
 
-	handler.AssertExpectations(t)
+func TestUseDBAfterAuthentication(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	srv := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil)
+	authHandler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
+	require.NoError(t, authHandler.AddUser("root", "secret"))
+	handler := &mocks.Handler{}
+	handler.On("UseDB", "test").Return(nil)
+
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			if c, err := srv.NewCustomizedConn(conn, authHandler, handler); err == nil {
+				c.Close()
+			}
+		}
+	}()
+
+	// A client that fails to authenticate must not reach the handler.
+	_, err = client.Connect(l.Addr().String(), "nobody", "secret", "test")
+	require.Error(t, err)
+	_, err = client.Connect(l.Addr().String(), "root", "wrong", "test")
+	require.Error(t, err)
+	handler.AssertNotCalled(t, "UseDB", mock.Anything)
+
+	conn, err := client.Connect(l.Addr().String(), "root", "secret", "test")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	handler.AssertNumberOfCalls(t, "UseDB", 1)
 }
 
 func TestReadPluginName(t *testing.T) {
@@ -199,7 +225,7 @@ func TestReadUserName_MissingNulTerminator(t *testing.T) {
 func TestReadDb_MissingNulTerminator(t *testing.T) {
 	c := &Conn{capability: mysql.CLIENT_CONNECT_WITH_DB}
 	// CLIENT_CONNECT_WITH_DB set, non-empty db field, but no NUL.
-	if _, err := c.readDb([]byte("somedb"), 0); err == nil {
+	if _, _, err := c.readDb([]byte("somedb"), 0); err == nil {
 		t.Fatal("expected error for non-terminated db name, got nil")
 	}
 }
