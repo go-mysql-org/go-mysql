@@ -76,6 +76,11 @@ func (c *Conn) HandleCommand() error {
 }
 
 func (c *Conn) dispatch(data []byte) any {
+	if len(data) == 0 {
+		// MySQL reads an empty packet as COM_SLEEP, which it rejects as an
+		// unknown command.
+		return mysql.NewDefaultError(mysql.ER_UNKNOWN_COM_ERROR)
+	}
 	cmd := data[0]
 	data = data[1:]
 
