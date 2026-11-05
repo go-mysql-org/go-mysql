@@ -258,3 +258,14 @@ func TestReadAttributes(t *testing.T) {
 		}
 	}
 }
+
+func TestReadAttributes_TruncatedLength(t *testing.T) {
+	for _, data := range [][]byte{
+		{0xfc, 0x01},       // the length of all attributes
+		{0x02, 0xfc, 0x01}, // the length of the first key
+	} {
+		c := &Conn{}
+		_, err := c.readAttributes(data, 0)
+		require.NoError(t, err, "%x", data)
+	}
+}
