@@ -8,6 +8,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mocks"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -92,39 +93,54 @@ func TestReadDB(t *testing.T) {
 }
 
 func TestUseDBAfterAuthentication(t *testing.T) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer l.Close()
-
-	srv := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil)
 	authHandler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
 	require.NoError(t, authHandler.AddUser("root", "secret"))
-	handler := &mocks.Handler{}
-	handler.On("UseDB", "test").Return(nil)
 
-	go func() {
-		for {
-			conn, err := l.Accept()
-			if err != nil {
-				return
-			}
-			if c, err := srv.NewCustomizedConn(conn, authHandler, handler); err == nil {
-				c.Close()
-			}
-		}
-	}()
+	for name, srv := range map[string]*Server{
+		"no auth switch": NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil),
+		// The client starts with sha256_password, and the server switches it
+		// to the user's mysql_native_password.
+		"auth switch": NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_SHA256_PASSWORD, test_keys.RSAKey(), nil),
+	} {
+		t.Run(name, func(t *testing.T) {
+			l, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer l.Close()
 
-	// A client that fails to authenticate must not reach the handler.
-	_, err = client.Connect(l.Addr().String(), "nobody", "secret", "test")
-	require.Error(t, err)
-	_, err = client.Connect(l.Addr().String(), "root", "wrong", "test")
-	require.Error(t, err)
-	handler.AssertNotCalled(t, "UseDB", mock.Anything)
+			handler := &mocks.Handler{}
+			handler.On("UseDB", "test").Return(nil)
+			handler.On("UseDB", "missing").Return(mysql.NewDefaultError(mysql.ER_BAD_DB_ERROR, "missing"))
 
-	conn, err := client.Connect(l.Addr().String(), "root", "secret", "test")
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-	handler.AssertNumberOfCalls(t, "UseDB", 1)
+			go func() {
+				for {
+					conn, err := l.Accept()
+					if err != nil {
+						return
+					}
+					if c, err := srv.NewCustomizedConn(conn, authHandler, handler); err == nil {
+						c.Close()
+					}
+				}
+			}()
+			addr := l.Addr().String()
+
+			// A client that fails to authenticate must not reach the handler.
+			_, err = client.Connect(addr, "nobody", "secret", "test")
+			require.Error(t, err)
+			_, err = client.Connect(addr, "root", "wrong", "test")
+			require.Error(t, err)
+			handler.AssertNotCalled(t, "UseDB", mock.Anything)
+
+			conn, err := client.Connect(addr, "root", "secret", "test")
+			require.NoError(t, err)
+			require.NoError(t, conn.Close())
+			handler.AssertNumberOfCalls(t, "UseDB", 1)
+
+			// An error from UseDB reaches the client.
+			_, err = client.Connect(addr, "root", "secret", "missing")
+			require.ErrorContains(t, err, "Unknown database 'missing'")
+		})
+	}
 }
 
 func TestReadPluginName(t *testing.T) {
