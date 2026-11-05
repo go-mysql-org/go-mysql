@@ -30,10 +30,16 @@ func TestReadAuthData(t *testing.T) {
 func TestReadAuthData_LengthPastEnd(t *testing.T) {
 	c := &Conn{capability: mysql.CLIENT_SECURE_CONNECTION}
 
+	// Auth data that ends at the end of the packet is read.
+	auth, authLen, pos, err := c.readAuthData(append(make([]byte, 0, 8), 0x01, 0xab), 0)
+	require.NoError(t, err)
+	require.Equal(t, []byte{0xab}, auth)
+	require.Equal(t, 1, authLen)
+	require.Equal(t, 1, pos)
+
 	// The auth data length is 1, but the packet ends after it. The slice has
 	// spare capacity, as packets from the packet layer usually do.
-	data := append(make([]byte, 0, 8), 0x01)
-	_, _, _, err := c.readAuthData(data, 0)
+	_, _, _, err = c.readAuthData(append(make([]byte, 0, 8), 0x01), 0)
 	var myErr *mysql.MyError
 	require.ErrorAs(t, err, &myErr)
 	require.EqualValues(t, mysql.ER_HANDSHAKE_ERROR, myErr.Code)
