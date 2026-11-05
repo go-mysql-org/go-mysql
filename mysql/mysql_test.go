@@ -87,19 +87,6 @@ func TestMysqlEmptyDecode(t *testing.T) {
 	require.Equal(t, 0, n)
 }
 
-func TestMysqlTruncatedDecode(t *testing.T) {
-	for _, b := range [][]byte{
-		{0xfc},
-		{0xfc, 0x01},
-		{0xfd, 0x01, 0x02},
-		{0xfe, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07},
-	} {
-		_, isNull, n := LengthEncodedInt(b)
-		require.True(t, isNull, "%x", b)
-		require.Equal(t, len(b), n, "%x", b)
-	}
-}
-
 func TestValidateFlavor(t *testing.T) {
 	tbls := []struct {
 		flavor string

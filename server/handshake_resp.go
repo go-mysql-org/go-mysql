@@ -236,7 +236,15 @@ func (c *Conn) handleAuthMatch() (bool, error) {
 	return true, nil
 }
 
-func (c *Conn) readAttributes(data []byte, pos int) (int, error) {
+func (c *Conn) readAttributes(data []byte, pos int) (newPos int, err error) {
+	// prevent 'panic: runtime error: index out of range' error on a truncated
+	// length-encoded integer, as decodeFirstPart does
+	defer func() {
+		if recover() != nil {
+			err = mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+		}
+	}()
+
 	// read length of attribute data
 	attrLen, isNull, skip := mysql.LengthEncodedInt(data[pos:])
 	pos += skip

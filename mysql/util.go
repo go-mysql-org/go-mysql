@@ -342,10 +342,6 @@ func BFixedLengthInt(buf []byte) uint64 {
 	return num
 }
 
-// LengthEncodedInt decodes the length-encoded integer at the start of b, and
-// returns its value and the number of bytes it takes. If b is empty, or
-// shorter than its first byte says the integer is, there is no value to read:
-// it returns isNull true, as for a NULL, and n = len(b).
 func LengthEncodedInt(b []byte) (num uint64, isNull bool, n int) {
 	if len(b) == 0 {
 		return 0, true, 0
@@ -358,23 +354,14 @@ func LengthEncodedInt(b []byte) (num uint64, isNull bool, n int) {
 
 		// 252: value of following 2
 	case 0xfc:
-		if len(b) < 3 {
-			return 0, true, len(b)
-		}
 		return uint64(b[1]) | uint64(b[2])<<8, false, 3
 
 		// 253: value of following 3
 	case 0xfd:
-		if len(b) < 4 {
-			return 0, true, len(b)
-		}
 		return uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16, false, 4
 
 		// 254: value of following 8
 	case 0xfe:
-		if len(b) < 9 {
-			return 0, true, len(b)
-		}
 		return uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16 |
 				uint64(b[4])<<24 | uint64(b[5])<<32 | uint64(b[6])<<40 |
 				uint64(b[7])<<48 | uint64(b[8])<<56,
