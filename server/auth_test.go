@@ -21,6 +21,7 @@ func TestCompareNativePasswordAuthData_ResponseForEmptyPassword(t *testing.T) {
 	// A non-empty response is checked against the empty password too...
 	err := c.compareNativePasswordAuthData(mysql.CalcNativePassword(c.salt, []byte("wrong")), credential)
 	require.ErrorIs(t, err, ErrAccessDenied)
+	require.NotErrorIs(t, err, ErrAccessDeniedNoPassword) // "using password: YES"
 
 	// ...which doesn't stop the check of the next password.
 	err = c.compareNativePasswordAuthData(mysql.CalcNativePassword(c.salt, []byte("secret")), credential)
