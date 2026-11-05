@@ -267,6 +267,8 @@ func TestReadAttributes_TruncatedLength(t *testing.T) {
 	} {
 		c := &Conn{}
 		_, err := c.readAttributes(data, 0)
-		require.ErrorContains(t, err, "Bad handshake", "%x", data)
+		var myErr *mysql.MyError
+		require.ErrorAs(t, err, &myErr, "%x", data)
+		require.EqualValues(t, mysql.ER_HANDSHAKE_ERROR, myErr.Code, "%x", data)
 	}
 }
