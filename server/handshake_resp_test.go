@@ -2,12 +2,14 @@ package server
 
 import (
 	"bytes"
+	"encoding/binary"
 	"net"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mocks"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -93,16 +95,36 @@ func TestReadDB(t *testing.T) {
 }
 
 func TestUseDBAfterAuthentication(t *testing.T) {
-	authHandler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
-	require.NoError(t, authHandler.AddUser("root", "secret"))
-
-	for name, srv := range map[string]*Server{
-		"no auth switch": NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil),
-		// The client starts with sha256_password, and the server switches it
-		// to the user's mysql_native_password.
-		"auth switch": NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_SHA256_PASSWORD, test_keys.RSAKey(), nil),
+	for _, tc := range []struct {
+		name     string
+		srv      *Server
+		userAuth string // the auth method the user's password is stored for
+	}{
+		{
+			name:     "no auth switch",
+			srv:      NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil),
+			userAuth: mysql.AUTH_NATIVE_PASSWORD,
+		},
+		{
+			// The client starts with sha256_password, and the server switches
+			// it to the user's mysql_native_password.
+			name:     "auth switch",
+			srv:      NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_SHA256_PASSWORD, test_keys.RSAKey(), nil),
+			userAuth: mysql.AUTH_NATIVE_PASSWORD,
+		},
+		{
+			// Nothing is cached for the first logins, so the server asks for
+			// the full password, which the client encrypts with its RSA key.
+			name:     "caching_sha2_password full authentication",
+			srv:      NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), nil),
+			userAuth: mysql.AUTH_CACHING_SHA2_PASSWORD,
+		},
 	} {
-		t.Run(name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := tc.srv
+			authHandler := NewInMemoryAuthenticationHandler()
+			require.NoError(t, authHandler.AddUser("root", "secret", tc.userAuth))
+
 			l, err := net.Listen("tcp", "127.0.0.1:0")
 			require.NoError(t, err)
 			defer l.Close()
@@ -141,6 +163,66 @@ func TestUseDBAfterAuthentication(t *testing.T) {
 			require.ErrorContains(t, err, "Unknown database 'missing'")
 		})
 	}
+}
+
+// As in MySQL, an empty database name in the handshake response selects no
+// database. The client package never sends one, so this writes the handshake
+// response itself.
+func TestUseDBSkipsEmptyName(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	srv := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil)
+	authHandler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
+	require.NoError(t, authHandler.AddUser("root", "secret"))
+	handler := &mocks.Handler{}
+	handler.On("UseDB", mock.Anything).Return(nil)
+
+	go func() {
+		conn, err := l.Accept()
+		if err != nil {
+			return
+		}
+		if c, err := srv.NewCustomizedConn(conn, authHandler, handler); err == nil {
+			c.Close()
+		}
+	}()
+
+	conn, err := net.Dial("tcp", l.Addr().String())
+	require.NoError(t, err)
+	defer conn.Close()
+	pc := packet.NewConn(conn)
+
+	greeting, err := pc.ReadPacket()
+	require.NoError(t, err)
+	// The scramble's first 8 bytes follow the protocol version, the server
+	// version and the connection id. The other 12 follow a filler byte, the
+	// capability flags, the charset, the status, the scramble length and 10
+	// reserved bytes.
+	pos := bytes.IndexByte(greeting[1:], 0x00) + 2 + 4
+	salt := append([]byte{}, greeting[pos:pos+8]...)
+	pos += 8 + 1 + 2 + 1 + 2 + 2 + 1 + 10
+	salt = append(salt, greeting[pos:pos+12]...)
+
+	auth := mysql.CalcNativePassword(salt, []byte("secret"))
+	data := make([]byte, 4) // the packet header, which WritePacket fills in
+	data = binary.LittleEndian.AppendUint32(data, mysql.CLIENT_PROTOCOL_41|mysql.CLIENT_SECURE_CONNECTION|
+		mysql.CLIENT_PLUGIN_AUTH|mysql.CLIENT_CONNECT_WITH_DB)
+	data = binary.LittleEndian.AppendUint32(data, 0) // max packet size
+	data = append(data, mysql.DEFAULT_COLLATION_ID)
+	data = append(data, make([]byte, 23)...)
+	data = append(data, "root\x00"...)
+	data = append(data, byte(len(auth)))
+	data = append(data, auth...)
+	data = append(data, 0x00) // the empty database name
+	data = append(data, mysql.AUTH_NATIVE_PASSWORD+"\x00"...)
+	require.NoError(t, pc.WritePacket(data))
+
+	resp, err := pc.ReadPacket()
+	require.NoError(t, err)
+	require.Equal(t, mysql.OK_HEADER, resp[0])
+	handler.AssertNotCalled(t, "UseDB", mock.Anything)
 }
 
 func TestReadPluginName(t *testing.T) {
