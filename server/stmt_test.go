@@ -478,11 +478,25 @@ func TestStmtCursor(t *testing.T) {
 			require.Equal(t, rows[1], packets[1])
 			require.Equal(t, mysql.SERVER_STATUS_CURSOR_EXISTS, statusOf(t, packets[2]))
 
+			// A zero-count fetch asks for no rows: an empty batch, the cursor
+			// still open, and the remaining rows served afterwards.
+			packets = fetch(0)
+			require.Len(t, packets, 1)
+			require.Equal(t, mysql.SERVER_STATUS_CURSOR_EXISTS, statusOf(t, packets[0]))
+			require.NotNil(t, st.cursor)
+
 			// The last row is sent with SERVER_STATUS_LAST_ROW_SEND.
 			packets = fetch(2)
 			require.Len(t, packets, 2)
 			require.Equal(t, rows[2], packets[0])
 			require.Equal(t, mysql.SERVER_STATUS_LAST_ROW_SEND, statusOf(t, packets[1]))
+
+			// The flags describe this response only: the next command answers
+			// without them.
+			packets = run(mysql.COM_PING)
+			require.Len(t, packets, 1)
+			require.Zero(t, uint16(packets[0][3])|uint16(packets[0][4])<<8)
+			require.False(t, c.HasStatus(mysql.SERVER_STATUS_LAST_ROW_SEND))
 
 			// A drained cursor is closed, so fetching again is an error rather
 			// than an empty batch that never ends.

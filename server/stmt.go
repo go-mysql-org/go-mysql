@@ -242,18 +242,23 @@ func (c *Conn) handleStmtFetch(data []byte) (any, error) {
 		return nil, mysql.NewDefaultError(mysql.ER_STMT_HAS_NO_OPEN_CURSOR, id)
 	}
 
-	// num_rows 0 means all remaining rows.
-	if n := uint64(len(s.cursor.RowDatas)); numRows == 0 || uint64(numRows) > n {
+	// A count larger than what is left serves the rest. Zero is a request for
+	// no rows: the batch comes back empty and the cursor stays open, the same
+	// answer MySQL gives.
+	if n := uint64(len(s.cursor.RowDatas)); uint64(numRows) > n {
 		numRows = uint32(n)
 	}
 
 	rows := s.cursor.RowDatas[:numRows]
 	s.cursor.RowDatas = s.cursor.RowDatas[numRows:]
 
+	// dispatch clears the cursor flags before every command, so the batch that
+	// keeps the cursor open has to say so again.
 	if len(s.cursor.RowDatas) == 0 {
 		s.cursor = nil
-		c.UnsetStatus(mysql.SERVER_STATUS_CURSOR_EXISTS)
 		c.SetStatus(mysql.SERVER_STATUS_LAST_ROW_SEND)
+	} else {
+		c.SetStatus(mysql.SERVER_STATUS_CURSOR_EXISTS)
 	}
 
 	return cursorRows(rows), nil
