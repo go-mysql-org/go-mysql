@@ -14,6 +14,8 @@ import (
 // Handler is what a server needs to implement the client-server protocol
 type Handler interface {
 	// handle COM_INIT_DB command, you can check whether the dbName is valid, or other.
+	// It also handles the database the client names in the handshake response: that one is
+	// selected once the client is authenticated, before OnAuthSuccess, and only if the name is not empty.
 	UseDB(dbName string) error
 	// handle COM_QUERY command, like SELECT, INSERT, UPDATE, etc...
 	// If Result has a Resultset (SELECT, SHOW, etc...), we will send this as the response, otherwise, we will send Result
