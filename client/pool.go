@@ -17,9 +17,15 @@ import (
 Pool for efficient reuse of connections.
 
 Usage:
-	pool := client.NewPool(log.Debugf, 100, 400, 5, `127.0.0.1:3306`, `username`, `userpwd`, `dbname`)
+	pool, err := client.NewPoolWithOptions(`127.0.0.1:3306`, `username`, `userpwd`, `dbname`)
+	if err != nil {
+		// handle error
+	}
 	...
-	conn, _ := pool.GetConn(ctx)
+	conn, err := pool.GetConn(ctx)
+	if err != nil {
+		// handle error
+	}
 	defer pool.PutConn(conn)
 	conn.Execute/conn.Begin/etc...
 */
@@ -109,6 +115,10 @@ func NewPoolWithOptions(
 		po.maxIdle = po.minAlive
 	}
 
+	if po.logger == nil {
+		po.logger = slog.Default()
+	}
+
 	pool := &Pool{
 		logger:   po.logger,
 		minAlive: po.minAlive,
@@ -158,6 +168,10 @@ func NewPoolWithOptions(
 // may be greater by 1 inside newConnectionProducer).
 // maxIdle specifies the maximum number of idle connections (see DefaultIdleTimeout).
 //
+// If pool initialization fails, NewPool logs the error (using logger, or the default slog logger
+// when logger is nil) and returns nil. Callers must verify the returned pool is not nil before
+// calling methods like GetConn, or prefer NewPoolWithOptions for explicit error handling.
+//
 // Deprecated: use NewPoolWithOptions
 func NewPool(
 	logger *slog.Logger,
@@ -179,14 +193,21 @@ func NewPool(
 		WithPoolLimits(minAlive, maxAlive, maxIdle),
 		WithConnOptions(options...),
 	)
-	if err != nil && logger != nil {
-		logger.Error("Pool: NewPool", slog.Any("error", err))
+	if err != nil {
+		if logger != nil {
+			logger.Error("Pool: NewPool", slog.Any("error", err))
+		} else {
+			slog.Error("Pool: NewPool", slog.Any("error", err))
+		}
 	}
 
 	return pool
 }
 
 func (pool *Pool) GetStats(stats *ConnectionStats) {
+	if pool == nil {
+		return
+	}
 	pool.synchro.Lock()
 
 	*stats = pool.synchro.stats
@@ -198,6 +219,9 @@ func (pool *Pool) GetStats(stats *ConnectionStats) {
 
 // GetConn returns connection from the pool or create new
 func (pool *Pool) GetConn(ctx context.Context) (*Conn, error) {
+	if pool == nil {
+		return nil, errors.Errorf("failed get conn, pool is nil")
+	}
 	for {
 		if pool.ctx.Err() != nil {
 			return nil, errors.Errorf("failed get conn, pool closed")
@@ -221,6 +245,12 @@ func (pool *Pool) GetConn(ctx context.Context) (*Conn, error) {
 
 // PutConn returns working connection back to pool
 func (pool *Pool) PutConn(conn *Conn) {
+	if pool == nil {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		return
+	}
 	pool.putConnection(Connection{
 		conn:      conn,
 		lastUseAt: pool.nowTs(),
@@ -229,6 +259,12 @@ func (pool *Pool) PutConn(conn *Conn) {
 
 // DropConn closes the connection without any checks
 func (pool *Pool) DropConn(conn *Conn) {
+	if pool == nil {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		return
+	}
 	pool.closeConn(conn)
 }
 
@@ -569,6 +605,9 @@ func (pool *Pool) ping(conn *Conn) error {
 // Close only shutdown idle connections. we couldn't control the connection which not in the pool.
 // So before call Close, Call PutConn to put all connections that in use back to connection pool first.
 func (pool *Pool) Close() {
+	if pool == nil {
+		return
+	}
 	pool.cancel()
 	// wait newConnectionProducer exit.
 	pool.wg.Wait()
