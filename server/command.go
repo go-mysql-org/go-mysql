@@ -78,6 +78,12 @@ func (c *Conn) HandleCommand() error {
 }
 
 func (c *Conn) dispatch(data []byte) any {
+	// Cursor flags describe the response to the command being handled. They
+	// live on the connection, so they are cleared here rather than left for
+	// whatever the next unrelated OK or EOF packet happens to report.
+	c.UnsetStatus(mysql.SERVER_STATUS_CURSOR_EXISTS)
+	c.UnsetStatus(mysql.SERVER_STATUS_LAST_ROW_SEND)
+
 	cmd := data[0]
 	data = data[1:]
 
@@ -127,6 +133,12 @@ func (c *Conn) dispatch(data []byte) any {
 		return st
 	case mysql.COM_STMT_EXECUTE:
 		r, err := c.handleStmtExecute(data)
+		if err != nil {
+			return err
+		}
+		return r
+	case mysql.COM_STMT_FETCH:
+		r, err := c.handleStmtFetch(data)
 		if err != nil {
 			return err
 		}
