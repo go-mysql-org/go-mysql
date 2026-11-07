@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/test_util"
@@ -188,6 +189,84 @@ func (s *canalTestSuite) TestAnalyzeAdvancesSyncedPos() {
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), startingPos.Name, endingPos.Name)
 	require.Greater(s.T(), endingPos.Pos, startingPos.Pos)
+}
+
+type rowsCollector struct {
+	DummyEventHandler
+	rows chan *RowsEvent
+}
+
+func (h *rowsCollector) OnRow(e *RowsEvent) error {
+	h.rows <- e
+	return nil
+}
+
+func (h *rowsCollector) String() string {
+	return "rowsCollector"
+}
+
+// TestSkippedColumns checks that a column left out of a partial row image
+// (binlog_row_image=MINIMAL, set per session) can be told apart from a NULL.
+func (s *canalTestSuite) TestSkippedColumns() {
+	<-s.c.WaitDumpDone()
+
+	s.execute("DROP TABLE IF EXISTS test.canal_skipped")
+	s.execute("CREATE TABLE test.canal_skipped (id int PRIMARY KEY, name varchar(20) NOT NULL, note varchar(20) NULL)")
+	s.execute("INSERT INTO test.canal_skipped VALUES (1, 'a', 'keep'), (2, 'b', 'drop')")
+
+	pos, err := s.c.GetMasterPos()
+	require.NoError(s.T(), err)
+
+	cfg := NewDefaultConfig()
+	cfg.Addr = s.c.cfg.Addr
+	cfg.Flavor = s.c.cfg.Flavor
+	cfg.User = "root"
+	cfg.Dump.ExecutionPath = ""
+	cfg.IncludeTableRegex = []string{`.*\.canal_skipped`}
+	cfg.ExcludeTableRegex = nil
+	c, err := NewCanal(cfg)
+	require.NoError(s.T(), err)
+	defer c.Close()
+
+	h := &rowsCollector{rows: make(chan *RowsEvent, 8)}
+	c.SetEventHandler(h)
+	go func() {
+		_ = c.RunFrom(pos)
+	}()
+
+	// binlog_row_image is per session, so use a dedicated connection.
+	conn, err := client.Connect(cfg.Addr, "root", "", "test")
+	require.NoError(s.T(), err)
+	defer conn.Close()
+	_, err = conn.Execute("SET SESSION binlog_row_image = 'MINIMAL'")
+	require.NoError(s.T(), err)
+	_, err = conn.Execute("UPDATE test.canal_skipped SET name = 'a2' WHERE id = 1")
+	require.NoError(s.T(), err)
+	_, err = conn.Execute("UPDATE test.canal_skipped SET note = NULL WHERE id = 2")
+	require.NoError(s.T(), err)
+
+	next := func() *RowsEvent {
+		select {
+		case e := <-h.rows:
+			return e
+		case <-time.After(10 * time.Second):
+			s.T().Fatal("timeout waiting for row event")
+			return nil
+		}
+	}
+
+	// note is not in the row image: nil in Rows, listed in SkippedColumns.
+	e := next()
+	require.Equal(s.T(), UpdateAction, e.Action)
+	require.Len(s.T(), e.Rows, 2)
+	require.Equal(s.T(), [][]int{{1, 2}, {0, 2}}, e.SkippedColumns)
+	require.Nil(s.T(), e.Rows[1][2])
+
+	// note is in the row image and really NULL: nil in Rows, not skipped.
+	e = next()
+	require.Len(s.T(), e.Rows, 2)
+	require.Equal(s.T(), [][]int{{1, 2}, {0, 1}}, e.SkippedColumns)
+	require.Nil(s.T(), e.Rows[1][2])
 }
 
 func (s *canalTestSuite) TestCanalFilter() {
