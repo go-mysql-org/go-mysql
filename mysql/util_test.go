@@ -7,6 +7,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDecodePasswordHex(t *testing.T) {
+	for encoded, decoded := range map[string][]byte{
+		"":        {}, // the hash of an empty password
+		"01abff":  {0x01, 0xab, 0xff},
+		"*01abff": {0x01, 0xab, 0xff},
+	} {
+		got, err := DecodePasswordHex(encoded)
+		require.NoError(t, err, encoded)
+		require.Equal(t, decoded, got, encoded)
+	}
+}
+
 func TestCompareServerVersions(t *testing.T) {
 	tests := []struct {
 		A      string
