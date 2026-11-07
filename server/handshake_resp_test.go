@@ -382,3 +382,17 @@ func TestReadAttributes(t *testing.T) {
 		}
 	}
 }
+
+func TestReadAttributes_TruncatedLength(t *testing.T) {
+	for _, data := range [][]byte{
+		{0xfc, 0x01},                   // the length of all attributes
+		{0x02, 0xfc, 0x01},             // the length of the first key
+		{0x04, 0x01, 0x6b, 0xfc, 0x01}, // the length of the first value
+	} {
+		c := &Conn{}
+		_, err := c.readAttributes(data, 0)
+		var myErr *mysql.MyError
+		require.ErrorAs(t, err, &myErr, "%x", data)
+		require.EqualValues(t, mysql.ER_HANDSHAKE_ERROR, myErr.Code, "%x", data)
+	}
+}
