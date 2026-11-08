@@ -27,6 +27,11 @@ type RowsEvent struct {
 	// Header can be used to inspect the event
 	Header *replication.EventHeader
 	Flags  uint16
+	// SkippedColumns lists, for every row in Rows, the indexes of the columns
+	// that were left out of the row image because of binlog_row_image=MINIMAL
+	// or NOBLOB. A nil in Rows at one of these indexes means "not logged",
+	// while a nil at any other index means NULL.
+	SkippedColumns [][]int
 }
 
 func newRowsEvent(table *schema.Table, action string, rows [][]any, header *replication.EventHeader, ev *replication.RowsEvent) *RowsEvent {
@@ -38,6 +43,7 @@ func newRowsEvent(table *schema.Table, action string, rows [][]any, header *repl
 	e.Header = header
 	if ev != nil {
 		e.Flags = ev.Flags
+		e.SkippedColumns = ev.SkippedColumns
 	}
 
 	e.handleUnsigned()
