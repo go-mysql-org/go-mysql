@@ -84,6 +84,11 @@ func (c *Conn) dispatch(data []byte) any {
 	c.UnsetStatus(mysql.SERVER_STATUS_CURSOR_EXISTS)
 	c.UnsetStatus(mysql.SERVER_STATUS_LAST_ROW_SEND)
 
+	if len(data) == 0 {
+		// MySQL reads an empty packet as COM_SLEEP, which it rejects as an
+		// unknown command.
+		return mysql.NewDefaultError(mysql.ER_UNKNOWN_COM_ERROR)
+	}
 	cmd := data[0]
 	data = data[1:]
 
