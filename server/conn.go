@@ -17,6 +17,7 @@ type Conn struct {
 	serverConf     *Server
 	capability     uint32
 	charset        uint8
+	collationID    uint16
 	authPluginName string
 	attributes     map[string]string
 	connectionID   uint32
@@ -109,14 +110,7 @@ func (c *Conn) handshake() error {
 	}
 
 	if err := c.readHandshakeResponse(); err != nil {
-		if errors.Is(err, ErrAccessDenied) {
-			var usingPasswd uint16 = mysql.ER_YES
-			if errors.Is(err, ErrAccessDeniedNoPassword) {
-				usingPasswd = mysql.ER_NO
-			}
-			err = mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.user,
-				c.RemoteAddr().String(), mysql.MySQLErrName[usingPasswd])
-		}
+		err = c.accessDeniedError(err)
 		c.authHandler.OnAuthFailure(c, err)
 		_ = c.writeError(err)
 		return err
@@ -134,6 +128,20 @@ func (c *Conn) handshake() error {
 	c.ResetSequence()
 
 	return nil
+}
+
+// accessDeniedError turns ErrAccessDenied into the ER_ACCESS_DENIED_ERROR a
+// client is sent; other errors are returned unchanged.
+func (c *Conn) accessDeniedError(err error) error {
+	if !errors.Is(err, ErrAccessDenied) {
+		return err
+	}
+	var usingPasswd uint16 = mysql.ER_YES
+	if errors.Is(err, ErrAccessDeniedNoPassword) {
+		usingPasswd = mysql.ER_NO
+	}
+	return mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.user,
+		c.RemoteAddr().String(), mysql.MySQLErrName[usingPasswd])
 }
 
 func (c *Conn) Close() {
@@ -173,8 +181,17 @@ func (c *Conn) deprecateEOF() bool {
 		c.serverConf.Capability()&mysql.CLIENT_DEPRECATE_EOF > 0
 }
 
+// Charset returns the low byte of the client's collation ID. The handshake
+// carries only that byte, but COM_CHANGE_USER carries all 16 bits; see
+// CollationID.
 func (c *Conn) Charset() uint8 {
 	return c.charset
+}
+
+// CollationID returns the client's collation ID: from the handshake (8 bits),
+// or from the last COM_CHANGE_USER that named one (16 bits).
+func (c *Conn) CollationID() uint16 {
+	return c.collationID
 }
 
 // Attributes returns the connection attributes.

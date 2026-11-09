@@ -89,6 +89,50 @@ func (s *clientTestSuite) TestConn_Ping() {
 	require.NoError(s.T(), err)
 }
 
+func (s *clientTestSuite) TestConn_ChangeUser() {
+	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
+	c, err := Connect(addr, *testUser, *testPassword, *testDB)
+	require.NoError(s.T(), err)
+	defer c.Close()
+
+	_, err = c.Execute("SET @change_user = 1")
+	require.NoError(s.T(), err)
+	_, err = c.Execute("BEGIN")
+	require.NoError(s.T(), err)
+	stmt, err := c.Prepare("SELECT 1")
+	require.NoError(s.T(), err)
+	require.True(s.T(), c.IsInTransaction())
+
+	// The session is reset: the transaction rolled back, the variable and
+	// the prepared statement gone, the new database selected.
+	require.NoError(s.T(), c.ChangeUser(*testUser, *testPassword, "mysql"))
+	require.False(s.T(), c.IsInTransaction())
+	r, err := c.Execute("SELECT @change_user IS NULL, DATABASE()")
+	require.NoError(s.T(), err)
+	isNull, _ := r.GetInt(0, 0)
+	require.Equal(s.T(), int64(1), isNull)
+	db, _ := r.GetString(0, 1)
+	require.Equal(s.T(), "mysql", db)
+	require.Equal(s.T(), "mysql", c.GetDB())
+	_, err = stmt.Execute()
+	var myErr *mysql.MyError
+	require.ErrorAs(s.T(), err, &myErr)
+	require.Equal(s.T(), uint16(mysql.ER_UNKNOWN_STMT_HANDLER), myErr.Code)
+
+	// No database.
+	require.NoError(s.T(), c.ChangeUser(*testUser, *testPassword, ""))
+	r, err = c.Execute("SELECT DATABASE() IS NULL")
+	require.NoError(s.T(), err)
+	isNull, _ = r.GetInt(0, 0)
+	require.Equal(s.T(), int64(1), isNull)
+
+	// A failed change reports the server's error. Whether the connection
+	// survives is the server's choice: MySQL closes it, MariaDB does not.
+	err = c.ChangeUser(*testUser, *testPassword+"-wrong", *testDB)
+	require.ErrorAs(s.T(), err, &myErr)
+	require.Equal(s.T(), uint16(mysql.ER_ACCESS_DENIED_ERROR), myErr.Code)
+}
+
 func (s *clientTestSuite) TestConn_Compress() {
 	addr := fmt.Sprintf("%s:%s", *test_util.MysqlHost, s.port)
 	conn, err := Connect(addr, *testUser, *testPassword, "", func(conn *Conn) error {

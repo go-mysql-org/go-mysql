@@ -295,6 +295,64 @@ func (c *Conn) UseDBWithResult(dbName string) (*mysql.Result, error) {
 	return r, nil
 }
 
+// ChangeUser sends COM_CHANGE_USER: the server authenticates user with
+// password, resets the session as COM_RESET_CONNECTION does (MySQL rolls back
+// an open transaction, deallocates prepared statements and clears session
+// variables), and selects dbName, or no database when dbName is "".
+//
+// MySQL closes the connection when the change fails (MariaDB keeps it open),
+// so do not rely on the Conn after an error.
+func (c *Conn) ChangeUser(user, password, dbName string) error {
+	c.user, c.password = user, password
+	auth, addNull, err := c.genAuthResponse(c.salt)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if addNull {
+		auth = append(auth, 0x00)
+	}
+	if len(auth) > 255 {
+		return errors.Errorf("auth response of %d bytes does not fit COM_CHANGE_USER", len(auth))
+	}
+
+	collationName := c.collation
+	if len(collationName) == 0 {
+		collationName = mysql.DEFAULT_COLLATION_NAME
+	}
+	collation, err := charset.GetCollationByName(collationName)
+	if err != nil {
+		return errors.Errorf("invalid collation name %s", collationName)
+	}
+
+	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_change_user.html
+	data := make([]byte, 0, len(user)+len(auth)+len(dbName)+len(c.authPluginName)+6)
+	data = append(data, user...)
+	data = append(data, 0x00, byte(len(auth)))
+	data = append(data, auth...)
+	data = append(data, dbName...)
+	data = append(data, 0x00, byte(collation.ID), byte(collation.ID>>8))
+	if c.capability&mysql.CLIENT_PLUGIN_AUTH != 0 {
+		data = append(data, c.authPluginName...)
+		data = append(data, 0x00)
+	}
+	if c.capability&mysql.CLIENT_CONNECT_ATTRS != 0 {
+		attrs := c.genAttributes()
+		if attrs == nil {
+			attrs = []byte{0x00}
+		}
+		data = append(data, attrs...)
+	}
+
+	if err := c.writeCommandBuf(mysql.COM_CHANGE_USER, data); err != nil {
+		return errors.Trace(err)
+	}
+	if err := c.handleAuthResult(); err != nil {
+		return errors.Trace(err)
+	}
+	c.db = dbName
+	return nil
+}
+
 func (c *Conn) GetDB() string {
 	return c.db
 }

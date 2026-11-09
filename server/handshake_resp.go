@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/binary"
+	stderrors "errors"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/errors"
@@ -33,7 +34,7 @@ func (c *Conn) readHandshakeResponse() error {
 		return err
 	}
 
-	cont, err := c.handleAuthMatch()
+	cont, err := c.handleAuthMatch(authData)
 	if err != nil {
 		return err
 	}
@@ -95,6 +96,7 @@ func (c *Conn) decodeFirstPart(data []byte) (newData []byte, pos int, err error)
 
 	// connection's default character set as defined
 	c.charset = data[pos]
+	c.collationID = uint16(data[pos])
 	pos++
 
 	// skip reserved 23[00]
@@ -225,10 +227,14 @@ func (c *Conn) handlePublicKeyRetrieval(authData []byte) (bool, error) {
 	return true, nil
 }
 
-func (c *Conn) handleAuthMatch() (bool, error) {
+func (c *Conn) handleAuthMatch(authData []byte) (bool, error) {
 	// if the client responds the handshake with a different auth method, the server will send the AuthSwitchRequest packet
 	// to the client to ask the client to switch.
 	if err := c.acquireCredential(); err != nil {
+		if stderrors.Is(err, errUnknownUser) && isEmptyPassword(authData) {
+			// MySQL reports "(using password: NO)" for an unknown user too.
+			return false, errUnknownUserNoPassword
+		}
 		return false, err
 	}
 
