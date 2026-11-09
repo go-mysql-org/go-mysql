@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -530,6 +531,128 @@ func TestStmtCursor(t *testing.T) {
 			require.ErrorContains(t, err, "Unknown prepared statement handler")
 		})
 	}
+}
+
+// With cursors disabled, CURSOR_TYPE_READ_ONLY is answered inline and keeps no
+// cursor.
+func TestStmtCursorDisabled(t *testing.T) {
+	for _, deprecateEOF := range []bool{false, true} {
+		t.Run(fmt.Sprintf("deprecateEOF=%t", deprecateEOF), func(t *testing.T) {
+			h := &cursorStmtHandler{}
+			clientConn := &mockconn.MockConn{MultiWrite: true}
+			c := &Conn{
+				Conn:       packet.NewConn(clientConn),
+				serverConf: &Server{},
+				capability: mysql.CLIENT_PROTOCOL_41,
+				h:          h,
+				stmts:      make(map[uint32]*Stmt),
+			}
+			require.True(t, c.serverConf.CursorsEnabled())
+			c.serverConf.SetCursorsEnabled(false)
+			require.False(t, c.serverConf.CursorsEnabled())
+			if deprecateEOF {
+				c.SetCapability(mysql.CLIENT_DEPRECATE_EOF)
+				require.NoError(t, c.serverConf.SetCapability(mysql.CLIENT_DEPRECATE_EOF))
+			}
+			st := &Stmt{}
+			st.Rest(0, 2, nil)
+			c.stmts[1] = st
+
+			require.NoError(t, c.WriteValue(c.dispatch([]byte{mysql.COM_STMT_EXECUTE, 1, 0, 0, 0, mysql.CURSOR_TYPE_READ_ONLY, 1, 0, 0, 0})))
+			packets := splitPackets(t, clientConn.WriteBuffered)
+
+			// Column count, two definitions, the EOF after them unless
+			// deprecated, three rows, and the terminator.
+			want := 1 + 2 + 3 + 1
+			if !deprecateEOF {
+				want++
+			}
+			require.Len(t, packets, want)
+			require.Equal(t, []byte{2}, packets[0])
+			require.Zero(t, statusOf(t, packets[len(packets)-1])&mysql.SERVER_STATUS_CURSOR_EXISTS)
+			require.False(t, c.HasStatus(mysql.SERVER_STATUS_CURSOR_EXISTS))
+			require.Nil(t, st.cursor)
+
+			_, err := c.handleStmtFetch([]byte{1, 0, 0, 0, 1, 0, 0, 0})
+			require.ErrorContains(t, err, "has no open cursor")
+		})
+	}
+}
+
+// newCursorTestConn returns a connection with statement 1 prepared, serving
+// cursorStmtHandler's three rows.
+func newCursorTestConn() (*Conn, *mockconn.MockConn, *Stmt) {
+	clientConn := &mockconn.MockConn{MultiWrite: true}
+	c := &Conn{
+		Conn:       packet.NewConn(clientConn),
+		serverConf: &Server{},
+		capability: mysql.CLIENT_PROTOCOL_41,
+		h:          &cursorStmtHandler{},
+		stmts:      make(map[uint32]*Stmt),
+	}
+	st := &Stmt{}
+	st.Rest(0, 2, nil)
+	c.stmts[1] = st
+	return c, clientConn, st
+}
+
+// Cursors are enabled on a new Server, and on a Conn that has no Server.
+func TestStmtCursorsEnabledByDefault(t *testing.T) {
+	require.True(t, (&Server{}).CursorsEnabled())
+	require.True(t, (&Conn{}).cursorsEnabled())
+}
+
+// A cursor opened before disabling stays fetchable until the next execution.
+func TestStmtCursorOpenedBeforeDisable(t *testing.T) {
+	c, clientConn, st := newCursorTestConn()
+	run := func(data ...byte) [][]byte {
+		t.Helper()
+		clientConn.WriteBuffered = nil
+		require.NoError(t, c.WriteValue(c.dispatch(data)))
+		return splitPackets(t, clientConn.WriteBuffered)
+	}
+	execute := []byte{mysql.COM_STMT_EXECUTE, 1, 0, 0, 0, mysql.CURSOR_TYPE_READ_ONLY, 1, 0, 0, 0}
+	fetchOne := []byte{mysql.COM_STMT_FETCH, 1, 0, 0, 0, 1, 0, 0, 0}
+
+	run(execute...)
+	require.NotNil(t, st.cursor)
+
+	c.serverConf.SetCursorsEnabled(false)
+	// One row and the EOF: the earlier cursor is still served.
+	require.Len(t, run(fetchOne...), 2)
+	require.NotNil(t, st.cursor)
+
+	// Executing again answers inline and drops the cursor.
+	run(execute...)
+	require.Nil(t, st.cursor)
+	packets := run(fetchOne...)
+	require.Len(t, packets, 1)
+	require.Equal(t, mysql.ERR_HEADER, packets[0][0])
+
+	c.serverConf.SetCursorsEnabled(true)
+	run(execute...)
+	require.NotNil(t, st.cursor)
+}
+
+// SetCursorsEnabled is safe to call while serving (run with -race).
+func TestStmtSetCursorsEnabledConcurrently(t *testing.T) {
+	c, clientConn, _ := newCursorTestConn()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := range 1000 {
+			c.serverConf.SetCursorsEnabled(i%2 == 0)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 1000 {
+			clientConn.WriteBuffered = nil
+			_ = c.WriteValue(c.dispatch([]byte{mysql.COM_STMT_EXECUTE, 1, 0, 0, 0, mysql.CURSOR_TYPE_READ_ONLY, 1, 0, 0, 0}))
+		}
+	}()
+	wg.Wait()
 }
 
 type noResultStmtHandler struct {
