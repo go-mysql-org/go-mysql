@@ -32,6 +32,24 @@ func TestReadAuthData(t *testing.T) {
 	require.Equal(t, len(data)-1, readBytes)
 }
 
+func TestReadAuthData_LengthPastEnd(t *testing.T) {
+	c := &Conn{capability: mysql.CLIENT_SECURE_CONNECTION}
+
+	// Auth data that ends at the end of the packet is read.
+	auth, authLen, pos, err := c.readAuthData(append(make([]byte, 0, 8), 0x01, 0xab), 0)
+	require.NoError(t, err)
+	require.Equal(t, []byte{0xab}, auth)
+	require.Equal(t, 1, authLen)
+	require.Equal(t, 1, pos)
+
+	// The auth data length is 1, but the packet ends after it. The slice has
+	// spare capacity, as packets from the packet layer usually do.
+	_, _, _, err = c.readAuthData(append(make([]byte, 0, 8), 0x01), 0)
+	var myErr *mysql.MyError
+	require.ErrorAs(t, err, &myErr)
+	require.EqualValues(t, mysql.ER_HANDSHAKE_ERROR, myErr.Code)
+}
+
 func TestDecodeFirstPart(t *testing.T) {
 	c := &Conn{}
 
@@ -380,5 +398,19 @@ func TestReadAttributes(t *testing.T) {
 		if vv := c.attributes[k]; vv != v {
 			t.Fatalf("unexpected value for %s, got %s instead of %s", k, vv, v)
 		}
+	}
+}
+
+func TestReadAttributes_TruncatedLength(t *testing.T) {
+	for _, data := range [][]byte{
+		{0xfc, 0x01},                   // the length of all attributes
+		{0x02, 0xfc, 0x01},             // the length of the first key
+		{0x04, 0x01, 0x6b, 0xfc, 0x01}, // the length of the first value
+	} {
+		c := &Conn{}
+		_, err := c.readAttributes(data, 0)
+		var myErr *mysql.MyError
+		require.ErrorAs(t, err, &myErr, "%x", data)
+		require.EqualValues(t, mysql.ER_HANDSHAKE_ERROR, myErr.Code, "%x", data)
 	}
 }

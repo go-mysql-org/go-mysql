@@ -197,6 +197,11 @@ func (c *Conn) readAuthData(data []byte, pos int) (auth []byte, authLen int, new
 		// auth length and auth
 		authLen = int(data[pos])
 		pos++
+		// Check the length against the packet: slicing past its end, but not
+		// past its capacity, would not panic.
+		if pos+authLen > len(data) {
+			return nil, 0, 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+		}
 		auth = data[pos : pos+authLen]
 	} else {
 		authLen = bytes.IndexByte(data[pos:], 0x00)
@@ -242,7 +247,15 @@ func (c *Conn) handleAuthMatch() (bool, error) {
 	return true, nil
 }
 
-func (c *Conn) readAttributes(data []byte, pos int) (int, error) {
+func (c *Conn) readAttributes(data []byte, pos int) (newPos int, err error) {
+	// prevent 'panic: runtime error: index out of range' error on a truncated
+	// length-encoded integer, as decodeFirstPart does
+	defer func() {
+		if recover() != nil {
+			err = mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+		}
+	}()
+
 	// read length of attribute data
 	attrLen, isNull, skip := mysql.LengthEncodedInt(data[pos:])
 	pos += skip
