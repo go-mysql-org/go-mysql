@@ -2,6 +2,7 @@ package canal
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ type canalTestSuite struct {
 	addr string
 	suite.Suite
 	c *Canal
+	h *testEventHandler
 }
 
 type canalTestSuiteOption func(c *canalTestSuite)
@@ -101,7 +103,8 @@ func (s *canalTestSuite) SetupSuite() {
 
 	s.execute("SET GLOBAL binlog_format = 'ROW'")
 
-	s.c.SetEventHandler(&testEventHandler{T: s.T()})
+	s.h = &testEventHandler{T: s.T()}
+	s.c.SetEventHandler(s.h)
 	go func() {
 		set, _ := mysql.ParseGTIDSet(cfg.Flavor, "")
 		err = s.c.StartFromGTID(set)
@@ -129,6 +132,22 @@ func (s *canalTestSuite) execute(query string, args ...any) *mysql.Result {
 type testEventHandler struct {
 	DummyEventHandler
 	T *testing.T
+
+	mu              sync.Mutex
+	unparsedQueries []string
+}
+
+func (h *testEventHandler) OnUnparsedQuery(_ *replication.EventHeader, _ mysql.Position, e *replication.QueryEvent, _ error) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.unparsedQueries = append(h.unparsedQueries, string(e.Query))
+	return nil
+}
+
+func (h *testEventHandler) getUnparsedQueries() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]string(nil), h.unparsedQueries...)
 }
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
@@ -160,6 +179,22 @@ func (s *canalTestSuite) TestCanal() {
 
 	err := s.c.CatchMasterPos(10 * time.Second)
 	require.NoError(s.T(), err)
+}
+
+func (s *canalTestSuite) TestUnparsedQuery() {
+	<-s.c.WaitDumpDone()
+
+	s.execute("DROP TABLE IF EXISTS test.canal_test_unparsed")
+	s.execute("CREATE TABLE test.canal_test_unparsed (id int PRIMARY KEY)")
+	// The parser does not support spatial column types.
+	query := "ALTER TABLE test.canal_test_unparsed ADD COLUMN g POINT"
+	s.execute(query)
+
+	err := s.c.CatchMasterPos(10 * time.Second)
+	require.NoError(s.T(), err)
+	require.Contains(s.T(), s.h.getUnparsedQueries(), query)
+
+	s.execute("DROP TABLE test.canal_test_unparsed")
 }
 
 func (s *canalTestSuite) TestAnalyzeAdvancesSyncedPos() {
