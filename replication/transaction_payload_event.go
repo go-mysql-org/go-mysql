@@ -3,6 +3,7 @@ package replication
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -76,32 +77,71 @@ func (e *TransactionPayloadEvent) Decode(data []byte) error {
 }
 
 func (e *TransactionPayloadEvent) decodeFields(data []byte) error {
-	offset := uint64(0)
-
+	// MySQL writes the field type, the field length and the value with
+	// net_store_length (Transaction_payload::encode), so each of them is a
+	// length-encoded integer, not a fixed-width one.
 	for {
-		fieldType := mysql.FixedLengthInt(data[offset : offset+1])
-		offset++
-
-		if fieldType == OTW_PAYLOAD_HEADER_END_MARK {
-			e.Payload = data[offset:]
-			break
+		fieldType, n, err := payloadLengthEncodedInt(data)
+		if err != nil {
+			return err
 		}
-		fieldLength := mysql.FixedLengthInt(data[offset : offset+1])
-		offset++
+		data = data[n:]
+		if fieldType == OTW_PAYLOAD_HEADER_END_MARK {
+			e.Payload = data
+			return nil
+		}
+		fieldLength, n, err := payloadLengthEncodedInt(data)
+		if err != nil {
+			return err
+		}
+		data = data[n:]
+		if fieldLength > uint64(len(data)) {
+			return errors.New("TransactionPayloadEvent: header field runs past the event")
+		}
+		field := data[:fieldLength]
+		data = data[fieldLength:]
 
+		var dst *uint64
 		switch fieldType {
 		case OTW_PAYLOAD_SIZE_FIELD:
-			e.Size = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+			dst = &e.Size
 		case OTW_PAYLOAD_COMPRESSION_TYPE_FIELD:
-			e.CompressionType = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+			dst = &e.CompressionType
 		case OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD:
-			e.UncompressedSize = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+			dst = &e.UncompressedSize
+		default:
+			// Unknown fields are skipped by their length, as MySQL does.
+			continue
 		}
-
-		offset += fieldLength
+		if *dst, _, err = payloadLengthEncodedInt(field); err != nil {
+			return err
+		}
 	}
+}
 
-	return nil
+// payloadLengthEncodedInt decodes one net_store_length integer and returns
+// it with the number of bytes it occupies. Unlike mysql.LengthEncodedInt it
+// checks that the bytes are there.
+func payloadLengthEncodedInt(b []byte) (uint64, int, error) {
+	if len(b) == 0 {
+		return 0, 0, errors.New("TransactionPayloadEvent: truncated header")
+	}
+	need := 1
+	switch b[0] {
+	case 0xfb, 0xff:
+		return 0, 0, fmt.Errorf("TransactionPayloadEvent: invalid length-encoded integer 0x%x", b[0])
+	case 0xfc:
+		need = 3
+	case 0xfd:
+		need = 4
+	case 0xfe:
+		need = 9
+	}
+	if len(b) < need {
+		return 0, 0, errors.New("TransactionPayloadEvent: truncated header")
+	}
+	v, _, n := mysql.LengthEncodedInt(b)
+	return v, n, nil
 }
 
 // stampInnerEventPositions fixes LogPos of decoded inner events. MySQL copies
