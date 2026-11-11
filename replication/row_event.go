@@ -1391,12 +1391,17 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 		v = e.parseFracTime(v)
 	case mysql.MYSQL_TYPE_TIME:
 		n = 3
-		i32 := uint32(mysql.FixedLengthInt(data[0:3]))
-		if i32 == 0 {
-			v = "00:00:00"
-		} else {
-			v = fmt.Sprintf("%02d:%02d:%02d", i32/10000, (i32%10000)/100, i32%100)
+		// The legacy TIME format is a signed 3-byte integer (hh*10000 + mm*100 + ss).
+		i32 := int32(mysql.FixedLengthInt(data[0:3]))
+		if i32&0x800000 != 0 {
+			// sign-extend the int24 to int32
+			i32 |= ^int32(0xFFFFFF)
 		}
+		sign := ""
+		if i32 < 0 {
+			sign, i32 = "-", -i32
+		}
+		v = fmt.Sprintf("%s%02d:%02d:%02d", sign, i32/10000, (i32%10000)/100, i32%100)
 	case mysql.MYSQL_TYPE_TIME2:
 		v, n, err = decodeTime2(data, meta)
 	case mysql.MYSQL_TYPE_DATE:
