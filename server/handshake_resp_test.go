@@ -2,10 +2,15 @@ package server
 
 import (
 	"bytes"
+	"encoding/binary"
+	"net"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mocks"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
+	"github.com/go-mysql-org/go-mysql/test_util/test_keys"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -25,6 +30,24 @@ func TestReadAuthData(t *testing.T) {
 	_, _, readBytes, err := c.readAuthData(data, len(data)-1)
 	require.NoError(t, err)
 	require.Equal(t, len(data)-1, readBytes)
+}
+
+func TestReadAuthData_LengthPastEnd(t *testing.T) {
+	c := &Conn{capability: mysql.CLIENT_SECURE_CONNECTION}
+
+	// Auth data that ends at the end of the packet is read.
+	auth, authLen, pos, err := c.readAuthData(append(make([]byte, 0, 8), 0x01, 0xab), 0)
+	require.NoError(t, err)
+	require.Equal(t, []byte{0xab}, auth)
+	require.Equal(t, 1, authLen)
+	require.Equal(t, 1, pos)
+
+	// The auth data length is 1, but the packet ends after it. The slice has
+	// spare capacity, as packets from the packet layer usually do.
+	_, _, _, err = c.readAuthData(append(make([]byte, 0, 8), 0x01), 0)
+	var myErr *mysql.MyError
+	require.ErrorAs(t, err, &myErr)
+	require.EqualValues(t, mysql.ER_HANDSHAKE_ERROR, myErr.Code)
 }
 
 func TestDecodeFirstPart(t *testing.T) {
@@ -58,17 +81,8 @@ func TestDecodeFirstPart(t *testing.T) {
 }
 
 func TestReadDB(t *testing.T) {
-	handler := &mocks.Handler{}
-	c := &Conn{
-		h: handler,
-	}
+	c := &Conn{}
 	c.SetCapability(mysql.CLIENT_CONNECT_WITH_DB)
-	var dbName string
-
-	// when handler's UseDB is called, copy dbName to local variable
-	handler.On("UseDB", mock.IsType("")).Return(nil).Once().RunFn = func(args mock.Arguments) {
-		dbName = args[0].(string)
-	}
 
 	// example data from
 	// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_handshake_response.html#sect_protocol_connection_phase_packets_protocol_handshake_response41
@@ -84,8 +98,7 @@ func TestReadDB(t *testing.T) {
 	}
 	pos := 61
 
-	var err error
-	pos, err = c.readDb(data, pos)
+	dbName, pos, err := c.readDb(data, pos)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err.Error())
 	}
@@ -97,8 +110,137 @@ func TestReadDB(t *testing.T) {
 	if dbName != "test" {
 		t.Fatalf("unexpected db, got %s", dbName)
 	}
+}
 
-	handler.AssertExpectations(t)
+func TestUseDBAfterAuthentication(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		srv      *Server
+		userAuth string // the auth method the user's password is stored for
+	}{
+		{
+			name:     "no auth switch",
+			srv:      NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil),
+			userAuth: mysql.AUTH_NATIVE_PASSWORD,
+		},
+		{
+			// The client starts with sha256_password, and the server switches
+			// it to the user's mysql_native_password.
+			name:     "auth switch",
+			srv:      NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_SHA256_PASSWORD, test_keys.RSAKey(), nil),
+			userAuth: mysql.AUTH_NATIVE_PASSWORD,
+		},
+		{
+			// Nothing is cached for the first logins, so the server asks for
+			// the full password, which the client encrypts with its RSA key.
+			name:     "caching_sha2_password full authentication",
+			srv:      NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_CACHING_SHA2_PASSWORD, test_keys.RSAKey(), nil),
+			userAuth: mysql.AUTH_CACHING_SHA2_PASSWORD,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := tc.srv
+			authHandler := NewInMemoryAuthenticationHandler()
+			require.NoError(t, authHandler.AddUser("root", "secret", tc.userAuth))
+
+			l, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer l.Close()
+
+			handler := &mocks.Handler{}
+			handler.On("UseDB", "test").Return(nil)
+			handler.On("UseDB", "missing").Return(mysql.NewDefaultError(mysql.ER_BAD_DB_ERROR, "missing"))
+
+			go func() {
+				for {
+					conn, err := l.Accept()
+					if err != nil {
+						return
+					}
+					if c, err := srv.NewCustomizedConn(conn, authHandler, handler); err == nil {
+						c.Close()
+					}
+				}
+			}()
+			addr := l.Addr().String()
+
+			// A client that fails to authenticate must not reach the handler.
+			_, err = client.Connect(addr, "nobody", "secret", "test")
+			require.Error(t, err)
+			_, err = client.Connect(addr, "root", "wrong", "test")
+			require.Error(t, err)
+			handler.AssertNotCalled(t, "UseDB", mock.Anything)
+
+			conn, err := client.Connect(addr, "root", "secret", "test")
+			require.NoError(t, err)
+			require.NoError(t, conn.Close())
+			handler.AssertNumberOfCalls(t, "UseDB", 1)
+
+			// An error from UseDB reaches the client.
+			_, err = client.Connect(addr, "root", "secret", "missing")
+			require.ErrorContains(t, err, "Unknown database 'missing'")
+		})
+	}
+}
+
+// As in MySQL, an empty database name in the handshake response selects no
+// database. The client package never sends one, so this writes the handshake
+// response itself.
+func TestUseDBSkipsEmptyName(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer l.Close()
+
+	srv := NewServer("8.0.12", mysql.DEFAULT_COLLATION_ID, mysql.AUTH_NATIVE_PASSWORD, nil, nil)
+	authHandler := NewInMemoryAuthenticationHandler(mysql.AUTH_NATIVE_PASSWORD)
+	require.NoError(t, authHandler.AddUser("root", "secret"))
+	handler := &mocks.Handler{}
+	handler.On("UseDB", mock.Anything).Return(nil)
+
+	go func() {
+		conn, err := l.Accept()
+		if err != nil {
+			return
+		}
+		if c, err := srv.NewCustomizedConn(conn, authHandler, handler); err == nil {
+			c.Close()
+		}
+	}()
+
+	conn, err := net.Dial("tcp", l.Addr().String())
+	require.NoError(t, err)
+	defer conn.Close()
+	pc := packet.NewConn(conn)
+
+	greeting, err := pc.ReadPacket()
+	require.NoError(t, err)
+	// The scramble's first 8 bytes follow the protocol version, the server
+	// version and the connection id. The other 12 follow a filler byte, the
+	// capability flags, the charset, the status, the scramble length and 10
+	// reserved bytes.
+	pos := bytes.IndexByte(greeting[1:], 0x00) + 2 + 4
+	salt := append([]byte{}, greeting[pos:pos+8]...)
+	pos += 8 + 1 + 2 + 1 + 2 + 2 + 1 + 10
+	salt = append(salt, greeting[pos:pos+12]...)
+
+	auth := mysql.CalcNativePassword(salt, []byte("secret"))
+	data := make([]byte, 4) // the packet header, which WritePacket fills in
+	data = binary.LittleEndian.AppendUint32(data, mysql.CLIENT_PROTOCOL_41|mysql.CLIENT_SECURE_CONNECTION|
+		mysql.CLIENT_PLUGIN_AUTH|mysql.CLIENT_CONNECT_WITH_DB)
+	data = binary.LittleEndian.AppendUint32(data, 0) // max packet size
+	data = append(data, mysql.DEFAULT_COLLATION_ID)
+	data = append(data, make([]byte, 23)...)
+	data = append(data, "root\x00"...)
+	data = append(data, byte(len(auth)))
+	data = append(data, auth...)
+	data = append(data, 0x00) // the empty database name
+	data = append(data, mysql.AUTH_NATIVE_PASSWORD+"\x00"...)
+	require.NoError(t, pc.WritePacket(data))
+
+	resp, err := pc.ReadPacket()
+	require.NoError(t, err)
+	require.Equal(t, mysql.OK_HEADER, resp[0])
+	handler.AssertNotCalled(t, "UseDB", mock.Anything)
 }
 
 func TestReadPluginName(t *testing.T) {
@@ -199,7 +341,7 @@ func TestReadUserName_MissingNulTerminator(t *testing.T) {
 func TestReadDb_MissingNulTerminator(t *testing.T) {
 	c := &Conn{capability: mysql.CLIENT_CONNECT_WITH_DB}
 	// CLIENT_CONNECT_WITH_DB set, non-empty db field, but no NUL.
-	if _, err := c.readDb([]byte("somedb"), 0); err == nil {
+	if _, _, err := c.readDb([]byte("somedb"), 0); err == nil {
 		t.Fatal("expected error for non-terminated db name, got nil")
 	}
 }
@@ -256,5 +398,19 @@ func TestReadAttributes(t *testing.T) {
 		if vv := c.attributes[k]; vv != v {
 			t.Fatalf("unexpected value for %s, got %s instead of %s", k, vv, v)
 		}
+	}
+}
+
+func TestReadAttributes_TruncatedLength(t *testing.T) {
+	for _, data := range [][]byte{
+		{0xfc, 0x01},                   // the length of all attributes
+		{0x02, 0xfc, 0x01},             // the length of the first key
+		{0x04, 0x01, 0x6b, 0xfc, 0x01}, // the length of the first value
+	} {
+		c := &Conn{}
+		_, err := c.readAttributes(data, 0)
+		var myErr *mysql.MyError
+		require.ErrorAs(t, err, &myErr, "%x", data)
+		require.EqualValues(t, mysql.ER_HANDSHAKE_ERROR, myErr.Code, "%x", data)
 	}
 }

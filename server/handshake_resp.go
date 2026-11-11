@@ -24,7 +24,8 @@ func (c *Conn) readHandshakeResponse() error {
 
 	pos += authLen
 
-	if pos, err = c.readDb(data, pos); err != nil {
+	var db string
+	if db, pos, err = c.readDb(data, pos); err != nil {
 		return err
 	}
 
@@ -36,21 +37,28 @@ func (c *Conn) readHandshakeResponse() error {
 	if err != nil {
 		return err
 	}
-	if !cont {
-		return nil
-	}
+	if cont {
+		// read connection attributes
+		if c.capability&mysql.CLIENT_CONNECT_ATTRS > 0 {
+			// readAttributes returns new position for further processing of data
+			_, err = c.readAttributes(data, pos)
+			if err != nil {
+				return err
+			}
+		}
 
-	// read connection attributes
-	if c.capability&mysql.CLIENT_CONNECT_ATTRS > 0 {
-		// readAttributes returns new position for further processing of data
-		_, err = c.readAttributes(data, pos)
-		if err != nil {
+		// try to authenticate the client
+		if err = c.compareAuthData(c.authPluginName, authData); err != nil {
 			return err
 		}
 	}
 
-	// try to authenticate the client
-	return c.compareAuthData(c.authPluginName, authData)
+	// Like MySQL, select the database only once the client is authenticated,
+	// and only if the client named one.
+	if db != "" {
+		return c.h.UseDB(db)
+	}
+	return nil
 }
 
 func (c *Conn) readFirstPart() ([]byte, int, error) {
@@ -125,24 +133,22 @@ func (c *Conn) readUserName(data []byte, pos int) (int, error) {
 	return pos, nil
 }
 
-func (c *Conn) readDb(data []byte, pos int) (int, error) {
+// readDb reads the name of the database the client asks to connect to, if any.
+func (c *Conn) readDb(data []byte, pos int) (string, int, error) {
 	if c.capability&mysql.CLIENT_CONNECT_WITH_DB != 0 {
 		if len(data[pos:]) == 0 {
-			return pos, nil
+			return "", pos, nil
 		}
 
 		idx := bytes.IndexByte(data[pos:], 0x00)
 		if idx < 0 {
-			return 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+			return "", 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
 		}
 		db := string(data[pos : pos+idx])
 		pos += idx + 1
-
-		if err := c.h.UseDB(db); err != nil {
-			return 0, err
-		}
+		return db, pos, nil
 	}
-	return pos, nil
+	return "", pos, nil
 }
 
 func (c *Conn) readPluginName(data []byte, pos int) (int, error) {
@@ -191,6 +197,11 @@ func (c *Conn) readAuthData(data []byte, pos int) (auth []byte, authLen int, new
 		// auth length and auth
 		authLen = int(data[pos])
 		pos++
+		// Check the length against the packet: slicing past its end, but not
+		// past its capacity, would not panic.
+		if pos+authLen > len(data) {
+			return nil, 0, 0, mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+		}
 		auth = data[pos : pos+authLen]
 	} else {
 		authLen = bytes.IndexByte(data[pos:], 0x00)
@@ -236,7 +247,15 @@ func (c *Conn) handleAuthMatch() (bool, error) {
 	return true, nil
 }
 
-func (c *Conn) readAttributes(data []byte, pos int) (int, error) {
+func (c *Conn) readAttributes(data []byte, pos int) (newPos int, err error) {
+	// prevent 'panic: runtime error: index out of range' error on a truncated
+	// length-encoded integer, as decodeFirstPart does
+	defer func() {
+		if recover() != nil {
+			err = mysql.NewDefaultError(mysql.ER_HANDSHAKE_ERROR)
+		}
+	}()
+
 	// read length of attribute data
 	attrLen, isNull, skip := mysql.LengthEncodedInt(data[pos:])
 	pos += skip
