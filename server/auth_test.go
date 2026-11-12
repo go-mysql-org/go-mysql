@@ -18,12 +18,12 @@ func TestCompareNativePasswordAuthData_ResponseForEmptyPassword(t *testing.T) {
 	c := &Conn{salt: []byte("01234567890123456789")}
 	credential := Credential{Passwords: []string{"", "secret"}, AuthPluginName: mysql.AUTH_NATIVE_PASSWORD}
 
-	// A non-empty response is checked against the empty password too...
+	// Reject a non-empty response when none of the configured passwords match.
 	err := c.compareNativePasswordAuthData(mysql.CalcNativePassword(c.salt, []byte("wrong")), credential)
 	require.ErrorIs(t, err, ErrAccessDenied)
 	require.NotErrorIs(t, err, ErrAccessDeniedNoPassword) // "using password: YES"
 
-	// ...which doesn't stop the check of the next password.
+	// An empty password must not prevent a later password from matching.
 	err = c.compareNativePasswordAuthData(mysql.CalcNativePassword(c.salt, []byte("secret")), credential)
 	require.NoError(t, err)
 }

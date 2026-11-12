@@ -79,7 +79,10 @@ func stage1FromReply(scramble []byte, seed []byte, stage2 []byte) []byte {
 // see https://dev.mysql.com/doc/mysql-security-excerpt/5.7/en/password-hashing.html
 // ref vitess.io/vitess/go/mysql/auth_server.go
 func DecodePasswordHex(hexEncodedPassword string) ([]byte, error) {
-	return hex.DecodeString(strings.TrimPrefix(hexEncodedPassword, "*"))
+	if hexEncodedPassword[0] == '*' {
+		hexEncodedPassword = hexEncodedPassword[1:]
+	}
+	return hex.DecodeString(hexEncodedPassword)
 }
 
 // EncodePasswordHex encodes to the standard format used by MySQL
