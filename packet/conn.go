@@ -26,6 +26,9 @@ const (
 	// DefaultReadBufferSize is the bufio.Reader size used by NewConn and
 	// EnableReadBuffering.
 	DefaultReadBufferSize = 64 * 1024
+
+	// A payload of more than twice firstStepSize is read in two steps: this much first, then the rest.
+	firstStepSize = 256 * 1024
 )
 
 // Conn is the base class to handle MySQL protocol.
@@ -350,15 +353,24 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 
 	c.Sequence++
 
+	remaining := length
 	if buf, ok := w.(*bytes.Buffer); ok {
 		// Allocate the buffer with expected length directly instead of call `grow` and migrate data many times.
-		buf.Grow(length)
+		// But the length is what the peer announced, and it may never send that much, so a long payload is read in
+		// two steps: the buffer is grown for the second only once the first has arrived. (Growing a bytes.Buffer by
+		// less than its size doubles it, so a payload of up to twice the first step stays one step.)
+		if remaining > 2*firstStepSize {
+			buf.Grow(firstStepSize)
+			if err := c.copyPayload(w, firstStepSize); err != nil {
+				return err
+			}
+			remaining -= firstStepSize
+		}
+		buf.Grow(remaining)
 	}
 
-	if n, err := c.copyN(w, int64(length)); err != nil {
-		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, n, length)
-	} else if n != int64(length) {
-		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", n, length)
+	if err := c.copyPayload(w, remaining); err != nil {
+		return err
 	}
 	if length < mysql.MaxPayloadLen {
 		return nil
@@ -368,6 +380,16 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 		return errors.Wrap(err, "ReadPacketTo failed")
 	}
 
+	return nil
+}
+
+// copyPayload copies the next n bytes of a packet's payload to w.
+func (c *Conn) copyPayload(w io.Writer, n int) error {
+	if copied, err := c.copyN(w, int64(n)); err != nil {
+		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed. err %v, copied %v, expected %v", err, copied, n)
+	} else if copied != int64(n) {
+		return errors.Wrapf(mysql.ErrBadConn, "io.CopyN failed(n != int64(length)). %v bytes copied, while %v expected", copied, n)
+	}
 	return nil
 }
 
