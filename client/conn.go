@@ -350,6 +350,9 @@ func (c *Conn) ChangeUser(user, password, dbName string) error {
 		return errors.Trace(err)
 	}
 	c.db = dbName
+	// The server resets the session to the collation sent above, so the cached
+	// charset has to follow it: SetCharset skips a charset it believes is set.
+	c.charset = collation.CharsetName
 	return nil
 }
 

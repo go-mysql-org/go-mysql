@@ -176,7 +176,10 @@ func (c *Conn) handleAuthResult() error {
 		if data == nil {
 			data = c.salt
 		} else {
-			copy(c.salt, data)
+			// Not copy: the challenge can be longer than the 20 bytes of the
+			// handshake salt (client_ed25519 sends 32), and ChangeUser
+			// reuses c.salt after authentication.
+			c.salt = append(c.salt[:0], data...)
 		}
 		c.authPluginName = switchToPlugin
 		auth, addNull, err := c.genAuthResponse(data)

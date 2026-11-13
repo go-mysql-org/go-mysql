@@ -145,13 +145,22 @@ func (c *Conn) parseChangeUser(data []byte) (*changeUserRequest, error) {
 
 // parseConnectAttributes decodes a length-encoded block of length-encoded
 // key/value pairs.
-func parseConnectAttributes(data []byte) (map[string]string, error) {
+func parseConnectAttributes(data []byte) (attrs map[string]string, err error) {
+	// A length-encoded integer whose length bytes are missing makes
+	// LengthEncodedInt read past the end of data. readAttributes recovers the
+	// same panic on the handshake path.
+	defer func() {
+		if recover() != nil {
+			attrs, err = nil, mysql.ErrMalformPacket
+		}
+	}()
+
 	total, isNull, n := mysql.LengthEncodedInt(data)
 	if isNull || n == 0 || uint64(len(data)-n) < total {
 		return nil, mysql.ErrMalformPacket
 	}
 	data = data[n : n+int(total)]
-	attrs := make(map[string]string)
+	attrs = make(map[string]string)
 	for len(data) > 0 {
 		key, _, n, err := mysql.LengthEncodedString(data)
 		if err != nil {

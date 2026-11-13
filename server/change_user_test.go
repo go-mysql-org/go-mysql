@@ -212,12 +212,15 @@ func TestParseChangeUser(t *testing.T) {
 	require.Equal(t, &changeUserRequest{user: "u", plugin: mysql.AUTH_NATIVE_PASSWORD}, req)
 
 	for name, data := range map[string][]byte{
-		"no user terminator":   []byte("u"),
-		"auth past the end":    []byte("u\x00\x05ab"),
-		"no db terminator":     []byte("u\x00\x00db"),
-		"one-byte charset":     []byte("u\x00\x00\x00\xff"),
-		"no plugin terminator": []byte("u\x00\x00\x00\xff\x00plugin"),
-		"attributes past end":  append([]byte("u\x00\x00\x00\xff\x00p\x00"), 0x09, 0x01, 'k'),
+		"no user terminator":     []byte("u"),
+		"auth past the end":      []byte("u\x00\x05ab"),
+		"no db terminator":       []byte("u\x00\x00db"),
+		"one-byte charset":       []byte("u\x00\x00\x00\xff"),
+		"no plugin terminator":   []byte("u\x00\x00\x00\xff\x00plugin"),
+		"attributes past end":    append([]byte("u\x00\x00\x00\xff\x00p\x00"), 0x09, 0x01, 'k'),
+		"truncated attrs length": append([]byte("u\x00\x00\x00\xff\x00p\x00"), 0xfc),
+		"truncated key length":   append([]byte("u\x00\x00\x00\xff\x00p\x00"), 0x01, 0xfc),
+		"truncated value length": append([]byte("u\x00\x00\x00\xff\x00p\x00"), 0x03, 0x01, 'k', 0xfe),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := c.parseChangeUser(data)

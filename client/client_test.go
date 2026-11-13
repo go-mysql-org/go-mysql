@@ -119,6 +119,15 @@ func (s *clientTestSuite) TestConn_ChangeUser() {
 	require.ErrorAs(s.T(), err, &myErr)
 	require.Equal(s.T(), uint16(mysql.ER_UNKNOWN_STMT_HANDLER), myErr.Code)
 
+	// The command resets the session charset to the collation it sends, so
+	// the cached charset must still match the server.
+	require.NoError(s.T(), c.SetCharset("latin1"))
+	require.NoError(s.T(), c.ChangeUser(*testUser, *testPassword, "mysql"))
+	r, err = c.Execute("SELECT @@character_set_client")
+	require.NoError(s.T(), err)
+	serverCharset, _ := r.GetString(0, 0)
+	require.Equal(s.T(), serverCharset, c.GetCharset())
+
 	// No database.
 	require.NoError(s.T(), c.ChangeUser(*testUser, *testPassword, ""))
 	r, err = c.Execute("SELECT DATABASE() IS NULL")
