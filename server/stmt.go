@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/binary"
+	stderrors "errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -485,6 +486,24 @@ func (c *Conn) handleStmtClose(data []byte) error {
 	delete(c.stmts, id)
 
 	return nil
+}
+
+// ResetStmts deallocates every prepared statement on the connection, calling
+// HandleStmtClose for each, as MySQL does on COM_RESET_CONNECTION and
+// COM_CHANGE_USER. A handler that implements COM_RESET_CONNECTION through
+// HandleOtherCommand calls it so that statement IDs the client no longer
+// holds stop resolving. Every statement is removed even if HandleStmtClose
+// fails; the errors are joined.
+func (c *Conn) ResetStmts() error {
+	var errs []error
+	for id, st := range c.stmts {
+		if err := c.h.HandleStmtClose(st.Context); err != nil {
+			errs = append(errs, err)
+		}
+		c.resetCursor(st)
+		delete(c.stmts, id)
+	}
+	return stderrors.Join(errs...)
 }
 
 func (s *Stmt) isLongData(i int) bool {

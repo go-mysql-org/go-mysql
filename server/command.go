@@ -110,6 +110,11 @@ func (c *Conn) dispatch(data []byte) any {
 			return err
 		}
 		return nil
+	case mysql.COM_CHANGE_USER:
+		if h, ok := c.h.(ChangeUserHandler); ok {
+			return c.handleChangeUser(h, data)
+		}
+		return c.h.HandleOtherCommand(cmd, data)
 	case mysql.COM_FIELD_LIST:
 		before, after, _ := bytes.Cut(data, []byte{0x00})
 		table := utils.ByteSliceToString(before)
