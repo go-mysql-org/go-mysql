@@ -45,6 +45,7 @@ type Server struct {
 	tlsConfig         *tls.Config
 	cacheShaPassword  *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
 	authProvider      AuthenticationProvider
+	initialStatus     atomic.Uint32 // SERVER_STATUS_* flags of a new connection (see SetInitialStatus)
 }
 
 // NewDefaultServer: New mysql server with default settings.
@@ -132,6 +133,29 @@ func NewServerWithAuth(serverVersion string, collationID uint8, defaultAuthMetho
 
 func isAuthMethodSupported(authMethod string) bool {
 	return authMethod == mysql.AUTH_NATIVE_PASSWORD || authMethod == mysql.AUTH_CACHING_SHA2_PASSWORD || authMethod == mysql.AUTH_SHA256_PASSWORD || authMethod == mysql.AUTH_CLEAR_PASSWORD
+}
+
+// userConfigurableInitialStatus are the SERVER_STATUS_* flags SetInitialStatus
+// accepts: the ones that describe a session's state before it runs anything.
+const userConfigurableInitialStatus = mysql.SERVER_STATUS_AUTOCOMMIT | mysql.SERVER_STATUS_NO_BACKSLASH_ESCAPED
+
+// SetInitialStatus sets the SERVER_STATUS_* flags a new connection starts with
+// (default: none). Set them here rather than on the Conn: the handshake and the
+// auth OK are sent before NewCustomizedConn returns. MySQL starts sessions with
+// SERVER_STATUS_AUTOCOMMIT. Only SERVER_STATUS_AUTOCOMMIT and
+// SERVER_STATUS_NO_BACKSLASH_ESCAPED are accepted. Applies to new connections.
+func (s *Server) SetInitialStatus(status uint16) error {
+	if invalid := status &^ userConfigurableInitialStatus; invalid != 0 {
+		return fmt.Errorf("initial status %#x contains flags %#x that do not describe a new session; only SERVER_STATUS_AUTOCOMMIT and SERVER_STATUS_NO_BACKSLASH_ESCAPED are supported", status, invalid)
+	}
+	s.initialStatus.Store(uint32(status))
+	return nil
+}
+
+// InitialStatus returns the SERVER_STATUS_* flags a new connection starts with
+// (see SetInitialStatus).
+func (s *Server) InitialStatus() uint16 {
+	return uint16(s.initialStatus.Load())
 }
 
 func (s *Server) InvalidateCache(username string, host string) {
