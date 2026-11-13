@@ -73,3 +73,81 @@ func (s *poolTestSuite) TestPool_WrongAddr() {
 
 	require.Error(s.T(), err)
 }
+
+func (s *poolTestSuite) TestPool_NilPool() {
+	var pool *Pool
+
+	conn, err := pool.GetConn(context.Background())
+	require.Nil(s.T(), conn)
+	require.Error(s.T(), err)
+	require.EqualError(s.T(), err, "failed get conn, pool is nil")
+
+	var stats ConnectionStats
+	pool.GetStats(&stats)
+	pool.PutConn(nil)
+	pool.DropConn(nil)
+	pool.Close()
+}
+
+func TestNilPool(t *testing.T) {
+	var pool *Pool
+
+	conn, err := pool.GetConn(context.Background())
+	require.Nil(t, conn)
+	require.Error(t, err)
+	require.EqualError(t, err, "failed get conn, pool is nil")
+
+	var stats ConnectionStats
+	pool.GetStats(&stats)
+	pool.PutConn(nil)
+	pool.DropConn(nil)
+	pool.Close()
+}
+
+func TestNewPool_UnreachableHost(t *testing.T) {
+	l, err := net.Listen("tcp4", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := l.Addr().String()
+	_ = l.Close()
+
+	pool := NewPool(nil, 1, 2, 1, addr, "user", "pass", "test")
+	require.NotNil(t, pool)
+	require.NotNil(t, pool.logger)
+	defer pool.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	conn, err := pool.GetConn(ctx)
+	require.Nil(t, conn)
+	require.Error(t, err)
+}
+
+func TestNewPoolWithOptions_ConnectionFailureNilPool(t *testing.T) {
+	l, err := net.Listen("tcp4", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := l.Addr().String()
+	_ = l.Close()
+
+	pool, err := NewPoolWithOptions(
+		addr,
+		"user",
+		"pass",
+		"test",
+		WithLogger(nil),
+		WithPoolLimits(1, 2, 1),
+		WithNewPoolPingTimeout(100*time.Millisecond),
+	)
+	require.Nil(t, pool)
+	require.Error(t, err)
+
+	conn, err := pool.GetConn(context.Background())
+	require.Nil(t, conn)
+	require.EqualError(t, err, "failed get conn, pool is nil")
+
+	var stats ConnectionStats
+	pool.GetStats(&stats)
+	pool.PutConn(nil)
+	pool.DropConn(nil)
+	pool.Close()
+}
