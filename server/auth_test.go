@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/stretchr/testify/require"
 )
 
@@ -11,6 +12,20 @@ func TestErrAccessDenied(t *testing.T) {
 	require.True(t, errors.Is(ErrAccessDenied, ErrAccessDenied))
 	require.True(t, errors.Is(ErrAccessDeniedNoPassword, ErrAccessDenied))
 	require.False(t, errors.Is(ErrAccessDenied, ErrAccessDeniedNoPassword))
+}
+
+func TestCompareNativePasswordAuthData_ResponseForEmptyPassword(t *testing.T) {
+	c := &Conn{salt: []byte("01234567890123456789")}
+	credential := Credential{Passwords: []string{"", "secret"}, AuthPluginName: mysql.AUTH_NATIVE_PASSWORD}
+
+	// Reject a non-empty response when none of the configured passwords match.
+	err := c.compareNativePasswordAuthData(mysql.CalcNativePassword(c.salt, []byte("wrong")), credential)
+	require.ErrorIs(t, err, ErrAccessDenied)
+	require.NotErrorIs(t, err, ErrAccessDeniedNoPassword) // "using password: YES"
+
+	// An empty password must not prevent a later password from matching.
+	err = c.compareNativePasswordAuthData(mysql.CalcNativePassword(c.salt, []byte("secret")), credential)
+	require.NoError(t, err)
 }
 
 func TestCompareNativePasswordAuthData_EmptyPassword(t *testing.T) {

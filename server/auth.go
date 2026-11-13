@@ -94,7 +94,7 @@ func (c *Conn) compareNativePasswordAuthData(clientAuthData []byte, credential C
 
 	for _, password := range credential.Passwords {
 		hash, err := credential.hashPassword(password)
-		if err != nil {
+		if err != nil || hash == "" {
 			continue
 		}
 		decoded, err := mysql.DecodePasswordHex(hash)
