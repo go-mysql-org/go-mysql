@@ -50,6 +50,11 @@ func (s *Stmt) ResetParams() {
 	s.longData = make([]bool, s.Params)
 }
 
+// cursorsEnabled reports whether cursors are enabled; true without a Server.
+func (c *Conn) cursorsEnabled() bool {
+	return c.serverConf == nil || c.serverConf.CursorsEnabled()
+}
+
 func (c *Conn) writePrepare(s *Stmt) error {
 	data := make([]byte, 4, 128)
 
@@ -209,8 +214,8 @@ func (c *Conn) handleStmtExecute(data []byte) (any, error) {
 
 	s.ResetParams()
 
-	// A streaming result can't be buffered, so it keeps being sent inline.
-	if flag&mysql.CURSOR_TYPE_READ_ONLY == 0 || r == nil || !r.HasResultset() || r.IsStreaming() {
+	// Streaming results, and all results when cursors are disabled, go inline.
+	if flag&mysql.CURSOR_TYPE_READ_ONLY == 0 || !c.cursorsEnabled() || r == nil || !r.HasResultset() || r.IsStreaming() {
 		return r, nil
 	}
 
