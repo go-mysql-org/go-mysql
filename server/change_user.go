@@ -146,15 +146,18 @@ func (c *Conn) parseChangeUser(data []byte) (*changeUserRequest, error) {
 // parseConnectAttributes decodes a length-encoded block of length-encoded
 // key/value pairs.
 func parseConnectAttributes(data []byte) (attrs map[string]string, err error) {
-	// A length-encoded integer whose length bytes are missing makes
-	// LengthEncodedInt read past the end of data. readAttributes recovers the
-	// same panic on the handshake path.
+	// The checks below reject every truncated length prefix. This guard is the
+	// one decodeFirstPart, readAuthData and readAttributes keep, in case a read
+	// here is missed.
 	defer func() {
 		if recover() != nil {
 			attrs, err = nil, mysql.ErrMalformPacket
 		}
 	}()
 
+	if !lengthEncodedIntComplete(data) {
+		return nil, mysql.ErrMalformPacket
+	}
 	total, isNull, n := mysql.LengthEncodedInt(data)
 	if isNull || n == 0 || uint64(len(data)-n) < total {
 		return nil, mysql.ErrMalformPacket
@@ -162,11 +165,17 @@ func parseConnectAttributes(data []byte) (attrs map[string]string, err error) {
 	data = data[n : n+int(total)]
 	attrs = make(map[string]string)
 	for len(data) > 0 {
+		if !lengthEncodedIntComplete(data) {
+			return nil, mysql.ErrMalformPacket
+		}
 		key, _, n, err := mysql.LengthEncodedString(data)
 		if err != nil {
 			return nil, err
 		}
 		data = data[n:]
+		if !lengthEncodedIntComplete(data) {
+			return nil, mysql.ErrMalformPacket
+		}
 		value, _, n, err := mysql.LengthEncodedString(data)
 		if err != nil {
 			return nil, err
@@ -175,4 +184,22 @@ func parseConnectAttributes(data []byte) (attrs map[string]string, err error) {
 		attrs[string(key)] = string(value)
 	}
 	return attrs, nil
+}
+
+// lengthEncodedIntComplete reports whether b begins with a whole
+// length-encoded integer. LengthEncodedInt reads the 2, 3 or 8 bytes its
+// first byte announces without checking that they are there.
+func lengthEncodedIntComplete(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+	switch b[0] {
+	case 0xfc:
+		return len(b) >= 3
+	case 0xfd:
+		return len(b) >= 4
+	case 0xfe:
+		return len(b) >= 9
+	}
+	return true
 }
