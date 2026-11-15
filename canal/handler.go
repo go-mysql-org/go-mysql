@@ -29,6 +29,15 @@ type EventHandler interface {
 	String() string
 }
 
+// UnparsedQueryHandler is optional. If the EventHandler also implements it,
+// canal passes each QueryEvent its SQL parser cannot parse to OnUnparsedQuery
+// instead of skipping the event.
+// Canal does not know which tables such a statement changes, so it does not call
+// OnTableChanged or clear the table cache; call ClearTableCache if needed.
+type UnparsedQueryHandler interface {
+	OnUnparsedQuery(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent, parseErr error) error
+}
+
 type DummyEventHandler struct{}
 
 func (h *DummyEventHandler) OnRotate(*replication.EventHeader, *replication.RotateEvent) error {
