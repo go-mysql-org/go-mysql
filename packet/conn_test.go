@@ -3,6 +3,7 @@ package packet
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"testing"
@@ -370,8 +371,13 @@ func TestWritePacketCompressedLargePacket(t *testing.T) {
 	if !bytes.Equal(stream, want) {
 		t.Fatalf("uncompressed stream does not match the two packets (%d bytes, want %d)", len(stream), len(want))
 	}
-	if int(c.CompressedSequence) != len(frames) || c.Sequence != c.CompressedSequence {
+	if int(c.CompressedSequence) != len(frames) || c.Sequence != 2 {
 		t.Fatalf("after %d frames: Sequence %d, CompressedSequence %d", len(frames), c.Sequence, c.CompressedSequence)
+	}
+	// the next read continues the packet sequence from the compressed sequence
+	c.syncSequenceForRead()
+	if c.Sequence != c.CompressedSequence {
+		t.Fatalf("after sync: Sequence %d, CompressedSequence %d", c.Sequence, c.CompressedSequence)
 	}
 }
 
@@ -420,5 +426,35 @@ func TestCompressedSequenceContinuesAfterRead(t *testing.T) {
 	c.ResetSequence()
 	if c.Sequence != 0 || c.CompressedSequence != 0 {
 		t.Errorf("ResetSequence left Sequence %d, CompressedSequence %d", c.Sequence, c.CompressedSequence)
+	}
+}
+
+// A large packet followed by another packet in the same write batch must keep
+// the inner sequence contiguous; the switch to the compressed sequence only
+// happens at the write-to-read boundary.
+func TestCompressedConsecutiveWrites(t *testing.T) {
+	for _, algorithm := range []uint8{mysql.MYSQL_COMPRESS_ZLIB, mysql.MYSQL_COMPRESS_ZSTD} {
+		t.Run(fmt.Sprintf("algorithm%d", algorithm), func(t *testing.T) {
+			w := &writeCaptureConn{}
+			sender := &Conn{Conn: w, Compression: algorithm, Sequence: 1, CompressedSequence: 1}
+			sender.EnableWriteBuffering(DefaultBufferSize)
+			if err := sender.WritePacket(make([]byte, 4+mysql.MaxPayloadLen+1)); err != nil {
+				t.Fatal(err)
+			}
+			if err := sender.WritePacket([]byte{0, 0, 0, 0, 0xfe, 0, 0, 0, 0}); err != nil {
+				t.Fatal(err)
+			}
+			if err := sender.Flush(); err != nil {
+				t.Fatal(err)
+			}
+			receiver := newReadTestConn(w.written.Bytes(), algorithm)
+			receiver.Sequence, receiver.CompressedSequence = 1, 1
+			if _, err := receiver.ReadPacket(); err != nil {
+				t.Fatal("large packet:", err)
+			}
+			if _, err := receiver.ReadPacket(); err != nil {
+				t.Fatal("following EOF:", err)
+			}
+		})
 	}
 }

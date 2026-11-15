@@ -53,6 +53,11 @@ type Conn struct {
 
 	CompressedSequence uint8
 
+	// syncSequence is set after writing with compression and consumed by the
+	// next read, which first continues the packet sequence from the
+	// compressed sequence (see syncSequenceForRead).
+	syncSequence bool
+
 	compressedHeader [7]byte
 
 	compressedReader io.Reader
@@ -321,6 +326,8 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 }
 
 func (c *Conn) ReadPacketTo(w io.Writer) error {
+	c.syncSequenceForRead()
+
 	// The peer may be waiting on our buffered output before it sends more.
 	if err := c.Flush(); err != nil {
 		return err
@@ -428,13 +435,23 @@ func (c *Conn) WritePacket(data []byte) error {
 
 	c.Sequence++
 	if c.Compression != mysql.MYSQL_COMPRESS_NONE {
-		// With compression, the server continues the packet sequence from the
-		// compressed sequence once it has read our packets (net_flush in
-		// MySQL's sql-common/net_serv.cc does the same on its side). The two
-		// only differ when a packet was split over several compressed packets.
-		c.Sequence = c.CompressedSequence
+		// Packets written back to back keep their own sequence; the switch to
+		// the compressed sequence happens once, before the next read.
+		c.syncSequence = true
 	}
 	return nil
+}
+
+// syncSequenceForRead runs at the write-to-read boundary. With compression,
+// the peer continues the packet sequence from the compressed sequence once it
+// has read our packets (net_flush in MySQL's sql-common/net_serv.cc does the
+// same on its side). The two only differ when a packet was split over several
+// compressed packets. go-sql-driver/mysql's syncSequence does the same.
+func (c *Conn) syncSequenceForRead() {
+	if c.syncSequence {
+		c.Sequence = c.CompressedSequence
+		c.syncSequence = false
+	}
 }
 
 // writePacketData writes b, which holds one or more complete packets, either
@@ -636,6 +653,7 @@ func (c *Conn) WriteAuthSwitchPacket(authData []byte, addNUL bool) error {
 func (c *Conn) ResetSequence() {
 	c.Sequence = 0
 	c.CompressedSequence = 0
+	c.syncSequence = false
 }
 
 func (c *Conn) Close() error {
