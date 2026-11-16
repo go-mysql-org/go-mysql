@@ -1392,11 +1392,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 	case mysql.MYSQL_TYPE_TIME:
 		n = 3
 		// The legacy TIME format is a signed 3-byte integer (hh*10000 + mm*100 + ss).
-		i32 := int32(mysql.FixedLengthInt(data[0:3]))
-		if i32&0x800000 != 0 {
-			// sign-extend the int24 to int32
-			i32 |= ^int32(0xFFFFFF)
-		}
+		i32 := mysql.ParseBinaryInt24(data)
 		sign := ""
 		if i32 < 0 {
 			sign, i32 = "-", -i32

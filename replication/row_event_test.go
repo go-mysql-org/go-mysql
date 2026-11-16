@@ -1758,6 +1758,9 @@ func TestDecodeLegacyTime(t *testing.T) {
 		{[]byte{0xFF, 0xFF, 0xFF}, "-00:00:01"},  // -1
 		{[]byte{0x9C, 0xFF, 0xFF}, "-00:01:00"},  // -100 (hhmmss)
 		{[]byte{0x59, 0x0A, 0x80}, "-838:59:59"}, // -8385959, minimum TIME
+		// int24 extremes (outside the valid TIME range, but decoded deterministically)
+		{[]byte{0xFF, 0xFF, 0x7F}, "838:86:07"},  // 0x7FFFFF = 8388607
+		{[]byte{0x00, 0x00, 0x80}, "-838:86:08"}, // 0x800000 = -8388608
 	}
 	for _, tc := range testcases {
 		t.Run(tc.expected, func(t *testing.T) {
