@@ -82,6 +82,7 @@ func (s *Server) NewCustomizedConn(conn net.Conn, authHandler AuthenticationHand
 		authHandler:  authHandler,
 		h:            h,
 		connectionID: atomic.AddUint32(&baseConnID, 1),
+		status:       s.InitialStatus(),
 		stmts:        make(map[uint32]*Stmt),
 		salt:         mysql.RandomBuf(20),
 	}

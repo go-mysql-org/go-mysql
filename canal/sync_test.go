@@ -1,10 +1,14 @@
 package canal
 
 import (
+	"errors"
+	"log/slog"
 	"testing"
 
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/stretchr/testify/require"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 )
 
@@ -61,4 +65,84 @@ func TestHandleEventRowsQuery(t *testing.T) {
 			require.Equal(t, []string{query}, h.queries)
 		})
 	}
+}
+
+type unparsedQueryRecorder struct {
+	DummyEventHandler
+	queries  []string
+	nextPos  mysql.Position
+	parseErr error
+	ddls     []string
+	err      error
+}
+
+func (h *unparsedQueryRecorder) OnUnparsedQuery(_ *replication.EventHeader, nextPos mysql.Position, e *replication.QueryEvent, parseErr error) error {
+	h.queries = append(h.queries, string(e.Query))
+	h.nextPos = nextPos
+	h.parseErr = parseErr
+	return h.err
+}
+
+func (h *unparsedQueryRecorder) OnDDL(_ *replication.EventHeader, _ mysql.Position, e *replication.QueryEvent) error {
+	h.ddls = append(h.ddls, string(e.Query))
+	return nil
+}
+
+func newQueryEventCanal(h EventHandler) *Canal {
+	logger := slog.New(slog.DiscardHandler)
+	return &Canal{
+		cfg:          &Config{Logger: logger},
+		master:       &masterInfo{pos: mysql.Position{Name: "mysql-bin.000001", Pos: 4}, logger: logger},
+		parser:       parser.New(),
+		eventHandler: h,
+	}
+}
+
+func queryEvent(query string, logPos uint32) *replication.BinlogEvent {
+	return &replication.BinlogEvent{
+		Header: &replication.EventHeader{LogPos: logPos},
+		Event:  &replication.QueryEvent{Schema: []byte("test"), Query: []byte(query)},
+	}
+}
+
+// The parser does not support spatial column types.
+const unparsableDDL = "ALTER TABLE t ADD COLUMN g POINT"
+
+func TestHandleEventUnparsedQuery(t *testing.T) {
+	h := &unparsedQueryRecorder{}
+	c := newQueryEventCanal(h)
+
+	err := c.handleEvent(queryEvent(unparsableDDL, 120))
+	require.NoError(t, err)
+	require.Equal(t, []string{unparsableDDL}, h.queries)
+	require.Equal(t, mysql.Position{Name: "mysql-bin.000001", Pos: 120}, h.nextPos)
+	require.Error(t, h.parseErr)
+	require.Empty(t, h.ddls)
+}
+
+func TestHandleEventUnparsedQueryError(t *testing.T) {
+	handlerErr := errors.New("handler failed")
+	h := &unparsedQueryRecorder{err: handlerErr}
+	c := newQueryEventCanal(h)
+
+	err := c.handleEvent(queryEvent(unparsableDDL, 120))
+	require.ErrorIs(t, err, handlerErr)
+}
+
+func TestHandleEventUnparsedQueryWithoutHandler(t *testing.T) {
+	c := newQueryEventCanal(&DummyEventHandler{})
+
+	err := c.handleEvent(queryEvent(unparsableDDL, 120))
+	require.NoError(t, err)
+}
+
+func TestHandleEventParsedQuerySkipsUnparsedHandler(t *testing.T) {
+	h := &unparsedQueryRecorder{}
+	c := newQueryEventCanal(h)
+	query := "ALTER TABLE t ADD COLUMN c INT"
+
+	err := c.handleEvent(queryEvent(query, 120))
+	require.NoError(t, err)
+	require.Equal(t, []string{query}, h.ddls)
+	require.Empty(t, h.queries)
 }

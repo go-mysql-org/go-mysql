@@ -1,12 +1,15 @@
 package server
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"testing"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 	"github.com/stretchr/testify/require"
 )
 
@@ -305,4 +308,72 @@ func TestSetCapabilityRejectsUnsafeFlags(t *testing.T) {
 	require.True(t, svr.Capability()&mysql.CLIENT_FOUND_ROWS != 0)
 	require.NoError(t, svr.UnsetCapability(mysql.CLIENT_FOUND_ROWS))
 	require.False(t, svr.Capability()&mysql.CLIENT_FOUND_ROWS != 0)
+}
+
+func TestSetInitialStatusRejectsNonSessionFlags(t *testing.T) {
+	svr := NewDefaultServer()
+	require.Zero(t, svr.InitialStatus())
+	for _, flag := range []uint16{mysql.SERVER_STATUS_IN_TRANS, mysql.SERVER_MORE_RESULTS_EXISTS, mysql.SERVER_SESSION_STATE_CHANGED} {
+		require.Error(t, svr.SetInitialStatus(mysql.SERVER_STATUS_AUTOCOMMIT|flag))
+		require.Zero(t, svr.InitialStatus(), "a rejected status must not be applied")
+	}
+	require.NoError(t, svr.SetInitialStatus(mysql.SERVER_STATUS_AUTOCOMMIT|mysql.SERVER_STATUS_NO_BACKSLASH_ESCAPED))
+	require.Equal(t, mysql.SERVER_STATUS_AUTOCOMMIT|mysql.SERVER_STATUS_NO_BACKSLASH_ESCAPED, svr.InitialStatus())
+	require.NoError(t, svr.SetInitialStatus(0))
+	require.Zero(t, svr.InitialStatus())
+}
+
+// TestInitialStatusOnTheWire verifies that a connection reports the server's
+// initial status before its Handler has run: in the initial handshake packet,
+// in the OK that ends authentication, and in the reply to a first command.
+func TestInitialStatusOnTheWire(t *testing.T) {
+	for _, status := range []uint16{0, mysql.SERVER_STATUS_AUTOCOMMIT} {
+		t.Run(fmt.Sprintf("%#04x", status), func(t *testing.T) {
+			svr := NewDefaultServer()
+			require.NoError(t, svr.SetInitialStatus(status))
+			l, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer l.Close()
+			authHandler := NewInMemoryAuthenticationHandler()
+			require.NoError(t, authHandler.AddUser("root", ""))
+			go func() {
+				for {
+					conn, acceptErr := l.Accept()
+					if acceptErr != nil {
+						return
+					}
+					go func() {
+						sConn, connErr := svr.NewCustomizedConn(conn, authHandler, EmptyHandler{})
+						if connErr != nil {
+							return
+						}
+						for !sConn.Closed() {
+							if sConn.HandleCommand() != nil {
+								return
+							}
+						}
+					}()
+				}
+			}()
+
+			// The handshake packet: protocol version, NUL-terminated server
+			// version, connection id, 8 bytes of auth data, filler, capability
+			// low half, charset, then the status.
+			raw, err := net.Dial("tcp", l.Addr().String())
+			require.NoError(t, err)
+			defer raw.Close()
+			greeting, err := packet.NewConn(raw).ReadPacket()
+			require.NoError(t, err)
+			pos := 1 + bytes.IndexByte(greeting[1:], 0) + 1 + 4 + 8 + 1 + 2 + 1
+			require.Equal(t, status, binary.LittleEndian.Uint16(greeting[pos:]), "initial handshake")
+
+			c, err := client.Connect(l.Addr().String(), "root", "", "")
+			require.NoError(t, err)
+			defer c.Close()
+			wantAutocommit := status&mysql.SERVER_STATUS_AUTOCOMMIT != 0
+			require.Equal(t, wantAutocommit, c.IsAutoCommit(), "authentication OK")
+			require.NoError(t, c.Ping())
+			require.Equal(t, wantAutocommit, c.IsAutoCommit(), "COM_PING")
+		})
+	}
 }
