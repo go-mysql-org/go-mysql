@@ -405,6 +405,9 @@ func (c *Conn) writeCursorRows(rows []mysql.RowData) error {
 type (
 	noResponse  struct{}
 	eofResponse struct{}
+	// closeConn sends err, then WriteValue returns it so that HandleCommand
+	// closes the connection and reports err.
+	closeConn struct{ err error }
 
 	// cursorResult is the response to a COM_STMT_EXECUTE that opened a cursor.
 	cursorResult struct{ rs *mysql.Resultset }
@@ -418,6 +421,14 @@ func (c *Conn) WriteValue(value any) error {
 		return nil
 	case eofResponse:
 		return c.writeEOFOrOK()
+	case closeConn:
+		if err := c.writeError(v.err); err != nil {
+			return err
+		}
+		if err := c.Flush(); err != nil {
+			return err
+		}
+		return v.err
 	case error:
 		return c.writeError(v)
 	case nil:

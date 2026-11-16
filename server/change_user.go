@@ -18,7 +18,8 @@ import (
 // database when dbName is "".
 //
 // When authentication or HandleChangeUser fails, the error is sent to the
-// client and the connection is closed, as MySQL does.
+// client and the connection is closed, as MySQL does, and HandleCommand
+// returns the error.
 type ChangeUserHandler interface {
 	HandleChangeUser(user string, dbName string) error
 }
@@ -36,11 +37,7 @@ type changeUserRequest struct {
 // handleChangeUser runs COM_CHANGE_USER. A failure closes the connection.
 func (c *Conn) handleChangeUser(h ChangeUserHandler, data []byte) any {
 	if err := c.changeUser(h, data); err != nil {
-		_ = c.writeError(err)
-		_ = c.Flush()
-		c.Close()
-		c.Conn = nil
-		return noResponse{}
+		return closeConn{err}
 	}
 	return nil
 }
@@ -96,6 +93,8 @@ func (c *Conn) parseChangeUser(data []byte) (*changeUserRequest, error) {
 	if !ok {
 		return nil, malformed
 	}
+	// The strings are copied, as in the handshake: the user and attributes
+	// outlive the command, and would otherwise retain the whole packet.
 	req.user = string(user)
 
 	// The handshake requires CLIENT_SECURE_CONNECTION, so the auth response
@@ -103,8 +102,11 @@ func (c *Conn) parseChangeUser(data []byte) (*changeUserRequest, error) {
 	if len(rest) < 1 || len(rest) < 1+int(rest[0]) {
 		return nil, malformed
 	}
-	req.auth = append([]byte(nil), rest[1:1+int(rest[0])]...)
-	rest = rest[1+int(rest[0]):]
+	authLen := int(rest[0])
+	if authLen > 0 {
+		req.auth = rest[1 : 1+authLen : 1+authLen]
+	}
+	rest = rest[1+authLen:]
 
 	db, rest, ok := bytes.Cut(rest, []byte{0x00})
 	if !ok {

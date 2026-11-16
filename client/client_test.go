@@ -126,6 +126,7 @@ func (s *clientTestSuite) TestConn_ChangeUser() {
 	r, err = c.Execute("SELECT @@character_set_client")
 	require.NoError(s.T(), err)
 	serverCharset, _ := r.GetString(0, 0)
+	require.NotEqual(s.T(), "latin1", serverCharset)
 	require.Equal(s.T(), serverCharset, c.GetCharset())
 
 	// No database.
