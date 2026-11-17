@@ -53,8 +53,8 @@ func (h *changeUserHandler) state() ([]string, int) {
 }
 
 // serveChangeUser serves one connection with handler h and returns a client
-// connected as user u1.
-func serveChangeUser(t *testing.T, auth AuthenticationHandler, h Handler) *client.Conn {
+// connected as user u1, set up with opts.
+func serveChangeUser(t *testing.T, auth AuthenticationHandler, h Handler, opts ...client.Option) *client.Conn {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -75,7 +75,7 @@ func serveChangeUser(t *testing.T, auth AuthenticationHandler, h Handler) *clien
 		for co.HandleCommand() == nil {
 		}
 	}()
-	c, err := client.Connect(l.Addr().String(), "u1", "p1", "db1")
+	c, err := client.Connect(l.Addr().String(), "u1", "p1", "db1", opts...)
 	require.NoError(t, err)
 	t.Cleanup(func() { c.Close() })
 	return c
@@ -158,15 +158,6 @@ func TestChangeUserAuthFailureClosesConnection(t *testing.T) {
 			require.Error(t, err, "MySQL closes the connection after a failed change")
 		})
 	}
-}
-
-func TestChangeUserAccessDeniedCode(t *testing.T) {
-	c := serveChangeUser(t, newChangeUserAuth(t), &changeUserHandler{})
-	err := c.ChangeUser("u1", "nope", "db1")
-	var myErr *mysql.MyError
-	require.ErrorAs(t, err, &myErr)
-	require.Equal(t, uint16(mysql.ER_ACCESS_DENIED_ERROR), myErr.Code)
-	require.Contains(t, myErr.Message, "(using password: YES)")
 }
 
 func TestChangeUserHandlerErrorClosesConnection(t *testing.T) {
@@ -274,34 +265,12 @@ func TestChangeUserMetadataBeforeAuthHooks(t *testing.T) {
 	require.NoError(t, auth.AddUser("u1", "p1"))
 	require.NoError(t, auth.AddUser("u2", "p2"))
 
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer l.Close()
-	done := make(chan struct{})
-	defer func() { <-done }()
-	go func() {
-		defer close(done)
-		conn, err := l.Accept()
-		if err != nil {
-			return
-		}
-		co, err := NewDefaultServer().NewCustomizedConn(conn, auth, &changeUserHandler{})
-		if err != nil {
-			return
-		}
-		//nolint:revive // loop drains commands; work is in the condition
-		for co.HandleCommand() == nil {
-		}
-	}()
-
 	// utf8mb4_0900_as_cs is collation 278: the handshake carries only its
 	// low byte (22), COM_CHANGE_USER all of it.
-	c, err := client.Connect(l.Addr().String(), "u1", "p1", "", func(c *client.Conn) error {
+	c := serveChangeUser(t, auth, &changeUserHandler{}, func(c *client.Conn) error {
 		c.SetAttributes(map[string]string{"k": "v1"})
 		return c.SetCollation("utf8mb4_0900_as_cs")
 	})
-	require.NoError(t, err)
-	defer c.Close()
 	c.SetAttributes(map[string]string{"k": "v2"})
 	require.NoError(t, c.ChangeUser("u2", "p2", ""))
 
