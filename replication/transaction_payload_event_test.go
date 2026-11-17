@@ -2,6 +2,7 @@ package replication
 
 import (
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 
@@ -431,5 +432,45 @@ func BenchmarkPayloadDecoderPooled(b *testing.B) {
 			b.Fatal(err)
 		}
 		p.putPayloadDecoder(decoder)
+	}
+}
+
+// MySQL writes the header's field types, lengths and values with
+// net_store_length; a value of 251 or more has a prefix byte.
+func TestTransactionPayloadEventDecodeFields(t *testing.T) {
+	zstdMagic := []byte{0x28, 0xb5, 0x2f, 0xfd}
+	for _, tc := range []struct {
+		name               string
+		header             []byte
+		size, uncompressed uint64
+		wantErr            bool
+	}{
+		{name: "values below 251", header: []byte{0x02, 0x01, 0x00, 0x03, 0x01, 0xb6, 0x01, 0x01, 0x82, 0x00}, size: 130, uncompressed: 182},
+		{name: "2-byte uncompressed size", header: []byte{0x02, 0x01, 0x00, 0x03, 0x03, 0xfc, 0x6f, 0x02, 0x01, 0x01, 0xcf, 0x00}, size: 207, uncompressed: 623},
+		{name: "both sizes 251 or more", header: []byte{0x02, 0x01, 0x00, 0x03, 0x03, 0xfc, 0x0d, 0x13, 0x01, 0x03, 0xfc, 0xeb, 0x10, 0x00}, size: 4331, uncompressed: 4877},
+		{name: "3-byte value", header: []byte{0x02, 0x01, 0x00, 0x03, 0x04, 0xfd, 0x00, 0x00, 0x01, 0x01, 0x01, 0x0a, 0x00}, size: 10, uncompressed: 65536},
+		{name: "unknown field skipped", header: []byte{0x07, 0x02, 0xaa, 0xbb, 0x02, 0x01, 0x00, 0x03, 0x01, 0xb6, 0x01, 0x01, 0x82, 0x00}, size: 130, uncompressed: 182},
+		{name: "truncated header", header: []byte{0x02, 0x01, 0x00, 0x03, 0x03, 0xfc, 0x6f}, wantErr: true},
+		{name: "field length past the event", header: []byte{0x02, 0x01, 0x00, 0x03, 0x40, 0x01}, wantErr: true},
+		{name: "no end mark", header: []byte{0x02, 0x01, 0x00}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := &TransactionPayloadEvent{}
+			data := tc.header
+			if !tc.wantErr {
+				data = append(append([]byte{}, tc.header...), zstdMagic...)
+			}
+			// Exact capacity, so a read past the header cannot hide.
+			err := e.decodeFields(slices.Clip(data))
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.size, e.Size)
+			require.Equal(t, tc.uncompressed, e.UncompressedSize)
+			require.Equal(t, uint64(ZSTD), e.CompressionType)
+			require.Equal(t, zstdMagic, e.Payload)
+		})
 	}
 }
