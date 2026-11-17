@@ -177,6 +177,10 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 		utils.BytesBufferPut(buf)
 	}()
 
+	// Sync before reading the first compressed header below, which advances
+	// CompressedSequence: the reply continues from the value our write left.
+	c.syncSequenceForRead()
+
 	// compressedReader is reset to nil after each WritePacket, so a nil reader here means
 	// we're at the start of a new compressed frame and need to read its header. While a
 	// frame still has buffered packets to hand out, we reuse the existing reader rather

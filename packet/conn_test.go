@@ -458,3 +458,32 @@ func TestCompressedConsecutiveWrites(t *testing.T) {
 		})
 	}
 }
+
+// TestCompressedWriteThenRead covers a command and its reply on one connection,
+// as in Conn.Execute: the reply's packet sequence continues from the compressed
+// sequence our write left, not from the one after the reply's compressed header.
+func TestCompressedWriteThenRead(t *testing.T) {
+	ok := []byte{mysql.OK_HEADER, 0, 0, 2, 0, 0, 0}
+	for name, frame := range map[string][]byte{
+		"uncompressed": uncompressedFrame(1, mysqlPacket(1, ok)),
+		"zlib":         zlibFrame(t, 1, mysqlPacket(1, ok)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := newReadTestConn(frame, mysql.MYSQL_COMPRESS_ZLIB)
+			c.Conn = &writeCaptureConn{}
+			if err := c.WritePacket(append(make([]byte, 4), mysql.COM_QUERY, 'S')); err != nil {
+				t.Fatalf("WritePacket: %v", err)
+			}
+			got, err := c.ReadPacket()
+			if err != nil {
+				t.Fatalf("ReadPacket: %v", err)
+			}
+			if !bytes.Equal(got, ok) {
+				t.Fatalf("ReadPacket = %v, want %v", got, ok)
+			}
+			if c.Sequence != 2 || c.CompressedSequence != 2 {
+				t.Errorf("Sequence %d, CompressedSequence %d, want 2 and 2", c.Sequence, c.CompressedSequence)
+			}
+		})
+	}
+}
