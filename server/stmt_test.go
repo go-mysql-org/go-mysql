@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -557,4 +558,38 @@ func TestStmtCursorWithoutResultset(t *testing.T) {
 	require.Len(t, packets, 1)
 	require.Equal(t, mysql.OK_HEADER, packets[0][0])
 	require.False(t, c.HasStatus(mysql.SERVER_STATUS_CURSOR_EXISTS))
+}
+
+// closeRecordingHandler records the contexts passed to HandleStmtClose.
+type closeRecordingHandler struct {
+	EmptyHandler
+	closed   []any
+	closeErr error
+}
+
+func (h *closeRecordingHandler) HandleStmtClose(context any) error {
+	h.closed = append(h.closed, context)
+	return h.closeErr
+}
+
+func TestResetStmts(t *testing.T) {
+	h := &closeRecordingHandler{}
+	c := &Conn{h: h, stmts: map[uint32]*Stmt{1: {Context: 1}, 2: {Context: 2}}}
+
+	require.NoError(t, c.ResetStmts())
+	require.ElementsMatch(t, []any{1, 2}, h.closed)
+	require.Empty(t, c.stmts)
+
+	_, err := c.handleStmtExecute([]byte{1, 0, 0, 0, 0, 1, 0, 0, 0})
+	require.ErrorContains(t, err, "Unknown prepared statement handler (1)")
+}
+
+func TestResetStmtsReportsCloseErrors(t *testing.T) {
+	closeErr := errors.New("close failed")
+	h := &closeRecordingHandler{closeErr: closeErr}
+	c := &Conn{h: h, stmts: map[uint32]*Stmt{1: {Context: 1}, 2: {Context: 2}}}
+
+	require.ErrorIs(t, c.ResetStmts(), closeErr)
+	require.ElementsMatch(t, []any{1, 2}, h.closed)
+	require.Empty(t, c.stmts, "statements are deallocated even when a close fails")
 }
