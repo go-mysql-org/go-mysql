@@ -17,9 +17,15 @@ import (
 Pool for efficient reuse of connections.
 
 Usage:
-	pool := client.NewPool(log.Debugf, 100, 400, 5, `127.0.0.1:3306`, `username`, `userpwd`, `dbname`)
+	pool, err := client.NewPoolWithOptions(`127.0.0.1:3306`, `username`, `userpwd`, `dbname`)
+	if err != nil {
+		// handle error
+	}
 	...
-	conn, _ := pool.GetConn(ctx)
+	conn, err := pool.GetConn(ctx)
+	if err != nil {
+		// handle error
+	}
 	defer pool.PutConn(conn)
 	conn.Execute/conn.Begin/etc...
 */
@@ -158,6 +164,10 @@ func NewPoolWithOptions(
 // may be greater by 1 inside newConnectionProducer).
 // maxIdle specifies the maximum number of idle connections (see DefaultIdleTimeout).
 //
+// If pool initialization fails, NewPool logs the error (using logger, or the default slog logger
+// when logger is nil) and returns nil. Callers must verify the returned pool is not nil before
+// calling methods like GetConn, or prefer NewPoolWithOptions for explicit error handling.
+//
 // Deprecated: use NewPoolWithOptions
 func NewPool(
 	logger *slog.Logger,
@@ -170,17 +180,27 @@ func NewPool(
 	dbName string,
 	options ...Option,
 ) *Pool {
+	poolOptions := []PoolOption{
+		WithPoolLimits(minAlive, maxAlive, maxIdle),
+		WithConnOptions(options...),
+	}
+	if logger != nil {
+		poolOptions = append(poolOptions, WithLogger(logger))
+	}
+
 	pool, err := NewPoolWithOptions(
 		addr,
 		user,
 		password,
 		dbName,
-		WithLogger(logger),
-		WithPoolLimits(minAlive, maxAlive, maxIdle),
-		WithConnOptions(options...),
+		poolOptions...,
 	)
-	if err != nil && logger != nil {
-		logger.Error("Pool: NewPool", slog.Any("error", err))
+	if err != nil {
+		if logger != nil {
+			logger.Error("Pool: NewPool", slog.Any("error", err))
+		} else {
+			slog.Error("Pool: NewPool", slog.Any("error", err))
+		}
 	}
 
 	return pool
