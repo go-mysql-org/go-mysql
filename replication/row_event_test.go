@@ -1743,3 +1743,31 @@ func BenchmarkInt(b *testing.B) {
 		}
 	}
 }
+
+func TestDecodeLegacyTime(t *testing.T) {
+	// MYSQL_TYPE_TIME (pre-5.6.4 format) is a signed 3-byte integer
+	// holding hh*10000 + mm*100 + ss.
+	e := &RowsEvent{}
+	testcases := []struct {
+		data     []byte
+		expected string
+	}{
+		{[]byte{0x00, 0x00, 0x00}, "00:00:00"},
+		{[]byte{0x01, 0x00, 0x00}, "00:00:01"},
+		{[]byte{0xA7, 0xF5, 0x7F}, "838:59:59"},  // 8385959, maximum TIME
+		{[]byte{0xFF, 0xFF, 0xFF}, "-00:00:01"},  // -1
+		{[]byte{0x9C, 0xFF, 0xFF}, "-00:01:00"},  // -100 (hhmmss)
+		{[]byte{0x59, 0x0A, 0x80}, "-838:59:59"}, // -8385959, minimum TIME
+		// int24 extremes (outside the valid TIME range, but decoded deterministically)
+		{[]byte{0xFF, 0xFF, 0x7F}, "838:86:07"},  // 0x7FFFFF = 8388607
+		{[]byte{0x00, 0x00, 0x80}, "-838:86:08"}, // 0x800000 = -8388608
+	}
+	for _, tc := range testcases {
+		t.Run(tc.expected, func(t *testing.T) {
+			v, n, err := e.decodeValue(tc.data, mysql.MYSQL_TYPE_TIME, 0, false, false)
+			require.NoError(t, err)
+			require.Equal(t, 3, n)
+			require.Equal(t, tc.expected, v)
+		})
+	}
+}

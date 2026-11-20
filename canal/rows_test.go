@@ -74,3 +74,30 @@ func TestRowsEvent_flags(t *testing.T) {
 
 	require.Equal(t, canalEvent.Flags, replEvent.Flags)
 }
+
+// TestRowsEvent_skippedColumns checks that SkippedColumns from replication's
+// RowsEvent propagate to canal's RowsEvent, so a handler can tell a column
+// missing from a partial row image apart from one that is NULL.
+func TestRowsEvent_skippedColumns(t *testing.T) {
+	replEvent := &replication.RowsEvent{
+		Rows: [][]any{
+			{1, nil, "a"},
+			{2, "b", nil},
+		},
+		SkippedColumns: [][]int{
+			{1},
+			{},
+		},
+	}
+
+	var table schema.Table
+	canalEvent := newRowsEvent(&table, "update", replEvent.Rows, nil, replEvent)
+
+	require.Equal(t, replEvent.SkippedColumns, canalEvent.SkippedColumns)
+	require.Len(t, canalEvent.SkippedColumns, len(canalEvent.Rows))
+
+	// A dump builds its event without a replication.RowsEvent, so it has no
+	// skipped columns to report.
+	dumpEvent := newRowsEvent(&table, "insert", [][]any{{1, "a"}}, nil, nil)
+	require.Nil(t, dumpEvent.SkippedColumns)
+}
