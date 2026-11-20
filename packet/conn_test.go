@@ -3,6 +3,7 @@ package packet
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"testing"
@@ -286,5 +287,203 @@ func TestReadPacketSequenceMismatchIsBadConn(t *testing.T) {
 	}
 	if !mysql.ErrorEqual(err, mysql.ErrBadConn) {
 		t.Errorf("err = %v, want an error equal to mysql.ErrBadConn", err)
+	}
+}
+
+// writeCaptureConn records everything written to it.
+type writeCaptureConn struct {
+	net.Conn
+	written bytes.Buffer
+}
+
+func (w *writeCaptureConn) Write(b []byte) (int, error) { return w.written.Write(b) }
+
+type writtenFrame struct {
+	seq     byte
+	payload []byte // uncompressed
+}
+
+// parseCompressedFrames splits a compressed-protocol byte stream into frames
+// and decompresses their payloads.
+func parseCompressedFrames(t *testing.T, stream []byte) []writtenFrame {
+	t.Helper()
+	var frames []writtenFrame
+	for len(stream) > 0 {
+		if len(stream) < 7 {
+			t.Fatalf("truncated compressed header: %d bytes left", len(stream))
+		}
+		cl := int(stream[0]) | int(stream[1])<<8 | int(stream[2])<<16
+		ul := int(stream[4]) | int(stream[5])<<8 | int(stream[6])<<16
+		if len(stream) < 7+cl {
+			t.Fatalf("frame %d: compressed length %d, only %d bytes left", len(frames), cl, len(stream)-7)
+		}
+		body := stream[7 : 7+cl]
+		if ul > 0 {
+			r, err := compress.GetPooledZlibReader(bytes.NewReader(body))
+			if err != nil {
+				t.Fatalf("frame %d: zlib reader: %v", len(frames), err)
+			}
+			body, err = io.ReadAll(r)
+			if err != nil {
+				t.Fatalf("frame %d: zlib read: %v", len(frames), err)
+			}
+			if len(body) != ul {
+				t.Fatalf("frame %d: uncompressed length %d, header says %d", len(frames), len(body), ul)
+			}
+		}
+		frames = append(frames, writtenFrame{seq: stream[3], payload: body})
+		stream = stream[7+cl:]
+	}
+	return frames
+}
+
+// TestWritePacketCompressedLargePacket checks that a packet of 16MB or more is
+// sent in compressed packets of at most mysql.MaxPayloadLen bytes with
+// consecutive sequence numbers, and that the packet sequence then continues
+// from the compressed sequence like the server expects. Before, the 16MB
+// parts were written to the connection without a compressed header.
+func TestWritePacketCompressedLargePacket(t *testing.T) {
+	const tail = 1000
+	payload := make([]byte, mysql.MaxPayloadLen+tail)
+	for i := range payload {
+		payload[i] = byte(i % 251)
+	}
+	data := append(make([]byte, 4), payload...)
+
+	w := &writeCaptureConn{}
+	c := &Conn{Conn: w, Compression: mysql.MYSQL_COMPRESS_ZLIB}
+	if err := c.WritePacket(data); err != nil {
+		t.Fatalf("WritePacket: %v", err)
+	}
+
+	frames := parseCompressedFrames(t, w.written.Bytes())
+	var stream []byte
+	for i, f := range frames {
+		if f.seq != byte(i) {
+			t.Fatalf("frame %d has compressed sequence %d", i, f.seq)
+		}
+		if len(f.payload) > mysql.MaxPayloadLen {
+			t.Fatalf("frame %d carries %d bytes, more than %d", i, len(f.payload), mysql.MaxPayloadLen)
+		}
+		stream = append(stream, f.payload...)
+	}
+	want := append(mysqlPacket(0, payload[:mysql.MaxPayloadLen]), mysqlPacket(1, payload[mysql.MaxPayloadLen:])...)
+	if !bytes.Equal(stream, want) {
+		t.Fatalf("uncompressed stream does not match the two packets (%d bytes, want %d)", len(stream), len(want))
+	}
+	if int(c.CompressedSequence) != len(frames) || c.Sequence != 2 {
+		t.Fatalf("after %d frames: Sequence %d, CompressedSequence %d", len(frames), c.Sequence, c.CompressedSequence)
+	}
+	// the next read continues the packet sequence from the compressed sequence
+	c.syncSequenceForRead()
+	if c.Sequence != c.CompressedSequence {
+		t.Fatalf("after sync: Sequence %d, CompressedSequence %d", c.Sequence, c.CompressedSequence)
+	}
+}
+
+// TestCompressedSequenceContinuesAfterRead checks that the compressed sequence
+// is shared by both directions within a command, as in LOAD DATA LOCAL INFILE
+// where the client sends the file after the server's request. Before, every
+// write restarted at compressed sequence 0.
+func TestCompressedSequenceContinuesAfterRead(t *testing.T) {
+	request := append([]byte{mysql.LocalInFile_HEADER}, "data.csv"...)
+	w := &writeCaptureConn{}
+	c := newReadTestConn(uncompressedFrame(1, mysqlPacket(1, request)), mysql.MYSQL_COMPRESS_ZLIB)
+	c.Conn = w
+	// state after the client sent the query in compressed packet 0
+	c.Sequence, c.CompressedSequence = 1, 1
+
+	got, err := c.ReadPacket()
+	if err != nil {
+		t.Fatalf("ReadPacket: %v", err)
+	}
+	if !bytes.Equal(got, request) {
+		t.Fatalf("ReadPacket = %q, want %q", got, request)
+	}
+
+	for i, content := range [][]byte{[]byte("1,2\n"), nil} {
+		if err := c.WritePacket(append(make([]byte, 4), content...)); err != nil {
+			t.Fatalf("WritePacket #%d: %v", i, err)
+		}
+	}
+	frames := parseCompressedFrames(t, w.written.Bytes())
+	if len(frames) != 2 {
+		t.Fatalf("got %d frames, want 2", len(frames))
+	}
+	for i, f := range frames {
+		seq := byte(2 + i)
+		if f.seq != seq {
+			t.Errorf("frame %d has compressed sequence %d, want %d", i, f.seq, seq)
+		}
+		if len(f.payload) < 4 || f.payload[3] != seq {
+			t.Errorf("frame %d: packet sequence is not %d", i, seq)
+		}
+	}
+	if c.Sequence != 4 || c.CompressedSequence != 4 {
+		t.Errorf("Sequence %d, CompressedSequence %d, want 4 and 4", c.Sequence, c.CompressedSequence)
+	}
+
+	c.ResetSequence()
+	if c.Sequence != 0 || c.CompressedSequence != 0 {
+		t.Errorf("ResetSequence left Sequence %d, CompressedSequence %d", c.Sequence, c.CompressedSequence)
+	}
+}
+
+// A large packet followed by another packet in the same write batch must keep
+// the inner sequence contiguous; the switch to the compressed sequence only
+// happens at the write-to-read boundary.
+func TestCompressedConsecutiveWrites(t *testing.T) {
+	for _, algorithm := range []uint8{mysql.MYSQL_COMPRESS_ZLIB, mysql.MYSQL_COMPRESS_ZSTD} {
+		t.Run(fmt.Sprintf("algorithm%d", algorithm), func(t *testing.T) {
+			w := &writeCaptureConn{}
+			sender := &Conn{Conn: w, Compression: algorithm, Sequence: 1, CompressedSequence: 1}
+			sender.EnableWriteBuffering(DefaultBufferSize)
+			if err := sender.WritePacket(make([]byte, 4+mysql.MaxPayloadLen+1)); err != nil {
+				t.Fatal(err)
+			}
+			if err := sender.WritePacket([]byte{0, 0, 0, 0, 0xfe, 0, 0, 0, 0}); err != nil {
+				t.Fatal(err)
+			}
+			if err := sender.Flush(); err != nil {
+				t.Fatal(err)
+			}
+			receiver := newReadTestConn(w.written.Bytes(), algorithm)
+			receiver.Sequence, receiver.CompressedSequence = 1, 1
+			if _, err := receiver.ReadPacket(); err != nil {
+				t.Fatal("large packet:", err)
+			}
+			if _, err := receiver.ReadPacket(); err != nil {
+				t.Fatal("following EOF:", err)
+			}
+		})
+	}
+}
+
+// TestCompressedWriteThenRead covers a command and its reply on one connection,
+// as in Conn.Execute: the reply's packet sequence continues from the compressed
+// sequence our write left, not from the one after the reply's compressed header.
+func TestCompressedWriteThenRead(t *testing.T) {
+	ok := []byte{mysql.OK_HEADER, 0, 0, 2, 0, 0, 0}
+	for name, frame := range map[string][]byte{
+		"uncompressed": uncompressedFrame(1, mysqlPacket(1, ok)),
+		"zlib":         zlibFrame(t, 1, mysqlPacket(1, ok)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := newReadTestConn(frame, mysql.MYSQL_COMPRESS_ZLIB)
+			c.Conn = &writeCaptureConn{}
+			if err := c.WritePacket(append(make([]byte, 4), mysql.COM_QUERY, 'S')); err != nil {
+				t.Fatalf("WritePacket: %v", err)
+			}
+			got, err := c.ReadPacket()
+			if err != nil {
+				t.Fatalf("ReadPacket: %v", err)
+			}
+			if !bytes.Equal(got, ok) {
+				t.Fatalf("ReadPacket = %v, want %v", got, ok)
+			}
+			if c.Sequence != 2 || c.CompressedSequence != 2 {
+				t.Errorf("Sequence %d, CompressedSequence %d, want 2 and 2", c.Sequence, c.CompressedSequence)
+			}
+		})
 	}
 }

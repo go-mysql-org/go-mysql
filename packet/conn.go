@@ -53,6 +53,11 @@ type Conn struct {
 
 	CompressedSequence uint8
 
+	// syncSequence is set after writing with compression and consumed by the
+	// next read, which first continues the packet sequence from the
+	// compressed sequence (see syncSequenceForRead).
+	syncSequence bool
+
 	compressedHeader [7]byte
 
 	compressedReader io.Reader
@@ -172,6 +177,10 @@ func (c *Conn) ReadPacketReuseMem(dst []byte) ([]byte, error) {
 		utils.BytesBufferPut(buf)
 	}()
 
+	// Sync before reading the first compressed header below, which advances
+	// CompressedSequence: the reply continues from the value our write left.
+	c.syncSequenceForRead()
+
 	// compressedReader is reset to nil after each WritePacket, so a nil reader here means
 	// we're at the start of a new compressed frame and need to read its header. While a
 	// frame still has buffered packets to hand out, we reuse the existing reader rather
@@ -231,13 +240,17 @@ func (c *Conn) newCompressedPacketReader() (io.Reader, error) {
 		return nil, errors.Errorf("invalid compressed sequence %d != %d",
 			compressedSequence, c.CompressedSequence)
 	}
+	// Like the packet sequence, the compressed sequence is shared by both
+	// directions within a command: the next frame, read or written, uses the
+	// following number.
+	c.CompressedSequence++
 
 	compressedLength := int(uint32(c.compressedHeader[0]) | uint32(c.compressedHeader[1])<<8 | uint32(c.compressedHeader[2])<<16)
 	uncompressedLength := int(uint32(c.compressedHeader[4]) | uint32(c.compressedHeader[5])<<8 | uint32(c.compressedHeader[6])<<16)
 
 	// Always bound reads to this frame's payload (compressedLength bytes on the wire).
-	// copyN relies on hitting EOF at the frame boundary to advance CompressedSequence
-	// and move on to the next compressed packet.
+	// copyN relies on hitting EOF at the frame boundary to move on to the next
+	// compressed packet.
 	limitedReader := io.LimitReader(c.reader, int64(compressedLength))
 	if uncompressedLength > 0 {
 		switch c.Compression {
@@ -294,9 +307,8 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 		if c.Compression != mysql.MYSQL_COMPRESS_NONE &&
 			(goErrors.Is(err, io.ErrUnexpectedEOF) || goErrors.Is(err, io.EOF)) {
 			// we have read to EOF and read an incomplete uncompressed packet
-			// so advance the compressed sequence number and reset the compressed reader
-			// to get the remaining unread uncompressed bytes from the next compressed packet.
-			c.CompressedSequence++
+			// so reset the compressed reader to get the remaining unread
+			// uncompressed bytes from the next compressed packet.
 			if c.compressedReader, err = c.newCompressedPacketReader(); err != nil {
 				return written, errors.Trace(err)
 			}
@@ -318,6 +330,8 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 }
 
 func (c *Conn) ReadPacketTo(w io.Writer) error {
+	c.syncSequenceForRead()
+
 	// The peer may be waiting on our buffered output before it sends more.
 	if err := c.Flush(); err != nil {
 		return err
@@ -382,7 +396,7 @@ func (c *Conn) WritePacket(data []byte) error {
 
 		data[3] = c.Sequence
 
-		if n, err := c.writeWithTimeout(data[:4+mysql.MaxPayloadLen]); err != nil {
+		if n, err := c.writePacketData(data[:4+mysql.MaxPayloadLen]); err != nil {
 			return errors.Wrapf(mysql.ErrBadConn,
 				"Write(payload portion) failed. err %v", err)
 		} else if n != (4 + mysql.MaxPayloadLen) {
@@ -424,7 +438,37 @@ func (c *Conn) WritePacket(data []byte) error {
 	}
 
 	c.Sequence++
+	if c.Compression != mysql.MYSQL_COMPRESS_NONE {
+		// Packets written back to back keep their own sequence; the switch to
+		// the compressed sequence happens once, before the next read.
+		c.syncSequence = true
+	}
 	return nil
+}
+
+// syncSequenceForRead runs at the write-to-read boundary. With compression,
+// the peer continues the packet sequence from the compressed sequence once it
+// has read our packets (net_flush in MySQL's sql-common/net_serv.cc does the
+// same on its side). The two only differ when a packet was split over several
+// compressed packets. go-sql-driver/mysql's syncSequence does the same.
+func (c *Conn) syncSequenceForRead() {
+	if c.syncSequence {
+		c.Sequence = c.CompressedSequence
+		c.syncSequence = false
+	}
+}
+
+// writePacketData writes b, which holds one or more complete packets, either
+// as is or wrapped in compressed packets.
+func (c *Conn) writePacketData(b []byte) (int, error) {
+	switch c.Compression {
+	case mysql.MYSQL_COMPRESS_NONE:
+		return c.writeWithTimeout(b)
+	case mysql.MYSQL_COMPRESS_ZLIB, mysql.MYSQL_COMPRESS_ZSTD:
+		return c.writeCompressed(b)
+	default:
+		return 0, errors.Wrapf(mysql.ErrBadConn, "Write failed. Unsuppored compression algorithm set")
+	}
 }
 
 func (c *Conn) writeWithTimeout(b []byte) (n int, err error) {
@@ -444,7 +488,27 @@ func (c *Conn) writeDirect(b []byte) (n int, err error) {
 	return c.Write(b)
 }
 
+// writeCompressed sends data in compressed packets. A compressed packet can
+// carry at most mysql.MaxPayloadLen bytes, so larger data, such as a packet
+// of 16MB or more, is split over several of them.
 func (c *Conn) writeCompressed(data []byte) (n int, err error) {
+	for len(data) > 0 {
+		chunk := data
+		if len(chunk) > mysql.MaxPayloadLen {
+			chunk = chunk[:mysql.MaxPayloadLen]
+		}
+		if err = c.writeCompressedPacket(chunk); err != nil {
+			return n, err
+		}
+		n += len(chunk)
+		data = data[len(chunk):]
+	}
+	return n, nil
+}
+
+// writeCompressedPacket sends data, at most mysql.MaxPayloadLen bytes, as a
+// single compressed packet.
+func (c *Conn) writeCompressedPacket(data []byte) (err error) {
 	var (
 		compressedLength, uncompressedLength int
 		payload                              *bytes.Buffer
@@ -462,27 +526,33 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 		case mysql.MYSQL_COMPRESS_ZSTD:
 			w, err = zstd.NewWriter(payload)
 		default:
-			return 0, errors.Wrapf(mysql.ErrBadConn, "Write failed. Unsuppored compression algorithm set")
+			return errors.Wrapf(mysql.ErrBadConn, "Write failed. Unsuppored compression algorithm set")
 		}
 		if err != nil {
-			return 0, err
+			return err
 		}
 
-		uncompressedLength = len(data)
-		if n, err = w.Write(data); err != nil {
+		if _, err = w.Write(data); err != nil {
 			_ = w.Close()
-			return 0, err
+			return err
 		}
 		if err = w.Close(); err != nil {
-			return 0, err
+			return err
 		}
 
-		compressedLength = payload.Len()
-	} else {
+		if payload.Len() < len(data) {
+			uncompressedLength = len(data)
+			compressedLength = payload.Len()
+		} else {
+			// Compression did not help, and the compressed length might not
+			// even fit in the header: send the data uncompressed.
+			payload = nil
+		}
+	}
+	if payload == nil {
 		compressedLength = len(data)
 	}
 
-	c.CompressedSequence = 0
 	// write the compressed packet header
 	compressedPacket := utils.BytesBufferGet()
 	defer utils.BytesBufferPut(compressedPacket)
@@ -495,24 +565,20 @@ func (c *Conn) writeCompressed(data []byte) (n int, err error) {
 	compressedHeader[5] = byte(uncompressedLength >> 8)
 	compressedHeader[6] = byte(uncompressedLength >> 16)
 	if _, err = compressedPacket.Write(compressedHeader[:]); err != nil {
-		return 0, err
+		return err
 	}
 	c.CompressedSequence++
 
 	if payload != nil {
 		_, err = compressedPacket.Write(payload.Bytes())
 	} else {
-		n, err = compressedPacket.Write(data)
+		_, err = compressedPacket.Write(data)
 	}
-
 	if err != nil {
-		return 0, err
+		return err
 	}
-	if _, err = c.writeWithTimeout(compressedPacket.Bytes()); err != nil {
-		return 0, err
-	}
-
-	return n, nil
+	_, err = c.writeWithTimeout(compressedPacket.Bytes())
+	return err
 }
 
 // WriteClearAuthPacket Client clear text authentication packet
@@ -590,6 +656,8 @@ func (c *Conn) WriteAuthSwitchPacket(authData []byte, addNUL bool) error {
 
 func (c *Conn) ResetSequence() {
 	c.Sequence = 0
+	c.CompressedSequence = 0
+	c.syncSequence = false
 }
 
 func (c *Conn) Close() error {
