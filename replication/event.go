@@ -53,12 +53,13 @@ type EventError struct {
 	// Error message
 	Err string
 
-	// Event data
+	// Event data. Error() reports only its length, because the data can be
+	// large and can hold row values.
 	Data []byte
 }
 
 func (e *EventError) Error() string {
-	return fmt.Sprintf("Header %#v, Data %q, Err: %v", e.Header, e.Data, e.Err)
+	return fmt.Sprintf("Header %#v, Data length %d, Err: %v", e.Header, len(e.Data), e.Err)
 }
 
 type EventHeader struct {

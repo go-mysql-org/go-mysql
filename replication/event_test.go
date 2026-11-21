@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 
@@ -252,4 +253,20 @@ func TestHeartbeatEvent(t *testing.T) {
 			require.Equal(t, tc.hbEvent, e)
 		}
 	}
+}
+
+func TestEventErrorOmitsData(t *testing.T) {
+	// A 1 MiB event body, for example a rows event with a large BLOB value.
+	data := bytes.Repeat([]byte("row-value-canary"), 64*1024)
+	err := &EventError{
+		Header: &EventHeader{EventType: WRITE_ROWS_EVENTv2, LogPos: 1234},
+		Err:    "decode failed",
+		Data:   data,
+	}
+
+	msg := err.Error()
+	require.Less(t, len(msg), 256)
+	require.NotContains(t, msg, "row-value-canary")
+	require.Contains(t, msg, "Data length 1048576")
+	require.Contains(t, msg, "Err: decode failed")
 }
