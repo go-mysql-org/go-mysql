@@ -58,6 +58,11 @@ type Conn struct {
 	// compressed sequence (see syncSequenceForRead).
 	syncSequence bool
 
+	// syncWriteSequence is the same for the other direction: set after reading
+	// with compression and consumed by the next write (see
+	// syncSequenceForWrite).
+	syncWriteSequence bool
+
 	compressedHeader [7]byte
 
 	compressedReader io.Reader
@@ -331,6 +336,11 @@ func (c *Conn) copyN(dst io.Writer, n int64) (int64, error) {
 
 func (c *Conn) ReadPacketTo(w io.Writer) error {
 	c.syncSequenceForRead()
+	if c.Compression != mysql.MYSQL_COMPRESS_NONE {
+		// Packets read back to back keep their own sequence; the switch to
+		// the compressed sequence happens once, before the next write.
+		c.syncWriteSequence = true
+	}
 
 	// The peer may be waiting on our buffered output before it sends more.
 	if err := c.Flush(); err != nil {
@@ -387,6 +397,8 @@ func (c *Conn) ReadPacketTo(w io.Writer) error {
 
 // WritePacket data already has 4 bytes header will modify data in-place
 func (c *Conn) WritePacket(data []byte) error {
+	c.syncSequenceForWrite()
+
 	length := len(data) - 4
 
 	for length >= mysql.MaxPayloadLen {
@@ -455,6 +467,18 @@ func (c *Conn) syncSequenceForRead() {
 	if c.syncSequence {
 		c.Sequence = c.CompressedSequence
 		c.syncSequence = false
+	}
+}
+
+// syncSequenceForWrite runs at the read-to-write boundary, the mirror of
+// syncSequenceForRead: once the peer has flushed the compressed packets we
+// just read, it expects our next packet to continue from the compressed
+// sequence. The two differ when a packet read was split over several
+// compressed packets, e.g. an incompressible packet of 16MB or more.
+func (c *Conn) syncSequenceForWrite() {
+	if c.syncWriteSequence {
+		c.Sequence = c.CompressedSequence
+		c.syncWriteSequence = false
 	}
 }
 
@@ -658,6 +682,7 @@ func (c *Conn) ResetSequence() {
 	c.Sequence = 0
 	c.CompressedSequence = 0
 	c.syncSequence = false
+	c.syncWriteSequence = false
 }
 
 func (c *Conn) Close() error {

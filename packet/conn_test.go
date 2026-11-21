@@ -487,3 +487,40 @@ func TestCompressedWriteThenRead(t *testing.T) {
 		})
 	}
 }
+
+func TestCompressedReadThenWriteSequence(t *testing.T) {
+	payload := make([]byte, mysql.MaxPayloadLen+1)
+	x := uint32(0x12345678)
+	for i := range payload {
+		x ^= x << 13
+		x ^= x >> 17
+		x ^= x << 5
+		payload[i] = byte(x)
+	}
+
+	wire := &writeCaptureConn{}
+	sender := &Conn{Conn: wire, Compression: mysql.MYSQL_COMPRESS_ZLIB}
+	if err := sender.WritePacket(append(make([]byte, 4), payload...)); err != nil {
+		t.Fatal(err)
+	}
+
+	out := &writeCaptureConn{}
+	receiver := newReadTestConn(wire.written.Bytes(), mysql.MYSQL_COMPRESS_ZLIB)
+	receiver.Conn = out
+	if got, err := receiver.ReadPacket(); err != nil {
+		t.Fatal(err)
+	} else if len(got) != len(payload) {
+		t.Fatalf("got payload length %d, want %d", len(got), len(payload))
+	}
+	if receiver.Sequence != 2 || receiver.CompressedSequence != 3 {
+		t.Fatalf("after read: Sequence=%d CompressedSequence=%d, want 2 and 3", receiver.Sequence, receiver.CompressedSequence)
+	}
+
+	if err := receiver.WritePacket([]byte{0, 0, 0, 0, mysql.OK_HEADER}); err != nil {
+		t.Fatal(err)
+	}
+	frames := parseCompressedFrames(t, out.written.Bytes())
+	if len(frames) != 1 || frames[0].seq != 3 || frames[0].payload[3] != 3 {
+		t.Fatalf("next frame/packet sequence = %d/%d, want 3/3", frames[0].seq, frames[0].payload[3])
+	}
+}
