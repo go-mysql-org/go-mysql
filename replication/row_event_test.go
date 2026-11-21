@@ -1,6 +1,8 @@
 package replication
 
 import (
+	"io"
+	"os"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -1210,6 +1212,44 @@ func TestRowsEventType(t *testing.T) {
 
 		require.Equal(t, tc.want, rev.Type())
 	}
+}
+
+func TestRowsEventDecodeImageCorruptedJSONDiff(t *testing.T) {
+	// After image of a PARTIAL_UPDATE_ROWS_EVENT for a table with one JSON
+	// column. The JSON diff has an invalid operation.
+	data := []byte{
+		0x01,                   // binlog_row_value_options: PARTIAL_JSON
+		0x01,                   // partial bitmap: the JSON column holds a diff
+		0x00,                   // null bitmap
+		0x09, 0x00, 0x00, 0x00, // length of the diff
+		0x03,                   // operation: not Replace, Insert or Remove
+		0x03, 0x24, 0x2e, 0x61, // path: "$.a"
+		0x03, 0x05, 0x01, 0x00, // value: JSON int16 1
+	}
+
+	e := RowsEvent{
+		eventType: PARTIAL_UPDATE_ROWS_EVENT,
+		Table: &TableMapEvent{
+			ColumnType: []byte{mysql.MYSQL_TYPE_JSON},
+			ColumnMeta: []uint16{4},
+		},
+		ColumnCount: 1,
+	}
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	stdout := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = stdout })
+	_, decodeErr := e.decodeImage(data, []byte{0x01}, EnumRowImageTypeUpdateAI)
+	os.Stdout = stdout
+	require.NoError(t, w.Close())
+	out, err := io.ReadAll(r)
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
+
+	require.ErrorIs(t, decodeErr, ErrCorruptedJSONDiff)
+	require.Empty(t, string(out))
 }
 
 func TestTableMapHelperMaps(t *testing.T) {
