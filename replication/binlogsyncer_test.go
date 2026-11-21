@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -150,6 +151,64 @@ func TestHandleEventAndACKPayloadInnerGSet(t *testing.T) {
 	require.NoError(t, b.handleEventAndACK(NewBinlogStreamer(), ev, false))
 	require.Equal(t, gset.String(), innerQuery.Event.(*QueryEvent).GSet.String())
 	require.Equal(t, gset.String(), innerXID.Event.(*XIDEvent).GSet.String())
+}
+
+// TestHandleEventAndACKTaggedGTIDResumeSet verifies that prevGset, the set
+// retrySync resumes from, keeps the tag of the previous transaction when the
+// next GTID event is untagged.
+func TestHandleEventAndACKTaggedGTIDResumeSet(t *testing.T) {
+	const sid = "de278ad0-2106-11e4-9f8e-6edd0ca20947"
+	u := uuid.MustParse(sid)
+	untagged := func(gno int64) *BinlogEvent {
+		return &BinlogEvent{
+			Header: &EventHeader{EventType: GTID_EVENT},
+			Event:  &GTIDEvent{SID: u[:], GNO: gno},
+		}
+	}
+	tagged := func(tag string, gno int64) *BinlogEvent {
+		return &BinlogEvent{
+			Header: &EventHeader{EventType: GTID_TAGGED_LOG_EVENT},
+			Event:  &GtidTaggedLogEvent{GTIDEvent: GTIDEvent{SID: u[:], Tag: mysql.NewTag(tag), GNO: gno}},
+		}
+	}
+
+	tests := []struct {
+		name     string
+		events   []*BinlogEvent
+		wantPrev string // the resume set after the last event
+	}{
+		{
+			name:     "tagged then untagged",
+			events:   []*BinlogEvent{tagged("t1", 5), untagged(4)},
+			wantPrev: sid + ":1-3:t1:5",
+		},
+		{
+			name:     "mixed",
+			events:   []*BinlogEvent{tagged("t1", 7), untagged(4), tagged("t1", 8), untagged(5), untagged(6)},
+			wantPrev: sid + ":1-5:t1:7-8",
+		},
+		{
+			name:     "untagged then tagged",
+			events:   []*BinlogEvent{untagged(4), tagged("t1", 1)},
+			wantPrev: sid + ":1-4",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := NewBinlogSyncer(BinlogSyncerConfig{ServerID: 1})
+			defer b.Close()
+
+			gset, err := mysql.ParseMysqlGTIDSet(sid + ":1-3")
+			require.NoError(t, err)
+			b.prevGset = gset
+
+			for _, ev := range tt.events {
+				require.NoError(t, b.handleEventAndACK(NewBinlogStreamer(), ev, false))
+			}
+			require.Equal(t, tt.wantPrev, b.prevGset.String())
+		})
+	}
 }
 
 // TestHandleEventAndACKRotateLogDedup verifies the artificial rotate event the
