@@ -1678,8 +1678,8 @@ func TestTableMapEventDecodeCorrupted(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			data := make([]byte, len(tc.data))
 			failed := 0
-			for i := len(tc.data) - 1; i >= 0; i-- {
-				for _, b := range []byte{0x00, tc.data[i] - 1, tc.data[i] + 1, 0xfc, 0xfd, 0xfe, 0xff} {
+			for i, orig := range slices.Backward(tc.data) {
+				for _, b := range []byte{0x00, orig - 1, orig + 1, 0xfc, 0xfd, 0xfe, 0xff} {
 					copy(data, tc.data)
 					data[i] = b
 					if err := decodeTableMapEvent(data, 6); errors.Is(err, errTableMapDecodePanic) {
