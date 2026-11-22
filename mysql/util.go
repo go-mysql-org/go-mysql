@@ -404,13 +404,13 @@ func LengthEncodedString(b []byte) ([]byte, bool, int, error) {
 		return b[n:n], isNull, n, nil
 	}
 
-	n += int(num)
-
-	// Check data length
-	if len(b) >= n {
-		return b[n-int(num) : n : n], false, n, nil
+	// Compared as uint64: int(num) is negative for a length above MaxInt64.
+	if uint64(len(b)-n) < num {
+		return nil, false, n + int(num), io.EOF
 	}
-	return nil, false, n, io.EOF
+
+	n += int(num)
+	return b[n-int(num) : n : n], false, n, nil
 }
 
 func SkipLengthEncodedString(b []byte) (int, error) {
@@ -420,13 +420,11 @@ func SkipLengthEncodedString(b []byte) (int, error) {
 		return n, nil
 	}
 
-	n += int(num)
-
-	// Check data length
-	if len(b) >= n {
-		return n, nil
+	// Compared as uint64: int(num) is negative for a length above MaxInt64.
+	if uint64(len(b)-n) < num {
+		return n + int(num), io.EOF
 	}
-	return n, io.EOF
+	return n + int(num), nil
 }
 
 func PutLengthEncodedString(b []byte) []byte {

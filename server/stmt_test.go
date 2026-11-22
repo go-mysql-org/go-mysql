@@ -716,3 +716,21 @@ func TestResetStmtsReportsCloseErrors(t *testing.T) {
 	require.ElementsMatch(t, []any{1, 2}, h.closed)
 	require.Empty(t, c.stmts, "statements are deallocated even when a close fails")
 }
+
+// A string parameter whose length is truncated or larger than the packet is
+// rejected, not decoded with a panic.
+func TestHandleStmtExecuteMalformedStringLength(t *testing.T) {
+	for name, value := range map[string][]byte{
+		"truncated length": {0xfc},
+		"huge length":      {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := &Stmt{}
+			s.Rest(1, 0, nil)
+			c := Conn{h: &recordingStmtHandler{}, stmts: map[uint32]*Stmt{1: s}}
+			data := append([]byte{0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, mysql.MYSQL_TYPE_VAR_STRING, 0x0}, value...)
+			_, err := c.handleStmtExecute(data)
+			require.Error(t, err)
+		})
+	}
+}
