@@ -91,24 +91,40 @@ type TableMapEvent struct {
 
 func (e *TableMapEvent) Decode(data []byte) error {
 	pos := 0
+	if len(data) < e.tableIDSize+2 {
+		return errTableMapTruncated("table id and flags")
+	}
 	e.TableID = mysql.FixedLengthInt(data[0:e.tableIDSize])
 	pos += e.tableIDSize
 
 	e.Flags = binary.LittleEndian.Uint16(data[pos:])
 	pos += 2
 
+	if pos >= len(data) {
+		return errTableMapTruncated("schema name")
+	}
 	schemaLength := data[pos]
 	pos++
 
+	// the name and its 0x00 terminator
+	if len(data)-pos < int(schemaLength)+1 {
+		return errTableMapTruncated("schema name")
+	}
 	e.Schema = data[pos : pos+int(schemaLength)]
 	pos += int(schemaLength)
 
 	// skip 0x00
 	pos++
 
+	if pos >= len(data) {
+		return errTableMapTruncated("table name")
+	}
 	tableLength := data[pos]
 	pos++
 
+	if len(data)-pos < int(tableLength)+1 {
+		return errTableMapTruncated("table name")
+	}
 	e.Table = data[pos : pos+int(tableLength)]
 	pos += int(tableLength)
 
@@ -116,16 +132,22 @@ func (e *TableMapEvent) Decode(data []byte) error {
 	pos++
 
 	var n int
-	e.ColumnCount, _, n = mysql.LengthEncodedInt(data[pos:])
+	var ok bool
+	if e.ColumnCount, n, ok = readLengthEncodedInt(data[pos:]); !ok {
+		return errTableMapTruncated("column count")
+	}
 	pos += n
 
+	if e.ColumnCount > uint64(len(data)-pos) {
+		return errTableMapTruncated("column types")
+	}
 	e.ColumnType = data[pos : pos+int(e.ColumnCount)]
 	pos += int(e.ColumnCount)
 
 	var err error
 	var metaData []byte
-	if metaData, _, n, err = mysql.LengthEncodedString(data[pos:]); err != nil {
-		return errors.Trace(err)
+	if metaData, n, ok = readLengthEncodedString(data[pos:]); !ok {
+		return errTableMapTruncated("column metadata")
 	}
 
 	if err = e.decodeMeta(metaData); err != nil {
@@ -136,7 +158,7 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 	nullBitmapSize := bitmapByteSize(int(e.ColumnCount))
 	if len(data[pos:]) < nullBitmapSize {
-		return io.EOF
+		return errTableMapTruncated("NULL bitmap")
 	}
 
 	e.NullBitmap = data[pos : pos+nullBitmapSize]
@@ -158,6 +180,46 @@ func (e *TableMapEvent) Decode(data []byte) error {
 
 func bitmapByteSize(columnCount int) int {
 	return (columnCount + 7) / 8
+}
+
+// errTableMapTruncated returns the error for a TABLE_MAP_EVENT that ends
+// inside the named field, or whose field is longer than the rest of the event.
+func errTableMapTruncated(field string) error {
+	return fmt.Errorf("TableMapEvent: truncated %s: %w", field, io.ErrUnexpectedEOF)
+}
+
+// readLengthEncodedInt is mysql.LengthEncodedInt with a bounds check: ok is
+// false when b is empty or ends inside the integer.
+func readLengthEncodedInt(b []byte) (num uint64, n int, ok bool) {
+	if len(b) == 0 {
+		return 0, 0, false
+	}
+	switch b[0] {
+	case 0xfc:
+		n = 3
+	case 0xfd:
+		n = 4
+	case 0xfe:
+		n = 9
+	default:
+		n = 1
+	}
+	if len(b) < n {
+		return 0, 0, false
+	}
+	num, _, n = mysql.LengthEncodedInt(b)
+	return num, n, true
+}
+
+// readLengthEncodedString reads a length-encoded integer and that many bytes
+// after it. n is the number of bytes consumed; ok is false when b is too short.
+func readLengthEncodedString(b []byte) (v []byte, n int, ok bool) {
+	l, n, ok := readLengthEncodedInt(b)
+	if !ok || l > uint64(len(b)-n) {
+		return nil, 0, false
+	}
+	end := n + int(l)
+	return b[n:end:end], end, true
 }
 
 // see mysql sql/log_event.h
@@ -209,11 +271,17 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 	for i, t := range e.ColumnType {
 		switch t {
 		case mysql.MYSQL_TYPE_STRING:
+			if len(data)-pos < 2 {
+				return errTableMapTruncated(fmt.Sprintf("metadata of column %d", i))
+			}
 			x := uint16(data[pos]) << 8 // real type
 			x += uint16(data[pos+1])    // pack or field length
 			e.ColumnMeta[i] = x
 			pos += 2
 		case mysql.MYSQL_TYPE_NEWDECIMAL:
+			if len(data)-pos < 2 {
+				return errTableMapTruncated(fmt.Sprintf("metadata of column %d", i))
+			}
 			x := uint16(data[pos]) << 8 // precision
 			x += uint16(data[pos+1])    // decimals
 			e.ColumnMeta[i] = x
@@ -221,6 +289,9 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 		case mysql.MYSQL_TYPE_VAR_STRING,
 			mysql.MYSQL_TYPE_VARCHAR,
 			mysql.MYSQL_TYPE_BIT:
+			if len(data)-pos < 2 {
+				return errTableMapTruncated(fmt.Sprintf("metadata of column %d", i))
+			}
 			e.ColumnMeta[i] = binary.LittleEndian.Uint16(data[pos:])
 			pos += 2
 		case mysql.MYSQL_TYPE_BLOB,
@@ -229,11 +300,17 @@ func (e *TableMapEvent) decodeMeta(data []byte) error {
 			mysql.MYSQL_TYPE_GEOMETRY,
 			mysql.MYSQL_TYPE_VECTOR,
 			mysql.MYSQL_TYPE_JSON:
+			if len(data)-pos < 1 {
+				return errTableMapTruncated(fmt.Sprintf("metadata of column %d", i))
+			}
 			e.ColumnMeta[i] = uint16(data[pos])
 			pos++
 		case mysql.MYSQL_TYPE_TIME2,
 			mysql.MYSQL_TYPE_DATETIME2,
 			mysql.MYSQL_TYPE_TIMESTAMP2:
+			if len(data)-pos < 1 {
+				return errTableMapTruncated(fmt.Sprintf("metadata of column %d", i))
+			}
 			e.ColumnMeta[i] = uint16(data[pos])
 			pos++
 		case mysql.MYSQL_TYPE_NEWDATE,
@@ -259,11 +336,11 @@ func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
 		t := data[pos]
 		pos++
 
-		l, _, n := mysql.LengthEncodedInt(data[pos:])
+		v, n, ok := readLengthEncodedString(data[pos:])
+		if !ok {
+			return errTableMapTruncated(fmt.Sprintf("optional metadata field %d", t))
+		}
 		pos += n
-
-		v := data[pos : pos+int(l)]
-		pos += int(l)
 
 		switch t {
 		case TABLE_MAP_OPT_META_SIGNEDNESS:
@@ -340,7 +417,10 @@ func (e *TableMapEvent) decodeOptionalMeta(data []byte) (err error) {
 func (e *TableMapEvent) decodeIntSeq(v []byte) (ret []uint64, err error) {
 	p := 0
 	for p < len(v) {
-		i, _, n := mysql.LengthEncodedInt(v[p:])
+		i, n, ok := readLengthEncodedInt(v[p:])
+		if !ok {
+			return nil, errTableMapTruncated("integer in optional metadata")
+		}
 		p += n
 		ret = append(ret, i)
 	}
@@ -364,6 +444,9 @@ func (e *TableMapEvent) decodeColumnNames(v []byte) error {
 	for p < len(v) {
 		n := int(v[p])
 		p++
+		if len(v)-p < n {
+			return errTableMapTruncated("column name")
+		}
 		e.ColumnName = append(e.ColumnName, v[p:p+n])
 		p += n
 	}
@@ -377,13 +460,20 @@ func (e *TableMapEvent) decodeColumnNames(v []byte) error {
 func (e *TableMapEvent) decodeStrValue(v []byte) (ret [][][]byte, err error) {
 	p := 0
 	for p < len(v) {
-		nVal, _, n := mysql.LengthEncodedInt(v[p:])
+		nVal, n, ok := readLengthEncodedInt(v[p:])
+		if !ok {
+			return nil, errTableMapTruncated("ENUM or SET value count")
+		}
 		p += n
+		// every value takes at least one byte, its length
+		if nVal > uint64(len(v)-p) {
+			return nil, errTableMapTruncated("ENUM or SET values")
+		}
 		vals := make([][]byte, 0, int(nVal))
 		for i := 0; i < int(nVal); i++ {
-			val, _, n, err := mysql.LengthEncodedString(v[p:])
-			if err != nil {
-				return nil, err
+			val, n, ok := readLengthEncodedString(v[p:])
+			if !ok {
+				return nil, errTableMapTruncated("ENUM or SET value")
 			}
 			p += n
 			vals = append(vals, val)
@@ -396,7 +486,10 @@ func (e *TableMapEvent) decodeStrValue(v []byte) (ret [][][]byte, err error) {
 func (e *TableMapEvent) decodeSimplePrimaryKey(v []byte) error {
 	p := 0
 	for p < len(v) {
-		i, _, n := mysql.LengthEncodedInt(v[p:])
+		i, n, ok := readLengthEncodedInt(v[p:])
+		if !ok {
+			return errTableMapTruncated("primary key")
+		}
 		e.PrimaryKey = append(e.PrimaryKey, i)
 		e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, 0)
 		p += n
@@ -407,10 +500,16 @@ func (e *TableMapEvent) decodeSimplePrimaryKey(v []byte) error {
 func (e *TableMapEvent) decodePrimaryKeyWithPrefix(v []byte) error {
 	p := 0
 	for p < len(v) {
-		i, _, n := mysql.LengthEncodedInt(v[p:])
+		i, n, ok := readLengthEncodedInt(v[p:])
+		if !ok {
+			return errTableMapTruncated("primary key")
+		}
 		e.PrimaryKey = append(e.PrimaryKey, i)
 		p += n
-		i, _, n = mysql.LengthEncodedInt(v[p:])
+		i, n, ok = readLengthEncodedInt(v[p:])
+		if !ok {
+			return errTableMapTruncated("primary key prefix")
+		}
 		e.PrimaryKeyPrefix = append(e.PrimaryKeyPrefix, i)
 		p += n
 	}
