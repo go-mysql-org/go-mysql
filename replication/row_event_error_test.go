@@ -86,3 +86,18 @@ func TestRowsEventPanicErrorFormat(t *testing.T) {
 	err = e.decodePanicError("boom", 40, 50)
 	require.EqualError(t, err, prefix+"boom")
 }
+
+func TestJSONDiffErrorOmitsPath(t *testing.T) {
+	// A Replace diff at path $.canary_key whose value has an invalid JSON type.
+	data := []byte{0x00, 0x0c} // operation Replace, path length 12
+	data = append(data, "$.canary_key"...)
+	data = append(data, 0x02, 0x63, 0x00) // value length 2: type 0x63, one byte
+
+	e := &RowsEvent{}
+	_, err := e.decodeJSONPartialBinary(data)
+	require.Error(t, err)
+
+	msg := err.Error()
+	require.NotContains(t, msg, "canary_key")
+	require.Equal(t, "cannot read json diff value (op Replace, 2 bytes): invalid json type 99", msg)
+}
