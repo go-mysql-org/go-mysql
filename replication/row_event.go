@@ -1566,8 +1566,6 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 				diff, err = e.decodeJSONPartialBinary(data[meta:n])
 				if err == nil {
 					v = diff
-				} else {
-					fmt.Printf("decodeJSONPartialBinary(%q) fail: %s\n", data[meta:n], err)
 				}
 			} else {
 				var d []byte
