@@ -1084,6 +1084,13 @@ func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 }
 
 func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
+	// Recover before anything reads data, the decompression included.
+	defer func() {
+		if r := recover(); r != nil {
+			err2 = e.decodePanicError(r, pos, len(data))
+		}
+	}()
+
 	if e.compressed {
 		data, err2 = mysql.DecompressMariadbData(data[pos:])
 		if err2 != nil {
@@ -1098,12 +1105,6 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 		n   int
 		err error
 	)
-	// ... repeat rows until event-end
-	defer func() {
-		if r := recover(); r != nil {
-			err2 = e.decodePanicError(r, pos, len(data))
-		}
-	}()
 
 	// Pre-allocate memory for rows: before image + (optional) after image
 	rowsLen := 1
@@ -1123,6 +1124,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 		rowImageType = EnumRowImageTypeUpdateBI
 	}
 
+	// ... repeat rows until event-end
 	for pos < len(data) {
 		// Parse the first image
 		if n, err = e.decodeImage(data[pos:], e.ColumnBitmap1, rowImageType); err != nil {

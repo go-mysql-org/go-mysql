@@ -1904,3 +1904,68 @@ func TestJSONDiffErrorOmitsPath(t *testing.T) {
 	require.NotContains(t, msg, "canary_key")
 	require.Equal(t, "cannot read json diff value (op Replace, 2 bytes): invalid json type 99", msg)
 }
+
+func TestRowsEventMariadbCompressed(t *testing.T) {
+	table := &TableMapEvent{
+		tableIDSize: 6,
+		TableID:     108,
+		Schema:      []byte("db"),
+		Table:       []byte("tbl"),
+		ColumnCount: 1,
+		ColumnType:  []byte{mysql.MYSQL_TYPE_VARCHAR},
+		ColumnMeta:  []uint16{255},
+		NullBitmap:  []byte{0x01},
+	}
+	newEvent := func() *RowsEvent {
+		return &RowsEvent{
+			Version:     1,
+			tableIDSize: 6,
+			tables:      map[uint64]*TableMapEvent{108: table},
+			eventType:   MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1,
+			compressed:  true,
+		}
+	}
+	// event returns a MARIADB_WRITE_ROWS_COMPRESSED_EVENT_V1 body with one
+	// VARCHAR column, followed by the given compressed rows.
+	event := func(compressed ...byte) []byte {
+		return append([]byte{
+			0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, // table id 108
+			0x01, 0x00, // flags: STMT_END_F
+			0x01, // column count
+			0x01, // columns present
+		}, compressed...)
+	}
+
+	// One row (null bitmap, value "abc") compressed as MariaDB writes it:
+	// header byte 0x81 (zlib, one length byte), length 5, zlib stream.
+	e := newEvent()
+	err := e.Decode(event(0x81, 0x05,
+		0x78, 0x9c, 0x63, 0x60, 0x4e, 0x4c, 0x4a, 0x06, 0x00, 0x02, 0x5b, 0x01, 0x2a))
+	require.NoError(t, err)
+	require.Equal(t, [][]any{{"abc"}}, e.Rows)
+
+	// A row that runs past the decompressed data still fails: VARCHAR
+	// length 4, but only "abc" follows.
+	e = newEvent()
+	err = e.Decode(event(0x81, 0x05,
+		0x78, 0x9c, 0x63, 0x60, 0x49, 0x4c, 0x4a, 0x06, 0x00, 0x02, 0x5f, 0x01, 0x2b))
+	var rtErr runtime.Error
+	require.ErrorAs(t, err, &rtErr)
+	require.EqualError(t, err, `parse rows event panic (MariadbWriteRowsCompressedEventV1, table "db"."tbl", table id 108, `+
+		"column count 1, row images decoded 0, row image offset 0, data length 5): "+rtErr.Error())
+
+	// Malformed compressed data returns an error instead of panicking.
+	e = newEvent()
+	require.EqualError(t, e.Decode(event()), "compressed event data is empty")
+	e = newEvent()
+	require.EqualError(t, e.Decode(event(0x84, 0x00, 0x00)),
+		"compressed event data is 3 bytes, too short for its 5-byte header")
+
+	// A position past the end of the data is recovered like the panics in
+	// the rows.
+	e = newEvent()
+	err = e.DecodeData(11, event())
+	require.ErrorAs(t, err, &rtErr)
+	require.EqualError(t, err, "parse rows event panic (MariadbWriteRowsCompressedEventV1, table <nil>, table id 0, "+
+		"column count 0, row images decoded 0, row image offset 11, data length 10): "+rtErr.Error())
+}
