@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/stretchr/testify/require"
 
@@ -145,4 +146,50 @@ func TestHandleEventParsedQuerySkipsUnparsedHandler(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{query}, h.ddls)
 	require.Empty(t, h.queries)
+}
+
+type gtidRecorder struct {
+	DummyEventHandler
+	gtids []string
+}
+
+func (h *gtidRecorder) OnGTID(_ *replication.EventHeader, e mysql.BinlogGTIDEvent) error {
+	set, err := e.GTIDNext()
+	if err != nil {
+		return err
+	}
+	h.gtids = append(h.gtids, set.String())
+	return nil
+}
+
+func TestHandleEventGTID(t *testing.T) {
+	sid := uuid.MustParse("5aa72a7f-44a8-11ea-947f-0242ac190002")
+	tests := []struct {
+		name     string
+		event    replication.Event
+		expected string
+	}{
+		{
+			name:     "untagged",
+			event:    &replication.GTIDEvent{SID: sid[:], GNO: 5},
+			expected: "5aa72a7f-44a8-11ea-947f-0242ac190002:5",
+		},
+		{
+			name: "tagged",
+			event: &replication.GtidTaggedLogEvent{
+				GTIDEvent: replication.GTIDEvent{SID: sid[:], Tag: mysql.NewTag("t1"), GNO: 5},
+			},
+			expected: "5aa72a7f-44a8-11ea-947f-0242ac190002:t1:5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &gtidRecorder{}
+			c := &Canal{master: &masterInfo{}, eventHandler: h}
+			err := c.handleEvent(&replication.BinlogEvent{Header: &replication.EventHeader{}, Event: tt.event})
+			require.NoError(t, err)
+			require.Equal(t, []string{tt.expected}, h.gtids)
+		})
+	}
 }

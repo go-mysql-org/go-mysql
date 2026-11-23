@@ -134,6 +134,10 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 		if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
 			return errors.Trace(err)
 		}
+	case *replication.GtidTaggedLogEvent:
+		if err := c.eventHandler.OnGTID(ev.Header, e); err != nil {
+			return errors.Trace(err)
+		}
 	case *replication.RowsQueryEvent:
 		if err := c.eventHandler.OnRowsQueryEvent(e); err != nil {
 			return errors.Trace(err)
