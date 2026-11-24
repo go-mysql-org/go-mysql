@@ -115,10 +115,6 @@ func NewPoolWithOptions(
 		po.maxIdle = po.minAlive
 	}
 
-	if po.logger == nil {
-		po.logger = slog.Default()
-	}
-
 	pool := &Pool{
 		logger:   po.logger,
 		minAlive: po.minAlive,
@@ -184,14 +180,20 @@ func NewPool(
 	dbName string,
 	options ...Option,
 ) *Pool {
+	poolOptions := []PoolOption{
+		WithPoolLimits(minAlive, maxAlive, maxIdle),
+		WithConnOptions(options...),
+	}
+	if logger != nil {
+		poolOptions = append(poolOptions, WithLogger(logger))
+	}
+
 	pool, err := NewPoolWithOptions(
 		addr,
 		user,
 		password,
 		dbName,
-		WithLogger(logger),
-		WithPoolLimits(minAlive, maxAlive, maxIdle),
-		WithConnOptions(options...),
+		poolOptions...,
 	)
 	if err != nil {
 		if logger != nil {
@@ -205,9 +207,6 @@ func NewPool(
 }
 
 func (pool *Pool) GetStats(stats *ConnectionStats) {
-	if pool == nil {
-		return
-	}
 	pool.synchro.Lock()
 
 	*stats = pool.synchro.stats
@@ -219,9 +218,6 @@ func (pool *Pool) GetStats(stats *ConnectionStats) {
 
 // GetConn returns connection from the pool or create new
 func (pool *Pool) GetConn(ctx context.Context) (*Conn, error) {
-	if pool == nil {
-		return nil, errors.Errorf("failed get conn, pool is nil")
-	}
 	for {
 		if pool.ctx.Err() != nil {
 			return nil, errors.Errorf("failed get conn, pool closed")
@@ -245,12 +241,6 @@ func (pool *Pool) GetConn(ctx context.Context) (*Conn, error) {
 
 // PutConn returns working connection back to pool
 func (pool *Pool) PutConn(conn *Conn) {
-	if pool == nil {
-		if conn != nil {
-			_ = conn.Close()
-		}
-		return
-	}
 	pool.putConnection(Connection{
 		conn:      conn,
 		lastUseAt: pool.nowTs(),
@@ -259,12 +249,6 @@ func (pool *Pool) PutConn(conn *Conn) {
 
 // DropConn closes the connection without any checks
 func (pool *Pool) DropConn(conn *Conn) {
-	if pool == nil {
-		if conn != nil {
-			_ = conn.Close()
-		}
-		return
-	}
 	pool.closeConn(conn)
 }
 
@@ -605,9 +589,6 @@ func (pool *Pool) ping(conn *Conn) error {
 // Close only shutdown idle connections. we couldn't control the connection which not in the pool.
 // So before call Close, Call PutConn to put all connections that in use back to connection pool first.
 func (pool *Pool) Close() {
-	if pool == nil {
-		return
-	}
 	pool.cancel()
 	// wait newConnectionProducer exit.
 	pool.wg.Wait()
