@@ -647,7 +647,8 @@ func (e *RowsEvent) decodeJSONPartialBinary(data []byte) (*JsonDiff, error) {
 
 	d, err := e.decodeJSONBinary(data[:valueLength])
 	if err != nil {
-		return nil, fmt.Errorf("cannot read json diff for field %q: %w", path, err)
+		// The path is left out: JSON keys can hold user data.
+		return nil, fmt.Errorf("cannot read json diff value (op %s, %d bytes): %w", operationNumber, valueLength, err)
 	}
 	diff.Value = string(d)
 
