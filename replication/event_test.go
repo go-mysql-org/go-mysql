@@ -1,11 +1,23 @@
 package replication
 
 import (
+	"bytes"
+	"context"
+	"encoding/binary"
 	"fmt"
+	"hash/crc32"
+	"io"
+	"log/slog"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/packet"
 )
 
 func TestMariadbGTIDListEvent(t *testing.T) {
@@ -251,5 +263,150 @@ func TestHeartbeatEvent(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.hbEvent, e)
 		}
+	}
+}
+
+func TestEventErrorOmitsData(t *testing.T) {
+	// A 1 MiB event body, for example a rows event with a large BLOB value.
+	data := bytes.Repeat([]byte("row-value-canary"), 64*1024)
+	err := &EventError{
+		Header: &EventHeader{EventType: WRITE_ROWS_EVENTv2, LogPos: 1234},
+		Err:    "decode failed",
+		Data:   data,
+	}
+
+	msg := err.Error()
+	require.Less(t, len(msg), 256)
+	require.NotContains(t, msg, "row-value-canary")
+	require.Contains(t, msg, "Data length 1048576")
+	require.Contains(t, msg, "Err: decode failed")
+}
+
+// TestEventErrorAs does what an application does with a decode error from
+// BinlogParser or from BinlogStreamer.GetEvent: errors.As gives it the
+// *EventError, which still holds the event header and the whole event body,
+// while Error() prints the body only as its length.
+func TestEventErrorAs(t *testing.T) {
+	// FORMAT_DESCRIPTION_EVENT (CRC32 checksums) and TABLE_MAP_EVENT for table
+	// id 108 from TestRowsEventDecodeFunc. The TABLE_MAP_EVENT ends at 167.
+	fde := []byte{0x64, 0x61, 0x72, 0x63, 0xf, 0xb, 0x0, 0x0, 0x0, 0x77, 0x0, 0x0, 0x0, 0x7b, 0x0, 0x0, 0x0, 0x1, 0x0, 0x4, 0x0, 0x35, 0x2e, 0x37, 0x2e, 0x32, 0x32, 0x2d, 0x6c, 0x6f, 0x67, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x64, 0x61, 0x72, 0x63, 0x13, 0x38, 0xd, 0x0, 0x8, 0x0, 0x12, 0x0, 0x4, 0x4, 0x4, 0x4, 0x12, 0x0, 0x0, 0x5f, 0x0, 0x4, 0x1a, 0x8, 0x0, 0x0, 0x0, 0x8, 0x8, 0x8, 0x2, 0x0, 0x0, 0x0, 0xa, 0xa, 0xa, 0x2a, 0x2a, 0x0, 0x12, 0x34, 0x0, 0x1, 0xb8, 0x78, 0x9d, 0xfe}
+	tableMap := []byte{0x8d, 0x61, 0x72, 0x63, 0x13, 0xb, 0x0, 0x0, 0x0, 0x2c, 0x0, 0x0, 0x0, 0xa7, 0x0, 0x0, 0x0, 0x1, 0x0, 0x6c, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x2, 0x64, 0x62, 0x0, 0x3, 0x74, 0x62, 0x6c, 0x0, 0x1, 0x3, 0x0, 0x0, 0x63, 0x17, 0xe6, 0xf0}
+
+	// WRITE_ROWS_EVENTv2 for table id 109, which has no TABLE_MAP_EVENT, with a
+	// 4 KiB row value.
+	value := bytes.Repeat([]byte("row-value-canary"), 256)
+	body := []byte{
+		0x6d, 0x0, 0x0, 0x0, 0x0, 0x0, // table id
+		0x1, 0x0, // flags: STMT_END_F
+		0x2, 0x0, // extra data length
+		0x1, // column count
+		0x1, // columns present
+		0x0, // null bitmap
+	}
+	body = binary.LittleEndian.AppendUint16(body, uint16(len(value)))
+	body = append(body, value...)
+
+	header := &EventHeader{
+		Timestamp: 0x6372618d,
+		EventType: WRITE_ROWS_EVENTv2,
+		ServerID:  11,
+		EventSize: uint32(EventHeaderSize + len(body) + BinlogChecksumLength),
+	}
+	header.LogPos = 167 + header.EventSize
+
+	rows := make([]byte, EventHeaderSize, header.EventSize)
+	binary.LittleEndian.PutUint32(rows[0:], header.Timestamp)
+	rows[4] = byte(header.EventType)
+	binary.LittleEndian.PutUint32(rows[5:], header.ServerID)
+	binary.LittleEndian.PutUint32(rows[9:], header.EventSize)
+	binary.LittleEndian.PutUint32(rows[13:], header.LogPos)
+	rows = append(rows, body...)
+	rows = binary.LittleEndian.AppendUint32(rows, crc32.ChecksumIEEE(rows))
+
+	events := [][]byte{fde, tableMap, rows}
+	ignoreEvent := func(*BinlogEvent) error { return nil }
+
+	// Parse returns the *EventError itself. The other paths wrap it with
+	// errors.Trace.
+	testCases := []struct {
+		name string
+		run  func() error
+	}{
+		{"Parse", func() error {
+			parser := NewBinlogParser()
+			for _, event := range events {
+				if _, err := parser.Parse(event); err != nil {
+					return err
+				}
+			}
+			return nil
+		}},
+		{"ParseSingleEvent", func() error {
+			parser := NewBinlogParser()
+			r := bytes.NewReader(bytes.Join(events, nil))
+			for range events {
+				if _, err := parser.ParseSingleEvent(r, ignoreEvent); err != nil {
+					return err
+				}
+			}
+			return nil
+		}},
+		{"ParseReader", func() error {
+			return NewBinlogParser().ParseReader(bytes.NewReader(bytes.Join(events, nil)), ignoreEvent)
+		}},
+		{"GetEvent", func() error {
+			// A BinlogSyncer reads the events from a fake server.
+			conn, server := net.Pipe()
+			b := NewBinlogSyncer(BinlogSyncerConfig{ServerID: 1, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+			b.c = &client.Conn{Conn: packet.NewConn(conn)}
+			s := NewBinlogStreamer()
+			b.wg.Add(1)
+			go b.onStream(s)
+
+			writerDone := make(chan struct{})
+			go func() {
+				defer close(writerDone)
+				for i, event := range events {
+					// Packet length and sequence id, then an OK packet with the event.
+					p := binary.LittleEndian.AppendUint32(nil, uint32(1+len(event)))
+					p[3] = byte(i)
+					p = append(p, mysql.OK_HEADER)
+					if _, err := server.Write(append(p, event...)); err != nil {
+						return
+					}
+				}
+			}()
+			// Close both ends before waiting: an unread net.Pipe write blocks.
+			defer func() {
+				b.Close()
+				_ = server.Close()
+				<-writerDone
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			for {
+				if _, err := s.GetEvent(ctx); err != nil {
+					return err
+				}
+			}
+		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run()
+
+			var eventErr *EventError
+			require.ErrorAs(t, err, &eventErr)
+			require.Equal(t, header, eventErr.Header)
+			require.Equal(t, "invalid table id 109, no corresponding table map event", eventErr.Err)
+			require.Equal(t, body, eventErr.Data)
+			require.Less(t, len(eventErr.Error()), 256)
+
+			msg := err.Error()
+			require.NotContains(t, msg, "row-value-canary")
+			require.Contains(t, msg, fmt.Sprintf("Data length %d", len(body)))
+		})
 	}
 }
