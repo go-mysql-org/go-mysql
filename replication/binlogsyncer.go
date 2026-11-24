@@ -525,11 +525,12 @@ func (b *BinlogSyncer) StartSync(pos mysql.Position) (*BinlogStreamer, error) {
 }
 
 // StartSyncGTID starts syncing from the `gset` GTIDSet.
+// The syncer keeps its own copy of gset and does not modify the caller's set.
 func (b *BinlogSyncer) StartSyncGTID(gset mysql.GTIDSet) (*BinlogStreamer, error) {
 	b.cfg.Logger.Info("begin to sync binlog from GTID set", slog.Any("GTID set", gset))
 
 	b.prevMySQLGTIDEvent = nil
-	b.prevGset = gset
+	b.prevGset = gset.Clone()
 
 	b.m.Lock()
 	defer b.m.Unlock()
