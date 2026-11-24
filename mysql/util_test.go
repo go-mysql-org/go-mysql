@@ -1,6 +1,10 @@
 package mysql
 
 import (
+	"bytes"
+	"compress/zlib"
+	"io"
+	"runtime"
 	"testing"
 	"time"
 
@@ -131,4 +135,86 @@ func TestToBinaryDateTime(t *testing.T) {
 			}
 		})
 	}
+}
+
+// mariadbCompressed returns payload as MariaDB writes the body of a compressed
+// event: a header byte with the number of length bytes, the declared length
+// in that many big-endian bytes and the zlib stream.
+func mariadbCompressed(t *testing.T, lenSize int, declared uint64, payload []byte) []byte {
+	data := []byte{0x80 | byte(lenSize)}
+	for i := lenSize - 1; i >= 0; i-- {
+		data = append(data, byte(declared>>(8*i)))
+	}
+	var b bytes.Buffer
+	w := zlib.NewWriter(&b)
+	_, err := w.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+	return append(data, b.Bytes()...)
+}
+
+func TestDecompressMariadbData(t *testing.T) {
+	tests := []struct {
+		lenSize int
+		size    int
+	}{
+		{1, 0},
+		{1, 5},
+		{2, 300},
+		{3, 70000},
+		{4, 5},       // MariaDB uses the fewest length bytes, but any of 1 to 4 is valid
+		{3, 3 << 20}, // more than DecompressMariadbData allocates up front
+	}
+	for _, tc := range tests {
+		payload := bytes.Repeat([]byte("abcdefgh"), tc.size/8+1)[:tc.size]
+		got, err := DecompressMariadbData(mariadbCompressed(t, tc.lenSize, uint64(tc.size), payload))
+		require.NoError(t, err)
+		require.Equal(t, payload, got)
+		// The row decoders rely on slicing past the data failing.
+		require.Equal(t, len(got), cap(got))
+	}
+}
+
+func TestDecompressMariadbDataMalformed(t *testing.T) {
+	valid := mariadbCompressed(t, 1, 5, []byte("abcde"))
+	badChecksum := bytes.Clone(valid)
+	badChecksum[len(badChecksum)-1] ^= 0xff
+	tests := []struct {
+		name string
+		data []byte
+		err  string
+	}{
+		{"empty", nil, "compressed event data is empty"},
+		{"no length bytes", append([]byte{0x80}, valid[2:]...), "compressed event data header 0x80 has 0 length bytes, want 1 to 4"},
+		{"five length bytes", mariadbCompressed(t, 5, 5, []byte("abcde")), "compressed event data header 0x85 has 5 length bytes, want 1 to 4"},
+		{"length cut short", []byte{0x84, 0x00, 0x00}, "compressed event data is 3 bytes, too short for its 5-byte header"},
+		{"no zlib stream", valid[:2], "unexpected EOF"},
+		{"not zlib", []byte{0x81, 0x05, 'a', 'b', 'c', 'd', 'e'}, "zlib: invalid header"},
+		{"zlib stream cut short", valid[:len(valid)-6], "unexpected EOF"},
+		{"less data than declared", mariadbCompressed(t, 1, 6, []byte("abcde")), "unexpected EOF"},
+		{"bad checksum", badChecksum, "zlib: invalid checksum"},
+		{"no checksum", valid[:len(valid)-4], "unexpected EOF"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := DecompressMariadbData(tc.data)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestDecompressMariadbDataDeclaredLength(t *testing.T) {
+	// The header declares 4 GiB, the stream holds five bytes. The declared
+	// length must not be allocated before the data is decompressed.
+	// TotalAlloc counts the whole process, so this test must not run in
+	// parallel with others.
+	data := mariadbCompressed(t, 4, 0xffffffff, []byte("abcde"))
+
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_, err := DecompressMariadbData(data)
+	runtime.ReadMemStats(&after)
+
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(16<<20))
 }
