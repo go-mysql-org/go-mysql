@@ -386,11 +386,18 @@ func (t *testSyncerSuite) TestMysqlGTIDSync() {
 	}
 
 	set, _ := mysql.ParseMysqlGTIDSet(fmt.Sprintf("%s:%d-%d", masterUUID.String(), 1, 2))
+	want := set.String()
 
 	s, err := t.b.StartSyncGTID(set)
 	require.NoError(t.T(), err)
 
 	t.testSync(s)
+	// Stop the syncer goroutine before reading the sets.
+	t.b.Close()
+
+	// The syncer advances its own copy and leaves the caller's set unchanged.
+	require.NotEqual(t.T(), want, t.b.prevGset.String())
+	require.Equal(t.T(), want, set.String())
 }
 
 func (t *testSyncerSuite) TestMariadbPositionSync() {
