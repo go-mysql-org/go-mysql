@@ -3,6 +3,8 @@ package replication
 import (
 	"encoding/binary"
 	"math"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/goccy/go-json"
@@ -289,6 +291,46 @@ func TestFloatWithTrailingZero_EdgeCases(t *testing.T) {
 			input:    FloatWithTrailingZero(5.0000000000000001), // This might be rounded to 5.0 due to float64 precision
 			expected: "5.0",
 		},
+		{
+			name:     "largest double below 2^63",
+			input:    FloatWithTrailingZero(9223372036854774784),
+			expected: "9223372036854774784.0",
+		},
+		{
+			name:     "2^63",
+			input:    FloatWithTrailingZero(9223372036854775808),
+			expected: "9.223372036854776e18",
+		},
+		{
+			name:     "-2^63",
+			input:    FloatWithTrailingZero(-9223372036854775808),
+			expected: "-9.223372036854776e18",
+		},
+		{
+			name:     "1e19",
+			input:    FloatWithTrailingZero(1e19),
+			expected: "1e19",
+		},
+		{
+			name:     "-1e19",
+			input:    FloatWithTrailingZero(-1e19),
+			expected: "-1e19",
+		},
+		{
+			name:     "6.02214076e23",
+			input:    FloatWithTrailingZero(6.02214076e23),
+			expected: "6.02214076e23",
+		},
+		{
+			name:     "1e300",
+			input:    FloatWithTrailingZero(1e300),
+			expected: "1e300",
+		},
+		{
+			name:     "largest double",
+			input:    FloatWithTrailingZero(math.MaxFloat64),
+			expected: "1.7976931348623157e308",
+		},
 	}
 
 	for _, tt := range tests {
@@ -297,6 +339,65 @@ func TestFloatWithTrailingZero_EdgeCases(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.expected, string(result))
 		})
+	}
+}
+
+func TestFloatWithTrailingZero_LargeValues(t *testing.T) {
+	// MySQL reads a JSON number without '.' or 'e' as an integer when it fits
+	// in 64 bits, and MySQL 8.4 misreads long digit strings, so every value
+	// must come out short and with a '.' or an 'e'.
+	var values []float64
+	for e := 0; e <= 1023; e++ {
+		values = append(values, math.Ldexp(1, e))
+	}
+	for e := 0; e <= 308; e++ {
+		values = append(values, math.Pow10(e))
+	}
+	values = append(values, math.Nextafter(0x1p64, 0), math.MaxFloat64)
+
+	for _, v := range values {
+		for _, x := range []float64{v, -v} {
+			result, err := FloatWithTrailingZero(x).MarshalJSON()
+			require.NoError(t, err)
+			s := string(result)
+			require.True(t, strings.ContainsAny(s, ".e"), "%g: %s", x, s)
+			require.LessOrEqual(t, len(s), 24, "%g: %s", x, s)
+			parsed, err := strconv.ParseFloat(s, 64)
+			require.NoError(t, err)
+			require.Equal(t, x, parsed, s)
+		}
+	}
+}
+
+func TestFloatWithTrailingZero_NonFinite(t *testing.T) {
+	// NaN and ±Inf stay invalid JSON, as for float64; they must not turn
+	// into the null that formatMySQLDouble writes for them.
+	for _, v := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		_, err := json.Marshal(FloatWithTrailingZero(v))
+		require.Error(t, err, "%v", v)
+	}
+}
+
+func TestRowsEvent_decodeJSONBinary_FloatWithTrailingZero(t *testing.T) {
+	tests := []struct {
+		value    float64
+		expected string
+	}{
+		{5, "5.0"},
+		{1e19, "1e19"},
+		{-1.5e300, "-1.5e300"},
+	}
+
+	e := &RowsEvent{useFloatWithTrailingZero: true}
+	for _, tt := range tests {
+		// A JSONB scalar: the type byte, then the little-endian double.
+		data := make([]byte, 9)
+		data[0] = JSONB_DOUBLE
+		binary.LittleEndian.PutUint64(data[1:], math.Float64bits(tt.value))
+
+		result, err := e.decodeJSONBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, tt.expected, string(result))
 	}
 }
 

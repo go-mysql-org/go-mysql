@@ -105,12 +105,24 @@ func (jd *JsonDiff) String() string {
 	return fmt.Sprintf("json_diff(op:%s path:%s value:%s)", jd.Op, jd.Path, jd.Value)
 }
 
+// MarshalJSON writes f in fixed-point notation and adds ".0" to integral
+// values, so MySQL reads the text back as a JSON DOUBLE, not an integer.
+// For finite values with |f| >= 2^63 it writes the exponent form MySQL
+// itself uses ("1e19", "1e300") instead of 19 to 309 digits. Matching
+// MySQL's text does not make the round trip lossless; see jsonMySQLDouble.
 func (f FloatWithTrailingZero) MarshalJSON() ([]byte, error) {
-	if float64(f) == float64(int(f)) {
-		return []byte(strconv.FormatFloat(float64(f), 'f', 1, 64)), nil
+	v := float64(f)
+	// ±Inf stays invalid JSON, as for float64, rather than becoming the
+	// null that formatMySQLDouble writes for it.
+	if math.Abs(v) >= 0x1p63 && !math.IsInf(v, 0) {
+		return []byte(formatMySQLDouble(v)), nil
 	}
 
-	return []byte(strconv.FormatFloat(float64(f), 'f', -1, 64)), nil
+	if math.Trunc(v) == v {
+		return []byte(strconv.FormatFloat(v, 'f', 1, 64)), nil
+	}
+
+	return []byte(strconv.FormatFloat(v, 'f', -1, 64)), nil
 }
 
 func jsonbGetOffsetSize(isSmall bool) int {
