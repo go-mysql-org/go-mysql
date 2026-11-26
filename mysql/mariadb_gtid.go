@@ -151,6 +151,12 @@ func (s *MariadbGTIDSet) Update(GTIDStr string) error {
 	sp := strings.Split(GTIDStr, ",")
 	// todo, handle redundant same uuid
 	for i := range sp {
+		if sp[i] == "" {
+			// Skip empty segments (leading, trailing or doubled commas):
+			// ParseMariadbGTID reads them as the zero GTID, which would
+			// rewind an existing position in domain 0 back to sequence 0.
+			continue
+		}
 		gtid, err := ParseMariadbGTID(sp[i])
 		if err != nil {
 			return errors.Trace(err)
