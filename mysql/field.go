@@ -204,6 +204,11 @@ func (fv *FieldValue) AsFloat64() float64 {
 }
 
 // AsString returns the string value as bytes, or nil for NULL.
+//
+// The slice is not a copy: it shares memory with the row. For a row of a
+// [Resultset], copy it before [Result.Close] or [Resultset.Reset] if you
+// need it after that. For a row passed to a streaming callback, copy it
+// before the callback returns.
 func (fv *FieldValue) AsString() []byte {
 	if fv.Type == FieldValueTypeNull {
 		return nil
