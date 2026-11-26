@@ -41,7 +41,10 @@ func TestServerReceivesLargeStatementsIntact(t *testing.T) {
 		if err != nil {
 			return
 		}
-		for c.HandleCommand() == nil {
+		for {
+			if err := c.HandleCommand(); err != nil {
+				return
+			}
 		}
 	}()
 
