@@ -1,9 +1,12 @@
 package replication
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -1492,6 +1495,253 @@ func TestUnsignedMapWithYearColumn(t *testing.T) {
 		3: true,  // score     – unsigned (was wrongly false before the fix)
 	}
 	require.Equal(t, want, got)
+}
+
+// tableMapEventsFromServers are TABLE_MAP_EVENT bodies (6-byte table id,
+// without the common header and the checksum) written by MySQL 8.4.8 and
+// 9.7.4 with binlog_row_metadata=FULL. Both servers wrote the same bytes for
+// every table but t_vector, which only 9.7 supports. t_types_minimal is
+// t_types written with binlog_row_metadata=MINIMAL.
+//
+// Between them they carry every optional metadata field, multi-byte
+// length-encoded integers (collation 255, the 300 values of t_bigenum.e and
+// the length of their field) and a field go-mysql does not know (13, the
+// dimensions of a VECTOR column).
+//
+// ends lists the lengths at which a prefix of the body is a complete event:
+// the end of the NULL bitmap and the end of each optional metadata field.
+/*
+	CREATE TABLE t_types (
+	  id INT UNSIGNED NOT NULL, n_tiny TINYINT NOT NULL DEFAULT 0,
+	  n_small SMALLINT UNSIGNED, n_medium MEDIUMINT, n_big BIGINT UNSIGNED,
+	  n_dec DECIMAL(20,6), n_float FLOAT, n_double DOUBLE, n_year YEAR,
+	  n_bit BIT(12), c_char CHAR(10) CHARACTER SET latin1, c_varchar VARCHAR(300),
+	  c_varchar_bin VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+	  c_text TEXT, c_long_char CHAR(255), e_enum ENUM('a','b','c'),
+	  s_set SET('x','y','z'), e_enum_latin1 ENUM('l1','l2') CHARACTER SET latin1,
+	  g_geom GEOMETRY, g_point POINT, g_poly POLYGON, j_json JSON, t_date DATE,
+	  t_time TIME(3), t_datetime DATETIME(6), t_ts TIMESTAMP(2) NULL,
+	  inv_col INT INVISIBLE, `ünïcødé` VARCHAR(5), c_prefix VARCHAR(200) NOT NULL,
+	  PRIMARY KEY (id, c_prefix(10))
+	);
+	CREATE TABLE t_charsets (
+	  id BIGINT NOT NULL PRIMARY KEY, c1 VARCHAR(10) CHARACTER SET latin1,
+	  c2 VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+	  c3 VARCHAR(10) CHARACTER SET ascii, c4 TEXT CHARACTER SET utf8mb3,
+	  b1 BINARY(16), b2 VARBINARY(64), b3 BLOB,
+	  e1 ENUM('p','q') CHARACTER SET latin1, e2 ENUM('r','s') CHARACTER SET ascii,
+	  s1 SET('t','u') CHARACTER SET utf8mb4 COLLATE utf8mb4_bin
+	);
+	CREATE TABLE t_bigenum (id INT NOT NULL PRIMARY KEY, e ENUM('v1', 'v2', ..., 'v300'));
+	CREATE TABLE t_vector (id INT NOT NULL PRIMARY KEY, v VECTOR(3));
+*/
+var tableMapEventsFromServers = []struct {
+	name string
+	data []byte
+	ends []int
+}{
+	{
+		name: "t_types",
+		data: []byte("U\x00\x00\x00\x00\x00\x01\x00\x04test\x00\at_types\x00\x1d\x03\x01\x02\t\b\xf6\x04\x05\r\x10\xfe\x0f\x0f\xfc\xfe\xfe\xfe\xfe\xff\xff\xff\xf5\n\x13\x12\x11\x03\x0f\x0f \x14\x06\x04\b\x04\x01\xfe\n\xb0\x04P\x00\x02\xce\xfc\xf7\x01\xf8\x01\xf7\x01\x04\x04\x04\x04\x03\x06\x02\x14\x00 \x03\xfc\xff\xff\x0f\x01\x02\xa8\x80\x02\a\xfc\xff\x00\x00\b\x02.\a\x03\x00\x01\x03\x04\xea\x02id\x06n_tiny\an_small\bn_medium\x05n_big\x05n_dec\an_float\bn_double\x06n_year\x05n_bit\x06c_char\tc_varchar\rc_varchar_bin\x06c_text\vc_long_char\x06e_enum\x05s_set\re_enum_latin1\x06g_geom\ag_point\x06g_poly\x06j_json\x06t_date\x06t_time\nt_datetime\x04t_ts\ainv_col\vünïcødé\bc_prefix\n\x05\xfc\xff\x00\x02\b\x05\a\x03\x01x\x01y\x01z\x06\x0e\x03\x01a\x01b\x01c\x02\x02l1\x02l2\t\x04\x00\x00\x1c\n\f\x04\xff\xff\xff\xd8"),
+		ends: []int{90, 94, 103, 108, 344, 351, 360, 376, 382, 388},
+	},
+	{
+		name: "t_charsets",
+		data: []byte("W\x00\x00\x00\x00\x00\x01\x00\x04test\x00\nt_charsets\x00\v\b\x0f\x0f\x0f\xfc\xfe\x0f\xfc\xfe\xfe\xfe\x12\n\x00(\x00\n\x00\x02\xfe\x10@\x00\x02\xf7\x01\xf7\x01\xf8\x01\xfe\a\x01\x01\x00\x03\a\b.\v!???\x04!\x02id\x02c1\x02c2\x02c3\x02c4\x02b1\x02b2\x02b3\x02e1\x02e2\x02s1\v\x03\b\v.\x05\x05\x02\x01t\x01u\x06\n\x02\x01p\x01q\x02\x01r\x01s\b\x01\x00\f\x02\xff\xe0"),
+		ends: []int{59, 62, 71, 106, 111, 118, 130, 133, 137},
+	},
+	{
+		name: "t_bigenum",
+		data: tableMapEventBigEnum(),
+		ends: []int{32, 35, 42, 47, 1446, 1449, 1452},
+	},
+	{
+		name: "t_vector",
+		data: []byte("Y\x00\x00\x00\x00\x00\x01\x00\x04test\x00\bt_vector\x00\x02\x03\xf2\x01\x04\x02\x01\x01\x00\x02\x01?\r\x01\x03\x04\x05\x02id\x01v\b\x01\x00\f\x01\xc0"),
+		ends: []int{30, 33, 36, 39, 46, 49, 52},
+	},
+	{
+		name: "t_types_minimal",
+		data: []byte("U\x00\x00\x00\x00\x00\x01\x00\x04test\x00\at_types\x00\x1d\x03\x01\x02\t\b\xf6\x04\x05\r\x10\xfe\x0f\x0f\xfc\xfe\xfe\xfe\xfe\xff\xff\xff\xf5\n\x13\x12\x11\x03\x0f\x0f \x14\x06\x04\b\x04\x01\xfe\n\xb0\x04P\x00\x02\xce\xfc\xf7\x01\xf8\x01\xf7\x01\x04\x04\x04\x04\x03\x06\x02\x14\x00 \x03\xfc\xff\xff\x0f\x01\x02\xa8\x80\x02\a\xfc\xff\x00\x00\b\x02.\a\x03\x00\x01\x03"),
+		ends: []int{90, 94, 103, 108},
+	},
+}
+
+// tableMapEventBigEnum returns the body the servers wrote for t_bigenum. Its
+// ENUM_STR_VALUE field is 1,395 bytes long and holds 300 values, so the field
+// length and the value count are both 3-byte length-encoded integers.
+func tableMapEventBigEnum() []byte {
+	data := []byte("X\x00\x00\x00\x00\x00\x01\x00\x04test\x00\tt_bigenum\x00\x02\x03\xfe\x02\xf7\x02\x02\x01\x01\x00\x04\x05\x02id\x01e\n\x03\xfc\xff\x00\x06\xfcs\x05\xfc,\x01")
+	for i := 1; i <= 300; i++ {
+		v := fmt.Sprintf("v%d", i)
+		data = append(data, byte(len(v)))
+		data = append(data, v...)
+	}
+	return append(data, "\b\x01\x00\f\x01\xc0"...)
+}
+
+func TestTableMapEventDecodeServerEvents(t *testing.T) {
+	decoded := make(map[string]*TableMapEvent)
+	for _, tc := range tableMapEventsFromServers {
+		e := &TableMapEvent{tableIDSize: 6}
+		require.NoError(t, e.Decode(tc.data), tc.name)
+		decoded[tc.name] = e
+	}
+
+	e := decoded["t_types"]
+	require.Equal(t, []uint64{255, 0, 8, 2, 46}, e.DefaultCharset)
+	require.Equal(t, []uint64{255, 2, 8}, e.EnumSetDefaultCharset)
+	require.Equal(t, [][]string{{"a", "b", "c"}, {"l1", "l2"}}, e.EnumStrValueString())
+	require.Equal(t, [][]string{{"x", "y", "z"}}, e.SetStrValueString())
+	require.Equal(t, map[int]uint64{18: 0, 19: 1, 20: 3}, e.GeometryTypeMap())
+	require.Equal(t, "ünïcødé", e.ColumnNameString()[27])
+	require.False(t, e.VisibilityMap()[26])
+	require.Equal(t, []uint64{0, 28}, e.PrimaryKey)
+	require.Equal(t, []uint64{0, 10}, e.PrimaryKeyPrefix)
+
+	e = decoded["t_charsets"]
+	require.Equal(t, []uint64{8, 46, 11, 33, 63, 63, 63}, e.ColumnCharset)
+	require.Equal(t, []uint64{8, 11, 46}, e.EnumSetColumnCharset)
+	require.Equal(t, []uint64{0}, e.PrimaryKey)
+
+	e = decoded["t_bigenum"]
+	require.Len(t, e.EnumStrValueString(), 1)
+	require.Len(t, e.EnumStrValueString()[0], 300)
+	require.Equal(t, "v300", e.EnumStrValueString()[0][299])
+
+	require.Equal(t, []string{"id", "v"}, decoded["t_vector"].ColumnNameString())
+
+	e = decoded["t_types_minimal"]
+	require.Nil(t, e.ColumnName)
+	require.Equal(t, []uint64{255, 0, 8, 2, 46}, e.DefaultCharset)
+}
+
+var errTableMapDecodePanic = errors.New("Decode panicked")
+
+// decodeTableMapEvent decodes data as a TABLE_MAP_EVENT body and turns a panic
+// into an error wrapping errTableMapDecodePanic.
+func decodeTableMapEvent(data []byte, tableIDSize int) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%w: %v", errTableMapDecodePanic, r)
+		}
+	}()
+	e := &TableMapEvent{tableIDSize: tableIDSize}
+	return e.Decode(data)
+}
+
+func TestTableMapEventDecodeTruncated(t *testing.T) {
+	for _, tc := range tableMapEventsFromServers {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, len(tc.data), tc.ends[len(tc.ends)-1])
+			failed := 0
+			for cut := 1; cut <= len(tc.data); cut++ {
+				n := len(tc.data) - cut
+				complete := slices.Contains(tc.ends, n)
+				// A prefix that keeps the capacity of the whole event, as the
+				// body that Parse passes to Decode keeps the checksum after it,
+				// and one without spare capacity.
+				for _, data := range [][]byte{tc.data[:n], tc.data[:n:n]} {
+					err := decodeTableMapEvent(data, 6)
+					if complete && err != nil || !complete && !errors.Is(err, io.ErrUnexpectedEOF) {
+						t.Errorf("first %d of %d bytes, capacity %d: got error %v", n, len(tc.data), cap(data), err)
+						if failed++; failed == 5 {
+							return
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestTableMapEventDecodeMalformed decodes events in which one field does not
+// fit in the rest of the event. Each must fail with an error that names the
+// field, also when the slice has spare capacity after the event.
+func TestTableMapEventDecodeMalformed(t *testing.T) {
+	const (
+		idFlags = "\x01\x00\x00\x00\x00\x00\x01\x00" // table id 1, flags 1
+		names   = "\x04test\x00\x01t\x00"
+		oneInt  = "\x01\x03\x00\x00" // one MYSQL_TYPE_LONG column, no metadata, NULL bitmap
+		valid   = idFlags + names + oneInt
+		maxUint = "\xfe\xff\xff\xff\xff\xff\xff\xff\xff" // 2^64-1, length-encoded
+	)
+
+	e := &TableMapEvent{tableIDSize: 4}
+	require.NoError(t, e.Decode([]byte("\x01\x00\x00\x00\x01\x00"+names+oneInt)))
+	require.Equal(t, uint64(1), e.TableID)
+	require.Equal(t, "t", string(e.Table))
+
+	for _, tc := range []struct {
+		name        string
+		tableIDSize int
+		data        string
+		field       string
+	}{
+		{"table id", 6, idFlags[:7], "table id and flags"},
+		{"flags after a 4-byte table id", 4, "\x01\x00\x00\x00\x01", "table id and flags"},
+		{"schema name without terminator", 6, idFlags + "\x04test", "schema name"},
+		{"table name longer than the event", 6, idFlags + "\x04test\x00\x05t\x00", "table name"},
+		{"column count", 6, idFlags + names + "\xfc\x01", "column count"},
+		{"column count 2^64-1", 6, idFlags + names + maxUint + "\x03", "column types"},
+		{"metadata length 2^64-1", 6, idFlags + names + "\x01\x03" + maxUint, "column metadata"},
+		{"VARCHAR metadata", 6, idFlags + names + "\x01\x0f\x01\x2c\x00", "metadata of column 0"},
+		{"NULL bitmap", 6, idFlags + names + "\x01\x03\x00", "NULL bitmap"},
+		{"optional field without length", 6, valid + "\x01", "optional metadata field 1"},
+		{"optional field longer than the event", 6, valid + "\x01\x02\x00", "optional metadata field 1"},
+		{"optional field length 2^64-1", 6, valid + "\x0c" + maxUint, "optional metadata field 12"},
+		{"charset", 6, valid + "\x02\x02\xfc\xff", "integer in optional metadata"},
+		{"column name", 6, valid + "\x04\x02\x05c", "column name"},
+		{"ENUM value count", 6, valid + "\x06\x02\xfe\x01", "ENUM or SET value count"},
+		{"ENUM value count 2^64-1", 6, valid + "\x06\x09" + maxUint, "ENUM or SET values"},
+		{"ENUM value missing", 6, valid + "\x06\x03\x02\x01a", "ENUM or SET value"},
+		{"SET value longer than its field", 6, valid + "\x05\x03\x01\x05a", "ENUM or SET value"},
+		{"primary key", 6, valid + "\x08\x01\xfc", "primary key"},
+		{"primary key prefix", 6, valid + "\x09\x01\x00", "primary key prefix"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := len(tc.data)
+			// 4 spare bytes, like the checksum after the body that Parse
+			// passes to Decode
+			data := []byte(tc.data + "\xff\xff\xff\xff")
+			for _, d := range [][]byte{data[:n:n], data[:n]} {
+				err := decodeTableMapEvent(d, tc.tableIDSize)
+				require.ErrorIs(t, err, io.ErrUnexpectedEOF, "capacity %d", cap(d))
+				require.EqualError(t, err, "TableMapEvent: truncated "+tc.field+": unexpected EOF")
+			}
+		})
+	}
+}
+
+func TestTableMapEventDecodeCorrupted(t *testing.T) {
+	for _, tc := range tableMapEventsFromServers {
+		t.Run(tc.name, func(t *testing.T) {
+			data := make([]byte, len(tc.data))
+			failed := 0
+			for i, orig := range slices.Backward(tc.data) {
+				for _, b := range []byte{0x00, orig - 1, orig + 1, 0xfc, 0xfd, 0xfe, 0xff} {
+					copy(data, tc.data)
+					data[i] = b
+					if err := decodeTableMapEvent(data, 6); errors.Is(err, errTableMapDecodePanic) {
+						t.Errorf("byte %d set to 0x%02x: %v", i, b, err)
+						if failed++; failed == 5 {
+							return
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func FuzzTableMapEventDecode(f *testing.F) {
+	for _, tc := range tableMapEventsFromServers {
+		f.Add(tc.data)
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		e := &TableMapEvent{tableIDSize: 6}
+		_ = e.Decode(data) // must not panic; errors are acceptable
+	})
 }
 
 func TestInvalidEvent(t *testing.T) {
