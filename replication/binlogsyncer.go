@@ -82,25 +82,46 @@ type BinlogSyncerConfig struct {
 	// RenderJSONAsMySQLText, when true, makes the JSONB decoder emit text
 	// that is faithful to each value's original JSONB type tag where the
 	// JSON text grammar can express it. The default decode->json.Marshal
-	// path is lossy for DOUBLE and (less importantly) NEWDECIMAL, which
-	// matters when replaying the output back into a MySQL JSON column.
+	// path is lossy (see the "not ..." notes below), which matters when
+	// replaying the output back into a MySQL JSON column.
 	//
 	// Per-tag behaviour:
-	//   - JSONB_DOUBLE 1.0 renders as "1.0" (not "1"), so MySQL re-stores
-	//     it as JSONB_DOUBLE rather than JSONB_INT.
-	//   - JSONB_OPAQUE NEWDECIMAL renders as an unquoted number rather
-	//     than a quoted string. Note that MySQL's JSON text grammar has
-	//     no syntax for a decimal literal: re-inserting the text creates
-	//     a JSON DOUBLE, not the original JSONB_OPAQUE NEWDECIMAL. The
-	//     numeric value is preserved, the opaque type tag is not.
+	//   - JSONB_DOUBLE 1.0 renders as "1.0" (not "1", unless
+	//     UseFloatWithTrailingZero is set), so MySQL re-stores it as
+	//     JSONB_DOUBLE rather than JSONB_INT.
+	//   - JSONB_OPAQUE NEWDECIMAL renders as an unquoted number (not a
+	//     quoted string, unless UseDecimal and
+	//     decimal.MarshalJSONWithoutQuotes are both set).
 	//   - JSONB_OPAQUE DATE renders as "YYYY-MM-DD" (not the legacy
 	//     "YYYY-MM-DD 00:00:00.000000").
 	//   - JSONB_OPAQUE values of unrecognised inner types render as
-	//     "base64:typeN:<b64>" (matching mysqld) instead of the raw
-	//     payload bytes.
+	//     "base64:typeN:<b64>" (not the raw payload bytes, with invalid
+	//     UTF-8 replaced by U+FFFD). mysqld differs in two cases: it
+	//     breaks the base64 with a newline every 76 characters, and it
+	//     prints a VAR_STRING (type 253) payload as a plain string.
 	//   - Object key order is preserved from the JSONB stream
 	//     (length-then-bytes) instead of the lexicographic order Go maps
 	//     produce, matching MySQL's own text output.
+	//
+	// Re-inserting the text can change JSONB types and values. MySQL's
+	// own JSON text has the same limits, apart from the two opaque cases
+	// above. Changes include:
+	//   - NEWDECIMAL loses its type, precision and scale, since JSON text
+	//     has no decimal literal. A value with a positive scale becomes
+	//     DOUBLE (1.50 becomes 1.5), and a scale-0 value becomes INTEGER,
+	//     UNSIGNED INTEGER or DOUBLE by its range. Conversion to DOUBLE
+	//     can round the value.
+	//   - Opaque DATE, TIME, DATETIME and TIMESTAMP values become STRING.
+	//   - Other opaque values become the STRING "base64:typeN:<b64>".
+	//   - INTEGER or UNSIGNED INTEGER is chosen by value: a signed value
+	//     above 4294967295 becomes UNSIGNED INTEGER, and an unsigned value
+	//     up to 4294967295 becomes INTEGER.
+	//   - Some MySQL versions, 8.4.8 among them, parse some doubles back
+	//     an ulp or two off (MySQL bug reports #116160 and #112904).
+	//
+	// Opaque values come only from SQL values such as DECIMAL, DATE or
+	// BLOB, e.g. JSON_OBJECT('v', 1.5), where 1.5 is a DECIMAL literal.
+	// JSON inserted as text contains none.
 	//
 	// Other notes:
 	//   - UseDecimal and UseFloatWithTrailingZero have no effect on JSON
