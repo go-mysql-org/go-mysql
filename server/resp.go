@@ -413,12 +413,51 @@ type (
 	cursorResult struct{ rs *mysql.Resultset }
 	// cursorRows is the response to a COM_STMT_FETCH: one batch of rows.
 	cursorRows []mysql.RowData
+	// writeFailed ends a command whose response was cut short: nothing more
+	// is written and HandleCommand returns err.
+	writeFailed struct{ err error }
 )
+
+// errStreamAnswered means a streamed resultset passed to more failed after its
+// rows began, and its error packet already ended the response.
+var errStreamAnswered = errors.New("streamed resultset failed; its error ended the response")
+
+// writeMoreResult writes r with SERVER_MORE_RESULTS_EXISTS on its last packet.
+// It flushes, so r does not sit in the write buffer while the next statement runs.
+func (c *Conn) writeMoreResult(r *mysql.Result) error {
+	if r != nil {
+		// writeOK merges the status into the Result; use a copy so the flag
+		// stays off the Handler's Result, which it may return as the last one.
+		copied := *r
+		r = &copied
+	}
+	had := c.status & mysql.SERVER_MORE_RESULTS_EXISTS
+	c.status |= mysql.SERVER_MORE_RESULTS_EXISTS
+	defer func() {
+		c.status = c.status&^mysql.SERVER_MORE_RESULTS_EXISTS | had
+	}()
+	var stream *mysql.StreamResult
+	if r.IsStreaming() {
+		stream = r.StreamResult
+	}
+	if err := c.WriteValue(r); err != nil {
+		return err
+	}
+	if stream != nil && stream.Err() != nil {
+		return errStreamAnswered
+	}
+	if c.Conn != nil {
+		return c.Flush()
+	}
+	return nil
+}
 
 func (c *Conn) WriteValue(value any) error {
 	switch v := value.(type) {
 	case noResponse:
 		return nil
+	case writeFailed:
+		return v.err
 	case eofResponse:
 		return c.writeEOFOrOK()
 	case closeConn:
