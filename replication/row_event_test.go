@@ -1,10 +1,12 @@
 package replication
 
 import (
+	"encoding/binary"
 	"io"
 	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
@@ -680,6 +682,13 @@ func TestDecodeDatetime2(t *testing.T) {
 		{[]byte("\x99\x9a\xb8\xf7\xaa"), 0, true, "2016-10-28 15:30:42"},
 		{[]byte("\x99\x98\x38\xf7\xaa"), 0, false, "2016-00-28 15:30:42"},
 		{[]byte("\x99\x9a\x80\xf7\xaa"), 0, false, "2016-10-00 15:30:42"},
+		// days that do not exist, stored with ALLOW_INVALID_DATES
+		{[]byte("\x99\xa5\xbc\xc8\xb8"), 0, false, "2020-02-30 12:34:56"},
+		{[]byte("\x99\xa5\xbc\xc8\xb8\x01\xe2\x40"), uint16(6), false, "2020-02-30 12:34:56.123456"},
+		{[]byte("\x99\xa9\x7e\x00\x00"), 0, false, "2021-04-31 00:00:00"},
+		{[]byte("\x99\xa2\x7a\x00\x00"), 0, false, "2019-02-29 00:00:00"},
+		{[]byte("\x9a\xa9\xba\x00\x00"), 0, false, "2100-02-29 00:00:00"},
+		{[]byte("\x99\xa5\xba\xc8\xb8"), 0, true, "2020-02-29 12:34:56"},
 		{[]byte("\x99\x02\xc2\x00\x00"), 0, true, "1970-01-01 00:00:00"},
 		{[]byte("\x80\x00\x00\x00\x00"), 0, false, "0000-00-00 00:00:00"},
 		{[]byte("\x80\x00\x02\xf1\x05"), 0, false, "0000-00-01 15:04:05"},
@@ -695,13 +704,52 @@ func TestDecodeDatetime2(t *testing.T) {
 			switch v := value.(type) {
 			case fracTime:
 				require.True(t, parseTime)
-				require.True(t, tc.getFracTime)
+				require.True(t, tc.getFracTime, "got fracTime %s for %s", v, tc.expected)
 				require.Equal(t, tc.expected, v.String())
 			case string:
 				require.False(t, parseTime && tc.getFracTime)
 				require.Equal(t, tc.expected, v)
 			default:
 				require.FailNow(t, "invalid value type: %T", value)
+			}
+		}
+	}
+}
+
+func TestDecodeDatetime(t *testing.T) {
+	// MYSQL_TYPE_DATETIME, the format of DATETIME columns created before
+	// MySQL 5.6.4, stores YYYYMMDDhhmmss as a little-endian uint64.
+	testcases := []struct {
+		value    uint64
+		isTime   bool
+		expected string
+	}{
+		{20161028153042, true, "2016-10-28 15:30:42"},
+		{20200229123456, true, "2020-02-29 12:34:56"},
+		{20160028153042, false, "2016-00-28 15:30:42"},
+		{20161000153042, false, "2016-10-00 15:30:42"},
+		{20200230123456, false, "2020-02-30 12:34:56"},
+		{20210431000000, false, "2021-04-31 00:00:00"},
+		{20190229000000, false, "2019-02-29 00:00:00"},
+		{229000000, false, "0000-02-29 00:00:00"},
+	}
+	for _, tc := range testcases {
+		data := binary.LittleEndian.AppendUint64(nil, tc.value)
+		for _, parseTime := range []bool{true, false} {
+			e := &RowsEvent{parseTime: parseTime}
+			value, n, err := e.decodeValue(data, mysql.MYSQL_TYPE_DATETIME, 0, false, false)
+			require.NoError(t, err)
+			require.Equal(t, 8, n)
+			switch v := value.(type) {
+			case time.Time:
+				require.True(t, parseTime)
+				require.True(t, tc.isTime, "got time.Time %v for %s", v, tc.expected)
+				require.Equal(t, tc.expected, v.Format(time.DateTime))
+			case string:
+				require.False(t, parseTime && tc.isTime)
+				require.Equal(t, tc.expected, v)
+			default:
+				require.FailNowf(t, "invalid value type", "%T", value)
 			}
 		}
 	}

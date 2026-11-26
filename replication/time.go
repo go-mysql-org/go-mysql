@@ -55,6 +55,24 @@ func formatDatetime(year, month, day, hour, minute, second, frac, dec int) strin
 	return s[0 : len(s)-(6-dec)]
 }
 
+var daysInMonth = [12]int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+
+// validDate reports whether year-month-day is a real calendar date under
+// MySQL's rules. MySQL can also store a zero month or day (without
+// NO_ZERO_IN_DATE) and a day that does not exist in its month, such as
+// 2020-02-30 (with ALLOW_INVALID_DATES); time.Date would turn either into
+// another date.
+func validDate(year, month, day int) bool {
+	if month < 1 || month > 12 || day < 1 {
+		return false
+	}
+	if month == 2 && day == 29 {
+		// MySQL's leap year rule; unlike Go, MySQL does not count year 0.
+		return year != 0 && year%4 == 0 && (year%100 != 0 || year%400 == 0)
+	}
+	return day <= daysInMonth[month-1]
+}
+
 func microSecTimestampToTime(ts uint64) time.Time {
 	if ts == 0 {
 		return time.Time{}

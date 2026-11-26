@@ -47,6 +47,36 @@ func TestTime(tt *testing.T) {
 	}
 }
 
+func TestValidDate(t *testing.T) {
+	testcases := []struct {
+		year, month, day int
+		expected         bool
+	}{
+		{2020, 1, 31, true},
+		{2020, 4, 30, true},
+		{2020, 4, 31, false},
+		{9999, 12, 31, true},
+		{2020, 0, 15, false},
+		{2020, 13, 1, false},
+		{2020, 2, 0, false},
+		{2020, 2, 30, false},
+		// February 29 with MySQL's leap year rule, which does not count year 0
+		{0, 2, 28, true},
+		{0, 2, 29, false},
+		{4, 2, 29, true},
+		{100, 2, 29, false},
+		{400, 2, 29, true},
+		{1900, 2, 29, false},
+		{2000, 2, 29, true},
+		{2019, 2, 29, false},
+		{2020, 2, 29, true},
+		{2100, 2, 29, false},
+	}
+	for _, tc := range testcases {
+		require.Equal(t, tc.expected, validDate(tc.year, tc.month, tc.day), "%04d-%02d-%02d", tc.year, tc.month, tc.day)
+	}
+}
+
 func TestTimeStringLocation(tt *testing.T) {
 	t := fracTime{
 		time.Date(2018, time.Month(7), 30, 10, 0, 0, 0, time.FixedZone("EST", -5*3600)),
