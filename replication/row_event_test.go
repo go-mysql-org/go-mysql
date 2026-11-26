@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
@@ -1888,6 +1889,165 @@ func TestRowsEventPanicErrorFormat(t *testing.T) {
 	// Any other panic value is formatted with %v.
 	err = e.decodePanicError("boom", 40, 50)
 	require.EqualError(t, err, prefix+"boom")
+}
+
+func TestRowsEventDecodeRowWithoutData(t *testing.T) {
+	// TABLE_MAP_EVENT bodies of table 108 without optional metadata.
+	noColumns := []byte{
+		0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, // table id 108
+		0x01, 0x00, // flags
+		0x02, 'd', 'b', 0x00, // schema
+		0x03, 't', 'b', 'l', 0x00, // table
+		0x00, // column count
+		0x00, // metadata length
+	}
+	oneInt := []byte{
+		0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, // table id 108
+		0x01, 0x00, // flags
+		0x02, 'd', 'b', 0x00, // schema
+		0x03, 't', 'b', 'l', 0x00, // table
+		0x01, // column count
+		0x03, // column type: LONG
+		0x00, // metadata length
+		0x01, // NULL bitmap
+	}
+	// rowsEvent returns a version 2 rows event body of table 108: the
+	// header up to the column count, then the given bytes.
+	rowsEvent := func(b ...byte) []byte {
+		return append([]byte{
+			0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, // table id 108
+			0x01, 0x00, // flags: STMT_END_F
+			0x02, 0x00, // extra data length
+		}, b...)
+	}
+	decode := func(t *testing.T, tableMap []byte, eventType EventType, data []byte) (*RowsEvent, error) {
+		table := &TableMapEvent{tableIDSize: 6}
+		require.NoError(t, table.Decode(tableMap))
+		e := &RowsEvent{
+			Version:     2,
+			tableIDSize: 6,
+			tables:      map[uint64]*TableMapEvent{108: table},
+			eventType:   eventType,
+			needBitmap2: eventType == UPDATE_ROWS_EVENTv2 || eventType == PARTIAL_UPDATE_ROWS_EVENT,
+		}
+		// Without the check, Decode never returns and allocates gigabytes
+		// per second. Stop the test binary once it has allocated far more
+		// than these few bytes need, rather than wait for the test timeout
+		// or for the process to run out of memory.
+		var before runtime.MemStats
+		runtime.ReadMemStats(&before)
+		done, stopped := make(chan struct{}), make(chan struct{})
+		go func() {
+			defer close(stopped)
+			tick := time.NewTicker(10 * time.Millisecond)
+			defer tick.Stop()
+			for {
+				select {
+				case <-done:
+					return
+				case <-tick.C:
+					var now runtime.MemStats
+					runtime.ReadMemStats(&now)
+					if now.TotalAlloc-before.TotalAlloc > 64<<20 {
+						panic("RowsEvent.Decode allocated more than 64 MiB")
+					}
+				}
+			}
+		}()
+		defer func() {
+			close(done)
+			<-stopped
+		}()
+		return e, e.Decode(data)
+	}
+
+	// A row that takes no bytes, followed by more data.
+	for _, tc := range []struct {
+		name      string
+		tableMap  []byte
+		eventType EventType
+		data      []byte
+		err       string
+	}{
+		{
+			"write, no columns", noColumns, WRITE_ROWS_EVENTv2,
+			rowsEvent(0x00, 0x00), // column count 0, one more byte
+			"rows event has data after a row that takes no bytes (WriteRowsEventV2, column count 0, row offset 11, data length 12)",
+		},
+		{
+			"update, no columns", noColumns, UPDATE_ROWS_EVENTv2,
+			rowsEvent(0x00, 0x00),
+			"rows event has data after a row that takes no bytes (UpdateRowsEventV2, column count 0, row offset 11, data length 12)",
+		},
+		{
+			"delete, no columns", noColumns, DELETE_ROWS_EVENTv2,
+			rowsEvent(0x00, 0x00),
+			"rows event has data after a row that takes no bytes (DeleteRowsEventV2, column count 0, row offset 11, data length 12)",
+		},
+		{
+			"write, no column present", oneInt, WRITE_ROWS_EVENTv2,
+			rowsEvent(0x01, 0x00, 0x00), // column count 1, columns present 0, one more byte
+			"rows event has data after a row that takes no bytes (WriteRowsEventV2, column count 1, row offset 12, data length 13)",
+		},
+		{
+			"update, no column present", oneInt, UPDATE_ROWS_EVENTv2,
+			rowsEvent(0x01, 0x00, 0x00, 0x00),
+			"rows event has data after a row that takes no bytes (UpdateRowsEventV2, column count 1, row offset 13, data length 14)",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := decode(t, tc.tableMap, tc.eventType, tc.data)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+
+	// Rows that take bytes still decode, also when one image of a row
+	// takes none.
+	for _, tc := range []struct {
+		name      string
+		eventType EventType
+		data      []byte
+		rows      [][]any
+		skipped   [][]int
+	}{
+		{
+			"write", WRITE_ROWS_EVENTv2,
+			rowsEvent(0x01, 0x01, // column count 1, columns present
+				0x00, 0x2a, 0x00, 0x00, 0x00, // 42
+				0x00, 0x2b, 0x00, 0x00, 0x00), // 43
+			[][]any{{int32(42)}, {int32(43)}},
+			[][]int{{}, {}},
+		},
+		{
+			"update, empty before image", UPDATE_ROWS_EVENTv2,
+			rowsEvent(0x01, 0x00, 0x01, // column count 1, columns present before, after
+				0x00, 0x2a, 0x00, 0x00, 0x00),
+			[][]any{{nil}, {int32(42)}},
+			[][]int{{0}, {}},
+		},
+		{
+			"update, empty after image", UPDATE_ROWS_EVENTv2,
+			rowsEvent(0x01, 0x01, 0x00,
+				0x00, 0x2a, 0x00, 0x00, 0x00),
+			[][]any{{int32(42)}, {nil}},
+			[][]int{{}, {0}},
+		},
+		{
+			"partial update, empty before image", PARTIAL_UPDATE_ROWS_EVENT,
+			rowsEvent(0x01, 0x00, 0x01,
+				0x00, // binlog_row_value_options
+				0x00, 0x2a, 0x00, 0x00, 0x00),
+			[][]any{{nil}, {int32(42)}},
+			[][]int{{0}, {}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, err := decode(t, oneInt, tc.eventType, tc.data)
+			require.NoError(t, err)
+			require.Equal(t, tc.rows, e.Rows)
+			require.Equal(t, tc.skipped, e.SkippedColumns)
+		})
+	}
 }
 
 func TestJSONDiffErrorOmitsPath(t *testing.T) {
