@@ -430,3 +430,44 @@ func TestMariadbGTIDSetLogValue(t *testing.T) {
 
 	require.Nil(t, logValueAsJSON(t, (*MariadbGTIDSet)(nil)))
 }
+
+func TestMariaDBGTIDSetEmptySegments(t *testing.T) {
+	// Empty segments (leading, trailing or doubled commas) carry no GTID
+	// and must be skipped: they used to parse as the zero GTID, which
+	// rewound an existing position in domain 0 back to sequence 0 and
+	// made a non-empty set render as an empty string.
+	cases := []struct {
+		gtidStr     string
+		expectedStr string
+	}{
+		{"0-1-5,", "0-1-5"},
+		{",0-1-5", "0-1-5"},
+		{"0-1-5,,0-1-7", "0-1-7"},
+		{",", ""},
+		{",,", ""},
+	}
+
+	for _, cs := range cases {
+		gtidSet, err := ParseMariadbGTIDSet(cs.gtidStr)
+		require.NoError(t, err)
+		require.Equal(t, cs.expectedStr, gtidSet.String())
+		require.Equal(t, cs.expectedStr == "", gtidSet.IsEmpty())
+	}
+
+	// A set parsed from a string with an empty segment equals the clean set.
+	withEmpty, err := ParseMariadbGTIDSet("0-1-5,")
+	require.NoError(t, err)
+	clean, err := ParseMariadbGTIDSet("0-1-5")
+	require.NoError(t, err)
+	require.True(t, withEmpty.Equal(clean))
+
+	// Update with an empty string or only commas is a no-op and must not
+	// rewind an existing position.
+	parsed, err := ParseMariadbGTIDSet("0-1-5")
+	require.NoError(t, err)
+	set, ok := parsed.(*MariadbGTIDSet)
+	require.True(t, ok)
+	require.NoError(t, set.Update(""))
+	require.NoError(t, set.Update(","))
+	require.Equal(t, "0-1-5", set.String())
+}
