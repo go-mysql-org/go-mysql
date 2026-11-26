@@ -391,7 +391,7 @@ func (c *Conn) bindStmtArgs(s *Stmt, nullBitmap, paramTypes, paramValues []byte)
 			mysql.MYSQL_TYPE_GEOMETRY, mysql.MYSQL_TYPE_VECTOR,
 			mysql.MYSQL_TYPE_DATE, mysql.MYSQL_TYPE_NEWDATE,
 			mysql.MYSQL_TYPE_TIMESTAMP, mysql.MYSQL_TYPE_DATETIME, mysql.MYSQL_TYPE_TIME:
-			if len(paramValues) < (pos + 1) {
+			if !lengthEncodedIntComplete(paramValues[pos:]) {
 				return mysql.ErrMalformPacket
 			}
 
