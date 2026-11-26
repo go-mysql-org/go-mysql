@@ -1388,7 +1388,7 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 			hours := int(t / 10000)
 			minutes := int(t%10000) / 100
 			seconds := int(t % 100)
-			if !e.parseTime || months == 0 || days == 0 {
+			if !e.parseTime || !validDate(years, months, days) {
 				v = fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d",
 					years, months, days, hours, minutes, seconds)
 			} else {
@@ -1783,7 +1783,7 @@ func decodeDatetime2(data []byte, dec uint16, parseTime bool) (any, int, error) 
 	// minute = 0 = 0b000000
 	// second = 0 = 0b000000
 	// integer value = 0b1100100000010110000100000000000000000 = 107420450816
-	if !parseTime || intPart < 107420450816 || month == 0 || day == 0 {
+	if !parseTime || intPart < 107420450816 || !validDate(year, month, day) {
 		return formatDatetime(year, month, day, hour, minute, second, int(frac), int(dec)), n, nil
 	}
 
