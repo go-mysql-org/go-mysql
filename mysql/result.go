@@ -145,6 +145,14 @@ type Executer interface {
 	Execute(query string, args ...any) (*Result, error)
 }
 
+// Close returns a non-nil [Resultset] to the pool and closes a non-nil
+// [StreamResult], then sets both fields to nil.
+//
+// Do not use the resultset after Close, nor anything that points into its
+// memory, such as []byte values from [Resultset.GetValue] and
+// [FieldValue.AsString] or strings from [Resultset.GetString]. Later calls
+// to [NewResultset], including for queries on other connections, may reuse
+// that memory. Copy what you need before Close.
 func (r *Result) Close() {
 	if r.Resultset != nil {
 		r.returnToPool()
