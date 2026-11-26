@@ -1126,6 +1126,8 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 
 	// ... repeat rows until event-end
 	for pos < len(data) {
+		rowStart := pos
+
 		// Parse the first image
 		if n, err = e.decodeImage(data[pos:], e.ColumnBitmap1, rowImageType); err != nil {
 			return errors.Trace(err)
@@ -1138,6 +1140,14 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 				return errors.Trace(err)
 			}
 			pos += n
+		}
+
+		// An image can take no bytes, such as an after image without
+		// columns, but a whole row cannot: the next row would start at the
+		// same position, and this loop would never end.
+		if pos == rowStart {
+			return errors.Errorf("rows event has data after a row that takes no bytes (%s, column count %d, row offset %d, data length %d)",
+				e.eventType, e.ColumnCount, rowStart, len(data))
 		}
 	}
 
