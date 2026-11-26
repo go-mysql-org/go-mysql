@@ -46,6 +46,7 @@ type Server struct {
 	cacheShaPassword  *sync.Map // 'user@host' -> SHA256(SHA256(PASSWORD))
 	authProvider      AuthenticationProvider
 	initialStatus     atomic.Uint32 // SERVER_STATUS_* flags of a new connection (see SetInitialStatus)
+	cursorsDisabled   atomic.Bool   // see SetCursorsEnabled
 }
 
 // NewDefaultServer: New mysql server with default settings.
@@ -156,6 +157,20 @@ func (s *Server) SetInitialStatus(status uint16) error {
 // (see SetInitialStatus).
 func (s *Server) InitialStatus() uint16 {
 	return uint16(s.initialStatus.Load())
+}
+
+// SetCursorsEnabled sets whether CURSOR_TYPE_READ_ONLY opens a cursor (default:
+// enabled). A cursor holds its whole Resultset until it is fetched, so a Handler
+// that limits result memory per command should disable cursors. When disabled,
+// the rows are sent inline without SERVER_STATUS_CURSOR_EXISTS, as MySQL does
+// when it opens no cursor. It applies to executions that start after the call.
+func (s *Server) SetCursorsEnabled(enabled bool) {
+	s.cursorsDisabled.Store(!enabled)
+}
+
+// CursorsEnabled reports whether cursors are enabled (see SetCursorsEnabled).
+func (s *Server) CursorsEnabled() bool {
+	return !s.cursorsDisabled.Load()
 }
 
 func (s *Server) InvalidateCache(username string, host string) {

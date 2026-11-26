@@ -19,12 +19,10 @@ import (
 //   - Inter-token whitespace is compact (no space after ',' or ':'),
 //     unlike MySQL's "SELECT json_col" form. DOUBLE scalars are
 //     byte-identical to MySQL's own text (see jsonMySQLDouble).
-//   - NEWDECIMAL is the one tag that cannot be preserved on text
-//     round-trip: MySQL's JSON text grammar has no decimal literal, so
-//     re-inserting the unquoted number yields a JSON DOUBLE, not the
-//     original JSONB_OPAQUE NEWDECIMAL. The numeric value still
-//     round-trips; only the opaque type tag is lost. All other tags
-//     covered here do reproduce the original JSONB binary on re-insert.
+//   - JSON text cannot carry every JSONB type, so re-inserting the
+//     output does not always reproduce the original JSONB, just as
+//     re-inserting MySQL's own text does not. See
+//     BinlogSyncerConfig.RenderJSONAsMySQLText for what changes.
 
 // jsonString carries a JSONB string payload as raw bytes so MarshalJSON
 // can pass non-ASCII bytes through verbatim. MySQL JSON is byte-
@@ -57,9 +55,10 @@ func (n jsonRawNumber) MarshalJSON() ([]byte, error) {
 // re-reads as 6.0221407600000005e23.
 //
 // This does not make the round-trip lossless. MySQL's JSON text parser
-// misrounds some 16-17 significant-digit doubles by 1 ulp whatever the
-// spelling (MySQL bugs #116160 and #112904), including values MySQL
-// itself renders that way. Matching the server is the contract here;
+// in some versions (8.4.8 among them) misrounds some doubles by an ulp
+// or two, including values MySQL itself renders that way (MySQL bug
+// reports #116160 and #112904). A longer spelling avoids this for some
+// values but not for others. Matching the server is the contract here;
 // out-guessing its parser is not.
 type jsonMySQLDouble float64
 

@@ -281,22 +281,58 @@ func NewSha256PasswordHash(pwd string) (string, error) {
 	return hashCrypt256(pwd, string(salt), SHA256_PASSWORD_ITERATIONS)
 }
 
+// maxMariadbPrealloc caps the buffer that DecompressMariadbData allocates
+// before it decompresses anything (plus bytes.MinRead of read slack). The
+// declared length comes from the event, and a corrupt one can claim nearly
+// 4 GiB.
+const maxMariadbPrealloc = 1 << 20
+
+// DecompressMariadbData decompresses the body of a MariaDB compressed event.
+// Its first byte has bit 7 set, the algorithm in bits 4-6 (MariaDB writes only
+// 0, zlib) and, in bits 0-2, the number of bytes (1 to 4) of the big-endian
+// uncompressed length that follows. The zlib stream comes after the length.
+//
+// It returns an error when the data is too short for its header, when the
+// length takes other than 1 to 4 bytes, when zlib reports an error while
+// producing the declared length, or when the stream is shorter than that
+// length. It reads no further than the declared length, so the end of the
+// stream, including its checksum, is not always checked. It does not check
+// bit 7 or the algorithm.
 func DecompressMariadbData(data []byte) ([]byte, error) {
-	// algorithm always 0=zlib
-	// algorithm := (data[pos] & 0x07) >> 4
-	headerSize := int(data[0] & 0x07)
-	uncompressedDataSize := BFixedLengthInt(data[1 : 1+headerSize])
-	uncompressedData := make([]byte, uncompressedDataSize)
-	r, err := zlib.NewReader(bytes.NewReader(data[1+headerSize:]))
+	if len(data) == 0 {
+		return nil, errors.New("compressed event data is empty")
+	}
+	lenSize := int(data[0] & 0x07)
+	if lenSize < 1 || lenSize > 4 {
+		return nil, errors.Errorf("compressed event data header %#02x has %d length bytes, want 1 to 4", data[0], lenSize)
+	}
+	if len(data) < 1+lenSize {
+		return nil, errors.Errorf("compressed event data is %d bytes, too short for its %d-byte header", len(data), 1+lenSize)
+	}
+	size := BFixedLengthInt(data[1 : 1+lenSize])
+	r, err := zlib.NewReader(bytes.NewReader(data[1+lenSize:]))
 	if err != nil {
 		return nil, err
 	}
 	defer r.Close()
-	_, err = io.ReadFull(r, uncompressedData)
+
+	// Past maxMariadbPrealloc the buffer grows with the data that really
+	// decompresses. The extra bytes.MinRead lets ReadFrom reach EOF without
+	// growing a full buffer.
+	var buf bytes.Buffer
+	buf.Grow(int(min(size, maxMariadbPrealloc)) + bytes.MinRead)
+	n, err := buf.ReadFrom(io.LimitReader(r, int64(size)))
 	if err != nil {
 		return nil, err
 	}
-	return uncompressedData, nil
+	if uint64(n) != size {
+		return nil, io.ErrUnexpectedEOF
+	}
+	// No spare capacity: the row decoders slice with data[i:j], which can
+	// reach past the length up to the capacity, so a row that runs past the
+	// data would read zeros instead of failing.
+	out := buf.Bytes()
+	return out[:len(out):len(out)], nil
 }
 
 // AppendLengthEncodedInteger: encodes a uint64 value and appends it to the given bytes slice

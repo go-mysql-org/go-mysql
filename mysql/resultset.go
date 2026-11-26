@@ -87,6 +87,9 @@ func (r *Resultset) ColumnNumber() int {
 	return len(r.Fields)
 }
 
+// GetValue returns the value at row and column. A []byte value is not a
+// copy: it shares memory with the resultset, so copy it before
+// [Result.Close] or [Resultset.Reset] if you need it after that.
 func (r *Resultset) GetValue(row, column int) (any, error) {
 	if row >= len(r.Values) || row < 0 {
 		return nil, errors.Errorf("invalid row index %d", row)
@@ -106,6 +109,8 @@ func (r *Resultset) NameIndex(name string) (int, error) {
 	return 0, errors.Errorf("invalid field name %s", name)
 }
 
+// GetValueByName is [Resultset.GetValue] with the column given by name. A
+// returned []byte has the same lifetime as with GetValue.
 func (r *Resultset) GetValueByName(row int, name string) (any, error) {
 	column, err := r.NameIndex(name)
 	if err != nil {
@@ -282,6 +287,15 @@ func (r *Resultset) GetFloatByName(row int, name string) (float64, error) {
 	return r.GetFloat(row, column)
 }
 
+// GetString returns the value at row and column as a string. NULL is
+// returned as "".
+//
+// For a [FieldValueTypeString] value, the string is not a copy: it shares
+// the value's byte buffer. Treat it as invalid after [Result.Close] or
+// [Resultset.Reset], since the buffer can then be reused and overwritten
+// (after Close, by a query on any connection). Reading the string while that
+// happens is a data race. To keep the string, copy it with [strings.Clone]
+// before either call.
 func (r *Resultset) GetString(row, column int) (string, error) {
 	d, err := r.GetValue(row, column)
 	if err != nil {
@@ -307,6 +321,8 @@ func (r *Resultset) GetString(row, column int) (string, error) {
 	}
 }
 
+// GetStringByName is [Resultset.GetString] with the column given by name.
+// The returned string has the same lifetime as with GetString.
 func (r *Resultset) GetStringByName(row int, name string) (string, error) {
 	column, err := r.NameIndex(name)
 	if err != nil {

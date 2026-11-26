@@ -46,6 +46,16 @@ const (
 
 	jsonbValueEntrySizeSmall = 1 + jsonbSmallOffsetSize
 	jsonbValueEntrySizeLarge = 1 + jsonbLargeOffsetSize
+
+	// jsonbMaxDepth is the deepest nesting of arrays and objects that the
+	// decoder follows. It keeps a document from overflowing the goroutine
+	// stack, and it limits the cost of marshaling nested objects, which
+	// grows with the depth times the size of what they contain. It is not
+	// a MySQL limit: in-place updates with JSON_SET or JSON_REPLACE do not
+	// apply JSON_DOCUMENT_MAX_DEPTH (100) to the whole document, so MySQL
+	// can store deeper documents, and copies keep them. The decoder rejects
+	// those that go past this limit.
+	jsonbMaxDepth = 1000
 )
 
 var ErrCorruptedJSONDiff = fmt.Errorf("corrupted JSON diff") // ER_CORRUPTED_JSON_DIFF
@@ -105,12 +115,24 @@ func (jd *JsonDiff) String() string {
 	return fmt.Sprintf("json_diff(op:%s path:%s value:%s)", jd.Op, jd.Path, jd.Value)
 }
 
+// MarshalJSON writes f in fixed-point notation and adds ".0" to integral
+// values, so MySQL reads the text back as a JSON DOUBLE, not an integer.
+// For finite values with |f| >= 2^63 it writes the exponent form MySQL
+// itself uses ("1e19", "1e300") instead of 19 to 309 digits. Matching
+// MySQL's text does not make the round trip lossless; see jsonMySQLDouble.
 func (f FloatWithTrailingZero) MarshalJSON() ([]byte, error) {
-	if float64(f) == float64(int(f)) {
-		return []byte(strconv.FormatFloat(float64(f), 'f', 1, 64)), nil
+	v := float64(f)
+	// ±Inf stays invalid JSON, as for float64, rather than becoming the
+	// null that formatMySQLDouble writes for it.
+	if math.Abs(v) >= 0x1p63 && !math.IsInf(v, 0) {
+		return []byte(formatMySQLDouble(v)), nil
 	}
 
-	return []byte(strconv.FormatFloat(float64(f), 'f', -1, 64)), nil
+	if math.Trunc(v) == v {
+		return []byte(strconv.FormatFloat(v, 'f', 1, 64)), nil
+	}
+
+	return []byte(strconv.FormatFloat(v, 'f', -1, 64)), nil
 }
 
 func jsonbGetOffsetSize(isSmall bool) int {
@@ -142,15 +164,15 @@ func jsonbGetValueEntrySize(isSmall bool) int {
 // parent RowsEvent the decoder wraps leaf values in MySQL-text marshalers
 // (see json_mysql_text.go) so json.Marshal produces MySQL's textual JSON
 // form, faithful to each JSONB value's original type tag where the JSON
-// text grammar can express it. NEWDECIMAL is the one tag that cannot be
-// preserved on text round-trip (no decimal literal in JSON); see
-// BinlogSyncerConfig.RenderJSONAsMySQLText for the full caveat list.
+// text grammar can express it. Not every tag survives a text round trip;
+// see BinlogSyncerConfig.RenderJSONAsMySQLText for the list.
 func (e *RowsEvent) decodeJSONBinary(data []byte) ([]byte, error) {
 	d := jsonBinaryDecoder{
 		useDecimal:               e.useDecimal,
 		useFloatWithTrailingZero: e.useFloatWithTrailingZero,
 		ignoreDecodeErr:          e.ignoreJSONDecodeErr,
 		mysqlTextMode:            e.renderJSONAsMySQLText,
+		budget:                   len(data),
 	}
 
 	if d.isDataShort(data, 1) {
@@ -177,6 +199,16 @@ type jsonBinaryDecoder struct {
 	ignoreDecodeErr          bool
 	mysqlTextMode            bool
 	err                      error
+
+	// depth is the number of arrays and objects being decoded.
+	depth int
+	// budget is the number of document bytes that container headers, keys,
+	// strings and opaque values may still use. MySQL stores every value
+	// once, so for a document it wrote these add up to at most its length.
+	// A value is decoded once for every entry that points at it; the budget
+	// bounds that work by the length of the document, although it does not
+	// catch every pair of overlapping values.
+	budget int
 }
 
 func (d *jsonBinaryDecoder) decodeValue(tp byte, data []byte) any {
@@ -231,6 +263,13 @@ func (d *jsonBinaryDecoder) decodeValue(tp byte, data []byte) any {
 }
 
 func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObject bool) any {
+	if d.depth >= jsonbMaxDepth {
+		d.err = errors.Errorf("JSON document is nested deeper than %d levels", jsonbMaxDepth)
+		return nil
+	}
+	d.depth++
+	defer func() { d.depth-- }()
+
 	offsetSize := jsonbGetOffsetSize(isSmall)
 	if d.isDataShort(data, 2*offsetSize) {
 		return nil
@@ -238,6 +277,9 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 
 	count := d.decodeCount(data, isSmall)
 	size := d.decodeCount(data[offsetSize:], isSmall)
+	if d.err != nil {
+		return nil
+	}
 
 	if d.isDataShort(data, size) {
 		// Before MySQL 5.7.22, json type generated column may have invalid value,
@@ -253,14 +295,21 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 	keyEntrySize := jsonbGetKeyEntrySize(isSmall)
 	valueEntrySize := jsonbGetValueEntrySize(isSmall)
 
-	headerSize := 2*offsetSize + count*valueEntrySize
-
+	entrySize := valueEntrySize
 	if isObject {
-		headerSize += count * keyEntrySize
+		entrySize += keyEntrySize
 	}
 
-	if headerSize > size {
-		d.err = errors.Errorf("header size %d > size %d", headerSize, size)
+	// The entries must fit in the container. Divide instead of multiplying
+	// count, which can overflow where int has 32 bits.
+	headerSize := 2 * offsetSize
+	if size < headerSize || count > (size-headerSize)/entrySize {
+		d.err = errors.Errorf("header with %d entries > size %d", count, size)
+		return nil
+	}
+	headerSize += count * entrySize
+
+	if !d.consume(headerSize) {
 		return nil
 	}
 
@@ -273,13 +322,13 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 			keyOffset := d.decodeCount(data[entryOffset:], isSmall)
 			keyLength := int(d.decodeUint16(data[entryOffset+offsetSize:]))
 
-			// Key must start after value entry
-			if keyOffset < headerSize {
-				d.err = errors.Errorf("invalid key offset %d, must > %d", keyOffset, headerSize)
+			// Key must start after value entry and end within the object
+			if keyOffset < headerSize || keyOffset > size || keyLength > size-keyOffset {
+				d.err = errors.Errorf("invalid key offset %d length %d, must be within [%d, %d]", keyOffset, keyLength, headerSize, size)
 				return nil
 			}
 
-			if d.isDataShort(data, keyOffset+keyLength) {
+			if !d.consume(keyLength) {
 				return nil
 			}
 
@@ -293,6 +342,10 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 
 	values := make([]any, count)
 	for i := range count {
+		if d.err != nil {
+			return nil
+		}
+
 		// decode value
 		entryOffset := 2*offsetSize + valueEntrySize*i
 		if isObject {
@@ -308,11 +361,15 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 
 		valueOffset := d.decodeCount(data[entryOffset+1:], isSmall)
 
-		if d.isDataShort(data, valueOffset) {
+		// Value must start after the header and within the container
+		if valueOffset < headerSize || valueOffset >= size {
+			d.err = errors.Errorf("invalid value offset %d, must be within [%d, %d)", valueOffset, headerSize, size)
 			return nil
 		}
 
-		values[i] = d.decodeValue(tp, data[valueOffset:])
+		// The full slice expression also limits the capacity, so that the
+		// value cannot be read past the end of its container.
+		values[i] = d.decodeValue(tp, data[valueOffset:size:size])
 	}
 
 	if d.err != nil {
@@ -380,6 +437,22 @@ func (d *jsonBinaryDecoder) isDataShort(data []byte, expected int) bool {
 	}
 
 	return d.err != nil
+}
+
+// consume takes n bytes from the budget and fails once the decoded values
+// use more bytes than the document has, which means they overlap.
+func (d *jsonBinaryDecoder) consume(n int) bool {
+	if d.err != nil {
+		return false
+	}
+
+	if n < 0 || n > d.budget {
+		d.err = errors.New("invalid JSON document: values overlap")
+		return false
+	}
+
+	d.budget -= n
+	return true
 }
 
 func (d *jsonBinaryDecoder) decodeInt16(data []byte) int16 {
@@ -457,7 +530,7 @@ func (d *jsonBinaryDecoder) decodeString(data []byte) string {
 
 	l, n := d.decodeVariableLength(data)
 
-	if d.isDataShort(data, l+n) {
+	if !d.consume(l + n) {
 		return ""
 	}
 
@@ -477,11 +550,11 @@ func (d *jsonBinaryDecoder) decodeOpaque(data []byte) any {
 
 	l, n := d.decodeVariableLength(data)
 
-	if d.isDataShort(data, l+n) {
+	if !d.consume(1 + l + n) {
 		return nil
 	}
 
-	data = data[n : l+n]
+	data = data[n : l+n : l+n]
 
 	switch tp {
 	case mysql.MYSQL_TYPE_NEWDECIMAL:
@@ -510,6 +583,16 @@ func (d *jsonBinaryDecoder) decodeDecimal(data []byte) any {
 	precision := int(data[0])
 	scale := int(data[1])
 
+	// decodeDecimal reads as many bytes as the precision and scale need
+	// without checking the length of its input.
+	if precision == 0 || scale > precision {
+		d.err = errors.Errorf("invalid decimal precision %d scale %d", precision, scale)
+		return nil
+	}
+	if d.isDataShort(data[2:], decimalBinSize(precision, scale)) {
+		return nil
+	}
+
 	// MySQL renders JSON DECIMAL values unquoted; force the string form
 	// (useDecimal=false) so we can wrap it as a jsonRawNumber.
 	useDecimal := d.useDecimal
@@ -530,6 +613,14 @@ func (d *jsonBinaryDecoder) decodeDecimal(data []byte) any {
 		return jsonRawNumber(s)
 	}
 	return v
+}
+
+// decimalBinSize returns the number of bytes that decodeDecimal reads for
+// the given precision and scale, scale <= precision.
+func decimalBinSize(precision, scale int) int {
+	integral := precision - scale
+	return integral/digitsPerInteger*4 + compressedBytes[integral%digitsPerInteger] +
+		scale/digitsPerInteger*4 + compressedBytes[scale%digitsPerInteger]
 }
 
 func (d *jsonBinaryDecoder) decodeTime(data []byte) any {
@@ -583,7 +674,14 @@ func (d *jsonBinaryDecoder) decodeCount(data []byte, isSmall bool) int {
 		return int(v)
 	}
 
-	return int(d.decodeUint32(data))
+	v := d.decodeUint32(data)
+	if uint64(v) > math.MaxInt {
+		// Only where int has 32 bits; no container is that large.
+		d.err = errors.Errorf("count or offset %d does not fit in int", v)
+		return 0
+	}
+
+	return int(v)
 }
 
 func (d *jsonBinaryDecoder) decodeVariableLength(data []byte) (int, int) {
@@ -604,7 +702,12 @@ func (d *jsonBinaryDecoder) decodeVariableLength(data []byte) (int, int) {
 			}
 
 			pos++
-			// TODO: should consider length overflow int here.
+			// The value must fit in the data, which also keeps the length
+			// within int.
+			if length > uint64(len(data)-pos) {
+				d.err = errors.Errorf("data len %d < expected %d", len(data), length+uint64(pos))
+				return 0, 0
+			}
 			return int(length), pos
 		}
 	}
@@ -647,7 +750,8 @@ func (e *RowsEvent) decodeJSONPartialBinary(data []byte) (*JsonDiff, error) {
 
 	d, err := e.decodeJSONBinary(data[:valueLength])
 	if err != nil {
-		return nil, fmt.Errorf("cannot read json diff for field %q: %w", path, err)
+		// The path is left out: JSON keys can hold user data.
+		return nil, fmt.Errorf("cannot read json diff value (op %s, %d bytes): %w", operationNumber, valueLength, err)
 	}
 	diff.Value = string(d)
 

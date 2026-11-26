@@ -1084,6 +1084,13 @@ func (e *RowsEvent) decodeExtraData(data []byte) (err2 error) {
 }
 
 func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
+	// Recover before anything reads data, the decompression included.
+	defer func() {
+		if r := recover(); r != nil {
+			err2 = e.decodePanicError(r, pos, len(data))
+		}
+	}()
+
 	if e.compressed {
 		data, err2 = mysql.DecompressMariadbData(data[pos:])
 		if err2 != nil {
@@ -1098,12 +1105,6 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 		n   int
 		err error
 	)
-	// ... repeat rows until event-end
-	defer func() {
-		if r := recover(); r != nil {
-			err2 = errors.Errorf("parse rows event panic %v, data %q, parsed rows %#v, table map %#v", r, data, e, e.Table)
-		}
-	}()
 
 	// Pre-allocate memory for rows: before image + (optional) after image
 	rowsLen := 1
@@ -1123,6 +1124,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 		rowImageType = EnumRowImageTypeUpdateBI
 	}
 
+	// ... repeat rows until event-end
 	for pos < len(data) {
 		// Parse the first image
 		if n, err = e.decodeImage(data[pos:], e.ColumnBitmap1, rowImageType); err != nil {
@@ -1140,6 +1142,25 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 	}
 
 	return nil
+}
+
+// decodePanicError returns the error for a panic recovered in DecodeData. pos
+// is where the current row image starts in the buffer being decoded: data as
+// passed to DecodeData, or the decompressed row data of a MariaDB compressed
+// event. The message leaves out the event data, the decoded rows and the
+// table map, because they hold row values and errors often end up in logs.
+// A panic value that is an error is wrapped, so it stays in the error chain.
+func (e *RowsEvent) decodePanicError(r any, pos, dataLen int) error {
+	cause, ok := r.(error)
+	if !ok {
+		cause = errors.Errorf("%v", r)
+	}
+	table := "<nil>"
+	if e.Table != nil {
+		table = fmt.Sprintf("%q.%q", e.Table.Schema, e.Table.Table)
+	}
+	return errors.Annotatef(cause, "parse rows event panic (%s, table %s, table id %d, column count %d, row images decoded %d, row image offset %d, data length %d)",
+		e.eventType, table, e.TableID, e.ColumnCount, len(e.Rows), pos, dataLen)
 }
 
 func (e *RowsEvent) Decode(data []byte) error {
@@ -1467,8 +1488,6 @@ func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial boo
 				diff, err = e.decodeJSONPartialBinary(data[meta:n])
 				if err == nil {
 					v = diff
-				} else {
-					fmt.Printf("decodeJSONPartialBinary(%q) fail: %s\n", data[meta:n], err)
 				}
 			} else {
 				var d []byte
